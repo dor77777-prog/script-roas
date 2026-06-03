@@ -148,13 +148,14 @@ export default tseslint.config(
       // Tooltip-system-redesign Phase 0 (Task 0.1) HARDENED this rule to also
       // flag `title=` on prop-forwarding `components/ui` primitives (the
       // `<Button title=>` bypass that leaked a native tooltip to the DOM).
-      // That correctly surfaced ~26 pre-existing call-sites which Phase 2
-      // migrates to `HelpTooltip` / `aria-label`. Until Phase 2 lands in this
-      // branch, those call-sites are NOT yet converted, so the rule is held at
-      // 'warn' to keep the lint gate green on the Phase 0+1 increment. RATCHET
-      // BACK TO 'error' as the last step of Phase 2 (the migration commit), so
-      // the hardened guard is enforced again before the single deploy.
-      'local/no-native-title-tooltip': 'warn',
+      // That correctly surfaced ~26 pre-existing call-sites. Phase 2 migrated
+      // every one to `HelpTooltip` (or dropped the redundant `title=` to an
+      // `aria-label` on the optimize-toggles per decision §6.5.6, and removed
+      // the duplicate SVG `<title>` on the RoasTargetChart dots per §6.5.4).
+      // The rule was held at 'warn' only for the Phase 0+1 increment; with the
+      // migration landed it is RE-ARMED to 'error' so the hardened guard is
+      // hermetic again (no `title=` regression can slip past the gate).
+      'local/no-native-title-tooltip': 'error',
       // Wave-2 Task 2.7 guard — raw <input>/<select>/<textarea> bypass
       // the canonical glass-1 surface, the dir="auto" default, and the
       // shared error/aria-invalid wiring. Use Input / NativeSelect /

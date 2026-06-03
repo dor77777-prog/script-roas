@@ -146,18 +146,19 @@ export function InsightActions({
   return (
     <div className={cn('inline-flex items-center gap-1.5 flex-wrap', className)}>
       {canDrill && (
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={handlePrimary}
-          className="gap-1 px-2 py-1 h-auto text-[11px] font-semibold"
-          title={campaignName ? `פתח את ${campaignName} בלוח הקמפיין` : 'פתח קמפיין'}
-          aria-label={campaignName ? `פתח קמפיין: ${campaignName}` : 'פתח קמפיין'}
-        >
-          <ArrowUpRight size={11} />
-          פתח קמפיין
-        </Button>
+        <HelpTooltip content={campaignName ? `פתח את ${campaignName} בלוח הקמפיין` : 'פתח קמפיין'}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={handlePrimary}
+            className="gap-1 px-2 py-1 h-auto text-[11px] font-semibold"
+            aria-label={campaignName ? `פתח קמפיין: ${campaignName}` : 'פתח קמפיין'}
+          >
+            <ArrowUpRight size={11} />
+            פתח קמפיין
+          </Button>
+        </HelpTooltip>
       )}
 
       {deepLink && isAdsPlatform && (

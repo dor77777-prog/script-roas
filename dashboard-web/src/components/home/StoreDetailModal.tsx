@@ -37,6 +37,7 @@ import { useMemo } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { Sheet, SheetContent, SheetBody, SheetFooter } from '@/components/ui/Sheet';
 import { Card } from '@/components/ui/Card';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Badge } from '@/components/ui/Badge';
 import { Money } from '@/components/ui/Money';
 import { CountUp } from '@/components/ui/CountUp';
@@ -317,11 +318,14 @@ export function StoreDetailModal({
           {/* Phase 3 — per-store NC-ROAS / nCAC (different question). Own band;
               never touches the header ROAS band gradient. */}
           <section data-testid="store-detail-nc">
+            <HelpTooltip
+              content="לקוחות חדשים (הזמנה ראשונה אי-פעם). NC-ROAS = הכנסת לקוחות חדשים ÷ הוצאת פרסום; nCAC = הוצאת פרסום ÷ הזמנות חדשות."
+              withinDrawer
+            >
             <Card
               band={ncBand}
               bandStrength="muted"
               className="!p-3 sm:!p-4"
-              title="לקוחות חדשים (הזמנה ראשונה אי-פעם). NC-ROAS = הכנסת לקוחות חדשים ÷ הוצאת פרסום; nCAC = הוצאת פרסום ÷ הזמנות חדשות."
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
@@ -375,6 +379,7 @@ export function StoreDetailModal({
                 </bdi>
               </div>
             </Card>
+            </HelpTooltip>
           </section>
 
           {/* ── 3. ROAS over time ────────────────────────────────────────

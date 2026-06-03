@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { getSyncState, hydrateFromCloud, type SyncState } from '@/lib/cloudSync';
 import type { HealthResponse } from '@/app/api/health/route';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { fetchJsonOrNull } from '@/lib/fetchJson';
 
 /**
@@ -122,29 +123,30 @@ export function SyncIndicator() {
 
   return (
     <div className="relative">
-      <Button
-        variant="ghost"
-        onClick={onClick}
-        title={title}
-        className={cn(
-          'gap-1.5 rounded-lg px-2 sm:px-2.5 py-1.5 h-auto text-[11px] sm:text-xs font-medium ring-1 ring-glass-edge',
-          tone,
-        )}
-      >
-        {icon}
-        {/* a11y: announce sync-state transitions (syncing → ok → error /
-            supabase-down) to screen readers. `polite` (not `assertive`)
-            because status changes are informational, not urgent enough to
-            interrupt other speech. `aria-atomic` ensures the full new label
-            is read rather than just the diff. */}
-        <span
-          aria-live="polite"
-          aria-atomic="true"
-          className="hidden sm:inline"
+      <HelpTooltip content={title}>
+        <Button
+          variant="ghost"
+          onClick={onClick}
+          className={cn(
+            'gap-1.5 rounded-lg px-2 sm:px-2.5 py-1.5 h-auto text-[11px] sm:text-xs font-medium ring-1 ring-glass-edge',
+            tone,
+          )}
         >
-          {label}
-        </span>
-      </Button>
+          {icon}
+          {/* a11y: announce sync-state transitions (syncing → ok → error /
+              supabase-down) to screen readers. `polite` (not `assertive`)
+              because status changes are informational, not urgent enough to
+              interrupt other speech. `aria-atomic` ensures the full new label
+              is read rather than just the diff. */}
+          <span
+            aria-live="polite"
+            aria-atomic="true"
+            className="hidden sm:inline"
+          >
+            {label}
+          </span>
+        </Button>
+      </HelpTooltip>
       {expanded && status === 'error' && (
         <div
           dir="rtl"

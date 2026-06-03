@@ -222,29 +222,31 @@ export function GoalTracker({ data, range }: Props) {
   // to the previous (earlier) month — matching the mockup's visual order.
   const monthNav = effectiveMonth ? (
     <span className="inline-flex items-center gap-0.5 bg-glass-2 border border-glass-edge rounded-lg p-0.5">
-      <Button
-        variant="ghost"
-        size="icon"
-        className="!w-6 !h-6"
-        onClick={() => stepMonth(1)}
-        aria-label="חודש הבא"
-        title="חודש הבא"
-      >
-        <ChevronRight size={14} />
-      </Button>
+      <HelpTooltip content="חודש הבא">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="!w-6 !h-6"
+          onClick={() => stepMonth(1)}
+          aria-label="חודש הבא"
+        >
+          <ChevronRight size={14} />
+        </Button>
+      </HelpTooltip>
       <span className="font-semibold text-xs sm:text-[12.5px] text-ink min-w-[84px] text-center tabular-nums">
         {monthLabelHebrew(effectiveMonth)}
       </span>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="!w-6 !h-6"
-        onClick={() => stepMonth(-1)}
-        aria-label="חודש קודם"
-        title="חודש קודם"
-      >
-        <ChevronLeft size={14} />
-      </Button>
+      <HelpTooltip content="חודש קודם">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="!w-6 !h-6"
+          onClick={() => stepMonth(-1)}
+          aria-label="חודש קודם"
+        >
+          <ChevronLeft size={14} />
+        </Button>
+      </HelpTooltip>
     </span>
   ) : null;
 
@@ -397,9 +399,11 @@ export function GoalTracker({ data, range }: Props) {
             </div>
             <div className="flex items-center gap-1.5">
               {monthNav}
-              <Button variant="ghost" size="icon" onClick={startEdit} aria-label="ערוך יעד" title="ערוך יעד">
-                <Edit3 size={13} />
-              </Button>
+              <HelpTooltip content="ערוך יעד">
+                <Button variant="ghost" size="icon" onClick={startEdit} aria-label="ערוך יעד">
+                  <Edit3 size={13} />
+                </Button>
+              </HelpTooltip>
             </div>
           </div>
 
@@ -520,9 +524,11 @@ export function GoalTracker({ data, range }: Props) {
           </div>
           <div className="flex items-center gap-1.5">
             {monthNav}
-            <Button variant="ghost" size="icon" onClick={startEdit} aria-label="ערוך יעד" title="ערוך יעד">
-              <Edit3 size={13} />
-            </Button>
+            <HelpTooltip content="ערוך יעד">
+              <Button variant="ghost" size="icon" onClick={startEdit} aria-label="ערוך יעד">
+                <Edit3 size={13} />
+              </Button>
+            </HelpTooltip>
           </div>
         </div>
 

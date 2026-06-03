@@ -69,6 +69,7 @@
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Money } from '@/components/ui/Money';
 import { CountUp } from '@/components/ui/CountUp';
 import { Badge } from '@/components/ui/Badge';
@@ -651,6 +652,7 @@ export function CommandCenterHero({
           />
         </Card>
 
+        <HelpTooltip content="הכנסות − פרסום − מלאי. רווח נטו מלא (כולל הוצאות קבועות וחוזרות) נמצא ב-P&L.">
         <Card
           band={netBand.band}
           freshness={freshnessStage}
@@ -658,7 +660,6 @@ export function CommandCenterHero({
           // phone width beneath Revenue+Spend; md+ returns to its single column.
           className="hero-card featured col-span-2 md:col-span-1 px-4 py-4 sm:px-6 sm:py-6"
           data-testid="hero-net-profit"
-          title="הכנסות − פרסום − מלאי. רווח נטו מלא (כולל הוצאות קבועות וחוזרות) נמצא ב-P&L."
         >
           <HeroCardHeader
             label={`רווח תפעולי · ${rangeLabel}`}
@@ -696,6 +697,7 @@ export function CommandCenterHero({
             />
           )}
         </Card>
+        </HelpTooltip>
       </div>
 
       {/*
@@ -778,13 +780,13 @@ export function CommandCenterHero({
             operator preferred the inventory dollar amount + ratio
             subtitle over the ad-spend ratio. No threshold colouring —
             COGS is a structural metric, not a status signal. */}
+        <HelpTooltip content="עלות המלאי (COGS) בטווח הנבחר. בדרך כלל ~25% מהמחזור — לא יעד אלא תצפית.">
         <Card
           band={businessBand}
           bandStrength="muted"
           freshness={freshnessStage}
           className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-cogs"
-          title="עלות המלאי (COGS) בטווח הנבחר. בדרך כלל ~25% מהמחזור — לא יעד אלא תצפית."
         >
           <HeroCardHeader label={`מלאי · ${rangeLabel}`} />
           <bdi
@@ -806,13 +808,14 @@ export function CommandCenterHero({
             );
           })()}
         </Card>
+        </HelpTooltip>
 
+        <HelpTooltip content="MER — Marketing Efficiency Ratio: סך ההכנסות ÷ סך ההוצאות (ROAS משוקלל על כל הפלטפורמות). מקור האמת היחיד לרווחיות הפרסום.">
         <Card
           band={roasBand.band}
           freshness={freshnessStage}
           className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-roas"
-          title="MER — Marketing Efficiency Ratio: סך ההכנסות ÷ סך ההוצאות (ROAS משוקלל על כל הפלטפורמות). מקור האמת היחיד לרווחיות הפרסום."
         >
           <HeroCardHeader label="MER" />
           <bdi
@@ -831,17 +834,18 @@ export function CommandCenterHero({
             stroke={NEUTRAL_SPARK_STROKE}
           />
         </Card>
+        </HelpTooltip>
       </div>
 
       {newCustomer && (
         <div className="grid gap-3 grid-cols-1" data-testid="hero-nc-row">
+          <HelpTooltip content="לקוחות חדשים (הזמנה ראשונה אי-פעם). שאלה אחרת מ-MER: NC-ROAS = הכנסת לקוחות חדשים ÷ הוצאת פרסום; nCAC = הוצאת פרסום ÷ הזמנות חדשות.">
           <Card
             band={ncBand.band}
             bandStrength="muted"
             freshness={freshnessStage}
             className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
             data-testid="hero-nc-roas"
-            title="לקוחות חדשים (הזמנה ראשונה אי-פעם). שאלה אחרת מ-MER: NC-ROAS = הכנסת לקוחות חדשים ÷ הוצאת פרסום; nCAC = הוצאת פרסום ÷ הזמנות חדשות."
           >
             <div className="flex items-center justify-between gap-2">
               <HeroCardHeader label="לקוחות חדשים · שאלה אחרת" />
@@ -910,6 +914,7 @@ export function CommandCenterHero({
               </bdi>
             </div>
           </Card>
+          </HelpTooltip>
         </div>
       )}
     </section>

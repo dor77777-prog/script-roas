@@ -36,6 +36,7 @@ import { cn } from '@/lib/utils';
 import { fetchJsonOrNull } from '@/lib/fetchJson';
 import { useTheme } from './ThemeProvider';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { useDrawerEsc } from '@/lib/drawerStack';
@@ -544,25 +545,26 @@ export function CommandPalette({
   // ---- Trigger pill + modal -----------------------------------------------
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={() => { setOpen(true); setWarmCache(true); }}
-        className={cn(
-          'gap-1.5 sm:gap-2 rounded-lg',
-          'bg-glass-2 hover:bg-glass-3 active:bg-[color:var(--surface-elevated-1)]',
-          'border border-glass-edge text-ink-secondary',
-          'px-2.5 sm:px-3 py-1.5 sm:py-2 h-auto text-xs sm:text-sm font-medium shrink-0',
-        )}
-        title="חיפוש מהיר (⌘K)"
-        aria-label="פתח פנל פקודות"
-      >
-        <Search size={14} />
-        <span className="hidden sm:inline">חיפוש</span>
-        <kbd className="hidden md:inline-flex items-center gap-0.5 px-1 py-0.5 text-[10px] font-mono bg-glass-2 rounded border border-glass-edge tabular-nums">
-          <CmdIcon size={9} />K
-        </kbd>
-      </Button>
+      <HelpTooltip content="חיפוש מהיר (⌘K)">
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => { setOpen(true); setWarmCache(true); }}
+          className={cn(
+            'gap-1.5 sm:gap-2 rounded-lg',
+            'bg-glass-2 hover:bg-glass-3 active:bg-[color:var(--surface-elevated-1)]',
+            'border border-glass-edge text-ink-secondary',
+            'px-2.5 sm:px-3 py-1.5 sm:py-2 h-auto text-xs sm:text-sm font-medium shrink-0',
+          )}
+          aria-label="פתח פנל פקודות"
+        >
+          <Search size={14} />
+          <span className="hidden sm:inline">חיפוש</span>
+          <kbd className="hidden md:inline-flex items-center gap-0.5 px-1 py-0.5 text-[10px] font-mono bg-glass-2 rounded border border-glass-edge tabular-nums">
+            <CmdIcon size={9} />K
+          </kbd>
+        </Button>
+      </HelpTooltip>
 
       {open && (
         <div

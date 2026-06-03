@@ -768,17 +768,16 @@ export function RoasTargetChart({
                 : 'var(--chart-roas-line)';
             const r = isMax || isMin ? 3 : 2.5;
             return (
+              // Decision §6.5.4 — no SVG <title> on data dots; the crosshair
+              // tooltip already covers each point on hover (a native <title>
+              // would double-render a browser tooltip on top of it).
               <circle
                 key={`dot-${i}`}
                 cx={x}
                 cy={y}
                 r={r}
                 style={{ fill }}
-              >
-                <title>
-                  {`${formatDate(p.date)} · ROAS ${p.roas.toFixed(2)}`}
-                </title>
-              </circle>
+              />
             );
           })}
 

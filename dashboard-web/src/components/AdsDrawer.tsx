@@ -443,16 +443,20 @@ export function AdsDrawer({
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsFullscreen(v => !v)}
-              aria-label={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
-              title={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
-              data-testid="ads-drawer-fullscreen-toggle"
+            <HelpTooltip
+              content={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
+              withinDrawer
             >
-              {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsFullscreen(v => !v)}
+                aria-label={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
+                data-testid="ads-drawer-fullscreen-toggle"
+              >
+                {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              </Button>
+            </HelpTooltip>
           </div>
         </SheetHeader>
 
@@ -612,7 +616,7 @@ export function AdsDrawer({
                                   ? 'text-status-greenFg hover:bg-status-greenBg'
                                   : 'text-ink-muted hover:text-status-greenFg hover:bg-status-greenBg',
                               )}
-                              title={isOptimized ? 'לחץ להסרת הסימון' : 'סמן כאופטימיזציה בוצעה'}
+                              aria-label={isOptimized ? 'בטל סימון אופטימיזציה' : 'סמן כאופטימיזציה בוצעה'}
                               aria-pressed={isOptimized}
                             >
                               {isOptimized ? <CheckCircle2 size={16} /> : <Circle size={16} />}

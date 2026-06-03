@@ -80,6 +80,7 @@ import { roasLabel } from '@/lib/analytics';
 import { useCampaignTrueRevenue } from '@/lib/hooks/useCampaignTrueRevenue';
 import { CampaignsTableRow } from './CampaignsTableRow';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { TableBase } from '@/components/ui/TableBase';
@@ -1505,15 +1506,16 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             <span className="font-medium text-ink-secondary tabular-nums">
               {optimized.size} מסומנים
             </span>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onClearAll}
-              title="הסר את כל הסימונים"
-              className="h-auto px-1.5 py-0.5 text-[11px] sm:text-xs font-semibold text-ink-muted hover:text-status-redFg hover:bg-status-redBg"
-            >
-              נקה הכל
-            </Button>
+            <HelpTooltip content="הסר את כל הסימונים">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onClearAll}
+                className="h-auto px-1.5 py-0.5 text-[11px] sm:text-xs font-semibold text-ink-muted hover:text-status-redFg hover:bg-status-redBg"
+              >
+                נקה הכל
+              </Button>
+            </HelpTooltip>
           </div>
         )}
       </div>

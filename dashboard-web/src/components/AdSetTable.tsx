@@ -171,7 +171,6 @@ export function AdSetTable({
                           ? 'text-status-greenFg hover:bg-status-greenBg'
                           : 'text-ink-muted hover:text-status-greenFg hover:bg-status-greenBg',
                       )}
-                      title={isOptimized ? 'לחץ להסרת הסימון' : 'סמן כאופטימיזציה בוצעה'}
                       aria-label={isOptimized ? 'בטל סימון אופטימיזציה' : 'סמן כאופטימיזציה בוצעה'}
                       aria-pressed={isOptimized}
                     >

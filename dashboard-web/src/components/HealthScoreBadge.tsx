@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { CampaignHealth, HealthGrade } from '@/lib/campaignHealthScore';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 
 /**
  * Per-campaign Health Score badge with click-to-drill popover.
@@ -71,30 +72,33 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
 
   return (
     <div ref={containerRef} className="relative inline-flex">
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((v) => !v);
-        }}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        title={`${styles.label}${isUnknown ? '' : ` · ${health.score}/100`} — לחץ לפירוט`}
-        className={cn(
-          'min-w-[34px] h-7 px-1.5 text-[12px] font-bold leading-none tabular-nums',
-          'ring-1 cursor-pointer select-none hover:opacity-90 active:scale-95',
-          styles.chip,
-          styles.ring,
-        )}
+      <HelpTooltip
+        content={`${styles.label}${isUnknown ? '' : ` · ${health.score}/100`} — לחץ לפירוט`}
       >
-        {isUnknown ? '⏳' : health.grade}
-        {!isUnknown && (
-          <span className="ms-1 text-[10px] font-medium text-accent-fg">
-            {health.score}
-          </span>
-        )}
-      </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((v) => !v);
+          }}
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          className={cn(
+            'min-w-[34px] h-7 px-1.5 text-[12px] font-bold leading-none tabular-nums',
+            'ring-1 cursor-pointer select-none hover:opacity-90 active:scale-95',
+            styles.chip,
+            styles.ring,
+          )}
+        >
+          {isUnknown ? '⏳' : health.grade}
+          {!isUnknown && (
+            <span className="ms-1 text-[10px] font-medium text-accent-fg">
+              {health.score}
+            </span>
+          )}
+        </Button>
+      </HelpTooltip>
 
       {open && (
         <div

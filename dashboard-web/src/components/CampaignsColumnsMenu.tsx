@@ -141,33 +141,36 @@ export function CampaignsColumnsMenu({
 
   return (
     <div className="relative" ref={popoverRef}>
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        onClick={() => setOpen(v => !v)}
-        className={cn(
-          'gap-1.5',
-          hiddenCount > 0
-            ? 'border-status-warning bg-status-warningBg text-status-warningFg hover:bg-status-warningBg'
-            : '',
-        )}
-        title={
+      <HelpTooltip
+        content={
           hiddenCount > 0
             ? `${hiddenCount} עמודות מוסתרות — לחץ לעריכה`
             : 'הסתר/הצג עמודות בטבלה'
         }
-        aria-haspopup="true"
-        aria-expanded={open}
       >
-        <Columns3 size={13} />
-        <span>עמודות</span>
-        {hiddenCount > 0 && (
-          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-status-warningBg text-status-warningFg text-[10px] font-bold">
-            {hiddenCount}
-          </span>
-        )}
-      </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => setOpen(v => !v)}
+          className={cn(
+            'gap-1.5',
+            hiddenCount > 0
+              ? 'border-status-warning bg-status-warningBg text-status-warningFg hover:bg-status-warningBg'
+              : '',
+          )}
+          aria-haspopup="true"
+          aria-expanded={open}
+        >
+          <Columns3 size={13} />
+          <span>עמודות</span>
+          {hiddenCount > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-status-warningBg text-status-warningFg text-[10px] font-bold">
+              {hiddenCount}
+            </span>
+          )}
+        </Button>
+      </HelpTooltip>
 
       {open && (
         <div
@@ -248,38 +251,40 @@ export function CampaignsColumnsMenu({
                         Token-only — passes the design-color green-ratchet. */}
                     {isReorderable && (
                       <div className="flex flex-col gap-0.5 shrink-0 self-center">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => move(col.id, 'up')}
-                          disabled={!canUp}
-                          aria-label={`הזז ${col.label} למעלה`}
-                          title="הזז למעלה"
-                          className={cn(
-                            'w-6 h-6 rounded-md border p-0',
-                            canUp
-                              ? 'bg-glass-2 border-glass-edge text-ink-secondary hover:text-ink hover:bg-glass-1'
-                              : 'bg-glass-2 border-glass-edge text-ink-subtle opacity-40 cursor-not-allowed',
-                          )}
-                        >
-                          <ChevronUp size={13} />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => move(col.id, 'down')}
-                          disabled={!canDown}
-                          aria-label={`הזז ${col.label} למטה`}
-                          title="הזז למטה"
-                          className={cn(
-                            'w-6 h-6 rounded-md border p-0',
-                            canDown
-                              ? 'bg-glass-2 border-glass-edge text-ink-secondary hover:text-ink hover:bg-glass-1'
-                              : 'bg-glass-2 border-glass-edge text-ink-subtle opacity-40 cursor-not-allowed',
-                          )}
-                        >
-                          <ChevronDown size={13} />
-                        </Button>
+                        <HelpTooltip content="הזז למעלה">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => move(col.id, 'up')}
+                            disabled={!canUp}
+                            aria-label={`הזז ${col.label} למעלה`}
+                            className={cn(
+                              'w-6 h-6 rounded-md border p-0',
+                              canUp
+                                ? 'bg-glass-2 border-glass-edge text-ink-secondary hover:text-ink hover:bg-glass-1'
+                                : 'bg-glass-2 border-glass-edge text-ink-subtle opacity-40 cursor-not-allowed',
+                            )}
+                          >
+                            <ChevronUp size={13} />
+                          </Button>
+                        </HelpTooltip>
+                        <HelpTooltip content="הזז למטה">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => move(col.id, 'down')}
+                            disabled={!canDown}
+                            aria-label={`הזז ${col.label} למטה`}
+                            className={cn(
+                              'w-6 h-6 rounded-md border p-0',
+                              canDown
+                                ? 'bg-glass-2 border-glass-edge text-ink-secondary hover:text-ink hover:bg-glass-1'
+                                : 'bg-glass-2 border-glass-edge text-ink-subtle opacity-40 cursor-not-allowed',
+                            )}
+                          >
+                            <ChevronDown size={13} />
+                          </Button>
+                        </HelpTooltip>
                       </div>
                     )}
                   </li>

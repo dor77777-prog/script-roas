@@ -175,19 +175,20 @@ export function BillingSettings({ storeNames }: Props) {
 
   return (
     <>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => setOpen(true)}
-        className="gap-1.5 sm:gap-2 shrink-0"
-        title="הגדרות עלויות חודשיות"
-      >
-        <SettingsIcon size={14} />
-        <span>עלויות חודשיות</span>
-        <span className="hidden sm:inline text-ink-muted tabular-nums">
-          ({recurring.filter(r => r.active).length} פעילות · CAD {formatCurrency(totalMonthly)})
-        </span>
-      </Button>
+      <HelpTooltip content="הגדרות עלויות חודשיות">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setOpen(true)}
+          className="gap-1.5 sm:gap-2 shrink-0"
+        >
+          <SettingsIcon size={14} />
+          <span>עלויות חודשיות</span>
+          <span className="hidden sm:inline text-ink-muted tabular-nums">
+            ({recurring.filter(r => r.active).length} פעילות · CAD {formatCurrency(totalMonthly)})
+          </span>
+        </Button>
+      </HelpTooltip>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent

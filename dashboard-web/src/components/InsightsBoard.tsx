@@ -411,15 +411,16 @@ export function InsightsBoard({ data }: Props) {
                         {stateLabel}{st?.at ? ` · ${relativeTime(st.at)}` : ''}
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      onClick={() => restoreInsight(ins.id)}
-                      className="gap-1 px-2 py-1 h-auto text-[11px] font-semibold text-accent hover:bg-accent-bg shrink-0"
-                      title="שחזר תובנה לרשימה הראשית"
-                    >
-                      <Undo2 size={11} />
-                      שחזר
-                    </Button>
+                    <HelpTooltip content="שחזר תובנה לרשימה הראשית">
+                      <Button
+                        variant="ghost"
+                        onClick={() => restoreInsight(ins.id)}
+                        className="gap-1 px-2 py-1 h-auto text-[11px] font-semibold text-accent hover:bg-accent-bg shrink-0"
+                      >
+                        <Undo2 size={11} />
+                        שחזר
+                      </Button>
+                    </HelpTooltip>
                   </li>
                 );
               })}
@@ -607,28 +608,30 @@ function InsightBoardRow({
   const actionsNode = (
     <>
       {/* Mark done — ghost gray, turns green on hover */}
-      <Button
-        variant="secondary"
-        onClick={() => onMark(insight, 'done')}
-        className={cn(
-          'gap-1 px-2 py-1 h-auto text-[11px] font-medium',
-          'text-ink-secondary hover:text-status-greenFg hover:border-status-green hover:bg-status-greenBg',
-        )}
-        title="סמן שטיפלתי בזה — יוסתר ל-7 ימים, יחזור אם הבעיה תחזור"
-      >
-        <Check size={12} />
-        טיפלתי
-      </Button>
+      <HelpTooltip content="סמן שטיפלתי בזה — יוסתר ל-7 ימים, יחזור אם הבעיה תחזור">
+        <Button
+          variant="secondary"
+          onClick={() => onMark(insight, 'done')}
+          className={cn(
+            'gap-1 px-2 py-1 h-auto text-[11px] font-medium',
+            'text-ink-secondary hover:text-status-greenFg hover:border-status-green hover:bg-status-greenBg',
+          )}
+        >
+          <Check size={12} />
+          טיפלתי
+        </Button>
+      </HelpTooltip>
       {/* Hide */}
-      <Button
-        variant="ghost"
-        onClick={() => onMark(insight, 'ignored')}
-        className="gap-1 px-2 py-1 h-auto text-[11px] font-medium text-ink-muted hover:text-ink"
-        title="הסתר — לא יחזור עד שתשחזר ידנית"
-      >
-        <ArchiveX size={12} />
-        הסתר
-      </Button>
+      <HelpTooltip content="הסתר — לא יחזור עד שתשחזר ידנית">
+        <Button
+          variant="ghost"
+          onClick={() => onMark(insight, 'ignored')}
+          className="gap-1 px-2 py-1 h-auto text-[11px] font-medium text-ink-muted hover:text-ink"
+        >
+          <ArchiveX size={12} />
+          הסתר
+        </Button>
+      </HelpTooltip>
       {/* Q7 — drawer-default + Ads Manager deep-link */}
       <InsightActions
         campaignId={insight.campaignId}

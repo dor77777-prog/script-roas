@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-react';
 import { FreshnessChip } from './FreshnessChip';
 import { useDashboardRefresh } from '@/lib/useDashboardRefresh';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 
 /**
  * Phase 05.7.6 — Per-tab freshness header.
@@ -65,21 +66,22 @@ export function TabFreshnessHeader(props: {
           </span>
         )}
       </div>
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        onClick={handleRefreshClick}
-        disabled={isRefreshing}
-        title="מרענן את כל הנתונים בדשבורד מ-Shopify, Meta, Google, TikTok. לוקח 30-60 שניות (יוצג אישור לפני ההפעלה)."
-        aria-label="רענן את כל הדשבורד"
-      >
-        <RefreshCw
-          size={13}
-          className={isRefreshing ? 'animate-spin' : ''}
-        />
-        <span>{isRefreshing ? 'מרענן...' : 'רענן הכל'}</span>
-      </Button>
+      <HelpTooltip content="מרענן את כל הנתונים בדשבורד מ-Shopify, Meta, Google, TikTok. לוקח 30-60 שניות (יוצג אישור לפני ההפעלה).">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={handleRefreshClick}
+          disabled={isRefreshing}
+          aria-label="רענן את כל הדשבורד"
+        >
+          <RefreshCw
+            size={13}
+            className={isRefreshing ? 'animate-spin' : ''}
+          />
+          <span>{isRefreshing ? 'מרענן...' : 'רענן הכל'}</span>
+        </Button>
+      </HelpTooltip>
     </div>
   );
 }
