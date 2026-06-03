@@ -15,6 +15,7 @@ import {
   Store as StoreIcon,
   Home,
   Zap,
+  Users,
   TrendingUp,
   Megaphone,
   Package,
@@ -42,6 +43,7 @@ import type { DashboardData, Filters as F, PresetKey } from '@/lib/types';
 import { PRESET_LABELS, computePresetRange } from '@/lib/presets';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { ProductsResponse } from '@/app/api/products/route';
+import type { TabKey } from '@/lib/urlState';
 
 /**
  * Cmd-K command palette — Linear / Notion / Superhuman pattern.
@@ -50,7 +52,7 @@ import type { ProductsResponse } from '@/app/api/products/route';
  * "yesterday" preset. Type a campaign name → jump to the campaign.
  *
  * Categories:
- *   - Navigation (home / activity / archive / pnl / trends / campaigns / products / detail)
+ *   - Navigation (home / activity / customers / archive / pnl / trends / campaigns / products / detail)
  *   - Time ranges (presets)
  *   - Stores
  *   - Live shortcuts (today, this week, this month)
@@ -63,7 +65,9 @@ import type { ProductsResponse } from '@/app/api/products/route';
  * users / touch users.
  */
 
-type TabKey = 'home' | 'activity' | 'archive' | 'pnl' | 'trends' | 'campaigns' | 'products' | 'detail';
+// TabKey is the canonical union from `@/lib/urlState` (single source of truth)
+// so adding a tab there flows here without a stale local copy drifting out of
+// sync (e.g. Wave-2 'customers'). Imported above.
 
 type CommandKind = 'tab' | 'preset' | 'store' | 'campaign' | 'product' | 'action';
 
@@ -180,6 +184,7 @@ export function CommandPalette({
     const tabs: Array<{ key: TabKey; label: string; icon: React.ReactNode; search: string }> = [
       { key: 'home',      label: 'מעבר ל-בית',                icon: <Home size={15} />,        search: 'בית home overview ראשי' },
       { key: 'activity',  label: 'מעבר ל-פעילות',             icon: <Zap size={15} />,         search: 'פעילות activity events אירועים מכירות החזרים עגלה live feed' },
+      { key: 'customers', label: 'מעבר ל-לקוחות',             icon: <Users size={15} />,       search: 'לקוחות customers cohort cohorts ltv retention שימור ערך לקוח repeat' },
       { key: 'archive',   label: 'מעבר ל-טבלאות אופטימיזציה',  icon: <LayoutGrid size={15} />,  search: 'טבלאות אופטימיזציה היסטוריה archive optimization tables חודשי monthly' },
       { key: 'pnl',       label: 'מעבר ל-P&L',                icon: <Receipt size={15} />,     search: 'pnl רווח הוצאות profit loss' },
       { key: 'trends',    label: 'מעבר ל-מגמות',              icon: <TrendingUp size={15} />,  search: 'מגמות trends גרף roas over time מגמה' },

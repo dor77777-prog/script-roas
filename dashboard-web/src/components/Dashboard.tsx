@@ -71,6 +71,7 @@ import {
 } from '@/components/home/RoasTargetChart';
 import { ActivityFeed } from '@/components/home/ActivityFeed';
 import { ActivityEventsTab } from '@/components/activity/ActivityEventsTab';
+import { CustomerValueTab } from '@/components/CustomerValueTab';
 import { StoreDetailModal } from '@/components/home/StoreDetailModal';
 import { MobileStickyRoas } from '@/components/home/MobileStickyRoas';
 import { toStoreDetail } from '@/lib/home/storeDetail';
@@ -489,6 +490,9 @@ export function Dashboard() {
               )}
               {activeTab === 'activity' && (
                 <ActivityEventsTab data={data} globalStore={filters.store} />
+              )}
+              {activeTab === 'customers' && (
+                <CustomerValueTab stores={data.stores} globalStore={filters.store} />
               )}
               {activeTab === 'pnl' && (
                 <PnLTab

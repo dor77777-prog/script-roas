@@ -4,7 +4,7 @@ import { Sidebar } from '../Sidebar';
 import { ThemeProvider } from '../ThemeProvider';
 
 function renderSidebar(props: {
-  activeTab?: 'home'|'activity'|'archive'|'pnl'|'trends'|'campaigns'|'products'|'detail';
+  activeTab?: 'home'|'activity'|'customers'|'archive'|'pnl'|'trends'|'campaigns'|'products'|'detail';
   onTabChange?: (k: string) => void;
   isMobileOpen?: boolean;
   onMobileClose?: () => void;
@@ -22,10 +22,11 @@ function renderSidebar(props: {
 }
 
 describe('Sidebar', () => {
-  it('renders all 8 tab destinations + operator link + theme toggle', () => {
+  it('renders all 9 tab destinations + operator link + theme toggle', () => {
     renderSidebar();
     // 'פעילות' (Activity) sits RIGHT AFTER 'בית' (Home) — first after Home.
-    const expectedLabels = ['בית', 'פעילות', 'טבלאות אופטימיזציה', 'P&L', 'מגמות', 'קמפיינים', 'מוצרים', 'פירוט'];
+    // Wave 2: 'לקוחות' (Customer Value) lands at slot 3 (after פעילות).
+    const expectedLabels = ['בית', 'פעילות', 'לקוחות', 'טבלאות אופטימיזציה', 'P&L', 'מגמות', 'קמפיינים', 'מוצרים', 'פירוט'];
     for (const label of expectedLabels) {
       // The Sidebar now renders two copies of the nav body (desktop right-
       // rail + mobile off-canvas drawer) — both are always in the DOM, the
@@ -53,6 +54,25 @@ describe('Sidebar', () => {
     renderSidebar({ onTabChange });
     fireEvent.click(screen.getAllByText('פעילות')[0]);
     expect(onTabChange).toHaveBeenCalledWith('activity');
+  });
+
+  it('fires onTabChange("customers") when the לקוחות item is clicked', () => {
+    const onTabChange = vi.fn();
+    renderSidebar({ onTabChange });
+    fireEvent.click(screen.getAllByText('לקוחות')[0]);
+    expect(onTabChange).toHaveBeenCalledWith('customers');
+  });
+
+  it('orders לקוחות immediately after פעילות in the desktop rail (slot 3)', () => {
+    const { container } = renderSidebar();
+    const rail = container.querySelector('[data-testid="desktop-sidebar"]')!;
+    const labels = Array.from(rail.querySelectorAll('nav [role="tab"]')).map(
+      (b) => b.getAttribute('aria-label')?.trim() ?? b.textContent?.trim(),
+    );
+    const activityIdx = labels.findIndex((l) => l === 'פעילות');
+    const customersIdx = labels.findIndex((l) => l === 'לקוחות');
+    expect(activityIdx).toBeGreaterThanOrEqual(0);
+    expect(customersIdx).toBe(activityIdx + 1);
   });
 
   it('orders פעילות immediately after בית in the desktop rail', () => {

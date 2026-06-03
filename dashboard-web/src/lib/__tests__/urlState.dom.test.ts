@@ -153,6 +153,17 @@ describe('readDashboardState — legacy "analysis" tab migration (2026-06-01)', 
     expect(readDashboardState(DEFAULTS, search).tab).toBe('activity');
   });
 
+  it('accepts the new "customers" tab key and round-trips it (read → write → read)', () => {
+    // Wave 2 — "לקוחות" (Customer Value) tab.
+    // read
+    expect(readDashboardState(DEFAULTS, '?tab=customers').tab).toBe('customers');
+    // write
+    const search = writeDashboardState({ ...DEFAULTS, tab: 'customers' });
+    expect(search).toContain('tab=customers');
+    // round-trip back
+    expect(readDashboardState(DEFAULTS, search).tab).toBe('customers');
+  });
+
   it('falls back to the default tab for an unknown tab key', () => {
     expect(readDashboardState(DEFAULTS, '?tab=bogus').tab).toBe('home');
   });

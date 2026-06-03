@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  Home, Zap, Receipt, TrendingUp, Megaphone, Package, Table, LayoutGrid,
+  Home, Zap, Users, Receipt, TrendingUp, Megaphone, Package, Table, LayoutGrid,
   Cog, Sun, Moon, Monitor, Pin, PinOff, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -28,12 +28,16 @@ const NAV: NavItem[] = [
   // Placed RIGHT AFTER 'בית' so the live-activity browse view is the first
   // follow-up to the at-a-glance home snapshot.
   { key: 'activity',  label: 'פעילות',             icon: <Zap size={16} />,         slot: 2 },
-  { key: 'archive',   label: 'טבלאות אופטימיזציה',  icon: <LayoutGrid size={16} />,  slot: 3 },
-  { key: 'pnl',       label: 'P&L',                icon: <Receipt size={16} />,     slot: 4 },
-  { key: 'trends',    label: 'מגמות',              icon: <TrendingUp size={16} />,  slot: 5 },
-  { key: 'campaigns', label: 'קמפיינים',           icon: <Megaphone size={16} />,   slot: 6 },
-  { key: 'products',  label: 'מוצרים',             icon: <Package size={16} />,     slot: 7 },
-  { key: 'detail',    label: 'פירוט',              icon: <Table size={16} />,       slot: 8 },
+  // 'לקוחות' (Customer Value) — Wave 2 cohorts/LTV tab. Sits at slot 3, right
+  // after 'פעילות', so the "how much is a customer worth?" view follows the
+  // live-activity browse; the optimization tables + P&L deep-dives shift down.
+  { key: 'customers', label: 'לקוחות',             icon: <Users size={16} />,       slot: 3 },
+  { key: 'archive',   label: 'טבלאות אופטימיזציה',  icon: <LayoutGrid size={16} />,  slot: 4 },
+  { key: 'pnl',       label: 'P&L',                icon: <Receipt size={16} />,     slot: 5 },
+  { key: 'trends',    label: 'מגמות',              icon: <TrendingUp size={16} />,  slot: 6 },
+  { key: 'campaigns', label: 'קמפיינים',           icon: <Megaphone size={16} />,   slot: 7 },
+  { key: 'products',  label: 'מוצרים',             icon: <Package size={16} />,     slot: 8 },
+  { key: 'detail',    label: 'פירוט',              icon: <Table size={16} />,       slot: 9 },
 ];
 
 /**
