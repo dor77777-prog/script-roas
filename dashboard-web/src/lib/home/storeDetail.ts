@@ -29,6 +29,7 @@ import {
   type FirstOrderInput,
   type NewCustomerMetrics,
 } from '@/lib/home/newCustomerMetrics';
+import { netAdjustFactor } from '@/lib/home/revenueBasis';
 
 type PaidPlatform = 'meta' | 'google' | 'tiktok';
 
@@ -252,7 +253,10 @@ export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
   // Scoped to this store; MER spend = cur.spend (the mapping-aware aggregate
   // already in the StoreAgg, never raw account totals). Guest checkouts stay
   // in unclassifiableShare, never folded into new/returning.
-  const newCustomer = computeNewCustomerMetrics(firstOrderRows, cur.spend, storeName);
+  // Wave 1: re-base gross new-customer revenue onto NET via the store's blended
+  // net÷gross factor so NC-ROAS reconciles in scale with the headline net MER.
+  const { factor: ncNetAdj } = netAdjustFactor(cur.revenue, cur.grossRevenue);
+  const newCustomer = computeNewCustomerMetrics(firstOrderRows, cur.spend, storeName, ncNetAdj);
 
   return {
     storeId,

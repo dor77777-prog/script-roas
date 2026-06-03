@@ -78,6 +78,7 @@ import {
   computeNewCustomerMetrics,
   type FirstOrderInput,
 } from '@/lib/home/newCustomerMetrics';
+import { netAdjustFactor } from '@/lib/home/revenueBasis';
 import type { StoreAgg } from '@/lib/analytics';
 import { InsightsBoard } from './InsightsBoard';
 import {
@@ -822,8 +823,12 @@ function HomeTab({
   // CommandCenterHero — this never touches the hero ROAS band gradient.
   const heroNewCustomer = useMemo(() => {
     const scope = filters.store === 'All' ? undefined : filters.store;
-    return computeNewCustomerMetrics(firstOrderRows, filtered.curAgg.spend, scope);
-  }, [firstOrderRows, filtered.curAgg.spend, filters.store]);
+    // Wave 1: re-base gross new-customer revenue onto NET via the blended
+    // net÷gross factor of the current agg (business-wide or store-scoped),
+    // so NC-ROAS reconciles in scale with the hero's net MER band.
+    const { factor: ncNetAdj } = netAdjustFactor(filtered.curAgg.revenue, filtered.curAgg.grossRevenue);
+    return computeNewCustomerMetrics(firstOrderRows, filtered.curAgg.spend, scope, ncNetAdj);
+  }, [firstOrderRows, filtered.curAgg.spend, filtered.curAgg.revenue, filtered.curAgg.grossRevenue, filters.store]);
   const heroDelta = useMemo(() => {
     if (!prevAggFromPrevData) return undefined;
     return toHeroDelta(
