@@ -106,7 +106,7 @@ export function HelpTooltip({
   align,
   sideOffset,
   className,
-  delayDuration = 300,
+  delayDuration = 200,
   variant = 'auto',
   title,
   withinDrawer = false,

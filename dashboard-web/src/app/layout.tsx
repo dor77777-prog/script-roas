@@ -79,14 +79,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var c=localStorage.getItem('roas-theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;var t=(c==='light'||c==='dark')?c:(d?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();` }} />
         <ThemeProvider>
           {/*
-            Task 2.6 — single Radix Tooltip root for the whole app.
-            delayDuration=300ms balances "show on hover" with not being
-            annoying; skipDelayDuration=150ms lets adjacent tooltips
-            chain quickly once one is already open (matches Radix
-            recommendation for dense table UIs like CampaignsTableRow
-            and AdsDrawer).
+            Tooltip-system-redesign · Task 1.3 — single Radix Tooltip root for
+            the whole app. delayDuration=200ms opens a touch faster than the
+            old 300ms (snappier on hover without firing on transient passes);
+            skipDelayDuration=300ms keeps the "already-open" grace window long
+            enough that moving between adjacent help chips in dense table UIs
+            (CampaignsTableRow, AdsDrawer) chains instantly without re-waiting.
           */}
-          <TooltipProvider delayDuration={300} skipDelayDuration={150}>
+          <TooltipProvider delayDuration={200} skipDelayDuration={300}>
             <ErrorBoundary>{children}</ErrorBoundary>
           </TooltipProvider>
         </ThemeProvider>
