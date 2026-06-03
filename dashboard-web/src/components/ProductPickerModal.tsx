@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Heading } from '@/components/ui/Typography';
-import { useDrawerEsc } from '@/lib/drawerStack';
+import { Sheet, SheetContent, SheetHeader, SheetBody, SheetFooter, SheetTitle } from '@/components/ui/Sheet';
 import type { ProductRow } from '@/lib/products';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { ProductCatalogResponse } from '@/app/api/product-catalog/route';
@@ -28,6 +28,20 @@ import type { ProductCatalogResponse } from '@/app/api/product-catalog/route';
  *   per (date, product) and the same product appears many times.
  * - "Top 5 sellers" sit at the top of the list when search is empty, so
  *   the common-case (mapping a hero product) is one click away.
+ *
+ * SHELL: rendered through the shared `Sheet` primitive (`variant="modal"`),
+ * NOT a hand-rolled `fixed` overlay. This picker opens ON TOP of the
+ * CampaignDrawer, which is itself a modal Radix dialog (`Sheet`). A modal
+ * Radix dialog marks everything OUTSIDE its content `aria-hidden` +
+ * `pointer-events:none` (inert). A hand-rolled `<div className="fixed …">`
+ * is outside that scope, so it rendered VISIBLE but DEAD — clicks and the
+ * search box did nothing (the 2026-06-03 "can't search / can't map" bug,
+ * across every campaign + platform). Routing through `Sheet` makes the
+ * picker a real NESTED dialog that Radix recognises, so it escapes the
+ * parent's inert scope and is fully interactive. Same fix the AdsDrawer
+ * already uses (overlay + content lifted to `z-[60]` over the parent's
+ * `z-50` scrim). Esc / backdrop-close / focus-trap / scroll-lock now come
+ * from Radix — the old `useDrawerEsc` + custom backdrop are gone.
  */
 
 const salesFetcher = async (url: string): Promise<ProductsResponse> => {
@@ -115,17 +129,6 @@ export function ProductPickerModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial.join('|')]);
-
-  // Esc to close (without saving). Route through the shared drawerStack
-  // so when this picker opens on top of CampaignDrawer, a single Esc only
-  // closes the topmost layer (this picker) — not both at once.
-  //
-  // #WR-04 was a regression of WR-01 (commit af602b7): the picker
-  // registered its own window.addEventListener('keydown',...) directly,
-  // so pressing Esc fired BOTH the drawerStack's shared listener (closing
-  // CampaignDrawer) and the picker's own listener (closing itself) in
-  // the same tick.
-  useDrawerEsc(open, onClose);
 
   // Build the picker list from the FULL catalog (so unsold products are
   // visible too), then enrich with sales context (units / revenue) when
@@ -218,25 +221,28 @@ export function ProductPickerModal({
     onClose();
   }
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-[70] flex animate-fade-in"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="product-picker-title"
-    >
-      <div
-        className="absolute inset-0 bg-scrim backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden
-      />
-      <div
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent
+        variant="modal"
         dir="rtl"
-        className="relative w-full h-full m-0 sm:m-auto sm:w-auto sm:max-w-[560px] sm:max-h-[88vh] sm:h-auto bg-glass-1 rounded-none sm:rounded-2xl shadow-sheet border-0 sm:border sm:border-glass-edge flex flex-col"
+        // Radix needs a Title for screen-reader users (rendered sr-only below)
+        // and an explicit opt-out of the optional Description.
+        aria-describedby={undefined}
+        // We render a bespoke close X inside the header (start-aligned, next
+        // to the title block) — suppress the Sheet's auto-injected one.
+        hideDefaultClose
+        // Picker opens OVER the campaign modal (Sheet z-50). Lift the overlay
+        // + content to z-[60] so the parent's scrim can't cover it — identical
+        // to AdsDrawer. Routing through Sheet is also what makes the picker a
+        // real nested Radix dialog (escapes the parent's inert scope — the bug
+        // fix). 560px keeps it narrower than the campaign modal; max-sm makes
+        // it a full-screen sheet (handled by variant="modal").
+        overlayClassName="z-[60]"
+        className={cn('z-[60] p-0 gap-0 sm:max-w-[560px]')}
       >
-        <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-glass-edge">
+        <SheetTitle className="sr-only">{`שייך מוצרי ${storeName} לקמפיין ${campaignName}`}</SheetTitle>
+        <SheetHeader className="flex items-center justify-between gap-3 sm:px-5 py-3">
           <div className="min-w-0 flex items-center gap-2.5">
             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent-soft text-accent shrink-0">
               <Package size={16} />
@@ -265,7 +271,7 @@ export function ProductPickerModal({
           >
             <X size={18} />
           </Button>
-        </header>
+        </SheetHeader>
 
         <div className="px-4 sm:px-5 py-3 border-b border-glass-edge">
           {!isLoading && !usingCatalog && (
@@ -302,7 +308,7 @@ export function ProductPickerModal({
           />
         </div>
 
-        <div className="flex-1 overflow-y-auto px-2 sm:px-3 py-2">
+        <SheetBody className="px-2 sm:px-3 py-2">
           {isLoading && (
             <div className="text-center text-sm text-ink-muted py-10">
               טוען מוצרים…
@@ -390,9 +396,9 @@ export function ProductPickerModal({
               })}
             </ul>
           )}
-        </div>
+        </SheetBody>
 
-        <footer className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-t border-glass-edge bg-glass-2/30">
+        <SheetFooter className="justify-between sm:px-5">
           <span className="text-[11px] sm:text-xs text-ink-secondary tabular-nums">
             <strong className="text-ink">{selected.size}</strong> נבחרו
           </span>
@@ -412,8 +418,8 @@ export function ProductPickerModal({
               שמור
             </Button>
           </div>
-        </footer>
-      </div>
-    </div>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
