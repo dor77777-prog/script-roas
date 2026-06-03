@@ -42,6 +42,7 @@ import type { AdRow } from './ads';
 import type { OrderAttributionRow, OrderLineItem } from './ordersAttribution';
 import type { CatalogProduct } from './productCatalog';
 import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
+import { categorizePaymentGateway, type PaymentCategory } from './payments';
 
 /**
  * Generic row type. Without a generated `Database` schema, supabase-js's
@@ -1216,6 +1217,112 @@ export async function fetchCohortMonthlyFromPostgres(
     });
   }
   return rows;
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 7c. readPaymentMethodsByMonth — orders_attribution → PaymentMethodsByMonth
+//     תשלומים (2026-06-03) — per-month split of sales by payment gateway
+//     (credit / paypal / other) as orders + revenue (CAD), business-wide and
+//     per-store. Categorization is regex-based (categorizePaymentGateway), so
+//     it runs in code over the raw `payment_gateway` rather than in SQL.
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * תשלומים — canonical orders_attribution SELECT for the payment-methods
+ * aggregate. Exported so the select-string presence guard can pin every
+ * downstream-consumed column (a dropped column otherwise reads back undefined).
+ * Mirrors the ORDERS_ATTRIBUTION_SELECT / COHORT_MONTHLY_SELECT convention.
+ */
+export const PAYMENT_METHODS_SELECT = 'store_id, date, total_cad, payment_gateway';
+
+/** One gateway bucket: order count + revenue (CAD, already FX-converted). */
+export type PaymentBucket = { orders: number; revenueCad: number };
+
+/** The three categories, fully populated (zeroed when a category is absent). */
+export type PaymentCategoryTotals = Record<PaymentCategory, PaymentBucket>;
+
+/** One month's split: per-store buckets + a business-wide rollup. */
+export type PaymentMethodsMonth = {
+  /** 'YYYY-MM'. */
+  month: string;
+  /** Keyed by store_id → the store's credit/paypal/other buckets. */
+  perStore: Record<string, PaymentCategoryTotals>;
+  /** Sum across all stores in the month. */
+  business: PaymentCategoryTotals;
+};
+
+/** Result of readPaymentMethodsByMonth — months ascending. */
+export type PaymentMethodsByMonth = { months: PaymentMethodsMonth[] };
+
+/** A fresh zeroed credit/paypal/other bucket set. */
+function emptyCategoryTotals(): PaymentCategoryTotals {
+  return {
+    credit: { orders: 0, revenueCad: 0 },
+    paypal: { orders: 0, revenueCad: 0 },
+    other: { orders: 0, revenueCad: 0 },
+  };
+}
+
+/**
+ * Aggregate orders_attribution per month × store × payment category.
+ *
+ * - Reads the raw `payment_gateway` and categorizes in code via
+ *   `categorizePaymentGateway` (regex-based — not expressible cheaply in the
+ *   PostgREST select). NULL / unbackfilled gateways fall into `other`.
+ * - Revenue sums `total_cad` (already FX-converted to CAD; no FX work here).
+ * - Month derived from the `date` string's 'YYYY-MM' prefix (orders_attribution
+ *   `date` is an IL-local 'YYYY-MM-DD' day key — same source the other order
+ *   readers consume), so month bucketing stays consistent with the rest of the
+ *   reader layer without a SQL date_trunc.
+ * - Paginated (via `paginate()`) to bypass Supabase Cloud's db-max-rows=1000.
+ * - Per-store buckets are keyed by store_id; the business rollup is the sum
+ *   across stores. Months are returned ascending.
+ */
+export async function readPaymentMethodsByMonth(): Promise<PaymentMethodsByMonth> {
+  let data: DbRow[];
+  try {
+    data = await paginate<DbRow>(() =>
+      getSupabase().from('orders_attribution').select(PAYMENT_METHODS_SELECT),
+    );
+  } catch (e) {
+    throw new Error(`postgresReaders.readPaymentMethodsByMonth: ${(e as Error).message}`);
+  }
+
+  // month → { perStore, business }
+  const byMonth = new Map<string, PaymentMethodsMonth>();
+
+  for (const r of data) {
+    const month = String(r.date ?? '').slice(0, 7);
+    // Guard against malformed dates (no 'YYYY-MM' prefix) — skip rather than
+    // bucket under an empty month key.
+    if (month.length !== 7) continue;
+
+    const storeId = String(r.store_id);
+    const category = categorizePaymentGateway(
+      r.payment_gateway == null ? null : String(r.payment_gateway),
+    );
+    const revenueCad = toNumber(r.total_cad);
+
+    let entry = byMonth.get(month);
+    if (!entry) {
+      entry = { month, perStore: {}, business: emptyCategoryTotals() };
+      byMonth.set(month, entry);
+    }
+
+    let store = entry.perStore[storeId];
+    if (!store) {
+      store = emptyCategoryTotals();
+      entry.perStore[storeId] = store;
+    }
+
+    store[category].orders += 1;
+    store[category].revenueCad += revenueCad;
+    entry.business[category].orders += 1;
+    entry.business[category].revenueCad += revenueCad;
+  }
+
+  const months = [...byMonth.values()].sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : 0));
+  return { months };
 }
 
 // ────────────────────────────────────────────────────────────────────────
