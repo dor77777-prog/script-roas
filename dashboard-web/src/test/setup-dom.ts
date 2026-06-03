@@ -50,6 +50,20 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   });
 }
 
+// jsdom does not implement ResizeObserver. Radix's Tooltip/Popover `Arrow`
+// (via `@radix-ui/react-use-size`) constructs one on mount to track the arrow
+// box; without a stub the component throws `ResizeObserver is not defined`.
+// A no-op observer is sufficient for these DOM tests (we assert on roles/text,
+// not measured geometry).
+if (typeof globalThis !== 'undefined' && typeof (globalThis as { ResizeObserver?: unknown }).ResizeObserver === 'undefined') {
+  class ResizeObserverStub {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  (globalThis as { ResizeObserver: unknown }).ResizeObserver = ResizeObserverStub;
+}
+
 // jsdom does not implement Element.prototype.scrollIntoView. Components
 // that use it for keyboard navigation (e.g. CommandPalette scrolling the
 // active option into view) crash without a stub.
