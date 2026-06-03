@@ -40,6 +40,7 @@ import { Switch } from '@/components/ui/Switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { Textarea } from '@/components/ui/Textarea';
 import {
+  HelpTooltip,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -240,6 +241,54 @@ export default function PrimitivesPage() {
             </TooltipTrigger>
             <TooltipContent side="top">tooltip content</TooltipContent>
           </Tooltip>
+        </Section>
+
+        {/*
+          HelpTooltip harness — deterministic, data-free anchors for the
+          Playwright interaction gate (tests/visual/tooltips.spec.ts):
+          keyboard focus → tooltip → Esc, and touch tap-ⓘ → popover/sheet →
+          dismiss. The desktop path renders mode A (simple string → Radix
+          Tooltip role=tooltip) and mode B (rich → Popover role=dialog); under
+          touch emulation the SAME call-sites auto-select mode C (ⓘ toggletip)
+          and mode D (ⓘ → bottom Sheet) via useIsMobile, so one section covers
+          all four modes without DB data.
+          `data-underlying-fired` lets the touch spec assert the ⓘ never
+          activates the labelled subject's own action.
+        */}
+        <Section id="help-tooltip" title="HelpTooltip (modes A–D)">
+          <div className="flex flex-wrap items-center gap-6">
+            <HelpTooltip content="עזרה פשוטה — טולטיפ על focus/hover">
+              <Button
+                variant="secondary"
+                data-testid="help-simple-trigger"
+                onClick={(e) => {
+                  e.currentTarget.setAttribute('data-underlying-fired', 'true');
+                }}
+              >
+                ROAS
+              </Button>
+            </HelpTooltip>
+
+            <HelpTooltip
+              variant="rich"
+              title="כותרת עשירה"
+              content={
+                <p data-testid="help-rich-body">
+                  גוף עשיר עם כמה שורות הסבר. במובייל זה הופך ל-Sheet תחתון.
+                </p>
+              }
+            >
+              <Button
+                variant="secondary"
+                data-testid="help-rich-trigger"
+                onClick={(e) => {
+                  e.currentTarget.setAttribute('data-underlying-fired', 'true');
+                }}
+              >
+                NC-ROAS
+              </Button>
+            </HelpTooltip>
+          </div>
         </Section>
 
         <Section id="page-scope" title="PageScope">
