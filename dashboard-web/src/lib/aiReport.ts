@@ -13,6 +13,7 @@ import { analyzeCpmVsRoas, type DailyCpmRoasPoint } from './cpmRoasAnalysis';
 import { getCogsRateForStore } from './analytics';
 import type { Aggregated } from './campaignsAggregator';
 import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
+import { netAdjustFactor } from './home/revenueBasis';
 
 /**
  * Generates an AI-friendly markdown report for a store × date range.
@@ -178,17 +179,29 @@ export function generateAiReport({
 
   // ===== Summary KPIs =====
   let revenue = 0;
+  // Gross revenue (before refund_line_items deduction) for the same period.
+  // `grossRevenue` is null on historical rows pre-Phase-05.7.3 — fall back to
+  // net (`r.revenue`) so a missing column degrades to "no refund adjustment"
+  // rather than dropping the day's gross to 0 (which would over-deflate the
+  // blended net-adj factor below). Wave 1 (2026-06-03, Task 7).
+  let grossRevenue = 0;
   let fbSpend = 0;
   let gaSpend = 0;
   let ttSpend = 0;
   let cogs = 0;
   for (const r of daily) {
     revenue += r.revenue;
+    grossRevenue += r.grossRevenue ?? r.revenue;
     fbSpend += r.fbSpend;
     gaSpend += r.gaSpend;
     ttSpend += r.ttSpend ?? 0;
     cogs += r.cogs;
   }
+  // Blended net/gross factor for the store/period. Used to re-base GROSS
+  // orders_attribution revenue ($) onto the same NET basis as the headline MER
+  // (data_daily.revenue_cad). Uniform per period → ratios (coverage %, per-
+  // source %) are basis-invariant and must NOT be adjusted; only absolute $.
+  const { factor: revenueNetAdj } = netAdjustFactor(revenue, grossRevenue);
   const hasTikTok = ttSpend > 0;
   const totalSpend = fbSpend + gaSpend + ttSpend;
   const roas = totalSpend > 0 ? revenue / totalSpend : 0;
@@ -673,25 +686,38 @@ export function generateAiReport({
         'אפשר לכמת את פער ה-attribution האמיתי שלך.',
     );
     out.push('');
-    out.push(`| מקור | הזמנות | % | הכנסות | AOV |`);
+    out.push(
+      '> **בסיס הכנסות: נטו (מתואם refunds).** עמודות ההכנסות וה-AOV מוצגות בערך ' +
+        'ברוטו בקופה מוכפל ביחס ה-refund הממוצע של החנות/התקופה (net÷gross), כדי ' +
+        'שיתיישרו בקנה־מידה עם ה-MER הכותרתי. אחוזי הכיסוי וה-% לפי מקור הם יחסים ' +
+        '— בלתי-תלויי בסיס — ולכן לא מותאמים.',
+    );
+    out.push('');
+    out.push(`| מקור | הזמנות | % | הכנסות (נטו) | AOV (נטו) |`);
     out.push(`|---|---|---|---|---|`);
+    // Sort + per-source % stay on the GROSS sums (ratios are basis-invariant —
+    // the net-adj factor cancels). Only the DISPLAYED $ ("הכנסות", "AOV") are
+    // re-based by `revenueNetAdj` so they agree in scale with the net MER.
+    // Wave 1 (2026-06-03, Task 7).
     const sortedSources = Object.entries(bySource).sort(
       (a, b) => b[1].revenue - a[1].revenue,
     );
     for (const [src, b] of sortedSources) {
       const label = SOURCE_LABEL[src] ?? src;
       const pct = grandTotal > 0 ? (b.revenue / grandTotal) * 100 : 0;
-      const aov = b.count > 0 ? b.revenue / b.count : 0;
+      const revenueNet = b.revenue * revenueNetAdj;
+      const aovNet = b.count > 0 ? revenueNet / b.count : 0;
       out.push(
         `| ${label} | ${fmtNum(b.count)} | ${pct.toFixed(0)}% | ${fmtCad(
-          b.revenue,
-        )} | ${fmtCad(aov)} |`,
+          revenueNet,
+        )} | ${fmtCad(aovNet)} |`,
       );
     }
+    const grandTotalNet = grandTotal * revenueNetAdj;
     out.push(
       `| **סה"כ** | **${fmtNum(grandOrders)}** | **100%** | **${fmtCad(
-        grandTotal,
-      )}** | **${fmtCad(grandTotal > 0 ? grandTotal / grandOrders : 0)}** |`,
+        grandTotalNet,
+      )}** | **${fmtCad(grandOrders > 0 ? grandTotalNet / grandOrders : 0)}** |`,
     );
     out.push('');
     out.push(
