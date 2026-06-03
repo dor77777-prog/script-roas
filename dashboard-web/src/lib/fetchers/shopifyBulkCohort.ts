@@ -4,12 +4,21 @@
  * READ-ONLY toward Shopify; ZERO writes to ad platforms (CAPI-safe). Exports
  * per order:
  *   { id, createdAt, customer{id},
- *     currentTotalPriceSet{shopMoney{amount,currencyCode}} (gross),
+ *     totalPriceSet{shopMoney{amount,currencyCode}} (IMMUTABLE gross),
  *     totalRefundedSet{shopMoney{amount}} (refunds) }
  * via bulkOperationRunQuery → poll currentBulkOperation → download NDJSON →
  * parseBulkCohortNdjson → caller converts gross/net to CAD (cadConvert),
  * joins each order to its customer's first_order_month (ledger), and folds
  * into customer_cohort_monthly cells (aggregateCohortCells).
+ *
+ * INVARIANT #1 (shopifyRevenueRefunds.ts lines 13-18, also REST fetcher
+ * shopify.ts:817): store-level gross uses the IMMUTABLE total
+ * (`totalPriceSet`, the GraphQL equivalent of REST `total_price`), NOT
+ * `currentTotalPriceSet` — which is live and already nets every refund
+ * applied so far. Reading currentTotalPrice as "gross" understates gross for
+ * any refunded order AND makes the downstream net = gross − refund
+ * double-subtract refunds (once baked in, once explicit). totalRefundedSet is
+ * the separate refund leg; net (= gross − refund) is derived downstream.
  *
  * Privacy: only customer.id (opaque) is requested — never name/email/phone.
  *
@@ -27,7 +36,8 @@ export type BulkCohortOrderLine = {
   id: string;
   createdAt: string;
   customer: { id?: string | null } | null;
-  currentTotalPriceSet?: { shopMoney?: { amount?: string | null; currencyCode?: string | null } | null } | null;
+  /** IMMUTABLE gross (REST `total_price` equivalent) — refund-unaffected. */
+  totalPriceSet?: { shopMoney?: { amount?: string | null; currencyCode?: string | null } | null } | null;
   totalRefundedSet?: { shopMoney?: { amount?: string | null } | null } | null;
 };
 
@@ -36,7 +46,9 @@ export type BulkCohortRow = {
   orderId: string;
   createdAt: string;
   customerId: string | null;
+  /** IMMUTABLE gross (totalPriceSet) — refund-unaffected (Invariant #1). */
   grossNative: number;
+  /** Refund leg (totalRefundedSet). Downstream net = grossNative − refundNative. */
   refundNative: number;
   currency: string | null;
 };
@@ -44,6 +56,10 @@ export type BulkCohortRow = {
 /**
  * GraphQL document exporting per order {id, createdAt, customer{id}, gross,
  * refunds, currency} for ALL orders.
+ *
+ * `totalPriceSet` (NOT currentTotalPriceSet) is the IMMUTABLE gross — see the
+ * Invariant #1 note at the top of this file. `totalRefundedSet` is the refund
+ * leg; net is derived downstream as gross − refund.
  */
 export const BULK_COHORT_QUERY = `
 mutation {
@@ -56,7 +72,7 @@ mutation {
             id
             createdAt
             customer { id }
-            currentTotalPriceSet { shopMoney { amount currencyCode } }
+            totalPriceSet { shopMoney { amount currencyCode } }
             totalRefundedSet { shopMoney { amount } }
           }
         }
@@ -100,9 +116,12 @@ export function parseBulkCohortNdjson(ndjson: string): BulkCohortRow[] {
         orderId: gidTail(obj.id),
         createdAt: obj.createdAt,
         customerId: custGid ? gidTail(custGid) : null,
-        grossNative: toAmount(obj.currentTotalPriceSet?.shopMoney?.amount),
+        // Invariant #1: gross = IMMUTABLE totalPriceSet (refund-unaffected),
+        // NOT currentTotalPriceSet (which already nets refunds). Net is
+        // derived downstream as grossNative − refundNative.
+        grossNative: toAmount(obj.totalPriceSet?.shopMoney?.amount),
         refundNative: toAmount(obj.totalRefundedSet?.shopMoney?.amount),
-        currency: obj.currentTotalPriceSet?.shopMoney?.currencyCode ?? null,
+        currency: obj.totalPriceSet?.shopMoney?.currencyCode ?? null,
       });
     } catch {
       // malformed line — skip (one bad row must not abort the batch)
