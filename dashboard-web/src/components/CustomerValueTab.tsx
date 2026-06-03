@@ -80,6 +80,28 @@ function pctText(frac: number): string {
   return `${Math.round(frac * 100)}%`;
 }
 
+/**
+ * Bucket the flat per-cohort nCAC list into DESCENDING cohort years, each with
+ * its member months (ascending) — mirrors the by-year cohort grid so the footer
+ * regroups the SAME way. Zero data loss: every cohort month is preserved.
+ */
+function groupNcacByYear<T extends { firstOrderMonth: string }>(
+  items: T[],
+): { year: string; items: T[] }[] {
+  const byYear = new Map<string, T[]>();
+  for (const c of items) {
+    const y = c.firstOrderMonth.slice(0, 4);
+    if (!byYear.has(y)) byYear.set(y, []);
+    byYear.get(y)!.push(c);
+  }
+  return Array.from(byYear.entries())
+    .map(([year, list]) => ({
+      year,
+      items: [...list].sort((a, b) => a.firstOrderMonth.localeCompare(b.firstOrderMonth)),
+    }))
+    .sort((a, b) => b.year.localeCompare(a.year));
+}
+
 /** Ratio band tone — locked thresholds (<2 bad, 2-3 warn, ≥3 good). */
 function ratioTone(ratio: number | null): 'good' | 'warn' | 'bad' | 'none' {
   if (ratio == null || !Number.isFinite(ratio)) return 'none';
@@ -174,11 +196,22 @@ export function CustomerValueTab({
   const ratio = value.ltvToNcac;
   const tone = ratioTone(ratio);
 
-  // new-vs-old: compare cumNet at M2 (early LTV); fall back to M0.
-  const recent3 = value.newVsOld.recent[2] ?? value.newVsOld.recent[0] ?? 0;
-  const old3 = value.newVsOld.old[2] ?? value.newVsOld.old[0] ?? 0;
+  // new-vs-old: compare the early-LTV (M2 cumulative, fall back to M0) on the
+  // ACTIVE basis — profit by default — so the card is consistent with the
+  // headline LTV + the curve (resolves the "3-mo NET vs 12-mo PROFIT" mismatch).
+  const recentHalf = isProfit ? value.newVsOld.recent.profit : value.newVsOld.recent.net;
+  const oldHalf = isProfit ? value.newVsOld.old.profit : value.newVsOld.old.net;
+  const recent3 = recentHalf[2] ?? recentHalf[0] ?? 0;
+  const old3 = oldHalf[2] ?? oldHalf[0] ?? 0;
   const newVsOldDiff = old3 > 0 ? Math.round(((recent3 - old3) / old3) * 100) : null;
   const cmpMax = Math.max(recent3, old3, 1);
+
+  // Per-cohort nCAC grouped by cohort YEAR (DESC) — same regrouping as the
+  // by-year cohort grid, so the footer reads consistently. Zero data loss.
+  const ncacByYear = useMemo(
+    () => groupNcacByYear(value.cohortNcac),
+    [value.cohortNcac],
+  );
 
   const numClass = (t: 'good' | 'warn' | 'bad' | 'accent' | 'none') =>
     t === 'good'
@@ -422,8 +455,8 @@ export function CustomerValueTab({
         <div className="flex flex-wrap items-center gap-4">
           <div className="min-w-[180px] flex-1">
             <div className="mb-1 flex justify-between text-xs text-ink-secondary">
-              <span>חדשים (3 ח׳ אחרונים)</span>
-              <b className="text-ink">
+              <span>חדשים (3 ח׳ אחרונים, {basisLabel})</span>
+              <b className="text-ink" data-testid="cv-newvsold-recent">
                 <Money value={recent3} />
               </b>
             </div>
@@ -436,8 +469,8 @@ export function CustomerValueTab({
           </div>
           <div className="min-w-[180px] flex-1">
             <div className="mb-1 flex justify-between text-xs text-ink-secondary">
-              <span>ותיקים</span>
-              <b className="text-ink">
+              <span>ותיקים ({basisLabel})</span>
+              <b className="text-ink" data-testid="cv-newvsold-old">
                 <Money value={old3} />
               </b>
             </div>
@@ -465,26 +498,39 @@ export function CustomerValueTab({
             <CohortGridAdvanced rows={scopedRows} todayMonth={refMonth} />
           </div>
         </details>
-        {/* Per-cohort nCAC availability — pre-May cohorts have no ad-spend. */}
+        {/* Per-cohort nCAC availability — pre-May cohorts have no ad-spend.
+            Grouped by cohort YEAR (DESC), mirroring the by-year cohort grid. */}
         <div className="mt-3 border-t border-glass-edge pt-3 text-[11.5px] leading-relaxed text-ink-muted">
           עלות-גיוס לכל קבוצה (nCAC) זמינה רק מ-מאי 2026 והלאה (תקופת היסטוריית הפרסום). לקבוצות
           ישנות יותר מוצג{' '}
           <span className="font-semibold text-ink-secondary">אין נתוני הוצאה</span> במדד עלות-הגיוס.
-          {value.cohortNcac.length > 0 && (
-            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-              {value.cohortNcac.map((c) => (
-                <li key={c.firstOrderMonth} className="inline-flex items-center gap-1.5 tabular-nums">
-                  <span className="font-semibold text-ink-secondary">{c.firstOrderMonth}</span>
-                  {c.nCac == null ? (
-                    <span className="text-ink-muted">אין נתוני הוצאה</span>
-                  ) : (
-                    <span className="text-ink">
-                      <Money value={c.nCac} />
-                    </span>
-                  )}
-                </li>
+          {ncacByYear.length > 0 && (
+            <div className="mt-2 space-y-2">
+              {ncacByYear.map((yg) => (
+                <div key={yg.year} data-testid={`cv-ncac-year-${yg.year}`}>
+                  <div className="mb-1 text-2xs font-bold tabular-nums text-ink-secondary">
+                    {yg.year}
+                  </div>
+                  <ul className="flex flex-wrap gap-x-4 gap-y-1">
+                    {yg.items.map((c) => (
+                      <li
+                        key={c.firstOrderMonth}
+                        className="inline-flex items-center gap-1.5 tabular-nums"
+                      >
+                        <span className="font-semibold text-ink-secondary">{c.firstOrderMonth}</span>
+                        {c.nCac == null ? (
+                          <span className="text-ink-muted">אין נתוני הוצאה</span>
+                        ) : (
+                          <span className="text-ink">
+                            <Money value={c.nCac} />
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       </Card>

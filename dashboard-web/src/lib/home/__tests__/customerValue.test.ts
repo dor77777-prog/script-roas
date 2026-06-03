@@ -134,7 +134,10 @@ describe('computeCustomerValue — maturity gate on ltv12', () => {
 });
 
 describe('computeCustomerValue — new vs old cohorts (early LTV)', () => {
-  it('splits cohorts into recent/old halves and compares cumNet[0..2]', () => {
+  // newVsOld carries BOTH bases (net AND profit) so the tab's new-vs-veteran
+  // card matches the ACTIVE basis (profit by default) — same basis as the
+  // headline LTV + the curve. profit = net × keep-rate, so profit ≤ net.
+  it('splits cohorts into recent/old halves and exposes net cumNet[0..2] per half', () => {
     const rows: CohortMonthlyRow[] = [
       // OLD half: 2025-01, 2025-02 — strong early LTV (per-cust M0 100)
       cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000 }),
@@ -146,16 +149,52 @@ describe('computeCustomerValue — new vs old cohorts (early LTV)', () => {
       cell({ firstOrderMonth: '2025-12', monthSince: 1, activeCustomers: 4, orders: 4, netCad: 200 }),
     ];
     const r = computeCustomerValue(rows, { basis: 'net', feesRate: 0, blendedNcac: null, todayMonth: '2026-06' });
-    expect(r.newVsOld.recent).toHaveLength(3);
-    expect(r.newVsOld.old).toHaveLength(3);
+    expect(r.newVsOld.recent.net).toHaveLength(3);
+    expect(r.newVsOld.old.net).toHaveLength(3);
     // OLD: pooled M0 net (1000+1000)/(10+10)=100 ; M1 (500)/(20)=25 → cum [0]=100 [1]=125 [2]=125
-    expect(r.newVsOld.old[0]).toBeCloseTo(100, 5);
-    expect(r.newVsOld.old[1]).toBeCloseTo(125, 5);
-    expect(r.newVsOld.old[2]).toBeCloseTo(125, 5);
+    expect(r.newVsOld.old.net[0]).toBeCloseTo(100, 5);
+    expect(r.newVsOld.old.net[1]).toBeCloseTo(125, 5);
+    expect(r.newVsOld.old.net[2]).toBeCloseTo(125, 5);
     // RECENT: pooled M0 (500+500)/(10+10)=50 ; M1 (200)/(20)=10 → cum [0]=50 [1]=60 [2]=60
-    expect(r.newVsOld.recent[0]).toBeCloseTo(50, 5);
-    expect(r.newVsOld.recent[1]).toBeCloseTo(60, 5);
-    expect(r.newVsOld.recent[2]).toBeCloseTo(60, 5);
+    expect(r.newVsOld.recent.net[0]).toBeCloseTo(50, 5);
+    expect(r.newVsOld.recent.net[1]).toBeCloseTo(60, 5);
+    expect(r.newVsOld.recent.net[2]).toBeCloseTo(60, 5);
+  });
+
+  it('exposes a PROFIT cumulative curve per half = net × keep-rate (profit ≤ net)', () => {
+    const rows: CohortMonthlyRow[] = [
+      // OLD half
+      cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000 }),
+      cell({ firstOrderMonth: '2025-01', monthSince: 1, activeCustomers: 5, orders: 5, netCad: 500 }),
+      cell({ firstOrderMonth: '2025-02', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000 }),
+      // RECENT half
+      cell({ firstOrderMonth: '2025-11', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 500 }),
+      cell({ firstOrderMonth: '2025-12', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 500 }),
+      cell({ firstOrderMonth: '2025-12', monthSince: 1, activeCustomers: 4, orders: 4, netCad: 200 }),
+    ];
+    // keep 70% of net (cogs 25% + fees 5%) for every cohort month.
+    const r = computeCustomerValue(rows, {
+      basis: 'profit',
+      feesRate: 0.05,
+      defaultCogsPct: 0.25,
+      blendedNcac: null,
+      todayMonth: '2026-06',
+    });
+    expect(r.newVsOld.recent.profit).toHaveLength(3);
+    expect(r.newVsOld.old.profit).toHaveLength(3);
+    // OLD net cum [0]=100 [1]=125 [2]=125 → ×0.70
+    expect(r.newVsOld.old.profit[0]).toBeCloseTo(70, 5);
+    expect(r.newVsOld.old.profit[1]).toBeCloseTo(87.5, 5);
+    expect(r.newVsOld.old.profit[2]).toBeCloseTo(87.5, 5);
+    // RECENT net cum [0]=50 [1]=60 [2]=60 → ×0.70
+    expect(r.newVsOld.recent.profit[0]).toBeCloseTo(35, 5);
+    expect(r.newVsOld.recent.profit[1]).toBeCloseTo(42, 5);
+    expect(r.newVsOld.recent.profit[2]).toBeCloseTo(42, 5);
+    // Invariant: profit ≤ net at every point, both halves.
+    for (let i = 0; i < 3; i++) {
+      expect(r.newVsOld.recent.profit[i]).toBeLessThanOrEqual(r.newVsOld.recent.net[i] + 1e-9);
+      expect(r.newVsOld.old.profit[i]).toBeLessThanOrEqual(r.newVsOld.old.net[i] + 1e-9);
+    }
   });
 });
 

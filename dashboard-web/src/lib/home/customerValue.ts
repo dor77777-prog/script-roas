@@ -66,11 +66,19 @@ export interface CohortNcac {
   nCac: number | null;
 }
 
+/** Early-LTV (first-3-months) cumulative curve in BOTH bases for one cohort half. */
+export interface EarlyLtvHalf {
+  /** cumNet[0..2] (M0-weighted, 3 points). */
+  net: number[];
+  /** cumProfit[0..2] = net × keep-rate (M0-weighted, 3 points). profit ≤ net. */
+  profit: number[];
+}
+
 export interface NewVsOld {
-  /** cumNet[0..2] for the most-recent half of cohorts (M0-weighted, 3 points). */
-  recent: number[];
-  /** cumNet[0..2] for the older half of cohorts (M0-weighted, 3 points). */
-  old: number[];
+  /** Early-LTV (net + profit) for the most-recent half of cohorts. */
+  recent: EarlyLtvHalf;
+  /** Early-LTV (net + profit) for the older half of cohorts. */
+  old: EarlyLtvHalf;
 }
 
 export interface CustomerValue {
@@ -86,7 +94,7 @@ export interface CustomerValue {
   ltv12Profit: number | null;
   /** Share of cohort customers with ≥1 order after M0 (capped at 1). */
   repeatRate: number;
-  /** Recent-vs-old early-LTV comparison (cumNet[0..2] per half). */
+  /** Recent-vs-old early-LTV comparison (cumNet + cumProfit [0..2] per half). */
   newVsOld: NewVsOld;
   /** Per-cohort nCAC (null where spend is unavailable — pre-May). */
   cohortNcac: CohortNcac[];
@@ -149,6 +157,33 @@ function keepRate(month: string, opts: CustomerValueOpts): number {
   return Math.max(0, 1 - cogs - fees);
 }
 
+/**
+ * Pooled / M0-weighted cumulative-PROFIT curve (per customer) over a set of
+ * cells. Each cell's net is scaled by its cohort-month keep-rate then re-bucketed
+ * by months-since (keep-rate is per cohort-month, not per months-since), and the
+ * running sum is divided by the set's M0-active count — the exact profit
+ * re-bucketing the whole-curve block uses, factored out so the new-vs-old halves
+ * compute profit identically. Returns a 12-length array.
+ */
+function pooledProfitCurve(cells: CohortMonthlyRow[], opts: CustomerValueOpts): number[] {
+  const perMonthProfit = new Array(COHORT_HORIZON).fill(0);
+  let m0Active = 0;
+  for (const c of cells) {
+    const m = c.monthSince;
+    if (m < 0 || m >= COHORT_HORIZON) continue;
+    const net = Number.isFinite(c.netCad) ? c.netCad : 0;
+    perMonthProfit[m] += net * keepRate(c.firstOrderMonth, opts);
+    if (m === 0) m0Active += Number.isFinite(c.activeCustomers) ? c.activeCustomers : 0;
+  }
+  const cumulative = new Array(COHORT_HORIZON).fill(0);
+  let run = 0;
+  for (let m = 0; m < COHORT_HORIZON; m++) {
+    run += perMonthProfit[m];
+    cumulative[m] = m0Active > 0 ? run / m0Active : 0;
+  }
+  return cumulative;
+}
+
 export function computeCustomerValue(
   rows: CohortMonthlyRow[],
   opts: CustomerValueOpts,
@@ -166,21 +201,7 @@ export function computeCustomerValue(
   // Profit curve: each month's pooled net is scaled by that cohort-month's
   // keep-rate, then re-pooled. Because keep-rate is per cohort-month (not per
   // months-since), we re-bucket net-after-cost by months-since.
-  const profitPerMonth = new Array(COHORT_HORIZON).fill(0);
-  for (const c of scoped) {
-    const m = c.monthSince;
-    if (m < 0 || m >= COHORT_HORIZON) continue;
-    const net = Number.isFinite(c.netCad) ? c.netCad : 0;
-    profitPerMonth[m] += net * keepRate(c.firstOrderMonth, opts);
-  }
-  const cumulativeProfit = new Array(COHORT_HORIZON).fill(0);
-  {
-    let run = 0;
-    for (let m = 0; m < COHORT_HORIZON; m++) {
-      run += profitPerMonth[m];
-      cumulativeProfit[m] = all.m0Active > 0 ? run / all.m0Active : 0;
-    }
-  }
+  const cumulativeProfit = pooledProfitCurve(scoped, opts);
 
   // repeatRate — aggregate proxy: Σ active(m≥1) ÷ Σ M0, capped at 1.
   const repeatRate = all.m0Active > 0 ? Math.min(1, all.repeatActive / all.m0Active) : 0;
@@ -211,11 +232,21 @@ export function computeCustomerValue(
   const half = Math.ceil(months.length / 2);
   const oldMonths = new Set(months.slice(0, months.length - half));
   const recentMonths = new Set(months.slice(months.length - half));
-  const oldCurve = pooledCurve(scoped.filter((r) => oldMonths.has(r.firstOrderMonth)));
-  const recentCurve = pooledCurve(scoped.filter((r) => recentMonths.has(r.firstOrderMonth)));
+  const oldCells = scoped.filter((r) => oldMonths.has(r.firstOrderMonth));
+  const recentCells = scoped.filter((r) => recentMonths.has(r.firstOrderMonth));
+  const oldCurve = pooledCurve(oldCells);
+  const recentCurve = pooledCurve(recentCells);
+  // Carry BOTH bases so the new-vs-veteran card uses the ACTIVE basis (profit by
+  // default) — consistent with the headline LTV + the curve. profit ≤ net.
   const newVsOld: NewVsOld = {
-    recent: recentCurve.cumulativeNet.slice(0, 3),
-    old: oldCurve.cumulativeNet.slice(0, 3),
+    recent: {
+      net: recentCurve.cumulativeNet.slice(0, 3),
+      profit: pooledProfitCurve(recentCells, opts).slice(0, 3),
+    },
+    old: {
+      net: oldCurve.cumulativeNet.slice(0, 3),
+      profit: pooledProfitCurve(oldCells, opts).slice(0, 3),
+    },
   };
 
   // ── per-cohort nCAC (only for spend-available months) ───────────────────

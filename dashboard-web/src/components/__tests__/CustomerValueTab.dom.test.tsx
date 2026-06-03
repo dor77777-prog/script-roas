@@ -181,6 +181,29 @@ describe('CustomerValueTab — profit/revenue toggle', () => {
   });
 });
 
+describe('CustomerValueTab — new-vs-veteran uses the ACTIVE basis', () => {
+  // ISSUE 1: the card used to ALWAYS show NET ($86) while the headline + curve
+  // default to PROFIT ($47) — the apparent "$86 3-mo vs $47 12-mo" contradiction.
+  // The card now reads from the ACTIVE basis: profit by default, net on toggle.
+  it('shows profit values under the default (profit) basis and flips to net on the toggle', () => {
+    const { container } = renderTab();
+    const recentEl = () =>
+      container.querySelector('[data-testid="cv-newvsold-recent"]')!.textContent ?? '';
+    const oldEl = () =>
+      container.querySelector('[data-testid="cv-newvsold-old"]')!.textContent ?? '';
+    // Default basis = profit → the card numbers are the profit half-curves.
+    const recentProfit = recentEl();
+    const oldProfit = oldEl();
+    // Flip to revenue (net). The numbers must change (net ≥ profit, strictly
+    // larger here since keep-rate < 1).
+    fireEvent.click(screen.getByTestId('cv-basis-revenue'));
+    const recentNet = recentEl();
+    const oldNet = oldEl();
+    expect(recentNet).not.toBe(recentProfit);
+    expect(oldNet).not.toBe(oldProfit);
+  });
+});
+
 describe('CustomerValueTab — advanced cohort grid', () => {
   it('renders a collapsed <details> containing the cohort grid heatmap', () => {
     renderTab();
@@ -188,6 +211,72 @@ describe('CustomerValueTab — advanced cohort grid', () => {
     expect(details.tagName.toLowerCase()).toBe('details');
     // The grid table lives inside the <details>.
     expect(within(details).getByTestId('cv-grid')).toBeInTheDocument();
+  });
+});
+
+describe('CustomerValueTab — by-year cohort matrix accordion (ISSUE 2)', () => {
+  // The flat ~38-row cohort grid is regrouped into a by-YEAR accordion (same UX
+  // as PaymentMethodsTab): one <details> per cohort YEAR (DESC), most-recent
+  // open by default; expanding shows that year's cohort-month retention rows.
+  // ZERO data loss — every cohort row + the per-cohort nCAC stays.
+  const multiYearRows: CohortMonthlyRow[] = [
+    // 2024 cohort
+    cell({ firstOrderMonth: '2024-03', monthSince: 0, activeCustomers: 8, orders: 8, netCad: 800 }),
+    cell({ firstOrderMonth: '2024-03', monthSince: 1, activeCustomers: 3, orders: 3, netCad: 300 }),
+    // 2025 cohorts
+    cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000 }),
+    cell({ firstOrderMonth: '2025-01', monthSince: 1, activeCustomers: 6, orders: 6, netCad: 600 }),
+    cell({ firstOrderMonth: '2025-07', monthSince: 0, activeCustomers: 12, orders: 12, netCad: 1200 }),
+    // 2026 cohorts
+    cell({ firstOrderMonth: '2026-02', monthSince: 0, activeCustomers: 9, orders: 9, netCad: 900 }),
+    cell({ firstOrderMonth: '2026-05', monthSince: 0, activeCustomers: 7, orders: 7, netCad: 700 }),
+  ];
+
+  // jsdom keeps every <details> child in the DOM regardless of the `open`
+  // attribute, so we don't need to toggle to assert on the inner markup.
+  function renderMulti(extra?: Record<string, unknown>) {
+    return render(
+      <CustomerValueTab
+        stores={['uzoshop', 'zolplus', 'usmile360']}
+        injectedRows={multiYearRows}
+        injectedBlendedNcac={40}
+        injectedSpendByMonth={{ '2026-05': 280 }}
+        todayMonth="2026-06"
+        {...extra}
+      />,
+    );
+  }
+
+  it('renders one <details> per cohort YEAR (DESC) inside the advanced view', () => {
+    renderMulti();
+    expect(screen.getByTestId('cv-cohort-year-2026')).toBeInTheDocument();
+    expect(screen.getByTestId('cv-cohort-year-2025')).toBeInTheDocument();
+    expect(screen.getByTestId('cv-cohort-year-2024')).toBeInTheDocument();
+  });
+
+  it('opens the most-recent cohort year by default; older years collapsed', () => {
+    renderMulti();
+    const y2026 = screen.getByTestId('cv-cohort-year-row-2026') as HTMLDetailsElement;
+    const y2024 = screen.getByTestId('cv-cohort-year-row-2024') as HTMLDetailsElement;
+    expect(y2026.open).toBe(true);
+    expect(y2024.open).toBe(false);
+  });
+
+  it('keeps EVERY cohort-month row present (zero data loss across years)', () => {
+    renderMulti();
+    for (const fom of ['2024-03', '2025-01', '2025-07', '2026-02', '2026-05']) {
+      expect(screen.getByTestId(`cv-cohort-row-${fom}`)).toBeInTheDocument();
+    }
+  });
+
+  it('groups the per-cohort nCAC footer by year too (every cohort month preserved)', () => {
+    renderMulti();
+    // The nCAC group buckets exist for each cohort year.
+    expect(screen.getByTestId('cv-ncac-year-2026')).toBeInTheDocument();
+    expect(screen.getByTestId('cv-ncac-year-2025')).toBeInTheDocument();
+    expect(screen.getByTestId('cv-ncac-year-2024')).toBeInTheDocument();
+    // 2026-05 has spend → a real nCAC; the others surface "אין נתוני הוצאה".
+    expect(screen.getAllByText('אין נתוני הוצאה').length).toBeGreaterThan(0);
   });
 });
 
