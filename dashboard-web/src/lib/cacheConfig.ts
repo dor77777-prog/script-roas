@@ -15,6 +15,12 @@ export const CACHE_CONFIG = {
   products: { revalidate: 60, swr: 120 },
   ads: { revalidate: 300, swr: 900 },
   ordersAttribution: { revalidate: 300, swr: 900 },
+  // Wave 2 (2026-06-03) cohort/LTV aggregate. The customer_cohort_monthly
+  // table is a weekly full-replace (cron-cohort-refresh) of slow-moving
+  // strategic data — a 5-min server ISR window + 15-min CDN swr is plenty
+  // fresh and keeps the customer-value tab from burning Supabase quota on
+  // every poll. Mirrors the ordersAttribution window.
+  cohorts: { revalidate: 300, swr: 900 },
   storeMeta: { revalidate: 3600, swr: 86400 },
   productCatalog: { revalidate: 60, swr: 300 },
   // dashboardState revalidate raised from 10s → 30s (WR-05). With 3 partners
