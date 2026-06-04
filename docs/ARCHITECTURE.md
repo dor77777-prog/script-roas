@@ -458,6 +458,7 @@ providers. Now fully end-to-end:
 
 ### 9.5.2 Notifier
 - `dashboard-web/src/lib/notifications/tokenFailures.ts` → `notifyTokenFailure({provider, storeId, operation, errorMsg, advice?})`.
+- **DQ-2 (2026-06-04) — FX-failure alert:** `dashboard-web/src/lib/notifications/fxFailure.ts` → `notifyFxFailure({currency, dateStr, errorMsg})` wraps `notifyTokenFailure` as `provider='fx'`, `storeId='global'`, `operation='fx_rate_failure'`. The Meta + TikTok CAD adapters (`getFxCadAdapterForStore` / `getTikTokFxCadAdapterForStore`) previously swallowed a Frankfurter outage with a silent `return 0` (→ understated CAD spend/ROAS/net, no signal); they now fire this alert on BOTH the throw path and the invalid-rate (`rate<=0`) path before returning 0. Inherits the (provider,store,operation) 6h throttle → one page per outage window, not per-conversion. Never throws.
 - Soft-fail (never throws — caller's original exception keeps propagating).
 - 6h throttle per (provider, storeId, operation) — bumps `seen_count` every call, sends WhatsApp only when `last_alert_sent_at` is null or > 6h old.
 - Sends to single hard-coded recipient: `+972524809540` (operator's explicit instruction). Distinct from the daily-summary phone1/phone2 in `notification_config`.

@@ -16,6 +16,7 @@
 // budget configuration, not a historical day's budget.
 
 import { getFxRate } from '@/lib/fetchers/fx';
+import { notifyFxFailure } from '@/lib/notifications/fxFailure';
 import type { StoreId } from '@/lib/registries/types';
 
 export async function getAdAccountIdForStore(storeId: StoreId): Promise<string> {
@@ -63,9 +64,14 @@ export async function getFxCadAdapterForStore(
     if (currency === 'CAD') return amount;
     try {
       const rate = await getFxRate(currency, 'CAD', dateStr);
-      if (!Number.isFinite(rate) || rate <= 0) return 0;
+      if (!Number.isFinite(rate) || rate <= 0) {
+        // DQ-2: alert instead of silently zeroing CAD spend.
+        await notifyFxFailure({ currency, dateStr, errorMsg: `invalid rate ${rate}` });
+        return 0;
+      }
       return amount * rate;
-    } catch {
+    } catch (e) {
+      await notifyFxFailure({ currency, dateStr, errorMsg: e instanceof Error ? e.message : String(e) });
       return 0;
     }
   };

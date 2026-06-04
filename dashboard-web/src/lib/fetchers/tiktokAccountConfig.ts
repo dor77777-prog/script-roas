@@ -36,6 +36,7 @@ import {
   type TikTokAdvertiserInfo,
 } from './tiktok';
 import { getFxRate } from './fx';
+import { notifyFxFailure } from '@/lib/notifications/fxFailure';
 import type { StoreId } from '@/lib/registries/types';
 
 export type TikTokAccountConfig = {
@@ -130,9 +131,14 @@ export async function getTikTokFxCadAdapterForStore(
     if (currency === 'CAD') return amount;
     try {
       const rate = await getFxRate(currency, 'CAD', dateStr);
-      if (!Number.isFinite(rate) || rate <= 0) return 0;
+      if (!Number.isFinite(rate) || rate <= 0) {
+        // DQ-2: alert instead of silently zeroing CAD spend.
+        await notifyFxFailure({ currency, dateStr, errorMsg: `invalid rate ${rate}` });
+        return 0;
+      }
       return amount * rate;
-    } catch {
+    } catch (e) {
+      await notifyFxFailure({ currency, dateStr, errorMsg: e instanceof Error ? e.message : String(e) });
       return 0;
     }
   };
