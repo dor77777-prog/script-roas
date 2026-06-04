@@ -44,6 +44,8 @@ import { SyncIndicator } from './SyncIndicator';
 import { FreshnessChip } from './FreshnessChip';
 import { TabFreshnessHeader } from './TabFreshnessHeader';
 import { readDashboardState, syncUrl, drillToCampaigns, DEFAULT_PRESET, type TabKey } from '@/lib/urlState';
+import { OPEN_CAMPAIGN_DRAWER_EVENT, type OpenCampaignDrawerDetail } from '@/components/insights/InsightActions';
+import { STORE_ID_TO_NAME, type StoreId } from '@/lib/platformsByStore';
 import { buildDateRangeKey, getTodayInIsraelTz } from '@/lib/dateRange';
 import { useCogsSettings } from '@/lib/hooks/useCogsSettings';
 import { applyCogsToRows } from '@/lib/cogsSettings';
@@ -373,6 +375,28 @@ export function Dashboard() {
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+
+  // The "פתח קמפיין" primary action on InsightActions (insights board + the WS3
+  // action list, both on Home) dispatches `roas-open-campaign-drawer`. Its only
+  // subscriber is CampaignsTable, which is mounted ONLY on the campaigns tab —
+  // so from Home the click fired into the void (operator-reported 2026-06-05).
+  // Bridge it: when the campaigns tab is NOT mounted, route through the proven
+  // drillToCampaigns path (switch tab + open the drawer via c_drill on mount).
+  // When already on the campaigns tab, CampaignsTable's own listener handles it.
+  useEffect(() => {
+    function onInsightOpenCampaign(e: Event) {
+      const d = (e as CustomEvent<OpenCampaignDrawerDetail>).detail;
+      if (!d?.campaignId || !d?.storeId || !d?.platform) return;
+      if (activeTab === 'campaigns') return; // CampaignsTable owns the drawer there.
+      const lower = d.platform === 'Meta' ? 'meta' : d.platform === 'Google' ? 'google' : 'tiktok';
+      drillToCampaigns({
+        store: STORE_ID_TO_NAME[d.storeId as StoreId],
+        campaign: { storeId: d.storeId, platform: lower, campaignId: d.campaignId },
+      });
+    }
+    window.addEventListener(OPEN_CAMPAIGN_DRAWER_EVENT, onInsightOpenCampaign);
+    return () => window.removeEventListener(OPEN_CAMPAIGN_DRAWER_EVENT, onInsightOpenCampaign);
+  }, [activeTab]);
 
   const filtered = useMemo(() => {
     if (!data) return null;
