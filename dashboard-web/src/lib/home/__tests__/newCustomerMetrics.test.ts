@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeNewCustomerMetrics,
+  computeStableNcac,
   type FirstOrderInput,
 } from '@/lib/home/newCustomerMetrics';
 
@@ -90,5 +91,58 @@ describe('computeNewCustomerMetrics — net-adj + confidence', () => {
   it('confidence: suppressed when share > 40%', () => {
     const rows = [newRow(100, true), newRow(100, null)]; // 50%
     expect(computeNewCustomerMetrics(rows, 100, 'uzoshop', 1).confidence).toBe('suppressed');
+  });
+});
+
+describe('computeStableNcac — all-spend ÷ all-May+-new-customers', () => {
+  it('returns allHistorySpend / new-customer order count over the same window', () => {
+    const rows: FirstOrderInput[] = [
+      newRow(100, true),  // new
+      newRow(60, true),   // new
+      newRow(200, false), // returning — excluded from the denominator
+      newRow(40, null),   // guest — excluded from the denominator
+    ];
+    // 2 new-customer orders over the all-history window; spend 1000 → 500.
+    expect(computeStableNcac(rows, 1000)).toBeCloseTo(500, 5);
+  });
+
+  it('is INVARIANT to the selected date range — same window in, same nCAC out', () => {
+    // The whole point of BUG #3: the denominator (new-customer orders) and the
+    // numerator (spend) are BOTH over the full spend-history window, so the
+    // value does not change when the operator narrows the global date filter.
+    // We model that by computing over the identical all-history inputs twice
+    // (what the two stable SWR fetches return regardless of filters.range) and
+    // asserting the result is the same value, NOT the volatile short-range one.
+    const allHistoryRows: FirstOrderInput[] = [
+      newRow(120, true), newRow(120, true), newRow(120, true), newRow(120, true), // 4 new
+      newRow(300, false),
+    ];
+    const allHistorySpend = 4800; // May+ full spend extent
+    const stable = computeStableNcac(allHistoryRows, allHistorySpend);
+    expect(stable).toBeCloseTo(1200, 5); // 4800 / 4
+
+    // A SHORT-range slice (e.g. June ~4 days) would yield a tiny denominator
+    // and a wildly different value — proving the stable path must NOT use it.
+    const shortRangeRows: FirstOrderInput[] = [newRow(120, true)]; // 1 new
+    const shortRangeSpend = 320;
+    const volatile = computeStableNcac(shortRangeRows, shortRangeSpend);
+    expect(volatile).toBeCloseTo(320, 5); // 320 / 1 — the bouncing value
+    expect(stable).not.toBeCloseTo(volatile ?? NaN, 1);
+  });
+
+  it('scopes by storeName when provided', () => {
+    const rows: FirstOrderInput[] = [
+      { storeName: 'uzoshop', totalCad: 100, isFirstOrder: true },
+      { storeName: 'zolplus', totalCad: 999, isFirstOrder: true },
+      { storeName: 'zolplus', totalCad: 999, isFirstOrder: true },
+    ];
+    // uzoshop scope → 1 new order; spend 250 → 250.
+    expect(computeStableNcac(rows, 250, 'uzoshop')).toBeCloseTo(250, 5);
+  });
+
+  it('null spend / 0 spend / 0 new orders → null (no meaningless ratio)', () => {
+    expect(computeStableNcac([newRow(50, false)], 100)).toBeNull(); // 0 new orders
+    expect(computeStableNcac([newRow(50, true)], 0)).toBeNull();    // 0 spend
+    expect(computeStableNcac([newRow(50, true)], null)).toBeNull(); // null spend
   });
 });

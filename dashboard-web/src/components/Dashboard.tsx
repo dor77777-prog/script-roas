@@ -78,6 +78,7 @@ import { MobileStickyRoas } from '@/components/home/MobileStickyRoas';
 import { toStoreDetail } from '@/lib/home/storeDetail';
 import {
   computeNewCustomerMetrics,
+  computeStableNcac,
   type FirstOrderInput,
 } from '@/lib/home/newCustomerMetrics';
 import { netAdjustFactor } from '@/lib/home/revenueBasis';
@@ -122,6 +123,15 @@ const ordersFetcher = (url: string): Promise<OrdersResponseShape> =>
   fetchJson<OrdersResponseShape>(url);
 
 const initialPreset = 'this_month';
+
+/**
+ * BUG #3 fix (2026-06-04) — floor of the STABLE all-history window used by the
+ * Customers-tab blended nCAC. Ad spend exists from May 2026 onward (the full
+ * data_daily extent), so the stable window is `[SPEND_HISTORY_FLOOR, today-IL]`,
+ * INDEPENDENT of the global date-range filter. The upstream readers clamp to the
+ * actual data extent, so an over-wide floor is safe (it just selects all rows).
+ */
+const SPEND_HISTORY_FLOOR = '2026-05-01';
 
 /**
  * Wraps tab-switch state updates in the browser's native View Transitions
@@ -208,6 +218,31 @@ export function Dashboard() {
     // refreshInterval 0 — periodic refresh is driven by the single coordinated
     // useAutoRefresh(60s) above so this key re-renders TOGETHER with the others
     // (no offset per-hook timer). revalidateOnFocus stays for instant catch-up.
+    { refreshInterval: 0, revalidateOnFocus: true },
+  );
+
+  // BUG #3 fix (2026-06-04) — STABLE all-history window for the Customers-tab
+  // blended nCAC. The headline LTV:nCAC / payback / verdict on the לקוחות tab
+  // must NOT bounce as the operator narrows the global date filter, and its
+  // numerator (new-customer orders) and denominator (spend) must be over the
+  // SAME window. We fetch BOTH sources over a FIXED `[SPEND_HISTORY_FLOOR,
+  // today-IL]` range (independent of `filters.range`) so the value is stable —
+  // ad-spend history is May-2026+, so this window IS the full data extent.
+  // These keys are distinct from the range-scoped keys above, so they ride the
+  // single useAutoRefresh(60s) tick like every other key but never re-fire when
+  // the user changes the date filter (only at IL-midnight, when `to` rolls).
+  const stableNcacRange = useMemo(
+    () => ({ from: SPEND_HISTORY_FLOOR, to: getTodayInIsraelTz() }),
+    [],
+  );
+  const { data: stableSpendData } = useSWR<DashboardData>(
+    buildDateRangeKey('/api/data', stableNcacRange),
+    fetcher,
+    { refreshInterval: 0, revalidateOnFocus: true },
+  );
+  const { data: stableOrdersData } = useSWR(
+    buildDateRangeKey('/api/orders-attribution', stableNcacRange),
+    ordersFetcher,
     { refreshInterval: 0, revalidateOnFocus: true },
   );
 
@@ -407,12 +442,35 @@ export function Dashboard() {
   // raw account totals. blendedNcac drives the verdict / LTV:nCAC / payback;
   // spendByMonth feeds the per-cohort nCAC (best-effort over the current-range
   // data_daily rows — months outside the range degrade to the muted state).
+  //
+  // BUG #3 fix (2026-06-04) — `blendedNcac` is computed over the STABLE
+  // all-spend-history window (`stableNcacRange`), NOT `filtered.curAgg.spend`
+  // (the short selected range). nCAC = spend ÷ new-customer-orders bounced
+  // ($32 ↔ $53) because the denominator was a few-days subset that the live
+  // cron nudges every ~10 min, AND the numerator/denominator sat on DIFFERENT
+  // windows from the all-history LTV it divides into. Now BOTH the spend
+  // (mapping-aware `aggregate(...).spend` over the stable data_daily rows) and
+  // the new-customer order count (stable orders_attribution, isFirstOrder===true)
+  // span the SAME May+ window → stable + LTV-aligned. The Home-page nCAC /
+  // NC-ROAS tile below stays range-specific (intentionally). Scope-aware:
+  // narrowing the store still re-scopes both sides over the same full window.
   const customersBlendedNcac = useMemo(() => {
-    if (!filtered) return null;
     const scope = filters.store === 'All' ? undefined : filters.store;
-    const { factor } = netAdjustFactor(filtered.curAgg.revenue, filtered.curAgg.grossRevenue);
-    return computeNewCustomerMetrics(firstOrderRows, filtered.curAgg.spend, scope, factor).nCac;
-  }, [firstOrderRows, filtered, filters.store]);
+    const stableRows = stableSpendData?.rows;
+    const stableOrders = stableOrdersData?.rows;
+    if (!stableRows || !stableOrders) return null;
+    // Mapping-aware all-history spend (same agg.spend source — never raw totals).
+    const stableSpend = aggregate(
+      filterRows(stableRows, stableNcacRange, filters.store),
+      stableNcacRange,
+    ).spend;
+    const stableFirstOrderRows: FirstOrderInput[] = stableOrders.map((r) => ({
+      storeName: r.storeName,
+      totalCad: r.totalCad,
+      isFirstOrder: r.isFirstOrder,
+    }));
+    return computeStableNcac(stableFirstOrderRows, stableSpend, scope);
+  }, [stableSpendData, stableOrdersData, stableNcacRange, filters.store]);
   const customersSpendByMonth = useMemo(() => {
     const out: Record<string, number> = {};
     for (const r of data?.rows ?? []) {

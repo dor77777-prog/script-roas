@@ -94,3 +94,49 @@ export function computeNewCustomerMetrics(
 
   return { ncRevenue: ncRevenueNet, ncOrders, returningOrders: returning, ncRoas, nCac, unclassifiableShare, confidence };
 }
+
+/**
+ * BUG #3 fix (2026-06-04) — STABLE blended nCAC for the לקוחות (Customers) tab.
+ *
+ * WHY this exists separately from the Home-page range-scoped nCAC:
+ *   nCAC = spend ÷ new-customer-orders. The Home tile is intentionally
+ *   range-specific (it answers "what did this period cost to acquire?"). But
+ *   the Customers tab uses nCAC as the DENOMINATOR of the headline LTV:nCAC /
+ *   payback / verdict — and LTV there is computed over ALL customer history.
+ *   Feeding it a SHORT-range spend (e.g. June ~4 days) made the value bounce
+ *   ($32 ↔ $53 between refreshes): a tiny denominator over which the live cron
+ *   nudges spend every ~10 min, and a numerator/denominator on DIFFERENT
+ *   windows (all-history LTV vs few-days nCAC).
+ *
+ * The operator decision: compute over a STABLE window = the FULL spend-history
+ * extent (ad spend exists May-2026+ only, so the window IS the full data
+ * extent), INVARIANT to the selected global date-range filter. Numerator AND
+ * denominator are over the SAME all-history window. The caller therefore passes
+ * ALL-history inputs (a separate, range-independent fetch) — never the
+ * `filtered.curAgg.spend` short-range subset.
+ *
+ * Mapping-aware by construction: `allHistorySpend` is the SAME mapping-aware
+ * `agg.spend` source (data_daily via agg_data_daily_for_date), NEVER raw
+ * account totals. `rows` are the all-history orders_attribution rows; the
+ * denominator counts isFirstOrder === true only (matching the LTV cohort).
+ *
+ * Returns null when there is no meaningful ratio (no spend, or no new orders).
+ */
+export function computeStableNcac(
+  rows: FirstOrderInput[],
+  allHistorySpend: number | null,
+  storeName?: string,
+): number | null {
+  // A 0 / null / non-finite spend is a meaningless nCAC for this window (it
+  // means there is no spend history yet, not "free acquisition"). Guard it to
+  // null rather than reporting nCAC = 0 — `computeNewCustomerMetrics` clamps a
+  // null merSpend to 0 internally and would otherwise yield 0 when there are
+  // new orders. The verdict / payback panel renders null as "not enough data".
+  if (allHistorySpend == null || !Number.isFinite(allHistorySpend) || allHistorySpend <= 0) {
+    return null;
+  }
+  // Reuse the same pure accumulator so the new-customer order count is derived
+  // identically to the Home tile (isFirstOrder === true only). netAdjust is
+  // irrelevant here — nCAC is count-based — so we leave it at the default.
+  return computeNewCustomerMetrics(rows, allHistorySpend, storeName).nCac;
+}
