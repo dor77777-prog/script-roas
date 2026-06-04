@@ -1207,7 +1207,12 @@ export async function fetchCohortMonthlyFromPostgres(
   const rows: CohortMonthlyRow[] = [];
   for (const r of data) {
     rows.push({
-      storeId: String(r.store_id),
+      // A1 (2026-06-04): project to the DISPLAY name on the reader boundary —
+      // the customer-value scope selector + global filter use display names
+      // (data.stores), so emitting the raw store_id matched only uzoshop
+      // (identical string) and rendered an all-zero tab for Zol Plus / 360usmile.
+      // Mirrors every sibling reader (campaigns/products/payments).
+      storeId: STORE_NAME_BY_ID[String(r.store_id)] ?? String(r.store_id),
       firstOrderMonth: String(r.first_order_month ?? '').trim(),
       monthSince: toNumber(r.month_since),
       activeCustomers: toNumber(r.active_customers),

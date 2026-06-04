@@ -360,6 +360,40 @@ describe('computeCustomerValue — verdict coherence (mature basis: payback vs r
   });
 });
 
+describe('computeCustomerValue — new vs old: maturity-aligned boundary + cmpDepth (A5/B1)', () => {
+  it('veteran = age≥12, recent = age∈[3,12); a young (age<3) cohort is excluded', () => {
+    const rows: CohortMonthlyRow[] = [
+      // veteran (age 17): 2025-01
+      cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, netCad: 1000, orders: 10 }),
+      cell({ firstOrderMonth: '2025-01', monthSince: 1, activeCustomers: 5, netCad: 500, orders: 5 }),
+      cell({ firstOrderMonth: '2025-01', monthSince: 2, activeCustomers: 4, netCad: 400, orders: 4 }),
+      // recent (age 5): 2026-01 — observed 3 months
+      cell({ firstOrderMonth: '2026-01', monthSince: 0, activeCustomers: 10, netCad: 2000, orders: 10 }),
+      cell({ firstOrderMonth: '2026-01', monthSince: 1, activeCustomers: 6, netCad: 600, orders: 6 }),
+      cell({ firstOrderMonth: '2026-01', monthSince: 2, activeCustomers: 5, netCad: 400, orders: 5 }),
+      // too young (age 1): 2026-05 — must NOT land in recent (no 3-month obs)
+      cell({ firstOrderMonth: '2026-05', monthSince: 0, activeCustomers: 99, netCad: 99999, orders: 99 }),
+    ];
+    const r = computeCustomerValue(rows, { basis: 'net', feesRate: 0, blendedNcac: null, todayMonth: '2026-06' });
+    // recent M0 = 2026-01 only (2026-05 excluded as too young): 2000/10 = 200.
+    expect(r.newVsOld.recent.net[0]).toBeCloseTo(200, 5);
+    // veteran M0 = 2025-01: 1000/10 = 100.
+    expect(r.newVsOld.old.net[0]).toBeCloseTo(100, 5);
+    // both have 3 observed months → shared comparison depth = 2.
+    expect(r.newVsOld.cmpDepth).toBe(2);
+  });
+
+  it('cmpDepth = −1 when there is no recent (or no veteran) cohort → card empty state', () => {
+    const rows: CohortMonthlyRow[] = [
+      // only a veteran cohort, no age∈[3,12) recent
+      cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, netCad: 1000, orders: 10 }),
+    ];
+    const r = computeCustomerValue(rows, { basis: 'net', feesRate: 0, blendedNcac: null, todayMonth: '2026-06' });
+    expect(r.newVsOld.cmpDepth).toBe(-1);
+    expect(r.newVsOld.recent.net.every((x) => x === 0)).toBe(true);
+  });
+});
+
 describe('computeCustomerValue — store scope + empty', () => {
   it('storeName filter scopes the computation', () => {
     const rows: CohortMonthlyRow[] = [

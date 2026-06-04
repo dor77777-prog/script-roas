@@ -176,18 +176,15 @@ describe('CustomerValueTab — verdict coherence (mature basis: no "losing" + "r
   });
 });
 
-describe('CustomerValueTab — net/revenue-basis verdict coherence (single basis)', () => {
-  // BUG (Issue 1 + 4): the badge/ratio + the no-recovery clause were ALWAYS
-  // profit-derived (value.ltvToNcac = ltv12Profit/nCAC) while the headline LTV,
-  // net-per-customer, and the curve switched with the toggle. On the NET basis,
-  // when ltv12Profit < nCAC ≤ ltv12Net the verdict showed BOTH a positive green
-  // net AND a "losing" red badge — two bases at once. The fix derives the
-  // ratio/badge/net-per-customer/payback on the SAME (displayed) basis.
+describe('CustomerValueTab — profitability is PROFIT-pinned (B3, 2026-06-04)', () => {
+  // B3: every profitability element (ratio, badge, net-per-customer, payback,
+  // "losing/recovers" clause) is ALWAYS profit-derived — revenue is not profit
+  // (1.25× GROSS revenue with ~31.5% COGS+fees still owed is NOT "profitable").
+  // The basis toggle re-skins ONLY the curve + the headline שווי-לקוח NUMBER.
   //
   // Fixture: ONE mature cohort, ltv12Net=100, ltv12Profit=68.5 (keep-rate
-  // 1−0.25−0.065=0.685), blended nCAC=80. So profit ratio 0.856<1 ("losing")
-  // but net ratio 1.25≥1 (profitable). On the NET basis everything must read
-  // PROFITABLE; on the PROFIT basis everything must read LOSING.
+  // 1−0.25−0.065=0.685), blended nCAC=80. profit ratio 0.856<1 ("losing") on
+  // BOTH bases; only the headline LTV number changes when toggling.
   const windowRows: CohortMonthlyRow[] = [
     cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000 }),
   ];
@@ -203,26 +200,28 @@ describe('CustomerValueTab — net/revenue-basis verdict coherence (single basis
     );
   }
 
-  it('NET basis: profitable badge + green net (NOT a profit-derived "losing" badge)', () => {
+  it('NET basis: badge STAYS profit-pinned "losing"; only the headline LTV number switches', () => {
     const { container } = renderWindow();
+    const ltvBefore = screen.getByTestId('cv-kpi-ltv').textContent;
     fireEvent.click(screen.getByTestId('cv-basis-revenue'));
     const badge = container.querySelector('[data-testid="cv-ratio-badge"]');
     expect(badge).not.toBeNull();
-    // Net ratio 1.25 ≥ 1 ⇒ the badge must NOT be the "losing" red badge.
-    expect(badge!.textContent).not.toContain('מפסידים');
-    expect(badge!.className).not.toContain('text-status-redFg');
+    // profit ratio 0.856 < 1 → losing, regardless of the displayed basis.
+    expect(badge!.textContent).toContain('מפסידים');
+    expect(badge!.className).toContain('text-status-redFg');
     const verdict = screen.getByTestId('cv-verdict').textContent ?? '';
-    // The no-recovery clause must NOT appear on a profitable net basis.
-    expect(verdict).not.toContain('לא מחזיר את עלות הגיוס תוך שנה');
+    expect(verdict).toContain('לא מחזיר את עלות הגיוס תוך שנה');
+    // …but the headline LTV NUMBER switched to the (larger) net value.
+    expect(screen.getByTestId('cv-kpi-ltv').textContent).not.toBe(ltvBefore);
   });
 
-  it('NET basis: net-per-customer colour matches a profitable (not losing) badge', () => {
+  it('NET basis: net-per-customer stays profit-pinned negative (red), never a green revenue net', () => {
     const { container } = renderWindow();
     fireEvent.click(screen.getByTestId('cv-basis-revenue'));
     const verdict = container.querySelector('[data-testid="cv-verdict"]')!;
-    // net-per-customer = 100 − 80 = +20 → coloured good (green), never red.
-    expect(verdict.querySelector('.text-status-redFg')).toBeNull();
-    expect(verdict.querySelector('.text-status-greenFg')).not.toBeNull();
+    // profit net = 68.5 − 80 = −11.5 → red; the revenue net (+20) is NOT shown.
+    expect(verdict.querySelector('.text-status-redFg')).not.toBeNull();
+    expect(verdict.querySelector('.text-status-greenFg')).toBeNull();
   });
 
   it('PROFIT basis (same fixture): losing badge + red net + no curve callout', () => {
@@ -267,6 +266,51 @@ describe('CustomerValueTab — net/revenue-basis verdict coherence (single basis
   });
 });
 
+describe('CustomerValueTab — B1 era reconciliation + A7 ratio precision (2026-06-04)', () => {
+  it('B1: mature cohorts losing BUT recent cohorts pay back → amber (not red) badge + bridge', () => {
+    const recoverRows: CohortMonthlyRow[] = [
+      // mature (age 17) losing: M0 net 500/10 = 50/cust → profit 34.25 < nCAC 40
+      cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 500 }),
+      // recent (age 5) strong: M0 net 1000/10 = 100/cust → profit 68.5 ≥ 40
+      cell({ firstOrderMonth: '2026-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000 }),
+    ];
+    const { container } = render(
+      <CustomerValueTab
+        stores={['uzoshop']}
+        injectedRows={recoverRows}
+        injectedBlendedNcac={40}
+        injectedSpendByMonth={{}}
+        todayMonth="2026-06"
+      />,
+    );
+    const badge = container.querySelector('[data-testid="cv-ratio-badge"]')!;
+    // Mature ratio < 1 would be a red "losing" badge — but recent cohorts clear
+    // nCAC, so it is downgraded to a qualified amber badge.
+    expect(badge.className).toContain('text-status-warningFg');
+    expect(badge.className).not.toContain('text-status-redFg');
+    expect(badge.textContent).toContain('קבוצות בוגרות');
+    // …and the bridge to the new-vs-old card renders.
+    expect(container.querySelector('[data-testid="cv-recent-bridge"]')).not.toBeNull();
+  });
+
+  it('A7: ratio near break-even renders 2 decimals (never a "1.0×" beside a losing badge)', () => {
+    const nearRows: CohortMonthlyRow[] = [
+      cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000 }),
+    ];
+    render(
+      <CustomerValueTab
+        stores={['uzoshop']}
+        injectedRows={nearRows}
+        injectedBlendedNcac={70}
+        injectedSpendByMonth={{}}
+        todayMonth="2026-06"
+      />,
+    );
+    // ltv12Profit = 100 × 0.685 = 68.5 ; 68.5 / 70 = 0.978 → "0.98×".
+    expect(screen.getByTestId('cv-verdict').textContent ?? '').toMatch(/0\.98×/);
+  });
+});
+
 describe('CustomerValueTab — no-mature-cohort fallback curve has NO break-even', () => {
   // BUG (Issue 3): with no mature cohort the headline correctly shows "no
   // acquisition-cost data" (ltv12/ratio/payback all null), but the curve fell
@@ -290,9 +334,13 @@ describe('CustomerValueTab — no-mature-cohort fallback curve has NO break-even
     );
   }
 
-  it('headline shows the no-acquisition-cost-data state (no LTV verdict)', () => {
+  it('A4: headline names the MISSING side — no mature cohort (NOT "no acquisition-cost data")', () => {
+    // There IS an nCAC (50) but NO mature cohort → the missing side is the
+    // mature LTV. The verdict must say so, not blame the (present) nCAC.
     renderRecentOnly();
-    expect(screen.getByTestId('cv-verdict').textContent).toContain('אין עדיין נתוני עלות-גיוס');
+    const verdict = screen.getByTestId('cv-verdict').textContent ?? '';
+    expect(verdict).toContain('אין עדיין קבוצת לקוחות בוגרת');
+    expect(verdict).not.toContain('אין עדיין נתוני עלות-גיוס');
     expect(screen.getByTestId('cv-kpi-payback').textContent).toBe('—');
   });
 
@@ -332,15 +380,11 @@ describe('CustomerValueTab — zones curve', () => {
   });
 });
 
-describe('CustomerValueTab — payback zone-split coherence', () => {
-  // The zone split must sit where the VISIBLE curve crosses break-even. The
-  // headline paybackMonths is always profit-derived, so on the revenue (net)
-  // basis it must NOT be forced onto the net curve (net ≥ profit → net crosses
-  // earlier). The tab passes paybackMonths only in profit basis; net basis
-  // lets the curve derive its own crossing from the net points it is drawing.
-  //
-  // Fixture tuned so profit pays back LATER than net: a flat-ish curve whose
-  // net crosses the nCAC line a month before profit does.
+describe('CustomerValueTab — curve break-even appears ONLY on the profit basis (B3)', () => {
+  // B3: the break-even line + zone split + payback callout belong to PROFIT only
+  // — comparing a REVENUE curve to an acquisition cost is a category error. On
+  // the revenue (הכנסה) basis the curve shows the shape but NO break-even line /
+  // crossing / callout.
   const splitRows: CohortMonthlyRow[] = [
     cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 600, grossCad: 660 }),
     cell({ firstOrderMonth: '2025-01', monthSince: 1, activeCustomers: 5, orders: 5, netCad: 300, grossCad: 330 }),
@@ -348,15 +392,7 @@ describe('CustomerValueTab — payback zone-split coherence', () => {
     cell({ firstOrderMonth: '2025-01', monthSince: 3, activeCustomers: 3, orders: 3, netCad: 200, grossCad: 220 }),
   ];
 
-  function calloutMonth(container: HTMLElement): string | null {
-    const callout = container.querySelector('[data-testid="cv-payback-callout"]');
-    const texts = callout?.querySelectorAll('text');
-    if (!texts) return null;
-    // The 2nd <text> in the callout reads "חודש N".
-    return texts[1]?.textContent ?? null;
-  }
-
-  it('uses a basis-coherent payback split (net crosses earlier than profit)', () => {
+  it('profit basis draws a payback callout; revenue basis draws none', () => {
     const { container } = render(
       <CustomerValueTab
         stores={['uzoshop']}
@@ -366,19 +402,11 @@ describe('CustomerValueTab — payback zone-split coherence', () => {
         todayMonth="2026-06"
       />,
     );
-    // Profit basis (default): split at the profit-payback month.
-    const profitMonth = calloutMonth(container);
+    // Profit basis (default, profitable here): a break-even callout exists.
+    expect(container.querySelector('[data-testid="cv-payback-callout"]')).not.toBeNull();
+    // Revenue basis: NO break-even line/callout (category error suppressed).
     fireEvent.click(screen.getByTestId('cv-basis-revenue'));
-    const netMonth = calloutMonth(container);
-    // Both must render a callout. Net crosses break-even strictly EARLIER than
-    // profit (net ≥ profit), so the net split must sit to the LEFT of the
-    // profit split — proving the net basis is NOT forced onto the profit-derived
-    // payback month.
-    expect(profitMonth).toMatch(/חודש/);
-    expect(netMonth).toMatch(/חודש/);
-    const profN = Number(profitMonth!.replace(/[^\d.]/g, ''));
-    const netN = Number(netMonth!.replace(/[^\d.]/g, ''));
-    expect(netN).toBeLessThan(profN);
+    expect(container.querySelector('[data-testid="cv-payback-callout"]')).toBeNull();
   });
 });
 
@@ -395,11 +423,30 @@ describe('CustomerValueTab — profit/revenue toggle', () => {
 });
 
 describe('CustomerValueTab — new-vs-veteran uses the ACTIVE basis', () => {
-  // ISSUE 1: the card used to ALWAYS show NET ($86) while the headline + curve
-  // default to PROFIT ($47) — the apparent "$86 3-mo vs $47 12-mo" contradiction.
-  // The card now reads from the ACTIVE basis: profit by default, net on toggle.
+  // The card reads the ACTIVE basis: profit by default, net on toggle. A5: the
+  // split is maturity-aligned (veteran = age≥12, recent = age∈[3,12)), so the
+  // fixture needs BOTH a veteran AND a recent (observed-3-months) cohort.
+  const newVsOldRows: CohortMonthlyRow[] = [
+    // veteran (age 17): 2025-01, observed ≥3 months
+    cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000 }),
+    cell({ firstOrderMonth: '2025-01', monthSince: 1, activeCustomers: 5, orders: 5, netCad: 500 }),
+    cell({ firstOrderMonth: '2025-01', monthSince: 2, activeCustomers: 4, orders: 4, netCad: 400 }),
+    // recent (age 5): 2026-01, observed 3 months
+    cell({ firstOrderMonth: '2026-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1200 }),
+    cell({ firstOrderMonth: '2026-01', monthSince: 1, activeCustomers: 6, orders: 6, netCad: 600 }),
+    cell({ firstOrderMonth: '2026-01', monthSince: 2, activeCustomers: 5, orders: 5, netCad: 400 }),
+  ];
+
   it('shows profit values under the default (profit) basis and flips to net on the toggle', () => {
-    const { container } = renderTab();
+    const { container } = render(
+      <CustomerValueTab
+        stores={['uzoshop']}
+        injectedRows={newVsOldRows}
+        injectedBlendedNcac={40}
+        injectedSpendByMonth={{}}
+        todayMonth="2026-06"
+      />,
+    );
     const recentEl = () =>
       container.querySelector('[data-testid="cv-newvsold-recent"]')!.textContent ?? '';
     const oldEl = () =>

@@ -454,14 +454,28 @@ export function Dashboard() {
   // span the SAME May+ window → stable + LTV-aligned. The Home-page nCAC /
   // NC-ROAS tile below stays range-specific (intentionally). Scope-aware:
   // narrowing the store still re-scopes both sides over the same full window.
+  // A3 (2026-06-04): the customer-value scope is OWNED here (single source of
+  // truth) so the SAME scope drives the LTV/curve (computeCustomerValue, via
+  // the `scope` prop) AND the mapping-aware nCAC inputs below. Previously
+  // blendedNcac/spendByMonth keyed off the GLOBAL filter while the tab's
+  // compute keyed off its own in-tab selector → picking a store in the tab
+  // divided that store's LTV by the business-wide nCAC. Initialized from /
+  // synced to the global filter (the tab's selector then drives it locally).
+  const [customersScope, setCustomersScope] = useState<string>('all');
+  useEffect(() => {
+    if (filters.store === 'All') return;
+    if ((data?.stores ?? []).includes(filters.store)) setCustomersScope(filters.store);
+  }, [filters.store, data?.stores]);
+  const customersScopeStore = customersScope === 'all' ? undefined : customersScope;
+  const customersScopeFilter = customersScope === 'all' ? 'All' : customersScope;
+
   const customersBlendedNcac = useMemo(() => {
-    const scope = filters.store === 'All' ? undefined : filters.store;
     const stableRows = stableSpendData?.rows;
     const stableOrders = stableOrdersData?.rows;
     if (!stableRows || !stableOrders) return null;
     // Mapping-aware all-history spend (same agg.spend source — never raw totals).
     const stableSpend = aggregate(
-      filterRows(stableRows, stableNcacRange, filters.store),
+      filterRows(stableRows, stableNcacRange, customersScopeFilter),
       stableNcacRange,
     ).spend;
     const stableFirstOrderRows: FirstOrderInput[] = stableOrders.map((r) => ({
@@ -469,17 +483,25 @@ export function Dashboard() {
       totalCad: r.totalCad,
       isFirstOrder: r.isFirstOrder,
     }));
-    return computeStableNcac(stableFirstOrderRows, stableSpend, scope);
-  }, [stableSpendData, stableOrdersData, stableNcacRange, filters.store]);
+    return computeStableNcac(stableFirstOrderRows, stableSpend, customersScopeStore);
+  }, [stableSpendData, stableOrdersData, stableNcacRange, customersScopeFilter, customersScopeStore]);
+  // A2 (2026-06-04): per-cohort nCAC spend MUST come from the SAME stable
+  // May-2026+ window as the blended nCAC + the footer caption — NOT the
+  // selected range (which left May "אין נתוני הוצאה" while the caption claims
+  // "from May 2026", and made June a volatile single-day artifact ~6× off the
+  // $52 headline). Mapping-aware via filterRows over the per-store-attributed
+  // data_daily rows (same source the headline aggregates).
   const customersSpendByMonth = useMemo(() => {
+    const stableRows = stableSpendData?.rows;
+    if (!stableRows) return undefined;
+    const scoped = filterRows(stableRows, stableNcacRange, customersScopeFilter);
     const out: Record<string, number> = {};
-    for (const r of data?.rows ?? []) {
-      if (filters.store !== 'All' && r.storeName !== filters.store) continue;
+    for (const r of scoped) {
       const m = r.date.slice(0, 7);
       out[m] = (out[m] ?? 0) + (r.totalSpend ?? 0);
     }
     return out;
-  }, [data, filters.store]);
+  }, [stableSpendData, stableNcacRange, customersScopeFilter]);
 
   return (
     <div dir="rtl" className="min-h-screen bg-canvas flex">
@@ -601,6 +623,8 @@ export function Dashboard() {
                 <CustomerValueTab
                   stores={data.stores}
                   globalStore={filters.store}
+                  scope={customersScope}
+                  onScopeChange={setCustomersScope}
                   blendedNcac={customersBlendedNcac}
                   spendByMonth={customersSpendByMonth}
                 />

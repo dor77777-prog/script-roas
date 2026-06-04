@@ -134,6 +134,20 @@ describe('fetchCohortMonthlyFromPostgres', () => {
     expect(rows[1].monthSince).toBe(2);
   });
 
+  it('maps raw store_id → display name (A1: matches the scope selector + every sibling reader)', async () => {
+    // BUG (2026-06-04): the cohort reader was the ONLY reader emitting the raw
+    // store_id. The scope selector + global filter use DISPLAY names
+    // (data.stores = 'uzoshop' / 'Zol Plus' / '360usmile'), so scoping to
+    // zolplus/usmile360 matched 0 rows → an all-zero tab for 2/3 stores.
+    setSupabaseRows([
+      { store_id: 'zolplus', first_order_month: '2025-07', month_since: 0, active_customers: 10, orders: 10, gross_cad: 100, net_cad: 90 },
+      { store_id: 'usmile360', first_order_month: '2025-07', month_since: 0, active_customers: 5, orders: 5, gross_cad: 50, net_cad: 45 },
+      { store_id: 'uzoshop', first_order_month: '2025-07', month_since: 0, active_customers: 20, orders: 20, gross_cad: 200, net_cad: 180 },
+    ]);
+    const rows = await fetchCohortMonthlyFromPostgres();
+    expect(rows.map((r) => r.storeId)).toEqual(['Zol Plus', '360usmile', 'uzoshop']);
+  });
+
   it('orders by first_order_month then month_since', async () => {
     setSupabaseRows(fakeRows);
     await fetchCohortMonthlyFromPostgres();

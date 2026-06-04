@@ -75,10 +75,17 @@ export interface EarlyLtvHalf {
 }
 
 export interface NewVsOld {
-  /** Early-LTV (net + profit) for the most-recent half of cohorts. */
+  /** Early-LTV (net + profit) for the RECENT (observed-but-young, age∈[3,12)) cohorts. */
   recent: EarlyLtvHalf;
-  /** Early-LTV (net + profit) for the older half of cohorts. */
+  /** Early-LTV (net + profit) for the VETERAN (mature, age≥12) cohorts. */
   old: EarlyLtvHalf;
+  /**
+   * A5 — shared comparison index (0..2): min(2, recent.depth, veteran.depth).
+   * The card compares recent[cmpDepth] vs old[cmpDepth] so a 3-month label is
+   * always backed by the same observed depth on BOTH sides. −1 when either
+   * side is empty (→ the card shows its "not enough cohorts" empty state).
+   */
+  cmpDepth: number;
 }
 
 export interface CustomerValue {
@@ -140,6 +147,8 @@ function pooledCurve(cells: CohortMonthlyRow[]): {
   perMonthNet: number[];
   m0Active: number;
   repeatActive: number;
+  /** Deepest month_since with any active customer (−1 when the set is empty). */
+  depth: number;
 } {
   const perMonthNet = new Array(COHORT_HORIZON).fill(0);
   const perMonthActive = new Array(COHORT_HORIZON).fill(0);
@@ -160,7 +169,13 @@ function pooledCurve(cells: CohortMonthlyRow[]): {
   // Customers active in any month after M0 (aggregate proxy, capped downstream).
   let repeatActive = 0;
   for (let m = 1; m < COHORT_HORIZON; m++) repeatActive += perMonthActive[m];
-  return { retention, cumulativeNet, perMonthNet, m0Active, repeatActive };
+  // A5 — deepest observed month_since, so the new-vs-old card compares both
+  // halves at a SHARED depth (no immature half carrying M1 forward as a fake M2).
+  let depth = -1;
+  for (let m = COHORT_HORIZON - 1; m >= 0; m--) {
+    if (perMonthActive[m] > 0) { depth = m; break; }
+  }
+  return { retention, cumulativeNet, perMonthNet, m0Active, repeatActive, depth };
 }
 
 /** keep-rate (0..1) for a cohort month under the profit basis. */
@@ -236,15 +251,24 @@ export function computeCustomerValue(
   const ltv12Net = hasMature ? cumulativeNetMature[COHORT_HORIZON - 1] : null;
   const ltv12Profit = hasMature ? cumulativeProfitMature[COHORT_HORIZON - 1] : null;
 
-  // ── new vs old (early-LTV split on cohort months) ───────────────────────
+  // ── new vs old (early-LTV, aligned to the maturity boundary) ────────────
+  // A5 + B1 (2026-06-04): split by AGE, not a ceil-half of the month list, so
+  // the same cohort is never both "veteran (verdict-defining)" and "recent
+  // (improving)" — veteran = mature (age≥12, reuses matureCells); recent =
+  // observed-but-young (age∈[3,12)). Both have ≥3 observed months by
+  // construction, so comparing the first-3-months cumulative is apples-to-apples
+  // (no immature cohort carrying its M1 forward as a phantom M2).
   const months = [...new Set(scoped.map((r) => r.firstOrderMonth))].sort();
-  const half = Math.ceil(months.length / 2);
-  const oldMonths = new Set(months.slice(0, months.length - half));
-  const recentMonths = new Set(months.slice(months.length - half));
-  const oldCells = scoped.filter((r) => oldMonths.has(r.firstOrderMonth));
-  const recentCells = scoped.filter((r) => recentMonths.has(r.firstOrderMonth));
-  const oldCurve = pooledCurve(oldCells);
+  const recentCells = scoped.filter((r) => {
+    const age = cohortAgeMonths(r.firstOrderMonth, todayMonth);
+    return age >= 3 && age < MATURE_MONTHS;
+  });
   const recentCurve = pooledCurve(recentCells);
+  const cmpDepth = Math.min(
+    2,
+    Math.max(0, mature.depth),
+    Math.max(0, recentCurve.depth),
+  );
   // Carry BOTH bases so the new-vs-veteran card uses the ACTIVE basis (profit by
   // default) — consistent with the headline LTV + the curve. profit ≤ net.
   const newVsOld: NewVsOld = {
@@ -253,9 +277,10 @@ export function computeCustomerValue(
       profit: pooledProfitCurve(recentCells, opts).slice(0, 3),
     },
     old: {
-      net: oldCurve.cumulativeNet.slice(0, 3),
-      profit: pooledProfitCurve(oldCells, opts).slice(0, 3),
+      net: cumulativeNetMature.slice(0, 3),
+      profit: cumulativeProfitMature.slice(0, 3),
     },
+    cmpDepth: recentCurve.depth < 0 || mature.depth < 0 ? -1 : cmpDepth,
   };
 
   // ── per-cohort nCAC (only for spend-available months) ───────────────────

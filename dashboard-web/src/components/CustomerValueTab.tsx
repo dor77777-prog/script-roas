@@ -52,6 +52,14 @@ export interface CustomerValueTabProps {
   /** Global store filter (filters.store). 'All'/undefined → business-wide. */
   globalStore?: string;
   /**
+   * A3 — controlled scope from Dashboard ('all' = business-wide, else a store
+   * display name). When `onScopeChange` is provided the selector is controlled
+   * by the parent so the SAME scope drives blendedNcac/spendByMonth + the LTV
+   * compute. Omitted in standalone tests → internal-state fallback.
+   */
+  scope?: string;
+  onScopeChange?: (scope: string) => void;
+  /**
    * Mapping-aware spend (CAD) per cohort first-order-month — the SAME agg.spend
    * the rest of the dashboard uses (NEVER recomputed here). Wired by Dashboard.
    */
@@ -120,6 +128,8 @@ function ratioTone(ratio: number | null): 'good' | 'warn' | 'bad' | 'none' {
 export function CustomerValueTab({
   stores,
   globalStore,
+  scope: controlledScope,
+  onScopeChange,
   spendByMonth,
   blendedNcac,
   injectedRows,
@@ -128,14 +138,21 @@ export function CustomerValueTab({
   todayMonth,
 }: CustomerValueTabProps) {
   const [basis, setBasis] = useState<Basis>('profit');
-  const [scope, setScope] = useState<string>(
+  const [internalScope, setInternalScope] = useState<string>(
     globalStore && globalStore !== 'All' && stores.includes(globalStore) ? globalStore : 'all',
   );
-  // Keep the scope selector in sync when the operator changes the global filter.
+  // A3 — controlled by Dashboard when onScopeChange is provided (single source
+  // of truth so blendedNcac/spendByMonth + the LTV compute share one scope);
+  // internal-state fallback keeps the tab usable standalone in tests.
+  const scope = controlledScope ?? internalScope;
+  const setScope = onScopeChange ?? setInternalScope;
+  // Sync to the global filter only when UNCONTROLLED (Dashboard owns the sync
+  // when controlled — see Dashboard.customersScope).
   useEffect(() => {
+    if (onScopeChange) return;
     if (!globalStore || globalStore === 'All') return;
-    if (stores.includes(globalStore)) setScope(globalStore);
-  }, [globalStore, stores]);
+    if (stores.includes(globalStore)) setInternalScope(globalStore);
+  }, [globalStore, stores, onScopeChange]);
 
   // ── COGS settings (editable %, localStorage + same-tab event) ────────────
   const [cogs, setCogs] = useState<CogsSettings | null>(null);
@@ -196,77 +213,86 @@ export function CustomerValueTab({
 
   const isProfit = basis === 'profit';
   const basisLabel = isProfit ? 'רווח' : 'הכנסה';
-  // The displayed curve uses the MATURE cumulative — the SAME basis as the $LTV
-  // headline + the ratio + the payback — so the curve, its break-even crossing,
-  // and the verdict all reconcile (no "losing" + "recovers in N months" once).
-  // When there is no mature cohort (mature curve all-zero), gracefully fall back
-  // to the all-cohort pooled curve so the chart isn't an empty flat line.
+  // The curve switches with the toggle (cumulative revenue vs profit per
+  // customer). Mature basis = the same cohorts as the headline; fall back to the
+  // all-cohort pooled curve only when there's no mature cohort (so the chart
+  // isn't an empty flat line).
   const matureCurve = isProfit ? value.cumulativeProfitMature : value.cumulativeNetMature;
   const allCurve = isProfit ? value.cumulativeProfit : value.cumulativeNet;
   const hasMatureCurve = matureCurve.some((v) => v !== 0);
   const curvePoints = hasMatureCurve ? matureCurve : allCurve;
-  const ltv12 = isProfit ? value.ltv12Profit : value.ltv12Net;
+  // Headline שווי-לקוח NUMBER switches with the toggle (revenue or profit LTV).
+  const displayLtv = isProfit ? value.ltv12Profit : value.ltv12Net;
   const ncac = value.blendedNcac;
-  // Round the components BEFORE subtracting so the banner reconciles with the
-  // displayed $LTV − $nCAC (both shown as whole dollars via <Money>) — avoids
-  // "47 − 33 = 13" rounding mismatches.
-  const netPerCustomer =
-    ltv12 != null && ncac != null ? Math.round(ltv12) - Math.round(ncac) : null;
 
-  // ── ONE basis for every basis-dependent element ──────────────────────────
-  // value.ltvToNcac / value.paybackMonths are PROFIT-derived. The headline LTV,
-  // net-per-customer, and the curve switch with the toggle, so the ratio +
-  // badge + no-recovery clause + payback + the curve's break-even crossing MUST
-  // all be re-derived on the DISPLAYED basis — otherwise the net basis renders a
-  // profit-derived "losing" badge over a positive green net (Issue 1/4), and the
-  // net curve draws a payback the verdict denies (Issue 2). In profit basis we
-  // reuse the precomputed mature values; in net basis we derive the ratio + the
-  // payback from the MATURE net curve (ltv12Net / nCAC, first month_since the
-  // mature net cum ≥ nCAC) — null when there is no mature net value, exactly
-  // like the profit branch.
-  const displayRatio =
-    isProfit
-      ? value.ltvToNcac
-      : ltv12 != null && ncac != null && ncac > 0
-        ? ltv12 / ncac
-        : null;
-  const displayPayback = useMemo<number | null>(() => {
-    if (isProfit) return value.paybackMonths;
-    if (ncac == null || !hasMatureCurve) return null;
-    for (let m = 0; m < matureCurve.length; m++) {
-      if (matureCurve[m] >= ncac) return m;
-    }
-    return null;
-  }, [isProfit, value.paybackMonths, ncac, hasMatureCurve, matureCurve]);
-  const ratio = displayRatio;
+  // ── B3: every PROFITABILITY element is PROFIT-pinned ──────────────────────
+  // Revenue is not profit: 1.3× GROSS revenue with ~31.5% COGS+fees still owed
+  // is NOT "profitable". So the ratio, badge, net-per-customer, payback and the
+  // "losing/recovers" clause ALWAYS derive from profit (value.ltvToNcac /
+  // value.paybackMonths are already profit-derived). The basis toggle re-skins
+  // ONLY the curve + the headline שווי-לקוח number.
+  const profitLtv = value.ltv12Profit;
+  const ratio = value.ltvToNcac;
+  const payback = value.paybackMonths;
   const tone = ratioTone(ratio);
-  // net-per-customer colour follows the SAME comparison as the badge (ratio ≥ 1)
-  // rather than the rounded $LTV − $nCAC, so a sub-dollar losing ratio can never
-  // paint a green/zero net (Issue 4). When ratio is unknown, fall back to the
-  // rounded sign so an isolated nCAC-less case still colours sensibly.
+  const losing = ratio != null && ratio < 1;
+  const hasLtv = profitLtv != null;
+  const hasNcac = ncac != null;
+  // net-per-customer (profit). Round components before subtracting so it
+  // reconciles with the displayed $LTV − $nCAC. A7: when losing but rounding
+  // lands on $0, floor to −$1 so "$0 net" never sits beside a "losing" badge.
+  const netPerCustomerRaw =
+    hasLtv && hasNcac ? Math.round(profitLtv) - Math.round(ncac as number) : null;
+  const netPerCustomer =
+    netPerCustomerRaw != null && losing ? Math.min(-1, netPerCustomerRaw) : netPerCustomerRaw;
   const netIsGood = ratio != null ? ratio >= 1 : (netPerCustomer ?? 0) >= 0;
-  // The curve's break-even line + crossing must derive from the SAME basis +
-  // gate as the badge. Suppress nCAC entirely (no line / crossing / callout)
-  // when EITHER:
-  //   • there is no mature curve — the chart falls back to the all-cohort
-  //     pooled shape, which must NOT draw a crossing the headline disclaims
-  //     (Issue 3); or
-  //   • the displayed basis is LOSING (ratio < 1) — the curve must never draw a
-  //     payback the verdict denies, even via its own points→nCAC derivation
-  //     (Issue 2). When profitable, curveNcac is the real break-even and the
-  //     zone split is pinned to displayPayback below.
-  const losingOnDisplay = ratio != null && ratio < 1;
-  const curveNcac = hasMatureCurve && !losingOnDisplay ? ncac : null;
+  // A7: 2 decimals near break-even so "0.97×"/"1.04×" never round to a "1.0×"
+  // that contradicts the (raw-ratio) badge tone.
+  const ratioText =
+    ratio == null ? null : ratio >= 0.9 && ratio < 1.1 ? ratio.toFixed(2) : ratio.toFixed(1);
 
-  // new-vs-old: compare the early-LTV (M2 cumulative, fall back to M0) on the
-  // ACTIVE basis — profit by default — so the card is consistent with the
-  // headline LTV + the curve (resolves the "3-mo NET vs 12-mo PROFIT" mismatch).
+  // Curve break-even line (nCAC) ONLY on the PROFIT curve (comparing a revenue
+  // curve to acquisition cost is the B3 category error), and only when there's
+  // a mature curve and we're not losing (no crossing the verdict denies).
+  const curveNcac = isProfit && hasMatureCurve && !losing ? ncac : null;
+  const curvePayback = isProfit ? payback : null;
+
+  // ── A5: new-vs-old at the SHARED depth (no immature carry-forward) ────────
+  const cmpDepth = value.newVsOld.cmpDepth;
   const recentHalf = isProfit ? value.newVsOld.recent.profit : value.newVsOld.recent.net;
   const oldHalf = isProfit ? value.newVsOld.old.profit : value.newVsOld.old.net;
-  const recent3 = recentHalf[2] ?? recentHalf[0] ?? 0;
-  const old3 = oldHalf[2] ?? oldHalf[0] ?? 0;
-  const newVsOldDiff = old3 > 0 ? Math.round(((recent3 - old3) / old3) * 100) : null;
+  const recent3 = cmpDepth >= 0 ? recentHalf[cmpDepth] ?? 0 : 0;
+  const old3 = cmpDepth >= 0 ? oldHalf[cmpDepth] ?? 0 : 0;
+  // Gate the bars on the SAME condition as the sentence (no $0 veteran bar
+  // beside "insufficient"): both halves must have real early value.
+  const canCompare = cmpDepth >= 0 && old3 > 0 && recent3 > 0;
+  const newVsOldDiff = canCompare ? Math.round(((recent3 - old3) / old3) * 100) : null;
   const cmpMax = Math.max(recent3, old3, 1);
+  const cmpMonthsLabel = `${(cmpDepth >= 0 ? cmpDepth : 2) + 1} החודשים הראשונים`;
+
+  // ── B1: are the RECENT cohorts already paying back the current nCAC? ──────
+  // The headline LTV is mature-only (older, weaker cohorts) while nCAC is the
+  // 2026 window. When recent cohorts' observed early PROFIT already clears nCAC,
+  // an absolute "losing" badge is misleading → downgrade it + bridge to the
+  // new-vs-old card.
+  const recentEarlyProfit = cmpDepth >= 0 ? value.newVsOld.recent.profit[cmpDepth] ?? 0 : 0;
+  const recentPaysBack = hasNcac && recentEarlyProfit >= (ncac as number);
+  // Show the bridge when the verdict is "losing" on mature cohorts but the
+  // recent cohorts are stronger (improving) — so the two cards don't contradict.
+  const showRecentBridge = losing && (recentPaysBack || (newVsOldDiff != null && newVsOldDiff > 0));
+  // B1 — downgrade the ABSOLUTE "losing" badge to a qualified amber one when the
+  // recent cohorts already pay back: an absolute red "מפסידים" is misleading
+  // when current acquisition is profitable and only the OLD (mature) cohorts lag.
+  const badgeDowngraded = tone === 'bad' && recentPaysBack;
+  const badgeTone: 'good' | 'warn' | 'bad' = badgeDowngraded ? 'warn' : tone === 'none' ? 'warn' : tone;
+  const badgeText =
+    tone === 'good'
+      ? 'בריא ✓'
+      : badgeDowngraded
+        ? 'מבוסס על קבוצות בוגרות — החדשות חזקות יותר'
+        : tone === 'bad'
+          ? 'מתחת לסף הרווחיות — מפסידים על הגיוס'
+          : 'רווחי · מתחת ליעד ×3';
 
   // Per-cohort nCAC grouped by cohort YEAR (DESC) — same regrouping as the
   // by-year cohort grid, so the footer reads consistently. Zero data loss.
@@ -348,83 +374,134 @@ export function CustomerValueTab({
         }
       />
 
-      {/* 1. THE BOTTOM LINE — plain-Hebrew verdict. */}
+      {/* 1. THE BOTTOM LINE — plain-Hebrew verdict.
+          B3: the headline LTV NUMBER (displayLtv) switches with the basis
+          toggle, but the profitability verdict (net / payback / ratio / badge)
+          is ALWAYS profit-pinned (revenue is not profit). A4: the empty state
+          names WHICH side is missing. B1: era-tag + a qualified badge + a bridge
+          to the new-vs-old card when recent cohorts already pay back. */}
       <Card>
         <p data-testid="cv-verdict" className="text-[15.5px] sm:text-[17px] font-semibold leading-relaxed">
-          לקוח חדש שווה לך{' '}
-          <span className={cn('font-extrabold', numClass(isProfit ? 'good' : 'accent'))}>
-            <Money value={ltv12} />
-          </span>{' '}
-          {basisLabel} לאורך שנה, ועולה{' '}
-          <span className="font-extrabold text-ink">
-            <Money value={ncac} />
-          </span>{' '}
-          לגייס —{' '}
-          {netPerCustomer != null ? (
+          {!hasLtv ? (
+            // A4 — the missing side is the MATURE LTV, not the nCAC.
             <>
-              כלומר כל לקוח מכניס לך{' '}
-              <span className={cn('font-extrabold', numClass(netIsGood ? 'good' : 'bad'))}>
-                <Money value={netPerCustomer} />
-              </span>{' '}
-              נטו.{' '}
+              <span className="text-ink-muted">
+                {hasNcac ? (
+                  <>
+                    אין עדיין קבוצת לקוחות בוגרת (12 ח׳) לחישוב שווי-לקוח. עלות-הגיוס הנוכחית היא{' '}
+                    <span className="font-extrabold text-ink">
+                      <Money value={ncac} />
+                    </span>
+                    .{' '}
+                  </>
+                ) : (
+                  'אין עדיין מספיק נתונים לחישוב שווי-לקוח. '
+                )}
+              </span>
+              ו-<span className="font-extrabold tabular-nums text-ink">{pctText(value.repeatRate)}</span>{' '}
+              חוזרים לקנות שוב.
             </>
           ) : (
-            <span className="text-ink-muted">אין עדיין נתוני עלות-גיוס. </span>
-          )}
-          {displayPayback != null ? (
-            displayPayback === 0 ? (
-              <>
-                הוא מחזיר את עלות הגיוס{' '}
-                <span className={cn('font-extrabold', numClass('accent'))}>כבר מההזמנה הראשונה</span>,{' '}
-              </>
-            ) : (
-              <>
-                הוא מחזיר את עלות הגיוס תוך{' '}
-                <span className={cn('font-extrabold', numClass('accent'))}>{displayPayback}</span>{' '}
-                חודשים,{' '}
-              </>
-            )
-          ) : (
-            // No finite payback on the mature (honest) basis ⇒ the cohort never
-            // earns back its acquisition cost within the 12-month horizon. Render
-            // the no-recovery clause (NOT a month number) only when there IS an
-            // LTV + nCAC to judge against (netPerCustomer != null) — coherent with
-            // the "losing" badge + the negative net-per-customer.
-            netPerCustomer != null && (
-              <>
-                <span className={cn('font-extrabold', numClass('bad'))}>
-                  לא מחזיר את עלות הגיוס תוך שנה
-                </span>
-                ,{' '}
-              </>
-            )
-          )}
-          ו-<span className="font-extrabold tabular-nums text-ink">{pctText(value.repeatRate)}</span>{' '}
-          חוזרים לקנות שוב.
-          {ratio != null && (
             <>
-              {' '}על כל <span className="font-extrabold tabular-nums text-ink">$1</span> פרסום אתה מקבל{' '}
-              <span className={cn('font-extrabold tabular-nums', numClass(tone))}>
-                {ratio.toFixed(1)}×
+              לקוח חדש שווה לך{' '}
+              <span className={cn('font-extrabold', numClass(isProfit ? 'good' : 'accent'))}>
+                <Money value={displayLtv} />
               </span>{' '}
-              בערך-לקוח (LTV:nCAC)
-              <span
-                data-testid="cv-ratio-badge"
-                className={cn(
-                  'ms-1.5 inline-block rounded-full px-2.5 py-0.5 text-[12.5px] font-extrabold',
-                  tone === 'good'
-                    ? 'bg-status-greenBg text-status-greenFg'
-                    : tone === 'bad'
-                      ? 'bg-status-redBg text-status-redFg'
-                      : 'bg-status-warningBg text-status-warningFg',
-                )}
-              >
-                {tone === 'good'
-                  ? 'בריא ✓'
-                  : tone === 'bad'
-                    ? 'מתחת לסף הרווחיות — מפסידים על הגיוס'
-                    : 'רווחי · מתחת ליעד ×3'}
-              </span>
+              {basisLabel} לאורך שנה
+              {hasNcac && (
+                <>
+                  , ועולה{' '}
+                  <span className="font-extrabold text-ink">
+                    <Money value={ncac} />
+                  </span>{' '}
+                  לגייס
+                </>
+              )}{' '}
+              —{' '}
+              {hasNcac ? (
+                <>
+                  ברווח נטו (אחרי עלויות),{' '}
+                  {netIsGood ? (
+                    <>
+                      כל לקוח מכניס לך{' '}
+                      <span className={cn('font-extrabold', numClass('good'))}>
+                        <Money value={netPerCustomer} />
+                      </span>
+                      .{' '}
+                    </>
+                  ) : (
+                    <>
+                      כל לקוח{' '}
+                      <span className={cn('font-extrabold', numClass('bad'))}>
+                        מפסיד <Money value={netPerCustomer == null ? null : Math.abs(netPerCustomer)} />
+                      </span>
+                      .{' '}
+                    </>
+                  )}
+                  {payback != null ? (
+                    payback === 0 ? (
+                      <>
+                        הוא מחזיר את עלות הגיוס{' '}
+                        <span className={cn('font-extrabold', numClass('accent'))}>כבר מההזמנה הראשונה</span>,{' '}
+                      </>
+                    ) : (
+                      <>
+                        הוא מחזיר את עלות הגיוס תוך{' '}
+                        <span className={cn('font-extrabold', numClass('accent'))}>{payback}</span>{' '}
+                        חודשים,{' '}
+                      </>
+                    )
+                  ) : (
+                    <>
+                      <span className={cn('font-extrabold', numClass('bad'))}>
+                        לא מחזיר את עלות הגיוס תוך שנה
+                      </span>
+                      ,{' '}
+                    </>
+                  )}
+                </>
+              ) : (
+                <span className="text-ink-muted">אין עדיין נתוני עלות-גיוס. </span>
+              )}
+              ו-<span className="font-extrabold tabular-nums text-ink">{pctText(value.repeatRate)}</span>{' '}
+              חוזרים לקנות שוב.
+              {ratio != null && hasNcac && (
+                <>
+                  {' '}על כל <span className="font-extrabold tabular-nums text-ink">$1</span> פרסום אתה מקבל{' '}
+                  <span className={cn('font-extrabold tabular-nums', numClass(tone))}>{ratioText}×</span>{' '}
+                  ברווח-לקוח (LTV:nCAC)
+                  <span
+                    data-testid="cv-ratio-badge"
+                    className={cn(
+                      'ms-1.5 inline-block rounded-full px-2.5 py-0.5 text-[12.5px] font-extrabold',
+                      badgeTone === 'good'
+                        ? 'bg-status-greenBg text-status-greenFg'
+                        : badgeTone === 'bad'
+                          ? 'bg-status-redBg text-status-redFg'
+                          : 'bg-status-warningBg text-status-warningFg',
+                    )}
+                  >
+                    {badgeText}
+                  </span>
+                  {/* B1 — the headline LTV is restricted to mature (12mo+) cohorts. */}
+                  <span className="ms-1.5 text-[12px] font-normal text-ink-muted">
+                    · מבוסס על קבוצות בוגרות (12 ח׳+)
+                  </span>
+                </>
+              )}
+              {/* B1 — bridge to the new-vs-old card so "losing" (old cohorts) and
+                  "improving" (recent cohorts) never read as a contradiction. */}
+              {showRecentBridge && (
+                <span
+                  data-testid="cv-recent-bridge"
+                  className="mt-1.5 block text-[13px] font-semibold text-status-greenFg"
+                >
+                  ↗ אבל הקבוצות שגייסת לאחרונה חזקות יותר
+                  {newVsOldDiff != null && newVsOldDiff > 0 ? ` ב-${newVsOldDiff}%` : ''}
+                  {recentPaysBack ? ' — והן כבר מחזירות את עלות-הגיוס בחודשים הראשונים' : ''}. ראו
+                  ״לקוחות חדשים מול ותיקים״ למטה.
+                </span>
+              )}
             </>
           )}
         </p>
@@ -437,7 +514,7 @@ export function CustomerValueTab({
             שווי לקוח (12 ח׳, {basisLabel})
           </div>
           <div data-testid="cv-kpi-ltv" className="mt-1 text-2xl font-extrabold tracking-tight">
-            <Money value={ltv12} />
+            <Money value={displayLtv} />
           </div>
           <div className="mt-0.5 text-[11.5px] text-ink-muted">
             כמה {basisLabel} ממוצע לקוח מכניס לאורך שנה
@@ -453,7 +530,7 @@ export function CustomerValueTab({
         <Card data-testid="cv-kpi" className="p-4">
           <div className="text-xs font-semibold text-ink-secondary">החזר עלות (payback)</div>
           <div data-testid="cv-kpi-payback" className="mt-1 text-2xl font-extrabold tracking-tight tabular-nums">
-            {displayPayback != null ? `${displayPayback} ח׳` : '—'}
+            {payback != null ? `${payback} ח׳` : '—'}
           </div>
           <div className="mt-0.5 text-[11.5px] text-ink-muted">תוך כמה חודשים הרווח מכסה את הגיוס</div>
         </Card>
@@ -491,16 +568,13 @@ export function CustomerValueTab({
         </p>
         <CustomerValueCurve
           points={curvePoints}
-          // curveNcac is null when there is no mature cohort (the chart falls
-          // back to the all-cohort pooled shape) so the curve cannot draw a
-          // break-even line/crossing/callout the headline disclaims (Issue 3).
+          // B3: the break-even line + zone split appear ONLY on the PROFIT curve
+          // (curveNcac/curvePayback are null on the revenue curve — comparing a
+          // revenue curve to acquisition cost is a category error). Also null
+          // when there's no mature cohort (pooled fallback shape) or when losing,
+          // so the curve never draws a crossing the headline disclaims.
           ncac={curveNcac}
-          // The zone split is pinned to the DISPLAYED-basis payback (profit
-          // payback in profit basis; the mature-net crossing in net basis), so
-          // the curve's amber/green split + callout always reconcile with the
-          // headline badge + verdict — never a payback the verdict denies
-          // (Issue 2). null ⇒ no crossing/callout.
-          paybackMonths={displayPayback}
+          paybackMonths={curvePayback}
           basisLabel={basisLabel}
         />
         <div className="mt-2 flex flex-wrap gap-4 text-xs text-ink-secondary">
@@ -522,52 +596,58 @@ export function CustomerValueTab({
           הלקוחות החדשים — טובים יותר או פחות מהוותיקים?
         </h3>
         <p className="mb-3 mt-0.5 text-[12.5px] text-ink-secondary" data-testid="cv-newvsold-sub">
-          {newVsOldDiff == null ? (
-            'אין עדיין מספיק קבוצות להשוואה.'
+          {/* A5: gate on the SAME condition as the bars (canCompare); the label
+              names the SHARED observed depth ("first N months"), not "last 3
+              months" — the bucket is recent cohorts vs veterans, both observed
+              for the same N months. */}
+          {!canCompare || newVsOldDiff == null ? (
+            'אין עדיין מספיק קבוצות בוגרות וחדשות להשוואה.'
           ) : newVsOldDiff >= 0 ? (
             <>
               הלקוחות שגייסת לאחרונה שווים{' '}
-              <b className="text-status-greenFg">{newVsOldDiff}% יותר</b> ב-3 החודשים הראשונים
+              <b className="text-status-greenFg">{newVsOldDiff}% יותר</b> ב{cmpMonthsLabel}{' '}
               מהוותיקים — איכות הגיוס משתפרת.
             </>
           ) : (
             <>
               הלקוחות שגייסת לאחרונה שווים{' '}
-              <b className="text-status-redFg">{Math.abs(newVsOldDiff)}% פחות</b> ב-3 החודשים הראשונים
+              <b className="text-status-redFg">{Math.abs(newVsOldDiff)}% פחות</b> ב{cmpMonthsLabel}{' '}
               מהוותיקים — שווה לבדוק את איכות הגיוס.
             </>
           )}
         </p>
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="min-w-[180px] flex-1">
-            <div className="mb-1 flex justify-between text-xs text-ink-secondary">
-              <span>חדשים (3 ח׳ אחרונים, {basisLabel})</span>
-              <b className="text-ink" data-testid="cv-newvsold-recent">
-                <Money value={recent3} />
-              </b>
+        {canCompare && (
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="min-w-[180px] flex-1">
+              <div className="mb-1 flex justify-between text-xs text-ink-secondary">
+                <span>חדשים ({cmpMonthsLabel}, {basisLabel})</span>
+                <b className="text-ink" data-testid="cv-newvsold-recent">
+                  <Money value={recent3} />
+                </b>
+              </div>
+              <div className="h-3.5 overflow-hidden rounded-full bg-glass-2">
+                <div
+                  className="h-full rounded-full bg-status-green"
+                  style={{ width: `${(recent3 / cmpMax) * 100}%` }}
+                />
+              </div>
             </div>
-            <div className="h-3.5 overflow-hidden rounded-full bg-glass-2">
-              <div
-                className="h-full rounded-full bg-status-green"
-                style={{ width: `${(recent3 / cmpMax) * 100}%` }}
-              />
+            <div className="min-w-[180px] flex-1">
+              <div className="mb-1 flex justify-between text-xs text-ink-secondary">
+                <span>ותיקים ({cmpMonthsLabel}, {basisLabel})</span>
+                <b className="text-ink" data-testid="cv-newvsold-old">
+                  <Money value={old3} />
+                </b>
+              </div>
+              <div className="h-3.5 overflow-hidden rounded-full bg-glass-2">
+                <div
+                  className="h-full rounded-full bg-ink-muted"
+                  style={{ width: `${(old3 / cmpMax) * 100}%` }}
+                />
+              </div>
             </div>
           </div>
-          <div className="min-w-[180px] flex-1">
-            <div className="mb-1 flex justify-between text-xs text-ink-secondary">
-              <span>ותיקים ({basisLabel})</span>
-              <b className="text-ink" data-testid="cv-newvsold-old">
-                <Money value={old3} />
-              </b>
-            </div>
-            <div className="h-3.5 overflow-hidden rounded-full bg-glass-2">
-              <div
-                className="h-full rounded-full bg-ink-muted"
-                style={{ width: `${(old3 / cmpMax) * 100}%` }}
-              />
-            </div>
-          </div>
-        </div>
+        )}
       </Card>
 
       {/* 5. ADVANCED — collapsed cohort grid (no info loss). */}
@@ -609,6 +689,13 @@ export function CustomerValueTab({
                         ) : (
                           <span className="text-ink">
                             <Money value={c.nCac} />
+                            {/* A2 — the current month is month-to-date spend ÷
+                                full-month M0, so its per-cohort nCAC is not yet
+                                settled. Flag it instead of showing a final-looking
+                                figure. */}
+                            {c.firstOrderMonth === refMonth && (
+                              <span className="ms-1 text-ink-muted">(חלקי)</span>
+                            )}
                           </span>
                         )}
                       </li>
