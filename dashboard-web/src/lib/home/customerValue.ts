@@ -88,6 +88,19 @@ export interface CustomerValue {
   cumulativeNet: number[];
   /** Per-customer cumulative PROFIT curve (M0..M11) = net × keep-rate. */
   cumulativeProfit: number[];
+  /**
+   * Per-customer cumulative NET curve (M0..M11) over MATURE cohorts only — the
+   * same basis as ltv12Net + the payback. All-zero when no mature cohort exists.
+   * This is the basis the headline curve + verdict reconcile on (only mature
+   * cohorts have a real 12-month value; the all-cohort curve is inflated by
+   * recent cohorts' early months).
+   */
+  cumulativeNetMature: number[];
+  /**
+   * Per-customer cumulative PROFIT curve (M0..M11) over MATURE cohorts only —
+   * the same basis as ltv12Profit + the payback. All-zero when no mature cohort.
+   */
+  cumulativeProfitMature: number[];
   /** Net LTV at M11 over mature cohorts; null when no mature cohort exists. */
   ltv12Net: number | null;
   /** Profit LTV at M11 over mature cohorts; null when no mature cohort exists. */
@@ -101,8 +114,11 @@ export interface CustomerValue {
   /** Echo of the headline blended nCAC (CAD), or null. */
   blendedNcac: number | null;
   /**
-   * First month_since where cumulative profit ≥ blendedNcac; null when nCAC is
-   * null or the curve never reaches it.
+   * First month_since where the MATURE cumulative PROFIT ≥ blendedNcac; null
+   * when nCAC is null, no mature cohort exists, or the mature curve never reaches
+   * nCAC within the 12-month horizon. Derived on the SAME mature basis as
+   * ltv12Profit + ltvToNcac, so payback ⇔ ratio ⇔ net-per-customer never
+   * contradict (no "losing" + "recovers in N months" at once).
    */
   paybackMonths: number | null;
   /** ltv12Profit ÷ blendedNcac; null when either is null/≤0. */
@@ -212,20 +228,13 @@ export function computeCustomerValue(
   );
   const hasMature = matureCells.length > 0;
   const mature = pooledCurve(matureCells);
-  const ltv12Net = hasMature ? mature.cumulativeNet[COHORT_HORIZON - 1] : null;
-  let ltv12Profit: number | null = null;
-  if (hasMature) {
-    const mProfit = new Array(COHORT_HORIZON).fill(0);
-    for (const c of matureCells) {
-      const m = c.monthSince;
-      if (m < 0 || m >= COHORT_HORIZON) continue;
-      const net = Number.isFinite(c.netCad) ? c.netCad : 0;
-      mProfit[m] += net * keepRate(c.firstOrderMonth, opts);
-    }
-    let run = 0;
-    for (let m = 0; m < COHORT_HORIZON; m++) run += mProfit[m];
-    ltv12Profit = mature.m0Active > 0 ? run / mature.m0Active : null;
-  }
+  // Full 12-length MATURE cumulative curves — the headline curve + payback
+  // reconcile on these (only mature cohorts have a real 12-month value). When no
+  // mature cohort exists, pooledCurve / pooledProfitCurve return all-zero arrays.
+  const cumulativeNetMature = mature.cumulativeNet;
+  const cumulativeProfitMature = pooledProfitCurve(matureCells, opts);
+  const ltv12Net = hasMature ? cumulativeNetMature[COHORT_HORIZON - 1] : null;
+  const ltv12Profit = hasMature ? cumulativeProfitMature[COHORT_HORIZON - 1] : null;
 
   // ── new vs old (early-LTV split on cohort months) ───────────────────────
   const months = [...new Set(scoped.map((r) => r.firstOrderMonth))].sort();
@@ -266,10 +275,14 @@ export function computeCustomerValue(
   // ── payback + LTV:nCAC (headline, blended) ──────────────────────────────
   const blendedNcac =
     opts.blendedNcac != null && Number.isFinite(opts.blendedNcac) ? opts.blendedNcac : null;
+  // Payback is derived on the MATURE profit curve — the same basis as
+  // ltv12Profit + ltvToNcac — so the verdict can never say "losing" (ratio < 1,
+  // i.e. ltv12Profit < nCAC) AND "recovers in N months" at once. With no mature
+  // cohort there is no honest 12-month value → payback null.
   let paybackMonths: number | null = null;
-  if (blendedNcac != null) {
+  if (blendedNcac != null && hasMature) {
     for (let m = 0; m < COHORT_HORIZON; m++) {
-      if (cumulativeProfit[m] >= blendedNcac) {
+      if (cumulativeProfitMature[m] >= blendedNcac) {
         paybackMonths = m;
         break;
       }
@@ -284,6 +297,8 @@ export function computeCustomerValue(
     retention,
     cumulativeNet,
     cumulativeProfit,
+    cumulativeNetMature,
+    cumulativeProfitMature,
     ltv12Net,
     ltv12Profit,
     repeatRate,

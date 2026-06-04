@@ -92,6 +92,90 @@ describe('CustomerValueTab — verdict + KPIs', () => {
   });
 });
 
+describe('CustomerValueTab — verdict coherence (mature basis: no "losing" + "recovers in N months")', () => {
+  // BUG: with nCAC > the (honest) mature 12-month LTV the verdict showed BOTH a
+  // "losing" badge AND "recovers in N months" — because payback used the inflated
+  // all-cohort curve while the ratio used the mature curve. The fix derives the
+  // displayed curve + payback on the mature basis, so the trichotomy is coherent:
+  //   ratio<1 ⟺ net<0 ⟺ payback null ⟺ badge "מפסידים".
+  //
+  // Fixture: one MATURE cohort (2025-01) whose 12-month value stays below nCAC,
+  // plus a recent (immature) cohort (2026-05) that would inflate the all-cohort
+  // curve above nCAC.
+  const losingRows: CohortMonthlyRow[] = [
+    cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 500 }),
+    cell({ firstOrderMonth: '2026-05', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 2000 }),
+  ];
+
+  function renderLosing() {
+    return render(
+      <CustomerValueTab
+        stores={['uzoshop']}
+        injectedRows={losingRows}
+        injectedBlendedNcac={80}
+        injectedSpendByMonth={{ '2025-01': 800 }}
+        todayMonth="2026-06"
+      />,
+    );
+  }
+
+  it('shows the "does not recover within a year" clause, NOT a month number', () => {
+    renderLosing();
+    const verdict = screen.getByTestId('cv-verdict').textContent ?? '';
+    // The honest no-recovery clause must appear.
+    expect(verdict).toContain('לא מחזיר את עלות הגיוס תוך שנה');
+    // And there must be NO "recovers in N months" recovery clause (the recovery
+    // clause ends in "...תוך N חודשים"). No "חודשים" recovery clause may appear.
+    expect(verdict).not.toMatch(/מחזיר את עלות הגיוס תוך\s*\d/);
+    expect(verdict).not.toContain('חודשים');
+    expect(verdict).not.toContain('כבר מההזמנה הראשונה');
+  });
+
+  it('shows the LOSING badge (red, "מפסידים") with the no-recovery verdict', () => {
+    const { container } = renderLosing();
+    const badge = container.querySelector('[data-testid="cv-ratio-badge"]');
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toContain('מפסידים');
+    expect(badge!.className).toContain('text-status-redFg');
+  });
+
+  it('payback KPI is "—" (no months) when losing', () => {
+    renderLosing();
+    expect(screen.getByTestId('cv-kpi-payback').textContent).toBe('—');
+  });
+
+  it('renders NO payback callout on the curve when losing (no break-even crossing)', () => {
+    const { container } = renderLosing();
+    expect(container.querySelector('[data-testid="cv-payback-callout"]')).toBeNull();
+  });
+
+  it('renders a finite payback + month KPI when mature-LTV ≥ nCAC', () => {
+    // MATURE cohort with a high per-customer M0 value (net 150/cust) so that even
+    // under the default keep-rate (1 − 25% cogs − 6.5% fees = 0.685) the mature
+    // profit cum at M0 (≈ 102.75) clears the small nCAC (40) → payback at M0.
+    const winRows: CohortMonthlyRow[] = [
+      cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1500 }),
+      cell({ firstOrderMonth: '2025-01', monthSince: 1, activeCustomers: 5, orders: 5, netCad: 300 }),
+    ];
+    render(
+      <CustomerValueTab
+        stores={['uzoshop']}
+        injectedRows={winRows}
+        injectedBlendedNcac={40}
+        injectedSpendByMonth={{ '2025-01': 400 }}
+        todayMonth="2026-06"
+      />,
+    );
+    const verdict = screen.getByTestId('cv-verdict').textContent ?? '';
+    // A finite payback → either the "from the first order" or "within N months"
+    // recovery clause, and NEVER the no-recovery clause.
+    expect(verdict).toMatch(/מחזיר את עלות הגיוס/);
+    expect(verdict).not.toContain('לא מחזיר את עלות הגיוס תוך שנה');
+    // KPI shows a month value, not the dash.
+    expect(screen.getByTestId('cv-kpi-payback').textContent).not.toBe('—');
+  });
+});
+
 describe('CustomerValueTab — zones curve', () => {
   it('renders an SVG <path> for the cumulative LTV line', () => {
     const { container } = renderTab();

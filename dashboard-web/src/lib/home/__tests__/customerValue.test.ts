@@ -250,6 +250,116 @@ describe('computeCustomerValue — nCAC, payback, ltv:nCAC', () => {
   });
 });
 
+describe('computeCustomerValue — verdict coherence (mature basis: payback vs ratio)', () => {
+  // BUG: payback used the ALL-cohort pooled curve while ltv12/ratio used the
+  // MATURE-only curve. With a recent high-value cohort inflating the all-cohort
+  // curve, payback could "cross" nCAC even when the (honest) mature 12-month LTV
+  // is BELOW nCAC — saying "losing" AND "recovers in N months" at once.
+  //
+  // Fixture: one MATURE cohort (2025-01) whose 12-month cumulative profit stays
+  // BELOW the nCAC, plus a recent (immature) cohort (2026-05) with a huge M0 that
+  // would inflate the pooled all-cohort curve above nCAC. The mature-coherent
+  // payback must be null.
+  const matureBelow: CohortMonthlyRow[] = [
+    // MATURE: 2025-01 — per-customer net 50 at M0, never grows (no repeats).
+    cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 500 }),
+    // IMMATURE recent: 2026-05 — huge per-customer M0 net (200) inflates the
+    // pooled all-cohort M0 well above nCAC.
+    cell({ firstOrderMonth: '2026-05', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 2000 }),
+  ];
+
+  it('mature-LTV < nCAC ⇒ paybackMonths === null (no false "recovers in N months")', () => {
+    // keep 100% of net (no cogs/fees) → mature ltv12Profit = 50 < nCAC 80.
+    const r = computeCustomerValue(matureBelow, {
+      basis: 'profit',
+      feesRate: 0,
+      defaultCogsPct: 0,
+      blendedNcac: 80,
+      todayMonth: '2026-06',
+    });
+    // Honest mature 12-month profit is 50, below the 80 nCAC.
+    expect(r.ltv12Profit).toBeCloseTo(50, 5);
+    // Ratio < 1 → losing on acquisition.
+    expect(r.ltvToNcac).toBeCloseTo(50 / 80, 5);
+    expect(r.ltvToNcac! < 1).toBe(true);
+    // The mature curve never reaches nCAC within 12 months → payback null.
+    expect(r.paybackMonths).toBeNull();
+  });
+
+  it('exposes MATURE cumulative curves (net + profit) over the 12-month horizon', () => {
+    const r = computeCustomerValue(matureBelow, {
+      basis: 'profit',
+      feesRate: 0,
+      defaultCogsPct: 0,
+      blendedNcac: 80,
+      todayMonth: '2026-06',
+    });
+    expect(r.cumulativeNetMature).toHaveLength(12);
+    expect(r.cumulativeProfitMature).toHaveLength(12);
+    // Mature-only: cohort 2025-01 per-customer net 50, flat across the horizon.
+    expect(r.cumulativeNetMature[0]).toBeCloseTo(50, 5);
+    expect(r.cumulativeNetMature[11]).toBeCloseTo(50, 5);
+    expect(r.cumulativeProfitMature[11]).toBeCloseTo(50, 5);
+    // The all-cohort pooled curve is inflated by the recent cohort — it must
+    // differ from the mature curve (proving the two bases are distinct).
+    expect(r.cumulativeNet[0]).toBeCloseTo(2500 / 20, 5); // (500+2000)/20 = 125
+    expect(r.cumulativeNet[0]).not.toBeCloseTo(r.cumulativeNetMature[0], 1);
+  });
+
+  it('mature-LTV ≥ nCAC ⇒ a finite payback consistent with the ratio (≥1)', () => {
+    // MATURE cohort that grows past nCAC by M2 on the profit (mature) basis.
+    //  2025-01: M0 10 cust / net 500 (per-cust 50) · M1 5 / 300 (cum 80) · M2 4 / 200 (cum 100)
+    const matureAbove: CohortMonthlyRow[] = [
+      cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 500 }),
+      cell({ firstOrderMonth: '2025-01', monthSince: 1, activeCustomers: 5, orders: 5, netCad: 300 }),
+      cell({ firstOrderMonth: '2025-01', monthSince: 2, activeCustomers: 4, orders: 4, netCad: 200 }),
+    ];
+    const r = computeCustomerValue(matureAbove, {
+      basis: 'profit',
+      feesRate: 0,
+      defaultCogsPct: 0,
+      blendedNcac: 80,
+      todayMonth: '2026-06',
+    });
+    // mature cumProfit: [0]=50 [1]=80 [2]=100 → reaches 80 at M1.
+    expect(r.ltv12Profit).toBeCloseTo(100, 5);
+    expect(r.ltvToNcac).toBeCloseTo(100 / 80, 5);
+    expect(r.ltvToNcac! >= 1).toBe(true);
+    expect(r.paybackMonths).toBe(1);
+  });
+
+  it('payback uses the mature curve even when blendedNcac uses an extreme value', () => {
+    // Reaches nCAC at M0 (mature per-customer M0 profit 50 ≥ nCAC 40).
+    const matureM0: CohortMonthlyRow[] = [
+      cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 500 }),
+    ];
+    const r = computeCustomerValue(matureM0, {
+      basis: 'profit',
+      feesRate: 0,
+      defaultCogsPct: 0,
+      blendedNcac: 40,
+      todayMonth: '2026-06',
+    });
+    expect(r.paybackMonths).toBe(0);
+  });
+
+  it('no mature cohorts ⇒ paybackMonths null + mature curves are all-zero', () => {
+    const onlyRecent: CohortMonthlyRow[] = [
+      cell({ firstOrderMonth: '2026-05', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 2000 }),
+    ];
+    const r = computeCustomerValue(onlyRecent, {
+      basis: 'profit',
+      feesRate: 0,
+      defaultCogsPct: 0,
+      blendedNcac: 80,
+      todayMonth: '2026-06',
+    });
+    expect(r.ltv12Profit).toBeNull();
+    expect(r.paybackMonths).toBeNull();
+    expect(r.cumulativeProfitMature.every((x) => x === 0)).toBe(true);
+  });
+});
+
 describe('computeCustomerValue — store scope + empty', () => {
   it('storeName filter scopes the computation', () => {
     const rows: CohortMonthlyRow[] = [

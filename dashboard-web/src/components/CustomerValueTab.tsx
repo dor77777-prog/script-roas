@@ -196,7 +196,15 @@ export function CustomerValueTab({
 
   const isProfit = basis === 'profit';
   const basisLabel = isProfit ? 'רווח' : 'הכנסה';
-  const curvePoints = isProfit ? value.cumulativeProfit : value.cumulativeNet;
+  // The displayed curve uses the MATURE cumulative — the SAME basis as the $LTV
+  // headline + the ratio + the payback — so the curve, its break-even crossing,
+  // and the verdict all reconcile (no "losing" + "recovers in N months" once).
+  // When there is no mature cohort (mature curve all-zero), gracefully fall back
+  // to the all-cohort pooled curve so the chart isn't an empty flat line.
+  const matureCurve = isProfit ? value.cumulativeProfitMature : value.cumulativeNetMature;
+  const allCurve = isProfit ? value.cumulativeProfit : value.cumulativeNet;
+  const hasMatureCurve = matureCurve.some((v) => v !== 0);
+  const curvePoints = hasMatureCurve ? matureCurve : allCurve;
   const ltv12 = isProfit ? value.ltv12Profit : value.ltv12Net;
   const ncac = value.blendedNcac;
   // Round the components BEFORE subtracting so the banner reconciles with the
@@ -320,7 +328,7 @@ export function CustomerValueTab({
           ) : (
             <span className="text-ink-muted">אין עדיין נתוני עלות-גיוס. </span>
           )}
-          {value.paybackMonths != null && (
+          {value.paybackMonths != null ? (
             value.paybackMonths === 0 ? (
               <>
                 הוא מחזיר את עלות הגיוס{' '}
@@ -331,6 +339,20 @@ export function CustomerValueTab({
                 הוא מחזיר את עלות הגיוס תוך{' '}
                 <span className={cn('font-extrabold', numClass('accent'))}>{value.paybackMonths}</span>{' '}
                 חודשים,{' '}
+              </>
+            )
+          ) : (
+            // No finite payback on the mature (honest) basis ⇒ the cohort never
+            // earns back its acquisition cost within the 12-month horizon. Render
+            // the no-recovery clause (NOT a month number) only when there IS an
+            // LTV + nCAC to judge against (netPerCustomer != null) — coherent with
+            // the "losing" badge + the negative net-per-customer.
+            netPerCustomer != null && (
+              <>
+                <span className={cn('font-extrabold', numClass('bad'))}>
+                  לא מחזיר את עלות הגיוס תוך שנה
+                </span>
+                ,{' '}
               </>
             )
           )}
