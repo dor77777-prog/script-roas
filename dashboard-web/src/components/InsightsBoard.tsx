@@ -21,6 +21,7 @@ import {
 import type { DashboardData } from '@/lib/types';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
+import type { AdsResponse } from '@/app/api/ads/route';
 import {
   buildAllInsights,
   isInsightVisible,
@@ -31,6 +32,7 @@ import {
   type InsightStateKind,
   type Severity,
 } from '@/lib/insights';
+import { prioritizeInsights } from '@/lib/insights/prioritize';
 import { cn } from '@/lib/utils';
 import { fetchJsonOrNull } from '@/lib/fetchJson';
 import { AiInsightPill } from '@/components/ui/AiInsightPill';
@@ -40,6 +42,7 @@ import { InsightCardGroup, InsightCardRow } from '@/components/ui/InsightCard';
 import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { InsightActions } from '@/components/insights/InsightActions';
+import { ActionListPanel } from '@/components/insights/ActionListPanel';
 import { useStoreAdAccounts } from '@/lib/hooks/useStoreAdAccounts';
 
 const SEVERITY_META: Record<
@@ -112,6 +115,13 @@ export function InsightsBoard({ data }: Props) {
     '/api/campaigns', fetchJsonOrNull,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
+  // WS3 — per-day ad rows power the creative-fatigue detector (CTR decay +
+  // CPM creep). Same cadence as products/campaigns; dedupes with CampaignsTable's
+  // ads fetch via SWR's key cache.
+  const { data: ads, isLoading: aLoading } = useSWR<AdsResponse | null>(
+    '/api/ads', fetchJsonOrNull,
+    { refreshInterval: 120_000, revalidateOnFocus: false },
+  );
   // Task 5.6 (P1-10 / Q7) — feeds `InsightActions` deep-links with
   // account-aware URLs. Hook dedupes the SWR call with CampaignsTable.
   const adAccounts = useStoreAdAccounts();
@@ -171,8 +181,14 @@ export function InsightsBoard({ data }: Props) {
 
   // Build the full list, then split into "visible now" and "hidden by user".
   const allInsights = useMemo(() => {
-    return buildAllInsights(data.rows, campaigns?.rows ?? [], products?.rows ?? []);
-  }, [data.rows, campaigns, products]);
+    return buildAllInsights(
+      data.rows,
+      campaigns?.rows ?? [],
+      products?.rows ?? [],
+      ads?.rows ?? [],
+      { currentEffectiveStatus: campaigns?.currentEffectiveStatus },
+    );
+  }, [data.rows, campaigns, products, ads]);
 
   const { visible, hidden } = useMemo(() => {
     if (!hydrated) return { visible: allInsights, hidden: [] as Insight[] };
@@ -185,6 +201,11 @@ export function InsightsBoard({ data }: Props) {
     return { visible: vis, hidden: hid };
   }, [allInsights, states, hydrated]);
 
+  // WS3 — the "do this now" short list: dedup + rank the visible insights and
+  // keep the top few (criticals always survive the cut). Surfaced ABOVE the
+  // board so urgent items aren't trapped inside a collapsed panel.
+  const prioritized = useMemo(() => prioritizeInsights(visible, 5), [visible]);
+
   const grouped = useMemo(() => {
     const buckets: Record<Severity, Insight[]> = {
       critical: [], warning: [], opportunity: [], positive: [], info: [],
@@ -193,7 +214,7 @@ export function InsightsBoard({ data }: Props) {
     return buckets;
   }, [visible]);
 
-  const loading = pLoading || cLoading;
+  const loading = pLoading || cLoading || aLoading;
   const totalCount = visible.length;
   const hiddenCount = hidden.length;
 
@@ -225,6 +246,17 @@ export function InsightsBoard({ data }: Props) {
   }, [grouped]);
 
   return (
+    <div className="space-y-4 sm:space-y-5">
+      {/* WS3 — "do this now" action list. Always visible, ABOVE the board, so
+          the most urgent items are never trapped behind a collapsed panel. It
+          owns the collapsed-state headline + the all-clear signal; the board
+          below stays the full, grouped, searchable archive. */}
+      <ActionListPanel
+        insights={prioritized}
+        loading={loading}
+        onMark={markInsight}
+        adAccounts={adAccounts}
+      />
     <Card className="!p-0 overflow-hidden">
       {/* Clickable header — toggles the whole board open/closed. */}
       <Button
@@ -280,43 +312,15 @@ export function InsightsBoard({ data }: Props) {
         </div>
       </Button>
 
-      {/* AI-insight pill — surfaces the headline insight title as a one-line
-          context cue inside the expanded board where the editorial InsightHero
-          is absent. In the collapsed state, InsightHero already serves as the
-          hero-summary slot, so hiding the pill there avoids duplicating the
-          same title twice in the same viewport.
+      {/* AI-insight pill — one-line context cue inside the EXPANDED board.
+          WS3: the collapsed-state headline + the all-clear signal now live in
+          the always-visible ActionListPanel above this card, so the old
+          InsightHero / all-clear surfaces were removed from here to avoid
+          duplicating the same top insight twice in one viewport.
           AiInsightPill renders nothing when topInsight is null so no guard needed. */}
       {!loading && topInsight && boardExpanded && (
         <div className="px-4 sm:px-6 pb-0 pt-3">
           <AiInsightPill>{topInsight.title}</AiInsightPill>
-        </div>
-      )}
-
-      {/* Memorable headline: when the board is collapsed AND we have something
-          to say, surface the top insight as an editorial moment — large title,
-          vertical accent bar in the severity color, short "click for the rest"
-          hint. Per frontend-design's "give the user one thing they'll
-          remember" principle, this is the dashboard's signature surface. */}
-      {!boardExpanded && topInsight && !loading && (
-        <InsightHero
-          insight={topInsight}
-          otherCount={totalCount - 1}
-          onClick={toggleBoard}
-        />
-      )}
-
-      {/* All-clear state — calm dark panel with a soft green pulse so the user
-          can instantly see "nothing demands my attention right now". */}
-      {!boardExpanded && hiddenCount === 0 && totalCount === 0 && !loading && (
-        <div className="px-5 sm:px-6 py-5 flex items-center gap-3">
-          <span className="relative inline-flex w-2.5 h-2.5 shrink-0">
-            <span className="absolute inset-0 rounded-full bg-status-greenBg animate-ping" />
-            <span className="relative inline-flex w-full h-full rounded-full bg-status-green" />
-          </span>
-          <div className="text-[12px] sm:text-sm text-ink-secondary">
-            <span className="text-ink font-semibold">הכל רגוע.</span>{' '}
-            <span className="text-ink-muted">המערכת לא זיהתה אנומליות או הזדמנויות פעילות.</span>
-          </div>
         </div>
       )}
 
@@ -429,76 +433,7 @@ export function InsightsBoard({ data }: Props) {
         </div>
       )}
     </Card>
-  );
-}
-
-/**
- * Editorial "headline" preview shown when the board is collapsed and there's
- * at least one insight. Treats the insight title as a typographic moment —
- * larger size, looser tracking, a vertical accent bar in the severity color —
- * so the surface feels different from the surrounding KPI grid. Clicking
- * anywhere opens the board.
- */
-function InsightHero({
-  insight,
-  otherCount,
-  onClick,
-}: {
-  insight: Insight;
-  otherCount: number;
-  onClick: () => void;
-}) {
-  const meta = SEVERITY_META[insight.severity];
-  // Map the meta's "border-X/20" to a solid accent on the bar so the colour
-  // reads at full strength against the white surface (border-opacity is too
-  // muted for the kind of vertical-rule moment we want here).
-  const ACCENT_BG: Record<Severity, string> = {
-    critical:    'bg-status-red',
-    warning:     'bg-status-warning',
-    opportunity: 'bg-accent',
-    positive:    'bg-status-green',
-    info:        'bg-ink-muted',
-  };
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      onClick={onClick}
-      className="w-full justify-start items-stretch h-auto gap-4 sm:gap-5 px-4 sm:px-6 py-4 sm:py-5"
-      aria-label={`פתח לוח תובנות (${insight.title})`}
-    >
-      {/* Vertical accent bar — anchors the typographic moment and signals
-          severity at a glance. */}
-      <span
-        className={cn(
-          'shrink-0 w-[3px] rounded-full',
-          ACCENT_BG[insight.severity],
-        )}
-        aria-hidden
-      />
-
-      <div className="min-w-0 flex-1 space-y-1.5">
-        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] font-semibold">
-          <span className={meta.color}>{meta.label}</span>
-          {otherCount > 0 && (
-            <span className="text-ink-muted normal-case tracking-normal font-normal">
-              · עוד {otherCount} {otherCount === 1 ? 'תובנה' : 'תובנות'}
-            </span>
-          )}
-        </div>
-        <div className="text-base sm:text-lg md:text-xl font-semibold text-ink leading-snug tracking-tight">
-          {insight.title}
-        </div>
-        {insight.detail && (
-          <p className="text-[12px] sm:text-sm text-ink-secondary leading-relaxed line-clamp-2 max-w-2xl">
-            {insight.detail}
-          </p>
-        )}
-        <div className="pt-1 text-[11px] text-ink-muted opacity-0 group-hover:opacity-100 transition-opacity">
-          לחץ לפרטים ולכל התובנות ←
-        </div>
-      </div>
-    </Button>
+    </div>
   );
 }
 

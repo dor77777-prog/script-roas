@@ -3209,3 +3209,65 @@ contract (glass surfaces, token-only color, AA, `<Money>` for numbers).
     tooltip). Mode-selection + a11y + null-passthrough covered by
     `src/components/ui/__tests__/Tooltip.dom.test.tsx`; keyboard + touch-emulation + both-theme
     by `tests/visual/tooltips.spec.ts` (Playwright).
+
+## 32. WS3 — In-app intelligence: campaign-died + creative-fatigue + action list (2026-06-04)
+
+WS3 extends the pure insights engine (`lib/insights.ts`) with two new
+detectors and a ranking layer, and surfaces the result as an always-visible
+"do this now" action list above the (collapsed-by-default) `InsightsBoard`.
+Everything is **client-side over existing endpoints** — no new cron, no new
+API route, no migration. READ-ONLY: no pixel/CAPI events; the existing
+WhatsApp alerts are untouched (the WhatsApp *push* of these insights was
+descoped).
+
+### 32.1 New detectors (pure, TDD)
+- **`lib/insights/campaignDied.ts` → `detectCampaignDied(campaigns, currentEffectiveStatus?, today?)`**
+  Flags an *established* campaign that went dark. Groups daily `CampaignRow`s
+  (`/api/campaigns` → `campaigns_enriched`) by `${storeName}::${platform}::${campaignId}`
+  over the last 14 days. Establishment gate: ≥7 active days **and** mean ≥CAD 50/day
+  over the prior window `[today-13 .. today-1]`. Dark gate: spend on the
+  most-recent **completed** day (`today-1`) ≤ CAD 1 — the **current** Israel day is
+  excluded (mirrors the dead-day current-day suppression) and a **missing** `today-1`
+  row counts as 0 (the enriched view drops zero-activity rows). Severity `critical`,
+  weight **96**. The cause hint reads the live `CampaignsResponse.currentEffectiveStatus`
+  map (keyed `${storeId}::${Platform}::${campaignId}::${adSetId}` — resolved via exact /
+  bare-id / `::<id>` substring fallback, freshest `updatedAt` wins) and softens to
+  "marked paused" only when the platform reports PAUSED/REMOVED/ARCHIVED; it never
+  asserts the cause as fact.
+- **`lib/insights/adFatigue.ts` → `detectAdFatigue(ads)`**
+  Base CTR+CPM creative-fatigue. Groups per-day `AdRow`s (`/api/ads` →
+  `ads_enriched`) by `${storeId}::${platform}::${adId}`, splits the date window at
+  its midpoint (≥6 unique days per half required), and flags **iff** `recentCtr ≤
+  0.7·priorCtr` **and** `recentCpm ≥ 1.2·priorCpm` above a 5,000-combined-impression
+  noise floor. Severity `opportunity`, weight **68**, carrying the **parent
+  campaignId** so the drawer + Ads-Manager link resolve. The **frequency-climb leg**
+  (the strongest fatigue signal) is **deferred** — it needs an `ads_daily.frequency`
+  column + a Meta fetcher field that don't exist yet; do NOT fabricate frequency from
+  impressions.
+
+### 32.2 Ranking + wiring
+- **`lib/insights/prioritize.ts` → `prioritizeInsights(insights, n)`** — pure dedup +
+  rank. Dedup key: `c:${campaignId}` → `s:${scope}:${kind}` → `id:${id}` (keep max
+  weight, tie-break by severity then id). Sort weight-desc → severity-rank → id-asc.
+  Returns `filter((ins, idx) => idx < n || ins.severity === 'critical')` — top-N with
+  criticals **always** kept. Does **no** visibility filtering (the caller passes only
+  `isInsightVisible` rows).
+- **`lib/insights/adsManagerLink.ts`** — the campaign deep-link helper, **extracted**
+  so `insights.ts`, `campaignDied.ts`, and `adFatigue.ts` share one copy (was an
+  internal in `insights.ts`). Imports nothing from `insights.ts` → no cycle.
+- **`buildAllInsights(rows, campaigns, products, ads = [], opts?)`** gained a 4th `ads`
+  arg + an `opts.currentEffectiveStatus` (backward-compatible: existing 3-arg callers +
+  tests unchanged). It now splices `detectCampaignDied` + `detectAdFatigue` into the
+  weight-sorted merge.
+- **`InsightsBoard.tsx`** adds a third SWR fetch (`/api/ads`, 120s, same cadence as
+  products/campaigns), passes `ads.rows` + `campaigns.currentEffectiveStatus` into
+  `buildAllInsights`, computes `prioritizeInsights(visible, 5)`, and renders the new
+  **`components/insights/ActionListPanel.tsx`** above the board. The board's old
+  collapsed-state `InsightHero` + all-clear surfaces were removed — the action list now
+  owns the collapsed headline + the calm "all good" state; the board below remains the
+  full grouped archive.
+
+### 32.3 Tests
+`campaignDied` (8) + `prioritize` (11) + `adFatigue` (8) node tests; `ActionListPanel`
+(7) DOM test. All pure-logic detectors are deterministic (a `today` seam on
+`detectCampaignDied` for fixtures; the others read no clock).
