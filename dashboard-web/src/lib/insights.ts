@@ -27,6 +27,7 @@ import { fmtMoneyString } from './format';
 import type { DailyRow } from './types';
 import type { ProductRow } from './products';
 import type { CampaignRow } from './campaigns';
+import type { AdRow } from './ads';
 import {
   COGS_RATE_OF_REVENUE,
   aggregate,
@@ -34,6 +35,9 @@ import {
 } from './analytics';
 import { billingForRange } from './billing';
 import { TRANSACTION_FEES_RATE } from './costs';
+import { adsManagerLink } from './insights/adsManagerLink';
+import { detectCampaignDied } from './insights/campaignDied';
+import { detectAdFatigue } from './insights/adFatigue';
 
 export type Severity = 'critical' | 'warning' | 'opportunity' | 'positive' | 'info';
 
@@ -237,17 +241,8 @@ export function detectAnomalies(rows: DailyRow[]): Insight[] {
 // ============================================================================
 // Recommendations
 // ============================================================================
-
-function adsManagerLink(platform: string, campaignId: string): string | null {
-  if (!campaignId) return null;
-  if (platform === 'Meta') {
-    return `https://business.facebook.com/adsmanager/manage/ads?selected_campaign_ids=${encodeURIComponent(campaignId)}`;
-  }
-  if (platform === 'Google') {
-    return `https://ads.google.com/aw/campaigns?campaignId=${encodeURIComponent(campaignId)}`;
-  }
-  return null;
-}
+// NOTE: `adsManagerLink` lives in ./insights/adsManagerLink (shared with
+// detectCampaignDied + detectAdFatigue) — imported at the top of this file.
 
 export function generateRecommendations(
   campaigns: CampaignRow[],
@@ -829,8 +824,19 @@ export function buildAllInsights(
   rows: DailyRow[],
   campaigns: CampaignRow[],
   products: ProductRow[],
+  ads: AdRow[] = [],
+  opts?: {
+    /** Live campaign effective-status map (CampaignsResponse.currentEffectiveStatus).
+     *  Lets the campaign-died rule soften its copy to "marked paused" when the
+     *  platform actually reports a paused/removed status. Optional — the rule
+     *  falls back to a neutral "check budget/rejection" hint without it. */
+    currentEffectiveStatus?: Record<string, { status: string; updatedAt?: string }>;
+  },
 ): Insight[] {
   const anomalies = detectAnomalies(rows);
   const recs = generateRecommendations(campaigns, products, rows);
-  return [...anomalies, ...recs].sort((a, b) => b.weight - a.weight);
+  // WS3 — in-app intelligence: campaign-went-dark + creative-fatigue detectors.
+  const died = detectCampaignDied(campaigns, opts?.currentEffectiveStatus);
+  const fatigue = detectAdFatigue(ads);
+  return [...anomalies, ...recs, ...died, ...fatigue].sort((a, b) => b.weight - a.weight);
 }
