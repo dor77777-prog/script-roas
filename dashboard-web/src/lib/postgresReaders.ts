@@ -845,6 +845,19 @@ export type CurrentEffectiveStatusEntry = {
   updatedAt: string; // ISO timestamp
 };
 
+/**
+ * Bug fix (2026-06-04) — last-known CBO/ABO budget type per campaign /
+ * ad-set. Returned by `fetchLastKnownBudgetTypes` and consumed by the
+ * aggregator to backfill an all-empty in-range `budget_type` window. Defined
+ * here (the reader boundary) parallel to `CurrentEffectiveStatusEntry`; the
+ * aggregator declares a structurally-identical type of its own, matching the
+ * existing `CurrentEffectiveStatusEntry`/`CurrentStatusEntry` split.
+ */
+export type LastKnownBudgetTypeEntry = {
+  budgetType: 'CBO' | 'ABO';
+  lastSeenAt: string; // YYYY-MM-DD — date of the latest non-empty budget_type
+};
+
 export async function fetchCurrentCampaignStatuses(): Promise<
   Record<string, CurrentEffectiveStatusEntry>
 > {
@@ -915,6 +928,74 @@ export async function fetchCurrentCampaignStatuses(): Promise<
     if (seen.has(key)) continue;
     seen.add(key);
     out[key] = { status: status.status, updatedAt: status.updatedAt };
+  }
+  return out;
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 5b. fetchLastKnownBudgetTypes — last-known CBO/ABO per campaign / ad-set
+//     Bug fix (2026-06-04). Mirrors fetchCurrentCampaignStatuses end to end.
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Bug fix (2026-06-04) — CBO/ABO chip disappears on single-day / "today"
+ * views. `campaigns_daily.budget_type` is DERIVED: writers (cronDaily +
+ * persistCampaignsLive) set 'CBO' when the campaign budget>0, 'ABO' when the
+ * ad-set budget>0, else ''. Meta returns 0/0 budgets for paused / lifetime /
+ * budget-off campaigns, so TODAY's rows often carry budget_type='' and the
+ * aggregator's gated update loop leaves the aggregate's budget_type='' — the
+ * chip vanishes.
+ *
+ * This reader returns the most-recent NON-EMPTY budget_type per
+ * `${storeId}::${Platform}::${campaignId}::${adSetId}` key (last-known wins),
+ * so the aggregator can backfill an all-empty in-range window. Meta-only —
+ * the chip only renders for Meta. Mirrors `fetchCurrentCampaignStatuses`
+ * exactly: SAME key shape, SAME `titleCasePlatform` boundary, SAME
+ * `paginate()` ceiling, SAME soft-fail-to-{} (console.warn) on query error.
+ *
+ * Map value shape: `{ budgetType, lastSeenAt }`. `lastSeenAt` is the row's
+ * `date` (YYYY-MM-DD) of the most-recent non-empty budget_type; the
+ * aggregator uses it only to break ties when rolling ad-sets up to a
+ * campaign (freshest non-empty wins).
+ */
+export async function fetchLastKnownBudgetTypes(): Promise<
+  Record<string, LastKnownBudgetTypeEntry>
+> {
+  const out: Record<string, LastKnownBudgetTypeEntry> = {};
+
+  let rows: DbRow[];
+  try {
+    rows = await paginate<DbRow>(() => {
+      return getSupabase()
+        .from('campaigns_daily')
+        .select('store_id, platform, campaign_id, ad_set_id, budget_type, date')
+        .eq('platform', 'meta')
+        .in('budget_type', ['CBO', 'ABO']);
+    });
+  } catch (e) {
+    console.warn(`postgresReaders.fetchLastKnownBudgetTypes: ${(e as Error).message}`);
+    return out;
+  }
+
+  // Keep the row with the MOST-RECENT date per key (last-known wins). `date`
+  // is a fixed-width YYYY-MM-DD string so lexicographic compare == chrono.
+  const latestDate = new Map<string, string>();
+  for (const r of rows) {
+    const storeId    = String(r.store_id ?? '');
+    const platform   = titleCasePlatform(r.platform);
+    const campaignId = String(r.campaign_id ?? '');
+    const adSetId    = String(r.ad_set_id ?? '');
+    if (!storeId || !campaignId || !adSetId) continue;
+    const bt = String(r.budget_type ?? '').trim();
+    if (bt !== 'CBO' && bt !== 'ABO') continue;
+    const date = r.date ? String(r.date) : '';
+    if (!date) continue;
+    const key = `${storeId}::${platform}::${campaignId}::${adSetId}`;
+    const prev = latestDate.get(key);
+    if (!prev || date > prev) {
+      latestDate.set(key, date);
+      out[key] = { budgetType: bt, lastSeenAt: date };
+    }
   }
   return out;
 }

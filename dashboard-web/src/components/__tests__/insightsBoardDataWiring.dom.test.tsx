@@ -56,6 +56,7 @@ const CAMPAIGNS: CampaignsResponse = {
   lastUpdated: `${TODAY}T00:00:00.000Z`,
   dataLastWriteAt: `${TODAY}T00:00:00.000Z`,
   currentEffectiveStatus: {},
+  lastKnownBudgetTypes: {},
 };
 
 function jsonResponse(body: unknown): Response {

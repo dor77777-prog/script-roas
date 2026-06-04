@@ -25,6 +25,23 @@ export type CurrentStatusEntry = {
 };
 
 /**
+ * Bug fix (2026-06-04) — last-known CBO/ABO budget type for a campaign /
+ * ad-set, keyed DB-wide (NOT bounded by the operator's range), mirroring
+ * `CurrentStatusEntry`. `campaigns_daily.budget_type` is DERIVED: writers
+ * (cronDaily + persistCampaignsLive) set 'CBO' when the campaign budget>0,
+ * 'ABO' when the ad-set budget>0, else ''. Meta returns 0/0 budgets for
+ * paused / lifetime / budget-off campaigns, so TODAY's rows often carry
+ * budget_type='' and the chip vanishes on single-day / "today" views.
+ * This carries the most-recent NON-EMPTY value so the aggregator can
+ * backfill an all-empty in-range window.
+ */
+export type LastKnownBudgetTypeEntry = {
+  budgetType: 'CBO' | 'ABO';
+  /** ISO timestamp — the date of the most-recent non-empty budget_type row. */
+  lastSeenAt: string;
+};
+
+/**
  * Phase 12.5.x (2026-05-24) — "parent-disabled" marker statuses. These can
  * ONLY appear on an ad-set when its parent CAMPAIGN is paused / disabled at
  * the parent level. Even a single ad-set showing this status is authoritative:
@@ -174,6 +191,21 @@ export function aggregate(
    * `storeName` if the new store has no entry in this map.
    */
   storeDisplayNames?: Record<string, string>,
+  /**
+   * Bug fix (2026-06-04) — optional map of last-known CBO/ABO budget types,
+   * keyed by `${storeId}::${Platform}::${campaignId}::${adSetId}` (the SAME
+   * key shape as `currentEffectiveStatus`). Returned by /api/campaigns
+   * (`fetchLastKnownBudgetTypes`) and reflects the most-recent NON-EMPTY
+   * `budget_type` DB-wide, NOT bounded by `range`. When supplied, the
+   * post-pass below backfills any aggregate whose `budgetType` is still ''
+   * (because every in-range row had a derived-empty budget_type — common on
+   * single-day / "today" views of paused / lifetime / budget-off campaigns),
+   * so the CBO/ABO chip survives. Omitted → existing behavior, fully
+   * backwards compatible. Mirrors the `currentEffectiveStatus` override
+   * exactly: same key shape, same campaign-prefix roll-up for 'campaign'
+   * mode, same "only when present" semantics.
+   */
+  lastKnownBudgetTypes?: Record<string, LastKnownBudgetTypeEntry>,
 ): Aggregated[] {
   // Bug fix (2026-05-31): the user-facing "all stores" + "all platforms"
   // sentinels must be matched permissively. Historical bug: the table's
@@ -429,6 +461,48 @@ export function aggregate(
           const activeMarker = activeMarkerForPlatform(a.platform);
           a.effectiveStatus = activeMarker ?? freshest.status;
         }
+      }
+    }
+  }
+  // Bug fix (2026-06-04) — backfill an empty budgetType from the last-known
+  // map. Runs AFTER the gated update loop (which leaves budgetType='' when
+  // every in-range row had a derived-empty budget_type) and after the
+  // currentEffectiveStatus override. Mirrors that override's key handling
+  // exactly:
+  //   - 'adset': direct lookup by `storeId::Platform::campaignId::adSetId`.
+  //   - 'campaign': roll up the campaign's ad-sets — index the last-known
+  //     map by campaign prefix and use the freshest (max `lastSeenAt`)
+  //     non-empty entry as the campaign's budget type.
+  // Only fills when `!a.budgetType`, so an in-range value always wins (no
+  // regression on multi-day views where today's '' is one row among many
+  // with a real CBO/ABO).
+  if (lastKnownBudgetTypes && Object.keys(lastKnownBudgetTypes).length > 0) {
+    if (mode === 'adset') {
+      for (const a of map.values()) {
+        if (a.budgetType) continue;
+        const key = `${a.storeId}::${a.platform}::${a.campaignId}::${a.adSetId ?? ''}`;
+        const found = lastKnownBudgetTypes[key];
+        if (found) a.budgetType = found.budgetType;
+      }
+    } else {
+      // Index by campaign prefix so each campaign rolls up in O(M) total
+      // rather than O(N×M). Keep the entry with the freshest `lastSeenAt`
+      // per campaign (latest non-empty budget type DB-wide wins).
+      const byCampaign = new Map<string, LastKnownBudgetTypeEntry>();
+      for (const [k, entry] of Object.entries(lastKnownBudgetTypes)) {
+        const parts = k.split('::');
+        if (parts.length !== 4) continue;
+        const campKey = `${parts[0]}::${parts[1]}::${parts[2]}`;
+        const prev = byCampaign.get(campKey);
+        if (!prev || entry.lastSeenAt > prev.lastSeenAt) {
+          byCampaign.set(campKey, entry);
+        }
+      }
+      for (const a of map.values()) {
+        if (a.budgetType) continue;
+        const campKey = `${a.storeId}::${a.platform}::${a.campaignId}`;
+        const found = byCampaign.get(campKey);
+        if (found) a.budgetType = found.budgetType;
       }
     }
   }

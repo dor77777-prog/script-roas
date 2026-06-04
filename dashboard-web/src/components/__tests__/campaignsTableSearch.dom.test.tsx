@@ -34,6 +34,7 @@ const RESPONSE: CampaignsResponse = {
   lastUpdated: '2026-05-31T00:00:00.000Z',
   dataLastWriteAt: '2026-05-31T00:00:00.000Z',
   currentEffectiveStatus: {},
+  lastKnownBudgetTypes: {},
 };
 
 function jsonResponse(body: unknown): Response {

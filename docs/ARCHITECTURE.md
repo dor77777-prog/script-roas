@@ -3281,3 +3281,12 @@ descoped).
 `campaignDied` (8) + `prioritize` (11) + `adFatigue` (8) node tests; `ActionListPanel`
 (7) DOM test. All pure-logic detectors are deterministic (a `today` seam on
 `detectCampaignDied` for fixtures; the others read no clock).
+
+## 33. Last-known budget_type (CBO/ABO chip stability, 2026-06-05)
+
+The CBO/ABO chip in the campaigns table read `CampaignAgg.budgetType`, which the aggregator fills only from in-range `campaigns_daily` rows whose `budget_type` is non-empty (the update loop is gated `if (r.budgetType)`). `budget_type` is DERIVED at write time (CBO when campaign budget>0, ABO when adset budget>0, else `''`), and Meta returns 0/0 budgets for paused/lifetime/budget-off campaigns — so a single-day / "today" window (now the default range) often had all-empty rows → the chip vanished.
+
+Fix mirrors the `currentEffectiveStatus` last-known-status pattern exactly (no schema change — `campaign_registry` has no budget_type column):
+- `fetchLastKnownBudgetTypes()` (`postgresReaders.ts`, parallel to `fetchCurrentCampaignStatuses`) — reads `campaigns_daily` where platform=meta AND budget_type IN ('CBO','ABO'), keeps the most-recent date per `${storeId}::${Platform}::${campaignId}::${adSetId}` key, soft-fails to `{}`.
+- `/api/campaigns` adds it as a 4th `Promise.all` reader + a `lastKnownBudgetTypes` field on `CampaignsResponse` (`{}` on the degraded path).
+- `aggregateCampaigns` (`campaignsAggregator.ts`) takes it as an optional param and runs an override pass AFTER the currentEffectiveStatus block: for any aggregate with `!budgetType`, fill from the last-known map (adset-mode = direct key; campaign-mode = freshest entry under the campaign prefix). The gated update loop is untouched, so any in-range value still wins. `CampaignsTable` threads it through; `CampaignsTableRow` is unchanged. Guarded by 4 new `campaignsAggregator.test.ts` cases.

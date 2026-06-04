@@ -66,6 +66,7 @@ const CAMPAIGNS_RESPONSE: CampaignsResponse = {
   lastUpdated: '2026-05-31T00:00:00.000Z',
   dataLastWriteAt: '2026-05-31T00:00:00.000Z',
   currentEffectiveStatus: {},
+  lastKnownBudgetTypes: {},
 };
 
 // One order whose FIRST touch matches campaign 'c1' (firstUtmId === campaignId).

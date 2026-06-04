@@ -746,6 +746,14 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       platform,
       localRange,
       data.currentEffectiveStatus,
+      // positions 7-8 (effectiveStoreByCampaignId, storeDisplayNames) are not
+      // used by this caller — pass undefined to reach the 9th param.
+      undefined,
+      undefined,
+      // Bug fix (2026-06-04) — backfill the CBO/ABO chip's budgetType from
+      // the DB-wide last-known map when every in-range row is derived-empty
+      // (single-day / "today" views). Mirrors `currentEffectiveStatus`.
+      data.lastKnownBudgetTypes ?? {},
     );
     return sortAggregated(list, mode, sortKey, sortDir);
   }, [data, mode, localStore, platform, localRange, sortKey, sortDir]);

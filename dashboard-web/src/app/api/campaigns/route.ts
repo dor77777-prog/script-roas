@@ -4,7 +4,9 @@ import {
   fetchCampaignsFromPostgres,
   fetchCampaignsDailyLastWriteAt,
   fetchCurrentCampaignStatuses,
+  fetchLastKnownBudgetTypes,
   type CurrentEffectiveStatusEntry,
+  type LastKnownBudgetTypeEntry,
 } from '@/lib/postgresReaders';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
@@ -38,6 +40,18 @@ export type CampaignsResponse = {
    * `updatedAt` wins). Empty object on the soft-fail path.
    */
   currentEffectiveStatus: Record<string, CurrentEffectiveStatusEntry>;
+  /**
+   * Bug fix (2026-06-04) — last-known CBO/ABO budget type per
+   * (store, platform, campaign, ad_set) key. Map key shape:
+   *   `${storeId}::${Platform}::${campaignId}::${adSetId}`
+   * "Last-known" = the most-recent NON-EMPTY `budget_type` row in
+   * campaigns_daily DB-wide (Meta-only), REGARDLESS of the operator's
+   * selected range. `budget_type` is derived from Meta's 0/0 budgets for
+   * paused / lifetime / budget-off campaigns, so TODAY's rows are often
+   * empty; the aggregator uses this to backfill the CBO/ABO chip on
+   * single-day / "today" views. Empty object on the soft-fail path.
+   */
+  lastKnownBudgetTypes: Record<string, LastKnownBudgetTypeEntry>;
   /** Present only on the degraded-error path (rows: []). Consumers that
    *  surface "synced N min ago" should treat the response as data-less when
    *  this is set, even though rows + lastUpdated still satisfy the type. */
@@ -65,10 +79,11 @@ export async function GET(req: Request) {
     // broadcasts each campaign's status to its ad_sets via a distinct-tuples
     // lookup on campaigns_daily — so it runs alongside the in-range reads
     // without blocking them.
-    const [rows, dataLastWriteAt, currentEffectiveStatus] = await Promise.all([
+    const [rows, dataLastWriteAt, currentEffectiveStatus, lastKnownBudgetTypes] = await Promise.all([
       fetchCampaignsFromPostgres({ range }),
       fetchCampaignsDailyLastWriteAt({ range }),
       fetchCurrentCampaignStatuses(),
+      fetchLastKnownBudgetTypes(),
     ]);
     if (rows.length > 50000) {
       console.warn(`/api/campaigns: large response (${rows.length} rows) — consider pagination`);
@@ -78,6 +93,7 @@ export async function GET(req: Request) {
       lastUpdated: new Date().toISOString(),
       dataLastWriteAt,
       currentEffectiveStatus,
+      lastKnownBudgetTypes,
     };
     return NextResponse.json(body, {
       headers: { 'Cache-Control': cacheControl('campaigns') },
@@ -92,6 +108,7 @@ export async function GET(req: Request) {
         lastUpdated: new Date().toISOString(),
         dataLastWriteAt: null,
         currentEffectiveStatus: {},
+        lastKnownBudgetTypes: {},
         error: userFacingError(message),
       } satisfies CampaignsResponse,
       { status: 200, headers: { 'Cache-Control': 'no-store' } },

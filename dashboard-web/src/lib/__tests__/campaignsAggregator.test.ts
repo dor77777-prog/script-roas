@@ -306,3 +306,144 @@ describe('aggregate() — Phase A.5 v2 evening hotfix #7: effective-store collap
     expect(out[0].storeName).toBe('uzoshop');
   });
 });
+
+describe('aggregate() — lastKnownBudgetTypes override (CBO/ABO chip on single-day/today views)', () => {
+  // Bug (2026-06-04): campaigns_daily.budget_type is derived — writers set it
+  // to '' when Meta returns 0/0 budgets (paused / lifetime / budget-off
+  // campaigns). On single-day / "today" views the in-range rows often all
+  // carry budget_type='' so the gated update loop leaves the aggregate's
+  // budgetType='' and the CBO/ABO chip disappears. The last-known map
+  // (mirroring currentEffectiveStatus) backfills it from the most-recent
+  // non-empty row DB-wide.
+  it('fills budgetType from the last-known map when ALL in-range rows have budget_type=""', () => {
+    const rows = [
+      makeRow({
+        storeId: 'uzoshop',
+        storeName: 'uzoshop',
+        platform: 'Meta',
+        campaignId: 'camp-bt',
+        adSetId: 'adset-bt',
+        date: '2026-05-15',
+        budgetType: '',
+        campaignBudgetCad: null,
+        adSetBudgetCad: null,
+      }),
+    ];
+    const lastKnownBudgetTypes = {
+      'uzoshop::Meta::camp-bt::adset-bt': {
+        budgetType: 'CBO' as const,
+        lastSeenAt: '2026-05-14T00:00:00Z',
+      },
+    };
+    const out = aggregate(
+      rows,
+      'adset',
+      'All',
+      'all',
+      RANGE,
+      undefined,
+      undefined,
+      undefined,
+      lastKnownBudgetTypes,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].budgetType).toBe('CBO');
+  });
+
+  it('control: empty last-known map leaves budgetType="" untouched', () => {
+    const rows = [
+      makeRow({
+        storeId: 'uzoshop',
+        storeName: 'uzoshop',
+        platform: 'Meta',
+        campaignId: 'camp-bt',
+        adSetId: 'adset-bt',
+        date: '2026-05-15',
+        budgetType: '',
+        campaignBudgetCad: null,
+        adSetBudgetCad: null,
+      }),
+    ];
+    const out = aggregate(
+      rows,
+      'adset',
+      'All',
+      'all',
+      RANGE,
+      undefined,
+      undefined,
+      undefined,
+      {},
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].budgetType).toBe('');
+  });
+
+  it('campaign mode: fills budgetType from the campaign-prefixed last-known key', () => {
+    const rows = [
+      makeRow({
+        storeId: 'uzoshop',
+        storeName: 'uzoshop',
+        platform: 'Meta',
+        campaignId: 'camp-bt',
+        adSetId: 'adset-bt',
+        date: '2026-05-15',
+        budgetType: '',
+        campaignBudgetCad: null,
+        adSetBudgetCad: null,
+      }),
+    ];
+    const lastKnownBudgetTypes = {
+      'uzoshop::Meta::camp-bt::adset-bt': {
+        budgetType: 'ABO' as const,
+        lastSeenAt: '2026-05-14T00:00:00Z',
+      },
+    };
+    const out = aggregate(
+      rows,
+      'campaign',
+      'All',
+      'all',
+      RANGE,
+      undefined,
+      undefined,
+      undefined,
+      lastKnownBudgetTypes,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].budgetType).toBe('ABO');
+  });
+
+  it('does NOT override an aggregate that already has a non-empty budgetType', () => {
+    const rows = [
+      makeRow({
+        storeId: 'uzoshop',
+        storeName: 'uzoshop',
+        platform: 'Meta',
+        campaignId: 'camp-bt',
+        adSetId: 'adset-bt',
+        date: '2026-05-15',
+        budgetType: 'CBO',
+      }),
+    ];
+    const lastKnownBudgetTypes = {
+      'uzoshop::Meta::camp-bt::adset-bt': {
+        budgetType: 'ABO' as const,
+        lastSeenAt: '2026-05-14T00:00:00Z',
+      },
+    };
+    const out = aggregate(
+      rows,
+      'adset',
+      'All',
+      'all',
+      RANGE,
+      undefined,
+      undefined,
+      undefined,
+      lastKnownBudgetTypes,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].budgetType).toBe('CBO');
+  });
+});
