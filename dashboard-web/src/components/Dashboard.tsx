@@ -302,8 +302,15 @@ export function Dashboard() {
   // orders, so the hero header collapses cleanly. Quiet by default; prominent
   // only when >30% of orders carry no click-id/UTM. HERO ONLY — never per-store.
   const coverageChip: CoverageChipData | null = useMemo(
-    () => toCoverageChip(computeCoverage(ordersData?.rows ?? [])),
-    [ordersData],
+    () =>
+      toCoverageChip(
+        computeCoverage(
+          (ordersData?.rows ?? []).filter(
+            (r) => filters.store === 'All' || r.storeName === filters.store,
+          ),
+        ),
+      ),
+    [ordersData, filters.store],
   );
 
   // Counter that increments whenever the command palette wants to open the

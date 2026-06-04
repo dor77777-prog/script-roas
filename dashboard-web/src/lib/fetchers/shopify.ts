@@ -845,6 +845,39 @@ function safeDecode(s: string): string {
   }
 }
 
+/**
+ * Meta's `_fbc` cookie persists ~90 days after ANY Meta-ad click, so its mere
+ * PRESENCE is not a fresh-click signal — counting it would credit Meta for an
+ * organic/returning buyer who clicked weeks ago (over-attribution). Per Meta's
+ * official spec the cookie is `fb.<subdomainIndex>.<creationTimeMs>.<fbclid>`
+ * where creationTime is the UNIX-ms when the click/fbclid was first observed
+ * (https://developers.facebook.com/docs/marketing-api/conversions-api/parameters/fbp-and-fbc).
+ * We treat `_fbc` as a paid-click signal ONLY when that click falls within
+ * Meta's DEFAULT 7-day click attribution window relative to the order — i.e.
+ * exactly the window Meta itself would attribute the conversion in. The real
+ * per-click `fbclid` URL param stays a fresh signal on its own (handled by the
+ * caller); this guards the cookie-only path.
+ */
+const FBC_CLICK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // Meta default 7-day click
+
+export function fbcIsFreshClick(
+  fbc: string | undefined | null,
+  orderCreatedAt: string | null | undefined,
+): boolean {
+  if (!fbc) return false;
+  const parts = fbc.split('.'); // fb.<subdomainIndex>.<creationTimeMs>.<fbclid>
+  if (parts.length < 4 || parts[0] !== 'fb') return false;
+  const clickMs = Number(parts[2]);
+  if (!Number.isFinite(clickMs) || clickMs <= 0) return false;
+  // Can't verify freshness without the order time → don't over-attribute.
+  if (!orderCreatedAt) return false;
+  const orderMs = Date.parse(orderCreatedAt);
+  if (!Number.isFinite(orderMs)) return false;
+  const age = orderMs - clickMs;
+  // Click must be at/before the order and within the 7-day click window.
+  return age >= 0 && age <= FBC_CLICK_WINDOW_MS;
+}
+
 export function classifyOrderAttribution(order: ShopifyOrderPayload): {
   source: string;
   utmSource: string;
@@ -956,7 +989,11 @@ export function classifyOrderAttribution(order: ShopifyOrderPayload): {
   const utmContent = params['utm_content'] ?? '';
   const utmId = params['utm_id'] ?? '';
   const utmTerm = params['utm_term'] ?? '';
-  const fbclid = !!(params['fbclid'] || params['_fbc']);
+  // The real per-click `fbclid` URL param is a fresh paid signal on its own.
+  // The `_fbc` COOKIE only counts when its click is within Meta's 7-day click
+  // window vs the order (see fbcIsFreshClick) — its 90-day persistence would
+  // otherwise over-attribute returning/organic buyers to Meta.
+  const fbclid = !!params['fbclid'] || fbcIsFreshClick(params['_fbc'], order.created_at);
   const gclid = !!params['gclid'];
   // Phase 05.7.5: TikTok click ID. Same pattern as fbclid/gclid — TikTok's
   // ad SDK appends `ttclid` to landing URLs when the click came from a

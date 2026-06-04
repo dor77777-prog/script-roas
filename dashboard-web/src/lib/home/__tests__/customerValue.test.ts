@@ -123,6 +123,42 @@ describe('computeCustomerValue — profit basis at render', () => {
     expect(r.ltv12Profit).toBeCloseTo(94.5, 5);
   });
 
+  it('P2: a NEGATIVE cohort-month net passes through UNSCALED (profit === net, never above)', () => {
+    // Refund-heavy month: M0 positive (1000), M1 net is a loss (−200). keep-rate
+    // 75% (cogs 25%, no fees). The loss must NOT be shrunk by the keep-rate —
+    // COGS/fees don't reduce a refund — so the M1 profit contribution equals the
+    // M1 net contribution exactly, keeping profit ≤ net at every point.
+    const refundHeavy: CohortMonthlyRow[] = [
+      cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000 }),
+      cell({ firstOrderMonth: '2025-01', monthSince: 1, activeCustomers: 3, orders: 3, netCad: -200 }),
+    ];
+    const r = computeCustomerValue(refundHeavy, {
+      basis: 'profit',
+      feesRate: 0,
+      defaultCogsPct: 0.25,
+      blendedNcac: null,
+      todayMonth: '2026-06',
+    });
+    // net curve: [0]=1000/10=100, [1]=(1000−200)/10=80.
+    expect(r.cumulativeNet[0]).toBeCloseTo(100, 5);
+    expect(r.cumulativeNet[1]).toBeCloseTo(80, 5);
+    // profit curve: M0 scaled (1000×0.75=750 → /10 = 75); M1 loss UNSCALED
+    // (−200 → /10 = −20) → cum [1] = 55. The buggy `net×keepRate` would give
+    // −200×0.75=−150 → cum [1]=60, which sits ABOVE 55 (wrong direction).
+    expect(r.cumulativeProfit[0]).toBeCloseTo(75, 5);
+    expect(r.cumulativeProfit[1]).toBeCloseTo(55, 5);
+    // The M1 PROFIT step equals the M1 NET step exactly (the loss is identical
+    // on both bases) — i.e. perMonthProfit[1] === perMonthNet[1] for net<0.
+    expect(r.cumulativeProfit[1] - r.cumulativeProfit[0]).toBeCloseTo(
+      r.cumulativeNet[1] - r.cumulativeNet[0],
+      5,
+    );
+    // Invariant: profit ≤ net at every point, including the refund month.
+    for (let i = 0; i < 12; i++) {
+      expect(r.cumulativeProfit[i]).toBeLessThanOrEqual(r.cumulativeNet[i] + 1e-9);
+    }
+  });
+
   it('per-cohort cogsPct: missing month falls back to default keep-rate', () => {
     // No cogsPctByMonth at all → default 0.25 cogs assumed via opts.defaultCogsPct
     const r = computeCustomerValue(fixtureA, {

@@ -35,6 +35,11 @@ import {
 } from './analytics';
 import { billingForRange } from './billing';
 import { TRANSACTION_FEES_RATE } from './costs';
+import {
+  effectiveSalaryEntry,
+  salariesForRange,
+  type SalarySettings,
+} from './salarySettings';
 import { adsManagerLink } from './insights/adsManagerLink';
 import { detectCampaignDied } from './insights/campaignDied';
 import { detectAdFatigue } from './insights/adFatigue';
@@ -487,7 +492,19 @@ export function generateRecommendations(
  * Linear extrapolation to end-of-current-month, blending the last 7-day daily
  * average. Returns the projected total + days remaining.
  */
-export function forecastMonthEnd(rows: DailyRow[]): {
+export function forecastMonthEnd(
+  rows: DailyRow[],
+  /**
+   * P1 fix 2026-06-04 — business-level salary settings. When provided, the
+   * forecast subtracts MTD salaries from `monthToDateNet` AND extrapolates
+   * salaries into `projectedNet`, matching the dashboard P&L / Home hero
+   * (both pass `salariesForRange(...)` into `aggregate`). Without this the
+   * forecast's net was systematically too HIGH by the salary amount
+   * (default ~7% of revenue) vs the realized P&L net. Optional + defaults
+   * to no salaries so legacy callers stay byte-identical.
+   */
+  salarySettings?: SalarySettings,
+): {
   daysElapsedThisMonth: number;
   daysRemainingThisMonth: number;
   monthToDateRevenue: number;
@@ -524,7 +541,17 @@ export function forecastMonthEnd(rows: DailyRow[]): {
   const mtdRev = mtdAgg.revenue;
   const mtdSpend = mtdAgg.spend;
   const mtdCogs = mtdAgg.cogs;
-  const mtdNet = mtdAgg.trueNetProfit;
+  // P1 fix 2026-06-04 — MTD salaries deduction. The dashboard P&L + Home hero
+  // pass `salariesForRange(...)` into `aggregate` so their `trueNetProfit`
+  // subtracts salaries; the `mtdAgg` call above does NOT (no salaries arg), so
+  // `mtdAgg.trueNetProfit` is salary-FREE. Subtract the period salaries here so
+  // `monthToDateNet` matches the realized P&L net definition. `salariesForRange`
+  // is itself range-coherent (percent → %·revenue of in-range rows; amount →
+  // per-day allocation). Defaults to 0 when no settings supplied.
+  const mtdSalaries = salarySettings
+    ? salariesForRange(salarySettings, mtdRows, { from: monthStart, to: today })
+    : 0;
+  const mtdNet = mtdAgg.trueNetProfit - mtdSalaries;
 
   // 7-day average for projection.
   //
@@ -645,12 +672,29 @@ export function forecastMonthEnd(rows: DailyRow[]): {
   // the remaining days. See block comment above for the full rationale.
   const projectedCogs = mtdCogs + dailyAvgCogs * daysRemaining;
   const projectedFees = mtdFees + dailyAvgFees * daysRemaining;
+  // P1 fix 2026-06-04 — extrapolate salaries into the projected month-end net,
+  // mirroring how the dashboard P&L subtracts `salariesForRange(...)`. Salaries
+  // are billed per CALENDAR MONTH, so the projection covers the WHOLE current
+  // month (not a partial range): the percent path scales with the projected
+  // month-end revenue (`projectedRev`), the fixed-amount path is the full
+  // monthly amount (per-day × all days). Using `effectiveSalaryEntry` for the
+  // forecast month keeps this consistent with `salariesForRange` (whose
+  // amount path over a full month collapses to `value`, and whose percent path
+  // is `value/100 × revenue`). Defaults to 0 when no settings supplied.
+  const projectedSalaries = (() => {
+    if (!salarySettings) return 0;
+    const entry = effectiveSalaryEntry(salarySettings, `${yStr}-${mStr}`);
+    return entry.kind === 'percent'
+      ? (entry.value / 100) * projectedRev
+      : entry.value;
+  })();
   const projectedNet =
     projectedRev
     - projectedSpend
     - projectedCogs
     - projectedFees
-    - projectedFixedCosts;
+    - projectedFixedCosts
+    - projectedSalaries;
   const projectedRoas = projectedSpend > 0 ? projectedRev / projectedSpend : 0;
 
   return {

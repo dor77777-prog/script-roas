@@ -45,6 +45,23 @@ describe('ChannelTruthPanel', () => {
     expect(screen.getByTestId('channel-card-meta').textContent).toContain('—');
   });
 
+  it('truly-empty channel (no spend, no revenue) → badge "אין נתונים"', () => {
+    const m: ChannelMetric[] = [{ channel: 'meta', ncRevenue: 0, ncOrders: 0, spend: 0, ncRoas: null, nCac: null, ncNetProfit: null, overcountPct: null }];
+    render(<ChannelTruthPanel metrics={m} />);
+    const card = screen.getByTestId('channel-card-meta');
+    expect(card.textContent).toContain('אין נתונים');
+    expect(card.textContent).not.toContain('אין גיוס');
+  });
+
+  it('spend but zero new customers → badge "אין גיוס" (not "אין נתונים")', () => {
+    // e.g. Google/TikTok today: spend posted, no first-orders attributed yet.
+    const m: ChannelMetric[] = [{ channel: 'google', ncRevenue: 0, ncOrders: 0, spend: 3000, ncRoas: null, nCac: null, ncNetProfit: -3000, overcountPct: null }];
+    render(<ChannelTruthPanel metrics={m} />);
+    const card = screen.getByTestId('channel-card-google');
+    expect(card.textContent).toContain('אין גיוס');
+    expect(card.textContent).not.toContain('אין נתונים');
+  });
+
   it('shows the overcount % row for a channel with overcountPct != null (and rounds it)', () => {
     render(<ChannelTruthPanel metrics={METRICS} />);
     const meta = screen.getByTestId('channel-card-meta');

@@ -3303,3 +3303,15 @@ Surfaces trust signals where decisions happen. All READ-ONLY/CAPI-safe; every UI
 - **DQ-7 TikTok coverage** — `fetchTikTokCoverageInputs(range)` (account total = Σ data_daily tt_spend; campaigns from campaigns_daily; advertiserId from env) → `GET /api/tiktok-coverage`; pure `tiktokCoverage()` computes unmapped/unattributed client-side against the campaign-store map. UI: `<TikTokCoveragePanel/>` (operator HealthTab, below the static disclaimer).
 
 Drill bridge (2026-06-05): a Dashboard-level `roas-open-campaign-drawer` listener routes the InsightActions "פתח קמפיין" through `drillToCampaigns` when the campaigns tab isn't mounted (the board/action-list live on Home where CampaignsTable — the only other subscriber — is absent). See §32 for WS3.
+
+## 35. Deep-QA precision fixes (2026-06-05)
+
+Post-launch deep audit (DB ground-truth + adversarial code audit; 11 core systems verified sound) — 8 fixes:
+- **`_fbc` 7-day click gating** (`lib/fetchers/shopify.ts` `classifyOrderAttribution` + new exported `fbcIsFreshClick`): Meta's `_fbc` cookie persists ~90 days, so presence-alone over-attributed Meta. Per Meta's official spec (`fb.<subdomainIndex>.<creationTimeMs>.<fbclid>`) we parse the click time and treat the cookie as a paid signal ONLY within Meta's default **7-day click** window vs `order.created_at`. The real per-click `fbclid` URL param remains a fresh signal on its own. Affects new-order classification only.
+- **GoalTracker month-end forecast salaries** (`lib/insights.ts` `forecastMonthEnd` + GoalTracker): the forecast net now subtracts `salariesForRange` (MTD) + extrapolated month salaries, matching the dashboard P&L net definition (was ~7%-of-revenue too high). Optional param → legacy callers unchanged.
+- **Hero coverage chip** now filters by `filters.store` (was business-wide regardless of selected store).
+- **First-click coverage chip** display clamped to ≤100% (raw ratio kept in tooltip).
+- **ChannelTruthPanel** "אין גיוס" vs "אין נתונים" (spend-but-no-acquisition vs truly empty).
+- **Cohort grid** marks the current partial month "(חלקי)"; **cohort profit curve** no longer exceeds the net curve when a cohort-month net is negative (`net>=0 ? net*keepRate : net`).
+- **CampaignDrawer** uses `effectiveStoreId` consistently for cohort/reconciliation/attribution (was raw `storeId` → cohort vanished + reconciliation zeroed for remapped-store TikTok campaigns).
+- **Overcount basis (documented, no change):** `overcountByChannelFromCampaigns` verified-revenue is GROSS (`total_price`) — intentional + correct because the platform claim is also gross; overcount is a like-for-like gross comparison (NC-ROAS is net by design; overcount is gross by design).

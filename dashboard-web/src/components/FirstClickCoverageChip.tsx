@@ -17,7 +17,9 @@ export function FirstClickCoverageChip({
   lastClickOrders: number;
 }) {
   const coverage = lastClickOrders > 0 ? firstClickOrders / lastClickOrders : 0;
-  const pct = Math.round(coverage * 100);
+  // first-click and last-click are different order sets, so the raw ratio can
+  // exceed 1. Clamp the DISPLAYED % to 100 (the real counts stay in the title).
+  const pct = Math.min(100, Math.round(coverage * 100));
   // Quiet unless meaningfully low (<50% of last-click captured first-touch).
   const tone: 'quiet' | 'warn' = coverage >= 0.5 ? 'quiet' : 'warn';
   const title =

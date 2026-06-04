@@ -33,4 +33,22 @@ describe('FirstClickCoverageChip', () => {
     const tip = await screen.findByRole('tooltip');
     expect(tip.textContent).toContain('Google');
   });
+
+  it('clamps the displayed percentage to 100 when first-click exceeds last-click', () => {
+    // first-click and last-click are different order sets, so the raw ratio can
+    // exceed 1 (e.g. 15/10 = 150%). The chip must never render >100%.
+    render(<FirstClickCoverageChip firstClickOrders={15} lastClickOrders={10} />);
+    const chip = screen.getByTestId('first-click-coverage-chip');
+    expect(chip.textContent).toContain('100%');
+    expect(chip.textContent).not.toContain('150%');
+  });
+
+  it('keeps the real (unclamped) ratio in the tooltip when it exceeds 100%', async () => {
+    render(<FirstClickCoverageChip firstClickOrders={15} lastClickOrders={10} />);
+    fireEvent.pointerMove(screen.getByTestId('first-click-coverage-chip'));
+    const tip = await screen.findByRole('tooltip');
+    // Raw counts (15 of 10) are still surfaced in the tooltip text.
+    expect(tip.textContent).toContain('15');
+    expect(tip.textContent).toContain('10');
+  });
 });

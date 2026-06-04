@@ -52,6 +52,15 @@ interface YearGroup {
   rows: GridRow[];
 }
 
+/** Shift a 'YYYY-MM' month by n whole months. */
+function addMonths(month: string, n: number): string {
+  const [y, m] = month.split('-').map(Number);
+  const idx = (y * 12 + (m - 1)) + n;
+  const ny = Math.floor(idx / 12);
+  const nm = (idx % 12) + 1;
+  return `${ny}-${String(nm).padStart(2, '0')}`;
+}
+
 /**
  * Heatmap mix-percent for the green tint (0..55). Square-root eases the low end
  * so a 7%-retention cell still reads as faintly green without ever getting dark
@@ -124,6 +133,7 @@ export function CohortGridAdvanced({ rows, todayMonth }: CohortGridAdvancedProps
         <CohortYearAccordion
           key={yg.year}
           group={yg}
+          todayMonth={todayMonth}
           defaultOpen={yg.year === newestYear}
         />
       ))}
@@ -140,9 +150,11 @@ export function CohortGridAdvanced({ rows, todayMonth }: CohortGridAdvancedProps
  */
 function CohortYearAccordion({
   group,
+  todayMonth,
   defaultOpen,
 }: {
   group: YearGroup;
+  todayMonth: string;
   defaultOpen: boolean;
 }) {
   return (
@@ -166,14 +178,14 @@ function CohortYearAccordion({
         </span>
       </summary>
       <div className="overflow-x-auto px-3 pb-3">
-        <CohortYearGrid rows={group.rows} />
+        <CohortYearGrid rows={group.rows} todayMonth={todayMonth} />
       </div>
     </details>
   );
 }
 
 /** The M0..M11 retention grid for a single cohort year's member month rows. */
-function CohortYearGrid({ rows }: { rows: GridRow[] }) {
+function CohortYearGrid({ rows, todayMonth }: { rows: GridRow[]; todayMonth: string }) {
   return (
     <TableBase minWidth={620} className="border-separate [border-spacing:3px]">
       <thead>
@@ -190,38 +202,59 @@ function CohortYearGrid({ rows }: { rows: GridRow[] }) {
         </tr>
       </thead>
       <tbody>
-        {rows.map((gr) => (
-          <tr key={gr.month} data-testid={`cv-cohort-row-${gr.month}`}>
-            <td className="whitespace-nowrap pe-1.5 text-end text-[11px] font-bold text-ink-secondary">
-              {gr.month}
-            </td>
-            {gr.cells.map((v, m) =>
-              v == null ? (
-                <td
-                  key={m}
-                  className="h-7 min-w-[42px] rounded-md bg-glass-2 opacity-40"
-                  aria-hidden="true"
-                  style={{
-                    backgroundImage:
-                      'repeating-linear-gradient(45deg, var(--glass-2), var(--glass-2) 5px, transparent 5px, transparent 10px)',
-                  }}
-                />
-              ) : (
-                <td
-                  key={m}
-                  className={cn(
-                    'h-7 min-w-[42px] rounded-md text-center text-[11px] font-bold text-ink tabular-nums',
-                  )}
-                  style={{
-                    backgroundColor: `color-mix(in srgb, var(--status-green) ${tintPercent(v)}%, var(--glass-2))`,
-                  }}
-                >
-                  {Math.round(v)}%
-                </td>
-              ),
-            )}
-          </tr>
-        ))}
+        {rows.map((gr) => {
+          // The cell at column m === age maps to the CURRENT calendar month, which
+          // is still month-to-date. Guard with addMonths(...) === todayMonth so a
+          // future cohort (age floored to 0) is never falsely flagged.
+          const age = monthsBetween(gr.month, todayMonth);
+          const partialCol = addMonths(gr.month, age) === todayMonth ? age : -1;
+          return (
+            <tr key={gr.month} data-testid={`cv-cohort-row-${gr.month}`}>
+              <td className="whitespace-nowrap pe-1.5 text-end text-[11px] font-bold text-ink-secondary">
+                {gr.month}
+              </td>
+              {gr.cells.map((v, m) => {
+                if (v == null) {
+                  return (
+                    <td
+                      key={m}
+                      className="h-7 min-w-[42px] rounded-md bg-glass-2 opacity-40"
+                      aria-hidden="true"
+                      style={{
+                        backgroundImage:
+                          'repeating-linear-gradient(45deg, var(--glass-2), var(--glass-2) 5px, transparent 5px, transparent 10px)',
+                      }}
+                    />
+                  );
+                }
+                const isPartial = m === partialCol && m < COHORT_HORIZON;
+                // The in-progress month carries its accessible name via aria-label
+                // (the design system bans native title= tooltips) so it never reads
+                // as a completed retention figure.
+                const label = `${Math.round(v)}%${isPartial ? ' (חלקי)' : ''}`;
+                return (
+                  <td
+                    key={m}
+                    data-testid={isPartial ? `cv-cohort-cell-partial-${gr.month}` : undefined}
+                    data-partial={isPartial ? 'true' : undefined}
+                    aria-label={isPartial ? label : undefined}
+                    className={cn(
+                      'h-7 min-w-[42px] rounded-md text-center text-[11px] font-bold text-ink tabular-nums',
+                      // Partial (in-progress current month): dim so it never reads
+                      // as a completed retention figure.
+                      isPartial && 'opacity-60',
+                    )}
+                    style={{
+                      backgroundColor: `color-mix(in srgb, var(--status-green) ${tintPercent(v)}%, var(--glass-2))`,
+                    }}
+                  >
+                    {Math.round(v)}%
+                  </td>
+                );
+              })}
+            </tr>
+          );
+        })}
       </tbody>
     </TableBase>
   );

@@ -14,6 +14,7 @@ import type { DashboardData, DateRange } from '@/lib/types';
 import { buildDateRangeKey, getTodayInIsraelTz } from '@/lib/dateRange';
 import { useCogsSettings } from '@/lib/hooks/useCogsSettings';
 import { applyCogsToRows } from '@/lib/cogsSettings';
+import { useSalarySettings } from '@/lib/hooks/useSalarySettings';
 import { useGoalSettings } from '@/lib/hooks/useGoalSettings';
 import { effectiveGoal, monthFromRange } from '@/lib/goalSettings';
 import { computePacing, forecastMonthEnd } from '@/lib/insights';
@@ -146,6 +147,11 @@ export function GoalTracker({ data, range }: Props) {
   });
 
   const [cogsSettings] = useCogsSettings();
+  // P1 fix 2026-06-04 — thread salaries into the forecast the SAME way the
+  // dashboard P&L / Home hero do (both pass `salariesForRange(...)` into
+  // `aggregate`). Without this, the forecast's MTD + projected net omit
+  // salaries and read ~7%-of-revenue too HIGH vs the realized P&L net.
+  const [salarySettings] = useSalarySettings();
   // The prop `data.rows` is the dashboard's FILTERED set; the real feed is the
   // month-anchored wide fetch. Fall back to prop rows on first paint so the
   // panel always renders. cogs/netProfit derive only from revenue/spend, so the
@@ -156,7 +162,10 @@ export function GoalTracker({ data, range }: Props) {
   );
 
   // CURRENT month: the existing month-anchored forecast.
-  const forecast = useMemo(() => forecastMonthEnd(monthRows), [monthRows]);
+  const forecast = useMemo(
+    () => forecastMonthEnd(monthRows, salarySettings),
+    [monthRows, salarySettings],
+  );
   const daysInCurrentMonth = useMemo(
     () => forecast.daysElapsedThisMonth + forecast.daysRemainingThisMonth,
     [forecast],

@@ -360,24 +360,32 @@ export function CampaignDrawer({
     [productMap, rows, summary?.platform, effectiveStoreId, campaignId],
   );
 
+  // P2 fix (2026-06-04) — key the cohort/product-map lookups on
+  // `effectiveStoreId`, NOT the raw `storeId` prop. For a TikTok campaign
+  // remapped off its default store (Phase A.5 v2 shared-account mapping), the
+  // product map entries + the post-rewrite campaigns_daily spend both live
+  // under the effective store. Keying on the raw store made
+  // `productMap[currentCampaignKey]` empty → the cohort panel vanished. For
+  // every NON-remapped case `effectiveStoreId === storeId`, so this is a no-op
+  // outside the remapped-TikTok path. See effectiveStoreId memo above.
   const currentCampaignKey = useMemo(
-    () => campaignKey(storeId, summary?.platform ?? '', campaignId),
-    [storeId, summary?.platform, campaignId],
+    () => campaignKey(effectiveStoreId, summary?.platform ?? '', campaignId),
+    [effectiveStoreId, summary?.platform, campaignId],
   );
 
   const campaignNameByKey = useMemo(() => {
     const out = new Map<string, string>();
     for (const r of campaignsData?.rows ?? []) {
-      if (r.storeId !== storeId) continue;
+      if (r.storeId !== effectiveStoreId) continue;
       const k = campaignKey(r.storeId, r.platform, r.campaignId);
       if (!out.has(k)) out.set(k, r.campaignName || '—');
     }
     return out;
-  }, [campaignsData, storeId]);
+  }, [campaignsData, effectiveStoreId]);
 
   const otherCampaignsByProduct = useMemo(() => {
     const out = new Map<string, string[]>();
-    const storePrefix = `${storeId}::`;
+    const storePrefix = `${effectiveStoreId}::`;
     for (const [k, pids] of Object.entries(productMap)) {
       if (!k.startsWith(storePrefix)) continue;
       if (k === currentCampaignKey) continue;
@@ -388,7 +396,7 @@ export function CampaignDrawer({
       }
     }
     return out;
-  }, [productMap, storeId, currentCampaignKey, campaignNameByKey]);
+  }, [productMap, effectiveStoreId, currentCampaignKey, campaignNameByKey]);
 
   // ---- Cohort aggregation (preserved verbatim) ------------------------
   const cohortAggregated = useMemo(() => {
@@ -406,7 +414,7 @@ export function CampaignDrawer({
     };
     const acc = new Map<string, CohortAgg>();
     for (const r of campaignsData?.rows ?? []) {
-      if (r.storeId !== storeId) continue;
+      if (r.storeId !== effectiveStoreId) continue;
       const k = campaignKey(r.storeId, r.platform, r.campaignId);
       const existing = acc.get(k);
       if (existing) {
@@ -432,13 +440,13 @@ export function CampaignDrawer({
       }
     }
     return Array.from(acc.values());
-  }, [campaignsData, storeId]);
+  }, [campaignsData, effectiveStoreId]);
 
   const cannibalizationVerdicts = useMemo(() => {
     if (!summary) return [];
     return detectProductCannibalization({
       range: { from: rangeFrom, to: rangeTo },
-      storeId,
+      storeId: effectiveStoreId,
       productMap,
       campaignsDaily: (campaignsData?.rows ?? []).map(r => ({
         date: r.date,
@@ -455,7 +463,7 @@ export function CampaignDrawer({
         netRevenue: r.netRevenue ?? 0,
       })),
     });
-  }, [summary, rangeFrom, rangeTo, storeId, productMap, campaignsData, productsData]);
+  }, [summary, rangeFrom, rangeTo, effectiveStoreId, productMap, campaignsData, productsData]);
 
   const cohort = useMemo(() => {
     if (!summary) return null;
@@ -465,7 +473,7 @@ export function CampaignDrawer({
       units: number;
     }> = [];
     for (const p of productsData?.rows ?? []) {
-      if (p.storeId !== storeId) continue;
+      if (p.storeId !== effectiveStoreId) continue;
       if (p.date < rangeFrom || p.date > rangeTo) continue;
       if (!p.productId) continue;
       const net = p.netRevenue ?? p.revenue;
@@ -487,7 +495,7 @@ export function CampaignDrawer({
       campaignSpend.set(a.key, a.spend);
     }
     const ordersForAllocator = (ordersAttrData?.rows ?? [])
-      .filter(o => o.storeId === storeId)
+      .filter(o => o.storeId === effectiveStoreId)
       .filter(o => o.date >= rangeFrom && o.date <= rangeTo)
       .map(o => ({
         storeId: o.storeId,
@@ -497,7 +505,7 @@ export function CampaignDrawer({
         lineItems: o.lineItems ?? [],
       }));
     const alloc = allocateProductRevenue({
-      storeId,
+      storeId: effectiveStoreId,
       map: productMap,
       productRevenue,
       campaignSpend,
@@ -539,7 +547,7 @@ export function CampaignDrawer({
       roasShopifyByKey,
       roasShopifyPlatformByKey,
     });
-  }, [summary, currentCampaignKey, productMap, cohortAggregated, productsData, ordersAttrData, storeId, rangeFrom, rangeTo]);
+  }, [summary, currentCampaignKey, productMap, cohortAggregated, productsData, ordersAttrData, effectiveStoreId, rangeFrom, rangeTo]);
 
   const productChannelBreakdown = useMemo(() => {
     if (!summary || summary.platform !== 'Meta') return null;
@@ -549,13 +557,13 @@ export function CampaignDrawer({
     const breakdown = analyzeProductChannel({
       productIds: mappedIds,
       orders: ordersRows,
-      storeId,
+      storeId: effectiveStoreId,
       dateFrom: rangeFrom,
       dateTo: rangeTo,
     });
     if (breakdown.totalOrders < 3) return null;
     return breakdown;
-  }, [summary, ordersAttrData, rows, mappedIds, storeId, rangeFrom, rangeTo]);
+  }, [summary, ordersAttrData, rows, mappedIds, effectiveStoreId, rangeFrom, rangeTo]);
 
   // Per-ad-set attribution Map.
   const attributionByAdSet = useCampaignAttribution({
@@ -602,7 +610,11 @@ export function CampaignDrawer({
   const reconciliation = buildReconciliation({
     summary: { platform: summary.platform },
     mappedIds,
-    storeId,
+    // P2 fix — scope channel + Shopify series to the effective store so a
+    // remapped TikTok campaign's post-rewrite spend + its mapped-product
+    // orders aren't filtered out (raw store → all-zero series + spurious
+    // "Dark traffic 100%"). No-op for non-remapped campaigns.
+    storeId: effectiveStoreId,
     campaignsData,
     ordersData: ordersAttrData,
     productMap,
@@ -613,7 +625,10 @@ export function CampaignDrawer({
     {
       campaignName: summary.campaignName,
       campaignId,
-      storeId,
+      // P2 fix — match orders to the effective store; a remapped TikTok
+      // campaign's orders live under the effective store, so the raw store
+      // matched zero orders (wrong-store attribution). No-op when not remapped.
+      storeId: effectiveStoreId,
       platform: summary.platform,
       metaClaim: summary.value,
       spend: summary.spend,
@@ -838,6 +853,10 @@ export function CampaignDrawer({
             </TabsContent>
 
             <TabsContent value="daily">
+              {/* P2 fix — `storeId={effectiveStoreId}`: the prev-period CPM
+                  comparison filters campaignsDataPrev by store; a remapped
+                  TikTok campaign's prior rows live under the effective store
+                  too. No-op when the campaign isn't remapped. */}
               <CampaignDrawerDaily
                 dailyArr={summary.dailyArr}
                 rangeFrom={rangeFrom}
@@ -845,7 +864,7 @@ export function CampaignDrawer({
                 prevRange={prevRange}
                 campaignsDataPrev={campaignsDataPrev}
                 onAnalysisModeChange={setCpmAnalysisMode}
-                storeId={storeId}
+                storeId={effectiveStoreId}
                 campaignId={campaignId}
                 platform={summary.platform}
               />

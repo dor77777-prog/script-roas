@@ -81,6 +81,13 @@ export function overcountByChannelFromCampaigns(
     if (!inWindow(o.date, o.storeName)) continue;
     const ch = sourceToChannel(o.source);
     if (!ch) continue;
+    // BASIS NOTE (audit 2026-06-05): verified is GROSS — OrderAttributionRow.totalCad
+    // is Shopify `total_price` (gross-of-refunds, per the P0-2 invariant). This is
+    // INTENTIONAL and correct for overcount: the platform's claim (campaign
+    // conversion_value) is also gross, so overcount = (gross claim − gross verified)
+    // / gross claim is a like-for-like comparison. Do NOT net-adjust one side only —
+    // that would make the overcount % wrong. (NC-ROAS elsewhere is net by design;
+    // overcount is gross by design — different metrics, different bases.)
     verified[ch] += Number.isFinite(o.totalCad) ? o.totalCad : 0;
   }
 

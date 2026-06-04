@@ -30,6 +30,14 @@ const bandChip = (b: ReturnType<typeof roasBand>) =>
 const bandLabel = (b: ReturnType<typeof roasBand>) =>
   b === 'good' ? 'בריא' : b === 'warn' ? 'תקין' : b === 'bad' ? 'חלש' : 'אין נתונים';
 
+/**
+ * Badge text for a channel whose NC-ROAS is null. Distinguishes "spent but
+ * acquired nothing" (אין גיוס) from a truly empty channel (אין נתונים).
+ */
+export function channelEmptyLabel(m: Pick<ChannelMetric, 'spend' | 'ncRoas' | 'ncOrders'>): string {
+  return m.spend > 0 && m.ncRoas == null && m.ncOrders === 0 ? 'אין גיוס' : 'אין נתונים';
+}
+
 export interface ChannelTruthPanelProps {
   metrics: ChannelMetric[];
   /** Blended NC-ROAS / nCAC for the summary strip (from computeNewCustomerMetrics). */
@@ -101,7 +109,7 @@ export function ChannelTruthPanel({
                 </div>
               </div>
               <span className={cn('mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-extrabold', bandChip(b))}>
-                {bandLabel(b)}
+                {b === 'none' ? channelEmptyLabel(m) : bandLabel(b)}
               </span>
             </div>
           );

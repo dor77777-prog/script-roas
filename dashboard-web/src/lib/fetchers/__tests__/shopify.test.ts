@@ -795,7 +795,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
     ]);
   });
 
-  it('Orders Test 6: note_attributes _fbc → fbclidPresent=true and meta-paid', async () => {
+  it('Orders Test 6: note_attributes FRESH _fbc → fbclidPresent=true and meta-paid', async () => {
     const { fn } = makeFetchMock([
       {
         body: {
@@ -805,9 +805,13 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
               total_price: '25.00',
               test: false,
               financial_status: 'paid',
+              created_at: '2026-06-05T12:00:00Z',
               landing_site: '/products/x',
               referring_site: '',
-              note_attributes: [{ name: '_fbc', value: 'fb.1.123.AbC' }],
+              // _fbc with a FRESH click timestamp (3 days before the order) →
+              // within Meta's default 7-day click window → meta-paid. A stale
+              // ~90-day cookie would NOT count (see fbcFreshClick.test.ts).
+              note_attributes: [{ name: '_fbc', value: `fb.1.${Date.parse('2026-06-02T12:00:00Z')}.AbC` }],
               source_name: 'web',
               line_items: [],
             },

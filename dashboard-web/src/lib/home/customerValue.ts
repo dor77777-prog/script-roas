@@ -190,7 +190,8 @@ function keepRate(month: string, opts: CustomerValueOpts): number {
 
 /**
  * Pooled / M0-weighted cumulative-PROFIT curve (per customer) over a set of
- * cells. Each cell's net is scaled by its cohort-month keep-rate then re-bucketed
+ * cells. Each cell's POSITIVE net is scaled by its cohort-month keep-rate (a
+ * negative net — a refund-driven loss — passes through unscaled) then re-bucketed
  * by months-since (keep-rate is per cohort-month, not per months-since), and the
  * running sum is divided by the set's M0-active count — the exact profit
  * re-bucketing the whole-curve block uses, factored out so the new-vs-old halves
@@ -203,7 +204,12 @@ function pooledProfitCurve(cells: CohortMonthlyRow[], opts: CustomerValueOpts): 
     const m = c.monthSince;
     if (m < 0 || m >= COHORT_HORIZON) continue;
     const net = Number.isFinite(c.netCad) ? c.netCad : 0;
-    perMonthProfit[m] += net * keepRate(c.firstOrderMonth, opts);
+    // keep-rate scales only the POSITIVE portion (revenue minus COGS/fees). A
+    // negative cohort-month net is refund-driven — COGS/fees don't shrink a
+    // loss, so a loss passes through unscaled. Scaling it would lift the profit
+    // curve ABOVE the net curve on refund-heavy months (smaller-magnitude
+    // negative), which is wrong: profit ≤ net must hold everywhere.
+    perMonthProfit[m] += net >= 0 ? net * keepRate(c.firstOrderMonth, opts) : net;
     if (m === 0) m0Active += Number.isFinite(c.activeCustomers) ? c.activeCustomers : 0;
   }
   const cumulative = new Array(COHORT_HORIZON).fill(0);

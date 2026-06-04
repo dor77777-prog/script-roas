@@ -561,6 +561,63 @@ describe('CustomerValueTab — by-year cohort matrix accordion (ISSUE 2)', () =>
   });
 });
 
+describe('CustomerValueTab — partial current-month cohort cell (P2)', () => {
+  // The cell at column m === cohort-age corresponds to the CURRENT calendar
+  // month (month-to-date), which is still in progress. It must NOT read as a
+  // finished retention figure: render it with a partial affordance (reduced
+  // opacity + a "(חלקי)" aria-label — the design system bans native title=)
+  // WITHOUT changing the displayed value.
+  //
+  // Cohort 2026-05 with todayMonth 2026-06 → age 1 → M1 (2026-06) is partial.
+  const partialRows: CohortMonthlyRow[] = [
+    cell({ firstOrderMonth: '2026-05', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000 }),
+    cell({ firstOrderMonth: '2026-05', monthSince: 1, activeCustomers: 4, orders: 4, netCad: 400 }),
+  ];
+
+  function renderPartial() {
+    return render(
+      <CustomerValueTab
+        stores={['uzoshop', 'zolplus', 'usmile360']}
+        injectedRows={partialRows}
+        injectedBlendedNcac={40}
+        injectedSpendByMonth={{ '2026-05': 280 }}
+        todayMonth="2026-06"
+      />,
+    );
+  }
+
+  it('flags the in-progress current month (m === age) as partial', () => {
+    renderPartial();
+    const partial = screen.getByTestId('cv-cohort-cell-partial-2026-05');
+    expect(partial).toHaveAttribute('data-partial', 'true');
+    // The "(חלקי)" affordance is announced via aria-label — not a completed read.
+    expect(partial.getAttribute('aria-label') ?? '').toContain('(חלקי)');
+  });
+
+  it('does NOT change the partial cell value — still shows the M1 retention %', () => {
+    renderPartial();
+    // 4 active / 10 M0 = 40% — preserved exactly, just marked partial.
+    expect(screen.getByTestId('cv-cohort-cell-partial-2026-05')).toHaveTextContent('40%');
+  });
+
+  it('does not mark any cell partial for a fully-mature cohort', () => {
+    render(
+      <CustomerValueTab
+        stores={['uzoshop', 'zolplus', 'usmile360']}
+        injectedRows={[
+          cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000 }),
+          cell({ firstOrderMonth: '2025-01', monthSince: 1, activeCustomers: 5, orders: 5, netCad: 500 }),
+        ]}
+        injectedBlendedNcac={40}
+        injectedSpendByMonth={{ '2025-01': 400 }}
+        todayMonth="2026-06"
+      />,
+    );
+    // 2025-01 is ≥12 mo old → no column maps to the current month.
+    expect(screen.queryByTestId('cv-cohort-cell-partial-2025-01')).toBeNull();
+  });
+});
+
 describe('CustomerValueTab — LTV explainer is a rich tooltip (Phase 3a)', () => {
   // The ~400-char LTV explainer (the longest tooltip in the app) was promoted
   // from a plain-string simple bubble to variant="rich" + a title. On a fine

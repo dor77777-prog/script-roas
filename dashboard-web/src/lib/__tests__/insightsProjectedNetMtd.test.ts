@@ -45,6 +45,7 @@ import {
 import { forecastMonthEnd } from '@/lib/insights';
 import type { DailyRow } from '@/lib/types';
 import type { RecurringCost } from '@/lib/billing';
+import type { SalarySettings } from '@/lib/salarySettings';
 
 // Determinism: `forecastMonthEnd` (and this file's local `todayInIsrael()`)
 // read the wall clock via `new Date()` and have no explicit `now`/`asOf`
@@ -385,5 +386,125 @@ describe('forecastMonthEnd includes percent-of-revenue billing in projectedFixed
     // Requiring >$10 guards against the test silently passing pre-fix even on
     // tiny projections (e.g. a 1-day month).
     expect(actualDiff).toBeGreaterThan(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P1 fix 2026-06-04 — forecastMonthEnd must subtract salaries from BOTH the
+// month-to-date net AND the projected month-end net, matching the dashboard
+// P&L / Home hero (which thread `salariesForRange(...)` into `aggregate`).
+// Pre-fix: forecastMonthEnd took no salary settings, so its `monthToDateNet`
+// + `projectedNet` were systematically ~salary-amount (default 7% of revenue)
+// too HIGH vs the realized P&L net.
+//
+// Strategy: run forecastMonthEnd twice on identical rows — once WITH a salary
+// settings object, once WITHOUT (legacy call). The delta isolates the salary
+// effect. Pre-fix delta = 0 (the param didn't exist / was ignored).
+// ---------------------------------------------------------------------------
+describe('forecastMonthEnd subtracts salaries from mtd + projected net (P1 2026-06-04)', () => {
+  // PINNED_NOW (top of file) = 2026-05-15 → MTD window is 2026-05-01..05-15.
+  function buildRows(): DailyRow[] {
+    const today = todayInIsrael(); // 2026-05-15 under fake timers
+    const rows: DailyRow[] = [];
+    // One MTD day at day 3 of month — OUTSIDE the [today-7..today-1] baseline.
+    rows.push(
+      row({
+        date: today.slice(0, 8) + '03',
+        revenue: 10000,
+        totalSpend: 1000,
+        cogs: 2500,
+        hasCogs: true,
+      }),
+    );
+    // Baseline window: 7 days × 1000 rev each (also inside the MTD window since
+    // today=15, so today-7..today-1 = days 8..14, all in May).
+    for (let d = -7; d <= -1; d++) {
+      rows.push(
+        row({
+          date: addDays(today, d),
+          revenue: 1000,
+          totalSpend: 100,
+          cogs: 250,
+          hasCogs: true,
+        }),
+      );
+    }
+    return rows;
+  }
+
+  it('percent salary (7%): projectedNet AND monthToDateNet drop by the salary amount', () => {
+    const rows = buildRows();
+
+    const salarySettings: SalarySettings = {
+      v: 1,
+      default: { kind: 'percent', value: 7 },
+      byMonth: {},
+    };
+
+    const withSalary = forecastMonthEnd(rows, salarySettings);
+    const without = forecastMonthEnd(rows); // legacy call — no salaries
+
+    // Revenue projections must be identical (only the salary arg differs).
+    expect(withSalary.projectedRevenue).toBeCloseTo(without.projectedRevenue, 6);
+    expect(withSalary.monthToDateRevenue).toBeCloseTo(
+      without.monthToDateRevenue,
+      6,
+    );
+
+    // MTD net drops by 7% × MTD revenue.
+    const mtdRev = withSalary.monthToDateRevenue; // 10000 + 7×1000 = 17000
+    const expectedMtdSalary = 0.07 * mtdRev;
+    expect(without.monthToDateNet - withSalary.monthToDateNet).toBeCloseTo(
+      expectedMtdSalary,
+      4,
+    );
+
+    // Projected net drops by 7% × PROJECTED (month-end) revenue — the percent
+    // path scales with the extrapolated revenue.
+    const projRev = withSalary.projectedRevenue;
+    const expectedProjSalary = 0.07 * projRev;
+    expect(without.projectedNet - withSalary.projectedNet).toBeCloseTo(
+      expectedProjSalary,
+      4,
+    );
+
+    // Pre-fix pin: the delta would have been 0 (no salary param). Require a
+    // meaningful drop so the test can't silently pass pre-fix.
+    expect(without.projectedNet - withSalary.projectedNet).toBeGreaterThan(10);
+    expect(without.monthToDateNet - withSalary.monthToDateNet).toBeGreaterThan(
+      10,
+    );
+  });
+
+  it('fixed-amount salary: projectedNet drops by the full monthly amount (per-day → whole month)', () => {
+    const rows = buildRows();
+
+    const MONTHLY = 3000;
+    const salarySettings: SalarySettings = {
+      v: 1,
+      default: { kind: 'amount', value: MONTHLY },
+      byMonth: {},
+    };
+
+    const withSalary = forecastMonthEnd(rows, salarySettings);
+    const without = forecastMonthEnd(rows);
+
+    // The projection covers the WHOLE current month, so the fixed-amount path
+    // bills the full monthly amount.
+    expect(without.projectedNet - withSalary.projectedNet).toBeCloseTo(
+      MONTHLY,
+      4,
+    );
+
+    // MTD net drops by the per-day-allocated amount for the elapsed days:
+    // value × (daysOfMonthInRange / daysInMonth). MTD range = 05-01..05-15 =
+    // 15 days; May has 31 days → 3000 × 15/31.
+    const daysElapsed = withSalary.daysElapsedThisMonth; // 15
+    const daysInMonth = daysElapsed + withSalary.daysRemainingThisMonth; // 31
+    const expectedMtdSalary = (MONTHLY * daysElapsed) / daysInMonth;
+    expect(without.monthToDateNet - withSalary.monthToDateNet).toBeCloseTo(
+      expectedMtdSalary,
+      4,
+    );
   });
 });
