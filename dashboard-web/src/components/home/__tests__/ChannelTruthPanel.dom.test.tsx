@@ -7,9 +7,9 @@ import type { ChannelMetric } from '@/lib/home/channelTruth';
 afterEach(cleanup);
 
 const METRICS: ChannelMetric[] = [
-  { channel: 'meta', ncRevenue: 24600, ncOrders: 158, spend: 6000, ncRoas: 4.1, nCac: 38, ncNetProfit: 11220 },
-  { channel: 'google', ncRevenue: 9900, ncOrders: 67, spend: 3000, ncRoas: 3.3, nCac: 45, ncNetProfit: 3930 },
-  { channel: 'tiktok', ncRevenue: 2400, ncOrders: 27, spend: 2000, ncRoas: 1.2, nCac: 74, ncNetProfit: -360 },
+  { channel: 'meta', ncRevenue: 24600, ncOrders: 158, spend: 6000, ncRoas: 4.1, nCac: 38, ncNetProfit: 11220, overcountPct: 0.38 },
+  { channel: 'google', ncRevenue: 9900, ncOrders: 67, spend: 3000, ncRoas: 3.3, nCac: 45, ncNetProfit: 3930, overcountPct: 0 },
+  { channel: 'tiktok', ncRevenue: 2400, ncOrders: 27, spend: 2000, ncRoas: 1.2, nCac: 74, ncNetProfit: -360, overcountPct: null },
 ];
 
 describe('ChannelTruthPanel', () => {
@@ -40,9 +40,28 @@ describe('ChannelTruthPanel', () => {
   });
 
   it('renders "—" for a channel with no NC-ROAS (no spend or no revenue)', () => {
-    const m: ChannelMetric[] = [{ channel: 'meta', ncRevenue: 0, ncOrders: 0, spend: 0, ncRoas: null, nCac: null, ncNetProfit: null }];
+    const m: ChannelMetric[] = [{ channel: 'meta', ncRevenue: 0, ncOrders: 0, spend: 0, ncRoas: null, nCac: null, ncNetProfit: null, overcountPct: null }];
     render(<ChannelTruthPanel metrics={m} />);
     expect(screen.getByTestId('channel-card-meta').textContent).toContain('—');
+  });
+
+  it('shows the overcount % row for a channel with overcountPct != null (and rounds it)', () => {
+    render(<ChannelTruthPanel metrics={METRICS} />);
+    const meta = screen.getByTestId('channel-card-meta');
+    const row = meta.querySelector('[data-testid="channel-overcount-meta"]');
+    expect(row).not.toBeNull();
+    expect(meta.textContent).toContain('ספירת-יתר');
+    expect(row!.textContent).toContain('+38%'); // 0.38 → +38%
+    // google overcount 0 → renders +0%, row present (claim existed, no overcount)
+    const google = screen.getByTestId('channel-card-google');
+    expect(google.querySelector('[data-testid="channel-overcount-google"]')).not.toBeNull();
+    expect(google.querySelector('[data-testid="channel-overcount-google"]')!.textContent).toContain('+0%');
+  });
+
+  it('hides the overcount row when overcountPct is null', () => {
+    render(<ChannelTruthPanel metrics={METRICS} />);
+    const tiktok = screen.getByTestId('channel-card-tiktok'); // overcountPct null
+    expect(tiktok.querySelector('[data-testid="channel-overcount-tiktok"]')).toBeNull();
   });
 
   it('shows per-channel net profit (green positive, red negative)', () => {

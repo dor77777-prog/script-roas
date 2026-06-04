@@ -82,6 +82,17 @@ export function ChannelTruthPanel({
                   <span className="text-ink tabular-nums"><Money value={m.spend} /></span></div>
                 <div className="flex justify-between"><span className="text-ink-secondary">הזמנות חדשות</span>
                   <span className="text-ink tabular-nums">{m.ncOrders}</span></div>
+                {m.overcountPct != null && (
+                  <div
+                    data-testid={`channel-overcount-${m.channel}`}
+                    className="flex justify-between"
+                  >
+                    <span className="text-ink-muted">ספירת-יתר</span>
+                    <span className={cn('tabular-nums', m.overcountPct > 0 ? 'text-status-warningFg' : 'text-ink-muted')}>
+                      +{Math.round(m.overcountPct * 100)}%
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between border-t border-glass-edge pt-1 mt-0.5">
                   <span className="text-ink-secondary">רווח-נטו (אחרי עלויות)</span>
                   <span className={cn('tabular-nums font-bold', m.ncNetProfit == null ? 'text-ink-muted' : m.ncNetProfit >= 0 ? 'text-status-greenFg' : 'text-status-redFg')}>

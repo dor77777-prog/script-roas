@@ -81,7 +81,7 @@ import {
   computeStableNcac,
   type FirstOrderInput,
 } from '@/lib/home/newCustomerMetrics';
-import { computeChannelTruth } from '@/lib/home/channelTruth';
+import { computeChannelTruth, overcountByChannelFromCampaigns, CHANNELS, type Channel } from '@/lib/home/channelTruth';
 import { TRANSACTION_FEES_RATE } from '@/lib/costs';
 import { netAdjustFactor } from '@/lib/home/revenueBasis';
 import type { StoreAgg } from '@/lib/analytics';
@@ -733,9 +733,13 @@ function HomeTab({
   /**
    * Raw orders-attribution rows for the active range. Threaded through so
    * the Hero strip's per-day Orders sparkline can bucket the same row set
-   * the per-store order count already consumes — no second SWR fetch.
+   * the per-store order count already consumes — no second SWR fetch. Typed
+   * as the full OrderAttributionRow (the render site already passes the full
+   * rows): the sparkline reads the {storeName,date} subset, while
+   * channel-overcount-delta (WS2 #12) reads {source,totalCad,date} for the
+   * per-channel verified-revenue side.
    */
-  ordersRows?: Array<{ storeName: string; date: string }>;
+  ordersRows?: OrderAttributionRow[];
   /**
    * Phase 3 — minimal rows feeding the NC-ROAS / nCAC lens (hero subordinate
    * tile + per-store modal row). Carries storeName / totalCad / isFirstOrder
@@ -986,12 +990,27 @@ function HomeTab({
     // factor; per-platform spend; keepRate = 1 − effective COGS% − fees%.
     const cogsRate = filtered.curAgg.revenue > 0 ? filtered.curAgg.cogs / filtered.curAgg.revenue : 0;
     const keepRate = Math.max(0, 1 - cogsRate - TRANSACTION_FEES_RATE);
+    // channel-overcount-delta (WS2 #12) — platform-claimed conversion value
+    // (Σ campaigns conversionValue) vs Shopify click-ID-verified revenue
+    // (Σ ALL orders by source) per channel, same range + store scope.
+    const overcountFull = overcountByChannelFromCampaigns(
+      campaignsData?.rows ?? [],
+      ordersRows ?? [],
+      filters.range.from,
+      filters.range.to,
+      scope,
+    );
+    const overcountByChannel = CHANNELS.reduce((acc, ch) => {
+      acc[ch] = overcountFull[ch].overcountPct;
+      return acc;
+    }, {} as Record<Channel, number | null>);
     const channelMetrics = computeChannelTruth(
       firstOrderRows,
       { meta: filtered.curAgg.fbSpend, google: filtered.curAgg.gaSpend, tiktok: filtered.curAgg.ttSpend },
       scope,
       ncNetAdj,
       keepRate,
+      overcountByChannel,
     );
     return {
       ...m,
@@ -1011,6 +1030,9 @@ function HomeTab({
     filtered.curAgg.revenue,
     filtered.curAgg.grossRevenue,
     filters.store,
+    filters.range,
+    campaignsData?.rows,
+    ordersRows,
   ]);
   const heroDelta = useMemo(() => {
     if (!prevAggFromPrevData) return undefined;

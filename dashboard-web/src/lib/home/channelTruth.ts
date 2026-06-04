@@ -10,7 +10,8 @@
 // data_daily spend (fb/ga/tt), PASSED IN — never recomputed from raw account
 // totals. CAPI-safe: read-only, zero pixel/CAPI events.
 
-import type { OrderSource } from '@/lib/ordersAttribution';
+import type { OrderSource, OrderAttributionRow } from '@/lib/ordersAttribution';
+import type { CampaignRow } from '@/lib/campaigns';
 import type { FirstOrderInput } from '@/lib/home/newCustomerMetrics';
 
 export type Channel = 'meta' | 'google' | 'tiktok';
@@ -24,6 +25,73 @@ export function sourceToChannel(s: OrderSource | null | undefined): Channel | nu
     case 'tiktok-paid': return 'tiktok';
     default: return null;
   }
+}
+
+/**
+ * Map a CampaignRow's title-case `platform` ('Meta'|'Google'|'TikTok') to a
+ * paid channel, or null for anything else. Campaign platforms are title-case
+ * (see lib/campaigns.ts CampaignRow), unlike order `source` labels.
+ */
+function platformToChannel(p: string | null | undefined): Channel | null {
+  switch (p) {
+    case 'Meta': return 'meta';
+    case 'Google': return 'google';
+    case 'TikTok': return 'tiktok';
+    default: return null;
+  }
+}
+
+/**
+ * channel-overcount-delta (WS2 #12) — per-acquiring-channel "overcount %":
+ * how much the platform's SELF-REPORTED conversion value (Σ campaign
+ * conversionValue) exceeds the Shopify click-ID-VERIFIED revenue (Σ order
+ * totalCad whose `source` resolves to that channel). A positive overcount
+ * means the platform is claiming more revenue than deterministic click-IDs
+ * can confirm (modeled / view-through / cross-device fill).
+ *
+ * verified counts ALL orders for the channel (NOT first-order-only) — the
+ * platform's claim covers every conversion, so the verified side must too.
+ *
+ * overcountPct = claim > 0 ? max(0, (claim − verified) / claim) : null.
+ * Negative / halo (verified ≥ claim) clamps to 0; null when there's no claim
+ * (can't compute a ratio of nothing). Returns an entry for every channel.
+ *
+ * Pure + read-only; CAPI-safe (no pixel/CAPI events).
+ */
+export function overcountByChannelFromCampaigns(
+  campaigns: CampaignRow[],
+  orders: OrderAttributionRow[],
+  from: string,
+  to: string,
+  storeName?: string,
+): Record<Channel, { claim: number; verified: number; overcountPct: number | null }> {
+  const inWindow = (date: string, store: string) =>
+    date >= from && date <= to && (storeName ? store === storeName : true);
+
+  const claim: Record<Channel, number> = { meta: 0, google: 0, tiktok: 0 };
+  for (const c of campaigns) {
+    if (!inWindow(c.date, c.storeName)) continue;
+    const ch = platformToChannel(c.platform);
+    if (!ch) continue;
+    claim[ch] += Number.isFinite(c.conversionValue) ? c.conversionValue : 0;
+  }
+
+  const verified: Record<Channel, number> = { meta: 0, google: 0, tiktok: 0 };
+  for (const o of orders) {
+    if (!inWindow(o.date, o.storeName)) continue;
+    const ch = sourceToChannel(o.source);
+    if (!ch) continue;
+    verified[ch] += Number.isFinite(o.totalCad) ? o.totalCad : 0;
+  }
+
+  const out = {} as Record<Channel, { claim: number; verified: number; overcountPct: number | null }>;
+  for (const channel of CHANNELS) {
+    const cl = claim[channel];
+    const ve = verified[channel];
+    const overcountPct = cl > 0 ? Math.max(0, (cl - ve) / cl) : null;
+    out[channel] = { claim: cl, verified: ve, overcountPct };
+  }
+  return out;
 }
 
 export interface ChannelMetric {
@@ -45,6 +113,13 @@ export interface ChannelMetric {
    * channel has neither spend nor attributed revenue.
    */
   ncNetProfit: number | null;
+  /**
+   * channel-overcount-delta (WS2 #12) — fraction (0..1) by which the platform's
+   * self-reported conversion value exceeds Shopify click-ID-verified revenue
+   * for this channel. null when there's no platform claim to compare against
+   * (or no overcount data threaded through). See `overcountByChannelFromCampaigns`.
+   */
+  overcountPct: number | null;
 }
 
 /**
@@ -69,6 +144,13 @@ export function computeChannelTruth(
    * don't pass it; real callers derive it from the period's COGS + fees.
    */
   keepRate = 1,
+  /**
+   * channel-overcount-delta (WS2 #12) — per-channel overcount fraction (0..1)
+   * or null, typically derived via `overcountByChannelFromCampaigns(...)`.
+   * Optional + defaults to undefined → every channel's `overcountPct` is null
+   * (backward-compatible with callers/tests passing ≤5 args).
+   */
+  overcountByChannel?: Partial<Record<Channel, number | null>>,
 ): ChannelMetric[] {
   const scoped = storeName ? rows.filter((r) => r.storeName === storeName) : rows;
   const factor = Number.isFinite(netAdjust) && netAdjust > 0 ? netAdjust : 1;
@@ -87,6 +169,7 @@ export function computeChannelTruth(
     const ncRoas = spend > 0 && ncRevenue > 0 ? ncRevenue / spend : null;
     const nCac = ncOrders > 0 ? spend / ncOrders : null;
     const ncNetProfit = spend > 0 || ncRevenue > 0 ? ncRevenue * keep - spend : null;
-    return { channel, ncRevenue, ncOrders, spend, ncRoas, nCac, ncNetProfit };
+    const overcountPct = overcountByChannel?.[channel] ?? null;
+    return { channel, ncRevenue, ncOrders, spend, ncRoas, nCac, ncNetProfit, overcountPct };
   });
 }
