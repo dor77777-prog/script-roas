@@ -212,8 +212,51 @@ export function CustomerValueTab({
   // "47 − 33 = 13" rounding mismatches.
   const netPerCustomer =
     ltv12 != null && ncac != null ? Math.round(ltv12) - Math.round(ncac) : null;
-  const ratio = value.ltvToNcac;
+
+  // ── ONE basis for every basis-dependent element ──────────────────────────
+  // value.ltvToNcac / value.paybackMonths are PROFIT-derived. The headline LTV,
+  // net-per-customer, and the curve switch with the toggle, so the ratio +
+  // badge + no-recovery clause + payback + the curve's break-even crossing MUST
+  // all be re-derived on the DISPLAYED basis — otherwise the net basis renders a
+  // profit-derived "losing" badge over a positive green net (Issue 1/4), and the
+  // net curve draws a payback the verdict denies (Issue 2). In profit basis we
+  // reuse the precomputed mature values; in net basis we derive the ratio + the
+  // payback from the MATURE net curve (ltv12Net / nCAC, first month_since the
+  // mature net cum ≥ nCAC) — null when there is no mature net value, exactly
+  // like the profit branch.
+  const displayRatio =
+    isProfit
+      ? value.ltvToNcac
+      : ltv12 != null && ncac != null && ncac > 0
+        ? ltv12 / ncac
+        : null;
+  const displayPayback = useMemo<number | null>(() => {
+    if (isProfit) return value.paybackMonths;
+    if (ncac == null || !hasMatureCurve) return null;
+    for (let m = 0; m < matureCurve.length; m++) {
+      if (matureCurve[m] >= ncac) return m;
+    }
+    return null;
+  }, [isProfit, value.paybackMonths, ncac, hasMatureCurve, matureCurve]);
+  const ratio = displayRatio;
   const tone = ratioTone(ratio);
+  // net-per-customer colour follows the SAME comparison as the badge (ratio ≥ 1)
+  // rather than the rounded $LTV − $nCAC, so a sub-dollar losing ratio can never
+  // paint a green/zero net (Issue 4). When ratio is unknown, fall back to the
+  // rounded sign so an isolated nCAC-less case still colours sensibly.
+  const netIsGood = ratio != null ? ratio >= 1 : (netPerCustomer ?? 0) >= 0;
+  // The curve's break-even line + crossing must derive from the SAME basis +
+  // gate as the badge. Suppress nCAC entirely (no line / crossing / callout)
+  // when EITHER:
+  //   • there is no mature curve — the chart falls back to the all-cohort
+  //     pooled shape, which must NOT draw a crossing the headline disclaims
+  //     (Issue 3); or
+  //   • the displayed basis is LOSING (ratio < 1) — the curve must never draw a
+  //     payback the verdict denies, even via its own points→nCAC derivation
+  //     (Issue 2). When profitable, curveNcac is the real break-even and the
+  //     zone split is pinned to displayPayback below.
+  const losingOnDisplay = ratio != null && ratio < 1;
+  const curveNcac = hasMatureCurve && !losingOnDisplay ? ncac : null;
 
   // new-vs-old: compare the early-LTV (M2 cumulative, fall back to M0) on the
   // ACTIVE basis — profit by default — so the card is consistent with the
@@ -320,7 +363,7 @@ export function CustomerValueTab({
           {netPerCustomer != null ? (
             <>
               כלומר כל לקוח מכניס לך{' '}
-              <span className={cn('font-extrabold', numClass(netPerCustomer >= 0 ? 'good' : 'bad'))}>
+              <span className={cn('font-extrabold', numClass(netIsGood ? 'good' : 'bad'))}>
                 <Money value={netPerCustomer} />
               </span>{' '}
               נטו.{' '}
@@ -328,8 +371,8 @@ export function CustomerValueTab({
           ) : (
             <span className="text-ink-muted">אין עדיין נתוני עלות-גיוס. </span>
           )}
-          {value.paybackMonths != null ? (
-            value.paybackMonths === 0 ? (
+          {displayPayback != null ? (
+            displayPayback === 0 ? (
               <>
                 הוא מחזיר את עלות הגיוס{' '}
                 <span className={cn('font-extrabold', numClass('accent'))}>כבר מההזמנה הראשונה</span>,{' '}
@@ -337,7 +380,7 @@ export function CustomerValueTab({
             ) : (
               <>
                 הוא מחזיר את עלות הגיוס תוך{' '}
-                <span className={cn('font-extrabold', numClass('accent'))}>{value.paybackMonths}</span>{' '}
+                <span className={cn('font-extrabold', numClass('accent'))}>{displayPayback}</span>{' '}
                 חודשים,{' '}
               </>
             )
@@ -410,7 +453,7 @@ export function CustomerValueTab({
         <Card data-testid="cv-kpi" className="p-4">
           <div className="text-xs font-semibold text-ink-secondary">החזר עלות (payback)</div>
           <div data-testid="cv-kpi-payback" className="mt-1 text-2xl font-extrabold tracking-tight tabular-nums">
-            {value.paybackMonths != null ? `${value.paybackMonths} ח׳` : '—'}
+            {displayPayback != null ? `${displayPayback} ח׳` : '—'}
           </div>
           <div className="mt-0.5 text-[11.5px] text-ink-muted">תוך כמה חודשים הרווח מכסה את הגיוס</div>
         </Card>
@@ -448,13 +491,16 @@ export function CustomerValueTab({
         </p>
         <CustomerValueCurve
           points={curvePoints}
-          ncac={ncac}
-          // paybackMonths is profit-derived. Pin the zone split to it ONLY in
-          // profit basis; in net/revenue basis net ≥ profit so the net curve
-          // crosses break-even earlier — pass null and let the curve derive its
-          // own crossing from the net points it draws, so the amber/green split
-          // lands exactly where the visible line meets the nCAC line.
-          paybackMonths={isProfit ? value.paybackMonths : null}
+          // curveNcac is null when there is no mature cohort (the chart falls
+          // back to the all-cohort pooled shape) so the curve cannot draw a
+          // break-even line/crossing/callout the headline disclaims (Issue 3).
+          ncac={curveNcac}
+          // The zone split is pinned to the DISPLAYED-basis payback (profit
+          // payback in profit basis; the mature-net crossing in net basis), so
+          // the curve's amber/green split + callout always reconcile with the
+          // headline badge + verdict — never a payback the verdict denies
+          // (Issue 2). null ⇒ no crossing/callout.
+          paybackMonths={displayPayback}
           basisLabel={basisLabel}
         />
         <div className="mt-2 flex flex-wrap gap-4 text-xs text-ink-secondary">

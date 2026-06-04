@@ -176,6 +176,135 @@ describe('CustomerValueTab — verdict coherence (mature basis: no "losing" + "r
   });
 });
 
+describe('CustomerValueTab — net/revenue-basis verdict coherence (single basis)', () => {
+  // BUG (Issue 1 + 4): the badge/ratio + the no-recovery clause were ALWAYS
+  // profit-derived (value.ltvToNcac = ltv12Profit/nCAC) while the headline LTV,
+  // net-per-customer, and the curve switched with the toggle. On the NET basis,
+  // when ltv12Profit < nCAC ≤ ltv12Net the verdict showed BOTH a positive green
+  // net AND a "losing" red badge — two bases at once. The fix derives the
+  // ratio/badge/net-per-customer/payback on the SAME (displayed) basis.
+  //
+  // Fixture: ONE mature cohort, ltv12Net=100, ltv12Profit=68.5 (keep-rate
+  // 1−0.25−0.065=0.685), blended nCAC=80. So profit ratio 0.856<1 ("losing")
+  // but net ratio 1.25≥1 (profitable). On the NET basis everything must read
+  // PROFITABLE; on the PROFIT basis everything must read LOSING.
+  const windowRows: CohortMonthlyRow[] = [
+    cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000 }),
+  ];
+  function renderWindow() {
+    return render(
+      <CustomerValueTab
+        stores={['uzoshop']}
+        injectedRows={windowRows}
+        injectedBlendedNcac={80}
+        injectedSpendByMonth={{ '2025-01': 800 }}
+        todayMonth="2026-06"
+      />,
+    );
+  }
+
+  it('NET basis: profitable badge + green net (NOT a profit-derived "losing" badge)', () => {
+    const { container } = renderWindow();
+    fireEvent.click(screen.getByTestId('cv-basis-revenue'));
+    const badge = container.querySelector('[data-testid="cv-ratio-badge"]');
+    expect(badge).not.toBeNull();
+    // Net ratio 1.25 ≥ 1 ⇒ the badge must NOT be the "losing" red badge.
+    expect(badge!.textContent).not.toContain('מפסידים');
+    expect(badge!.className).not.toContain('text-status-redFg');
+    const verdict = screen.getByTestId('cv-verdict').textContent ?? '';
+    // The no-recovery clause must NOT appear on a profitable net basis.
+    expect(verdict).not.toContain('לא מחזיר את עלות הגיוס תוך שנה');
+  });
+
+  it('NET basis: net-per-customer colour matches a profitable (not losing) badge', () => {
+    const { container } = renderWindow();
+    fireEvent.click(screen.getByTestId('cv-basis-revenue'));
+    const verdict = container.querySelector('[data-testid="cv-verdict"]')!;
+    // net-per-customer = 100 − 80 = +20 → coloured good (green), never red.
+    expect(verdict.querySelector('.text-status-redFg')).toBeNull();
+    expect(verdict.querySelector('.text-status-greenFg')).not.toBeNull();
+  });
+
+  it('PROFIT basis (same fixture): losing badge + red net + no curve callout', () => {
+    const { container } = renderWindow();
+    // Default profit basis: ltv12Profit 68.5 < nCAC 80 → losing.
+    const badge = container.querySelector('[data-testid="cv-ratio-badge"]');
+    expect(badge!.textContent).toContain('מפסידים');
+    expect(badge!.className).toContain('text-status-redFg');
+    const verdict = screen.getByTestId('cv-verdict').textContent ?? '';
+    expect(verdict).toContain('לא מחזיר את עלות הגיוס תוך שנה');
+    // Curve must not draw a payback the verdict denies.
+    expect(container.querySelector('[data-testid="cv-payback-callout"]')).toBeNull();
+  });
+
+  it('NET basis genuinely losing (ltv12Net < nCAC): red net + losing badge + NO curve callout', () => {
+    const losingNetRows: CohortMonthlyRow[] = [
+      cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 500 }),
+    ];
+    const { container } = render(
+      <CustomerValueTab
+        stores={['uzoshop']}
+        injectedRows={losingNetRows}
+        injectedBlendedNcac={80}
+        injectedSpendByMonth={{ '2025-01': 800 }}
+        todayMonth="2026-06"
+      />,
+    );
+    fireEvent.click(screen.getByTestId('cv-basis-revenue'));
+    // ltv12Net = 50 < nCAC 80 → net ratio 0.625 < 1.
+    const badge = container.querySelector('[data-testid="cv-ratio-badge"]');
+    expect(badge!.textContent).toContain('מפסידים');
+    expect(badge!.className).toContain('text-status-redFg');
+    const verdict = container.querySelector('[data-testid="cv-verdict"]')!;
+    expect(verdict.textContent).toContain('לא מחזיר את עלות הגיוס תוך שנה');
+    // net-per-customer = 50 − 80 = −30 → red, never green.
+    expect(verdict.querySelector('.text-status-greenFg')).toBeNull();
+    expect(verdict.querySelector('.text-status-redFg')).not.toBeNull();
+    // The net curve never crosses break-even ⇒ no payback callout.
+    expect(container.querySelector('[data-testid="cv-payback-callout"]')).toBeNull();
+    // KPI payback shows the dash.
+    expect(screen.getByTestId('cv-kpi-payback').textContent).toBe('—');
+  });
+});
+
+describe('CustomerValueTab — no-mature-cohort fallback curve has NO break-even', () => {
+  // BUG (Issue 3): with no mature cohort the headline correctly shows "no
+  // acquisition-cost data" (ltv12/ratio/payback all null), but the curve fell
+  // back to the all-cohort pooled curve WITH ncac still passed — so the
+  // fallback curve crossed nCAC and drew a "month-0 payback" callout + green
+  // profit zone, contradicting the headline. The fix passes ncac=null to the
+  // curve in the no-mature case ⇒ shape only, no crossing/callout.
+  const recentOnlyRows: CohortMonthlyRow[] = [
+    cell({ firstOrderMonth: '2026-05', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 2000 }),
+    cell({ firstOrderMonth: '2026-05', monthSince: 1, activeCustomers: 4, orders: 4, netCad: 600 }),
+  ];
+  function renderRecentOnly() {
+    return render(
+      <CustomerValueTab
+        stores={['uzoshop']}
+        injectedRows={recentOnlyRows}
+        injectedBlendedNcac={50}
+        injectedSpendByMonth={{ '2026-05': 500 }}
+        todayMonth="2026-06"
+      />,
+    );
+  }
+
+  it('headline shows the no-acquisition-cost-data state (no LTV verdict)', () => {
+    renderRecentOnly();
+    expect(screen.getByTestId('cv-verdict').textContent).toContain('אין עדיין נתוני עלות-גיוס');
+    expect(screen.getByTestId('cv-kpi-payback').textContent).toBe('—');
+  });
+
+  it('the fallback curve draws NO break-even crossing/callout (no fabricated payback)', () => {
+    const { container } = renderRecentOnly();
+    // Curve still renders (shape) …
+    expect(screen.getByTestId('cv-curve')).toBeInTheDocument();
+    // … but with no nCAC line, no payback callout (ncac is suppressed).
+    expect(container.querySelector('[data-testid="cv-payback-callout"]')).toBeNull();
+  });
+});
+
 describe('CustomerValueTab — zones curve', () => {
   it('renders an SVG <path> for the cumulative LTV line', () => {
     const { container } = renderTab();
