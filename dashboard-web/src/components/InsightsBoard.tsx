@@ -35,6 +35,7 @@ import {
 import { prioritizeInsights } from '@/lib/insights/prioritize';
 import { cn } from '@/lib/utils';
 import { fetchJsonOrNull } from '@/lib/fetchJson';
+import { buildDateRangeKey, getTodayInIsraelTz, type DateRange } from '@/lib/dateRange';
 import { AiInsightPill } from '@/components/ui/AiInsightPill';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -106,20 +107,47 @@ type Props = {
 
 const BOARD_EXPANDED_KEY = 'roas-dashboard:insights-expanded';
 
+// The board analyzes a FIXED trailing window, independent of the dashboard's
+// selected range (which can be just "today" and would starve the rules:
+// recommendations need ≥7 active days, campaign-died a 14-day window, ad-fatigue
+// ≥12 days, anomalies a ~20-day baseline). 30 days satisfies all of them.
+const INSIGHTS_WINDOW_DAYS = 30;
+
 export function InsightsBoard({ data }: Props) {
+  // All four data routes REQUIRE explicit ?from=&to= (parseRangeParams throws
+  // otherwise → degraded empty response). Build range-scoped SWR keys for the
+  // trailing window, exactly like CampaignsTable. Without this the board (+ the
+  // WS3 action list) is silently blank — the fetches return no rows.
+  const insightsRange = useMemo<DateRange>(() => {
+    const today = getTodayInIsraelTz();
+    const [y, m, d] = today.split('-').map(Number);
+    const from = new Date(Date.UTC(y, m - 1, d - (INSIGHTS_WINDOW_DAYS - 1)))
+      .toISOString()
+      .slice(0, 10);
+    return { from, to: today };
+  }, []);
+
+  // Trailing-window dashboard rows drive anomalies + the recommendation context.
+  // We do NOT use the `data` prop (it's scoped to the operator's selected range,
+  // e.g. today) so the board stays a true "recent activity" analyzer; the prop
+  // is only a no-flash fallback while this fetch loads.
+  const { data: dataResp, isLoading: dLoading } = useSWR<DashboardData | null>(
+    buildDateRangeKey('/api/data', insightsRange), fetchJsonOrNull,
+    { refreshInterval: 120_000, revalidateOnFocus: false },
+  );
   const { data: products, isLoading: pLoading } = useSWR<ProductsResponse | null>(
-    '/api/products', fetchJsonOrNull,
+    buildDateRangeKey('/api/products', insightsRange), fetchJsonOrNull,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
   const { data: campaigns, isLoading: cLoading } = useSWR<CampaignsResponse | null>(
-    '/api/campaigns', fetchJsonOrNull,
+    buildDateRangeKey('/api/campaigns', insightsRange), fetchJsonOrNull,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
   // WS3 — per-day ad rows power the creative-fatigue detector (CTR decay +
   // CPM creep). Same cadence as products/campaigns; dedupes with CampaignsTable's
   // ads fetch via SWR's key cache.
   const { data: ads, isLoading: aLoading } = useSWR<AdsResponse | null>(
-    '/api/ads', fetchJsonOrNull,
+    buildDateRangeKey('/api/ads', insightsRange), fetchJsonOrNull,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
   // Task 5.6 (P1-10 / Q7) — feeds `InsightActions` deep-links with
@@ -182,13 +210,13 @@ export function InsightsBoard({ data }: Props) {
   // Build the full list, then split into "visible now" and "hidden by user".
   const allInsights = useMemo(() => {
     return buildAllInsights(
-      data.rows,
+      dataResp?.rows ?? data.rows,
       campaigns?.rows ?? [],
       products?.rows ?? [],
       ads?.rows ?? [],
       { currentEffectiveStatus: campaigns?.currentEffectiveStatus },
     );
-  }, [data.rows, campaigns, products, ads]);
+  }, [dataResp, data.rows, campaigns, products, ads]);
 
   const { visible, hidden } = useMemo(() => {
     if (!hydrated) return { visible: allInsights, hidden: [] as Insight[] };
@@ -214,7 +242,7 @@ export function InsightsBoard({ data }: Props) {
     return buckets;
   }, [visible]);
 
-  const loading = pLoading || cLoading || aLoading;
+  const loading = dLoading || pLoading || cLoading || aLoading;
   const totalCount = visible.length;
   const hiddenCount = hidden.length;
 
@@ -289,10 +317,10 @@ export function InsightsBoard({ data }: Props) {
                   </span>
                 )}
                 {totalCount > 0
-                  ? `${totalCount} ${totalCount === 1 ? 'תובנה פעילה' : 'תובנות פעילות'} · 14 ימים אחרונים`
+                  ? `${totalCount} ${totalCount === 1 ? 'תובנה פעילה' : 'תובנות פעילות'} · 30 ימים אחרונים`
                   : hiddenCount > 0
                   ? `${hiddenCount} תובנות מוסתרות זמינות בתחתית הלוח`
-                  : '14 ימים אחרונים · מתעדכן כל דקה'}
+                  : '30 ימים אחרונים · מתעדכן כל דקה'}
               </div>
             </div>
           </div>

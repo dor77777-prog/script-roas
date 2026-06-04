@@ -3266,6 +3266,16 @@ descoped).
   collapsed-state `InsightHero` + all-clear surfaces were removed — the action list now
   owns the collapsed headline + the calm "all good" state; the board below remains the
   full grouped archive.
+- **Range-scoped fetch fix (2026-06-04, UM 2.37.1).** The board now analyzes a FIXED
+  trailing 30-day window (`INSIGHTS_WINDOW_DAYS`), independent of the dashboard's selected
+  range. All four data routes (`/api/data`, `/api/campaigns`, `/api/ads`, `/api/products`)
+  **require** `?from=&to=` (`parseRangeParams` throws otherwise → degraded empty body), so
+  the board builds range-scoped SWR keys via `buildDateRangeKey(path, insightsRange)` —
+  exactly like `CampaignsTable`. Before this the board fetched them param-less → empty →
+  recommendations + both WS3 detectors never fired (anomalies still worked because they
+  read the range-scoped `data` prop). Anomalies now read the trailing-window `/api/data`
+  fetch; the `data` prop is only a no-flash fallback while it loads. Guarded by
+  `insightsBoardDataWiring.dom.test.tsx`.
 
 ### 32.3 Tests
 `campaignDied` (8) + `prioritize` (11) + `adFatigue` (8) node tests; `ActionListPanel`
