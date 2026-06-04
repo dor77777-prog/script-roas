@@ -81,6 +81,7 @@ import {
   computeStableNcac,
   type FirstOrderInput,
 } from '@/lib/home/newCustomerMetrics';
+import { computeChannelTruth } from '@/lib/home/channelTruth';
 import { netAdjustFactor } from '@/lib/home/revenueBasis';
 import type { StoreAgg } from '@/lib/analytics';
 import { InsightsBoard } from './InsightsBoard';
@@ -436,6 +437,7 @@ export function Dashboard() {
       storeName: r.storeName,
       totalCad: r.totalCad,
       isFirstOrder: r.isFirstOrder,
+      source: r.source, // channel-nc-roas-split (Wave 2) — per-channel split reads this
     }));
   }, [ordersData]);
 
@@ -978,8 +980,33 @@ function HomeTab({
     // net÷gross factor of the current agg (business-wide or store-scoped),
     // so NC-ROAS reconciles in scale with the hero's net MER band.
     const { factor: ncNetAdj } = netAdjustFactor(filtered.curAgg.revenue, filtered.curAgg.grossRevenue);
-    return computeNewCustomerMetrics(firstOrderRows, filtered.curAgg.spend, scope, ncNetAdj);
-  }, [firstOrderRows, filtered.curAgg.spend, filtered.curAgg.revenue, filtered.curAgg.grossRevenue, filters.store]);
+    const m = computeNewCustomerMetrics(firstOrderRows, filtered.curAgg.spend, scope, ncNetAdj);
+    // Wave 2 channel-nc-roas-split — same range + net factor, per-platform spend.
+    const channelMetrics = computeChannelTruth(
+      firstOrderRows,
+      { meta: filtered.curAgg.fbSpend, google: filtered.curAgg.gaSpend, tiktok: filtered.curAgg.ttSpend },
+      scope,
+      ncNetAdj,
+    );
+    return {
+      ...m,
+      channelTruth: {
+        metrics: channelMetrics,
+        blendedNcRoas: m.ncRoas,
+        blendedNcac: m.nCac,
+        unclassifiableShare: m.unclassifiableShare,
+      },
+    };
+  }, [
+    firstOrderRows,
+    filtered.curAgg.spend,
+    filtered.curAgg.fbSpend,
+    filtered.curAgg.gaSpend,
+    filtered.curAgg.ttSpend,
+    filtered.curAgg.revenue,
+    filtered.curAgg.grossRevenue,
+    filters.store,
+  ]);
   const heroDelta = useMemo(() => {
     if (!prevAggFromPrevData) return undefined;
     return toHeroDelta(

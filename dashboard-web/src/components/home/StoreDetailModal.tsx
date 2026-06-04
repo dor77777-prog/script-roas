@@ -39,6 +39,7 @@ import { Sheet, SheetContent, SheetBody, SheetFooter } from '@/components/ui/She
 import { Card } from '@/components/ui/Card';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Badge } from '@/components/ui/Badge';
+import { ChannelTruthPanel } from '@/components/home/ChannelTruthPanel';
 import { Money } from '@/components/ui/Money';
 import { CountUp } from '@/components/ui/CountUp';
 import { Sparkline } from '@/components/ui/Sparkline';
@@ -378,6 +379,20 @@ export function StoreDetailModal({
                   {(data.newCustomer.unclassifiableShare * 100).toFixed(0)}% לא מסווג
                 </bdi>
               </div>
+              {/* channel-nc-roas-split (Wave 2) — per-store per-channel breakdown. */}
+              {data.channelTruth && data.newCustomer.confidence !== 'suppressed' && (
+                <div className="mt-3.5 border-t border-glass-edge pt-3.5">
+                  <div className="mb-2 text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
+                    NC-ROAS לפי ערוץ
+                  </div>
+                  <ChannelTruthPanel
+                    metrics={data.channelTruth.metrics}
+                    blendedNcRoas={data.channelTruth.blendedNcRoas}
+                    blendedNcac={data.channelTruth.blendedNcac}
+                    unclassifiableShare={data.channelTruth.unclassifiableShare}
+                  />
+                </div>
+              )}
             </Card>
             </HelpTooltip>
           </section>

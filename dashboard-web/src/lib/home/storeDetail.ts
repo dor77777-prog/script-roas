@@ -29,6 +29,7 @@ import {
   type FirstOrderInput,
   type NewCustomerMetrics,
 } from '@/lib/home/newCustomerMetrics';
+import { computeChannelTruth, type ChannelMetric } from '@/lib/home/channelTruth';
 import { netAdjustFactor } from '@/lib/home/revenueBasis';
 
 type PaidPlatform = 'meta' | 'google' | 'tiktok';
@@ -91,6 +92,15 @@ export interface StoreDetailData {
   /** Per-store NC-ROAS / nCAC (new-customer lens). Scoped to this store; MER
    *  spend = cur.spend (mapping-aware). */
   newCustomer: NewCustomerMetrics;
+  /** channel-nc-roas-split (Wave 2) — per-channel new-customer breakdown for
+   *  this store (Meta/Google/TikTok), same net basis as `newCustomer`.
+   *  Always set by toStoreDetail; optional for back-compat with test mocks. */
+  channelTruth?: {
+    metrics: ChannelMetric[];
+    blendedNcRoas: number | null;
+    blendedNcac: number | null;
+    unclassifiableShare: number;
+  };
 }
 
 export interface ToStoreDetailArgs {
@@ -257,6 +267,14 @@ export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
   // net÷gross factor so NC-ROAS reconciles in scale with the headline net MER.
   const { factor: ncNetAdj } = netAdjustFactor(cur.revenue, cur.grossRevenue);
   const newCustomer = computeNewCustomerMetrics(firstOrderRows, cur.spend, storeName, ncNetAdj);
+  // Wave 2 channel-nc-roas-split — per-channel split for this store, same net
+  // factor, per-platform spend from the store's StoreAgg.
+  const channelMetrics = computeChannelTruth(
+    firstOrderRows,
+    { meta: cur.fbSpend, google: cur.gaSpend, tiktok: cur.ttSpend },
+    storeName,
+    ncNetAdj,
+  );
 
   return {
     storeId,
@@ -270,5 +288,11 @@ export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
     platforms,
     topCampaigns,
     newCustomer,
+    channelTruth: {
+      metrics: channelMetrics,
+      blendedNcRoas: newCustomer.ncRoas,
+      blendedNcac: newCustomer.nCac,
+      unclassifiableShare: newCustomer.unclassifiableShare,
+    },
   };
 }

@@ -18,6 +18,8 @@
  * from `unclassifiableShare` (see NC_CONFIDENCE_LOW / NC_CONFIDENCE_SUPPRESS).
  */
 
+import type { OrderSource } from '@/lib/ordersAttribution';
+
 export interface FirstOrderInput {
   /** Store display name — used by the optional `storeName` scope filter. */
   storeName: string;
@@ -25,6 +27,11 @@ export interface FirstOrderInput {
   totalCad: number;
   /** true = first-order-EVER; false = returning; null = unclassifiable. */
   isFirstOrder: boolean | null;
+  /**
+   * Acquiring-channel label (orders_attribution.source). Optional — only the
+   * per-channel split (channelTruth.ts) reads it; blended metrics ignore it.
+   */
+  source?: OrderSource;
 }
 
 /** Unclassifiable share > this → "low confidence" badge on NC-ROAS. */

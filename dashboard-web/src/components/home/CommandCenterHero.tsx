@@ -77,6 +77,8 @@ import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { CoverageChip } from '@/components/home/CoverageChip';
 import type { CoverageChip as CoverageChipData } from '@/lib/home/adapters';
 import type { NcConfidence } from '@/lib/home/newCustomerMetrics';
+import type { ChannelMetric } from '@/lib/home/channelTruth';
+import { ChannelTruthPanel } from '@/components/home/ChannelTruthPanel';
 import {
   useRoasBandGradient,
   type RoasBand,
@@ -191,6 +193,17 @@ export interface CommandCenterNewCustomer {
    * straight from `computeNewCustomerMetrics`.
    */
   confidence: NcConfidence;
+  /**
+   * channel-nc-roas-split (Wave 2) — optional per-channel breakdown. When
+   * present, a ChannelTruthPanel (Meta/Google/TikTok cards) renders under the
+   * blended NC-ROAS/nCAC numbers. Omit to hide.
+   */
+  channelTruth?: {
+    metrics: ChannelMetric[];
+    blendedNcRoas: number | null;
+    blendedNcac: number | null;
+    unclassifiableShare: number;
+  };
 }
 
 export interface CommandCenterHeroProps {
@@ -913,6 +926,21 @@ export function CommandCenterHero({
                 {(newCustomer.unclassifiableShare * 100).toFixed(0)}% לא מסווג
               </bdi>
             </div>
+            {/* channel-nc-roas-split (Wave 2) — per-channel breakdown under the
+                blended numbers: which channel acquires new customers profitably. */}
+            {newCustomer.channelTruth && newCustomer.confidence !== 'suppressed' && (
+              <div className="mt-3.5 border-t border-glass-edge pt-3.5">
+                <div className="mb-2 text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
+                  NC-ROAS לפי ערוץ
+                </div>
+                <ChannelTruthPanel
+                  metrics={newCustomer.channelTruth.metrics}
+                  blendedNcRoas={newCustomer.channelTruth.blendedNcRoas}
+                  blendedNcac={newCustomer.channelTruth.blendedNcac}
+                  unclassifiableShare={newCustomer.channelTruth.unclassifiableShare}
+                />
+              </div>
+            )}
           </Card>
           </HelpTooltip>
         </div>
