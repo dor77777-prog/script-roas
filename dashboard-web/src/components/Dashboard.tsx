@@ -43,7 +43,7 @@ import { CloudSync } from './CloudSync';
 import { SyncIndicator } from './SyncIndicator';
 import { FreshnessChip } from './FreshnessChip';
 import { TabFreshnessHeader } from './TabFreshnessHeader';
-import { readDashboardState, syncUrl, drillToCampaigns, type TabKey } from '@/lib/urlState';
+import { readDashboardState, syncUrl, drillToCampaigns, DEFAULT_PRESET, type TabKey } from '@/lib/urlState';
 import { buildDateRangeKey, getTodayInIsraelTz } from '@/lib/dateRange';
 import { useCogsSettings } from '@/lib/hooks/useCogsSettings';
 import { applyCogsToRows } from '@/lib/cogsSettings';
@@ -122,7 +122,10 @@ type OrdersResponseShape = {
 const ordersFetcher = (url: string): Promise<OrdersResponseShape> =>
   fetchJson<OrdersResponseShape>(url);
 
-const initialPreset = 'this_month';
+// Operator hard requirement (2026-06-04): the dashboard opens on TODAY.
+// Single source of truth in urlState.DEFAULT_PRESET (also drives the
+// "omit the default from the URL" logic) — do not hardcode a preset here.
+const initialPreset = DEFAULT_PRESET;
 
 /**
  * BUG #3 fix (2026-06-04) — floor of the STABLE all-history window used by the

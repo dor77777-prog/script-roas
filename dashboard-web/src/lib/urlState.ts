@@ -43,6 +43,15 @@ const PRESET_VALUES = new Set<PresetKey>([
 
 const DATE_RX = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * The default date-range preset when the URL carries no explicit range —
+ * operator hard requirement (2026-06-04): the dashboard opens on TODAY.
+ * Single source of truth: Dashboard's initial filters + writeDashboardState's
+ * "omit the default from the URL" logic both key off this. Changing it here
+ * changes the whole app's default-on-entry range.
+ */
+export const DEFAULT_PRESET: PresetKey = 'today';
+
 export type DashboardState = {
   tab: TabKey;
   filters: Filters;
@@ -118,7 +127,7 @@ export function writeDashboardState(
   // per-component params alone.
   for (const k of GLOBAL_PARAMS) params.delete(k);
   if (state.tab !== 'home') params.set('tab', state.tab);
-  if (state.filters.preset !== 'this_month') params.set('preset', state.filters.preset);
+  if (state.filters.preset !== DEFAULT_PRESET) params.set('preset', state.filters.preset);
   if (state.filters.preset === 'custom') {
     params.set('from', state.filters.range.from);
     params.set('to', state.filters.range.to);

@@ -14,8 +14,10 @@ import {
   drillToCampaigns,
   readDashboardState,
   writeDashboardState,
+  DEFAULT_PRESET,
   type DashboardState,
 } from '../urlState';
+import { computePresetRange } from '../presets';
 
 // Shared defaults for the readDashboardState migration tests below.
 const DEFAULTS: DashboardState = {
@@ -122,6 +124,41 @@ describe('drillToCampaigns', () => {
   it('is safe to call with no opts at all', () => {
     expect(() => drillToCampaigns()).not.toThrow();
     expect(window.location.search).toBe('?tab=campaigns');
+  });
+});
+
+describe('default date range = TODAY (operator hard requirement 2026-06-04)', () => {
+  it('DEFAULT_PRESET is "today"', () => {
+    expect(DEFAULT_PRESET).toBe('today');
+  });
+
+  it('computePresetRange("today") is a single current day (from === to)', () => {
+    const r = computePresetRange('today');
+    expect(r.from).toBe(r.to);
+  });
+
+  it('writeDashboardState OMITS the preset param when it is the default (today) → clean URL', () => {
+    const todayDefaults: DashboardState = {
+      tab: 'home',
+      filters: { preset: 'today', range: computePresetRange('today'), store: 'All' },
+    };
+    expect(writeDashboardState(todayDefaults)).not.toContain('preset=');
+  });
+
+  it('writeDashboardState INCLUDES the preset param for a non-default preset (e.g. this_month)', () => {
+    const s = writeDashboardState({
+      tab: 'home',
+      filters: { preset: 'this_month', range: { from: '2026-06-01', to: '2026-06-04' }, store: 'All' },
+    });
+    expect(s).toContain('preset=this_month');
+  });
+
+  it('an explicit ?preset= deep-link still overrides the today default (not clobbered)', () => {
+    const defaults: DashboardState = {
+      tab: 'home',
+      filters: { preset: DEFAULT_PRESET, range: computePresetRange(DEFAULT_PRESET), store: 'All' },
+    };
+    expect(readDashboardState(defaults, '?preset=last_7_days').filters.preset).toBe('last_7_days');
   });
 });
 
