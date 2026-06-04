@@ -113,7 +113,16 @@ export async function fetchTikTokHotMetricsForStore(input: TikTokHotMetricsInput
       ? ['adgroup_id']
       : ['ad_id'];
     const dimensions = JSON.stringify(dims);
-    const url = `${TT_BASE}/report/integrated/get/?advertiser_id=${advertiserId}&report_type=BASIC&data_level=${dataLevel}&dimensions=${encodeURIComponent(dimensions)}&metrics=${encodeURIComponent(JSON.stringify(['spend','impressions','clicks','conversion','purchase','total_purchase_value']))}&start_date=${dateStr}&end_date=${dateStr}&page=1&page_size=1000&filtering=${encodeURIComponent(JSON.stringify(filteringArr))}`;
+    // Conversion metrics: `complete_payment` (count of Complete Payment
+    // events) + `value_per_complete_payment` (avg value per payment). These
+    // are the metrics TikTok Ads Manager surfaces as "Complete Payments" and
+    // the operator's "המרות" — and the SAME set the nightly fetcher
+    // (tiktok.ts:fetchTikTokAdInsights) already uses. The earlier
+    // `purchase`/`total_purchase_value` pair is the APP-event family and
+    // returns 0 for this Shopify web-pixel setup (live API probe 2026-06-04:
+    // purchase=0 but complete_payment=1 for the same campaign) — which made
+    // every TikTok live tick write conversions=0 over the correct nightly value.
+    const url = `${TT_BASE}/report/integrated/get/?advertiser_id=${advertiserId}&report_type=BASIC&data_level=${dataLevel}&dimensions=${encodeURIComponent(dimensions)}&metrics=${encodeURIComponent(JSON.stringify(['spend','impressions','clicks','conversion','complete_payment','value_per_complete_payment']))}&start_date=${dateStr}&end_date=${dateStr}&page=1&page_size=1000&filtering=${encodeURIComponent(JSON.stringify(filteringArr))}`;
     const res = await fetcher(url, { headers: { 'Access-Token': accessToken } });
     if (!res.ok) throw new Error(`TikTok report ${dataLevel}: ${res.status}`);
     const body = await res.json() as { code?: number; message?: string; data?: { list?: unknown[] } };
@@ -178,8 +187,13 @@ async function toCampaignRow(
   const spend = Number(m.spend ?? 0);
   // CRIT-E (TikTok parallel): use per-call accountCurrency, not hardcoded USD.
   const spendCad = await getFx(spend, accountCurrency);
-  const purchase = Number(m.purchase ?? 0);
-  const purchaseValue = Number(m.total_purchase_value ?? 0);
+  // Conversions = Complete Payment count. Value is synthesized from
+  // `complete_payment` × `value_per_complete_payment` (avg value per payment),
+  // mirroring tiktok.ts:fetchTikTokAdInsights. `total_purchase_value` is the
+  // app-event value field and is empty for this web-pixel setup.
+  const purchase = Number(m.complete_payment ?? 0);
+  const avgPurchase = Number(m.value_per_complete_payment ?? 0);
+  const purchaseValue = purchase * avgPurchase;
   const purchaseValueCad = await getFx(purchaseValue, accountCurrency);
   return {
     store_id: resolveStore(cid), platform: 'tiktok',

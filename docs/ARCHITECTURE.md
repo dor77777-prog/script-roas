@@ -2110,6 +2110,38 @@ fetchers (prefixed `[gh-diag]` / `[tt-diag]`) to capture API response
 shape for the next 1-2 ticks; these will be removed once root cause
 is confirmed.
 
+### TikTok hot_metrics conversion metric: `purchase` → `complete_payment` (2026-06-04)
+
+Operator reported a live TikTok campaign showing **0 conversions** in the
+Campaigns tab while TikTok Ads Manager showed 2. Root cause:
+`fetchTikTokHotMetricsForStore` (the live writer for `campaigns_daily`,
+every ~10 min) requested the metrics `purchase` + `total_purchase_value`.
+For this Shopify **web-pixel** setup those belong to TikTok's APP-event
+family and are **always 0** — the real sales are reported under
+`complete_payment`. A live API probe (2026-06-04, campaign
+`1866979241538642`) confirmed: `purchase=0`, `total_purchase_value=0.00`,
+but `complete_payment=1`, `value_per_complete_payment=90.51`.
+
+This is the SAME metric set the **nightly** fetcher
+(`tiktok.ts:fetchTikTokAdInsights`) has used since the Phase 05.7.8 fix —
+and what ARCHITECTURE §"Metrics mapping" (line ~215) already documents as
+canonical. The hot_metrics fetcher had drifted from it. Symptom shape:
+- Days written by the live worker (`source='live_tick'`, i.e. **today**)
+  showed `conversions=0`, `conversion_value_cad=0`.
+- Days that received the nightly reconcile (`source='daily_reconcile'`)
+  were already correct.
+- So only the **today/live** TikTok numbers were wrong; **Meta** (purchase
+  priority chain `omni_purchase→purchase→fb_pixel_purchase`) and **Google**
+  (`metrics.conversions`) were unaffected at both live and nightly.
+
+Fix (`fetchTikTokHotMetricsForStore`): request
+`["spend","impressions","clicks","conversion","complete_payment","value_per_complete_payment"]`
+and map `conversions = complete_payment`,
+`conversion_value = complete_payment × value_per_complete_payment` (FX→CAD),
+mirroring the nightly fetcher exactly. No history backfill needed — past
+days were already correct via nightly reconcile; today self-heals on the
+next tick (~10 min) after deploy.
+
 ### TikTok DELETE-then-UPSERT for re-mapped campaigns
 
 User raised the concern that the dimensions fix must also handle new

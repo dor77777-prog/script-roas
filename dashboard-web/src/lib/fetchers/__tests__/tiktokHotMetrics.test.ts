@@ -12,7 +12,7 @@ describe('fetchTikTokHotMetricsForStore()', () => {
       data: {
         list: [{
           dimensions: { adgroup_id: 'TG1' },
-          metrics: { spend: '25.5', impressions: '1000', clicks: '20', conversion: 3, purchase: '3', total_purchase_value: '150.0' },
+          metrics: { spend: '25.5', impressions: '1000', clicks: '20', conversion: 3, complete_payment: '3', value_per_complete_payment: '50.0' },
         }],
       },
     };
@@ -199,6 +199,67 @@ describe('fetchTikTokHotMetricsForStore()', () => {
       fetcher: fetchMock,
       getFxCadFor: async () => 0,
     })).rejects.toThrow(/code=40002/);
+  });
+
+  // Bug 2026-06-04: the live hot-metrics writer requested `purchase` /
+  // `total_purchase_value` — empty for this Shopify web-pixel setup — so
+  // every TikTok live tick wrote conversions=0, while TikTok Ads Manager
+  // (and the nightly `fetchTikTokAdInsights` path) report sales under
+  // `complete_payment`. Live API probe 2026-06-04: campaign 1866979241538642
+  // returned purchase=0 but complete_payment=1, value_per_complete_payment=90.51.
+  // The fetcher must read `complete_payment` (count) and synthesize value as
+  // complete_payment × value_per_complete_payment, matching tiktok.ts.
+  it('maps conversions from complete_payment (NOT the empty purchase metric)', async () => {
+    const adgroupBody = {
+      code: 0,
+      data: {
+        list: [{
+          dimensions: { adgroup_id: 'TG1' },
+          // Mirrors production: purchase is 0, the real sale is under complete_payment.
+          metrics: {
+            spend: '8.93', impressions: '5985', clicks: '47', conversion: '1',
+            purchase: '0', total_purchase_value: '0.00',
+            complete_payment: '2', value_per_complete_payment: '90.51',
+          },
+        }],
+      },
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(adgroupBody), { status: 200 }));
+    const out = await fetchTikTokHotMetricsForStore({
+      storeId: 'uzoshop', advertiserId: '12345', accessToken: 'tok',
+      hotCampaignIds: ['TC1'], hotAdgroupIds: ['TG1'], hotAdIds: [],
+      dateStr: '2026-06-04', campaignStoreMap: {},
+      accountCurrency: 'USD',
+      adsetIdToCampaignId: new Map([['TG1', 'TC1']]),
+      fetcher: fetchMock,
+      getFxCadFor: async (amount, currency) => currency === 'USD' ? amount * 1.36 : amount,
+    });
+    expect(out.adsets).toHaveLength(1);
+    // 2 complete payments → conversions = 2 (not 0 from the empty purchase metric).
+    expect(out.adsets[0].conversions).toBe(2);
+    // value = complete_payment(2) × value_per_complete_payment(90.51) × FX(1.36).
+    expect(out.adsets[0].conversion_value_cad).toBeCloseTo(2 * 90.51 * 1.36, 4);
+  });
+
+  it('requests complete_payment + value_per_complete_payment (NOT purchase/total_purchase_value)', async () => {
+    const calls: string[] = [];
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify({ code: 0, data: { list: [] } }), { status: 200 });
+    });
+    await fetchTikTokHotMetricsForStore({
+      storeId: 'uzoshop', advertiserId: '12345', accessToken: 'tok',
+      hotCampaignIds: [], hotAdgroupIds: ['TG1'], hotAdIds: [],
+      dateStr: '2026-06-04', campaignStoreMap: {},
+      accountCurrency: 'USD',
+      adsetIdToCampaignId: new Map([['TG1', 'TC1']]),
+      fetcher: fetchMock,
+      getFxCadFor: async () => 0,
+    });
+    const url = decodeURIComponent(calls.find(c => /data_level=AUCTION_ADGROUP/.test(c))!);
+    expect(url).toContain('complete_payment');
+    expect(url).toContain('value_per_complete_payment');
+    expect(url).not.toContain('total_purchase_value');
   });
 
   it('skips with empty hot sets', async () => {
