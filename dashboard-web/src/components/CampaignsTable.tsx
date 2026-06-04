@@ -10,9 +10,11 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Download,
   Filter,
   Info,
   Megaphone,
+  Search,
   Store as StoreIcon,
   X,
 } from 'lucide-react';
@@ -84,6 +86,7 @@ import { Button } from '@/components/ui/Button';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
+import { toCsv, downloadCsv } from '@/lib/csvExport';
 import { TableBase } from '@/components/ui/TableBase';
 import { CampaignDrawer } from './CampaignDrawer';
 import { AdsDrawer } from './AdsDrawer';
@@ -483,6 +486,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     return 'all';
   });
   const [showAll, setShowAll] = useState(false);
+  // ux-table-search (Wave 1) — free-text filter by campaign / ad-set name.
+  const [search, setSearch] = useState('');
 
   // P1-3 mobile audit (2026-05-29) — collapse secondary filters (platform,
   // multi-mapped, optimized chip) behind an expander on < sm so the toolbar
@@ -1242,8 +1247,43 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     }
     return source;
   }, [aggregatedFiltered, sortKey, sortDir, trueRevenueByKey, healthByKey, firstClickByCampaign]);
-  const display = showAll ? displaySource : displaySource.slice(0, TOP_N_DEFAULT);
-  const remaining = displaySource.length - display.length;
+  // ux-table-search — filter the sorted set by campaign / ad-set name. A search
+  // shows ALL matches (bypasses the TOP_N collapse) so a found row is never
+  // hidden below the fold.
+  const searchQ = search.trim().toLowerCase();
+  const displaySearched = useMemo(
+    () =>
+      searchQ
+        ? displaySource.filter(
+            (a) =>
+              (a.campaignName || '').toLowerCase().includes(searchQ) ||
+              (a.adSetName || '').toLowerCase().includes(searchQ),
+          )
+        : displaySource,
+    [displaySource, searchQ],
+  );
+  const display = showAll || searchQ ? displaySearched : displaySearched.slice(0, TOP_N_DEFAULT);
+  const remaining = displaySearched.length - display.length;
+
+  // ux-csv-export — download the CURRENT (filtered + sorted) rows as CSV.
+  const handleExportCsv = () => {
+    const nameHeader = mode === 'campaign' ? 'קמפיין' : 'אד-סט';
+    const headers = [nameHeader, 'פלטפורמה', 'חנות', 'הוצאה (CAD)', 'המרות', 'ערך המרות (CAD)', 'ROAS'];
+    const rows = displaySearched.map((a) => {
+      const roas = a.spend > 0 ? a.conversionValue / a.spend : 0;
+      return [
+        mode === 'campaign' ? a.campaignName : a.adSetName || '',
+        a.platform,
+        a.storeName,
+        a.spend.toFixed(2),
+        a.conversions,
+        a.conversionValue.toFixed(2),
+        roas.toFixed(2),
+      ];
+    });
+    const stamp = `${range.from}_${range.to}`;
+    downloadCsv(`campaigns_${mode}_${stamp}.csv`, toCsv(headers, rows));
+  };
 
   // ----- Pixel-vs-Shopify attribution gap (top-of-table trust view) -------
   const attributionGap = useMemo(() => {
@@ -1426,6 +1466,30 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           ))}
         </NativeSelect>
       </div>
+
+      {/* ux-table-search + ux-csv-export (Wave 1) — filter the visible rows by
+          name + download the current (filtered/sorted) set as CSV. */}
+      <Input
+        type="search"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder={mode === 'campaign' ? 'חיפוש קמפיין…' : 'חיפוש אד-סט…'}
+        aria-label="חיפוש בטבלה"
+        prefix={<Search size={13} className="text-ink-muted" aria-hidden />}
+        className="w-32 sm:w-44 text-xs sm:text-sm"
+      />
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={handleExportCsv}
+        disabled={displaySearched.length === 0}
+        className="gap-1.5"
+        aria-label="ייצוא CSV"
+      >
+        <Download size={14} />
+        <span className="hidden sm:inline">ייצוא CSV</span>
+      </Button>
 
       {/* P1-3 mobile audit (2026-05-29) — expander toggle for SECONDARY
           filters. Visible only on < sm. On sm+ the secondary block is
