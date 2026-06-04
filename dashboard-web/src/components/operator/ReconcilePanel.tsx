@@ -46,7 +46,7 @@ const ENDPOINT = '/api/reconcile';
 // "check", "—" for the unparsable numeric cells) rather than throwing.
 // ---------------------------------------------------------------------------
 
-const DATE_RE = /(\d{1,2}\/\d{1,2})/; // DD/MM tag embedded in the label.
+const TAG_RE = /\s(\d{4}-\d{2}-\d{2})\/(.+?)\s*$/; // trailing " YYYY-MM-DD/store" (store may contain spaces).
 const NUM_RE = /-?\d+(?:[.,]\d+)?/g; // grabs numbers out of `detail`.
 
 interface ParsedViolation {
@@ -61,6 +61,8 @@ interface ParsedViolation {
   actual: number | null;
   /** actual − expected when both known, else null. */
   delta: number | null;
+  /** Known-explainable gap (INV-9 custom-item refunds) — shown muted as "מוסבר". */
+  soft: boolean;
 }
 
 const PLATFORM_RE = /\b(Meta|Google|TikTok)\b/;
@@ -68,19 +70,21 @@ const PLATFORM_RE = /\b(Meta|Google|TikTok)\b/;
 function parseViolation(v: Violation, index: number): ParsedViolation {
   const label = v.label ?? '';
 
-  // The harness tags the cell as `${DD/MM}/${store}` at the END of the label
-  // (e.g. "INV-7 Meta spend 30/05/uzoshop"). Pull the date, then the store is
-  // whatever follows the date's trailing slash.
+  // The harness tags the cell at the END of the label as " YYYY-MM-DD/store"
+  // (e.g. "INV-9 product vs data revenue 2026-05-31/Zol Plus"). Parse the FULL
+  // ISO date + the store after the slash (store may contain spaces). The earlier
+  // /(\d{1,2}\/\d{1,2})/ matched INSIDE the ISO date ("…05-31/360usmile" →
+  // "31/36" + "0usmile"), garbling both columns.
   let date = '—';
   let store = '';
   let check = label;
-  const dateMatch = label.match(DATE_RE);
-  if (dateMatch) {
-    date = dateMatch[1];
-    const after = label.slice((dateMatch.index ?? 0) + dateMatch[1].length);
-    // after looks like "/uzoshop" (cross-source) or "/uzoshop" too for agree().
-    store = after.replace(/^\//, '').trim();
-    check = label.slice(0, dateMatch.index).trim();
+  const m = label.match(TAG_RE);
+  if (m && m.index !== undefined) {
+    const iso = m[1];
+    const [, mo, d] = iso.split('-');
+    date = `${d}/${mo}`;
+    store = m[2].trim();
+    check = label.slice(0, m.index).trim();
   }
 
   // Platform, when the check phrase names one (INV-7 Meta/Google/TikTok spend).
@@ -125,6 +129,7 @@ function parseViolation(v: Violation, index: number): ParsedViolation {
     expected,
     actual,
     delta,
+    soft: Boolean(v.soft),
   };
 }
 
@@ -158,6 +163,11 @@ export function ReconcilePanel() {
 
   return (
     <div className="overflow-x-auto">
+      <p className="mb-3 text-xs leading-relaxed text-ink-muted">
+        בדיקות-הצלבה בין מקורות-הנתונים. שורות המסומנות{' '}
+        <span className="rounded bg-status-grayBg px-1.5 py-0.5 text-[10px] font-semibold text-status-grayFg">מוסבר</span>{' '}
+        הן הפרשי-חשבונאות ידועים (למשל החזרי custom-item — ARCHITECTURE §14.7) ובתחום הסביר, ולא דורשות פעולה. באנר דף-הבית מתריע רק על אי-התאמות מהותיות.
+      </p>
       <TableBase className="text-xs sm:text-sm">
         <TableHead>
           <TableRow>
@@ -172,7 +182,16 @@ export function ReconcilePanel() {
         <tbody>
           {rows.map((r) => (
             <TableRow key={r.key}>
-              <TableCell className="font-mono text-xs text-ink">{r.check}</TableCell>
+              <TableCell className="font-mono text-xs text-ink">
+                <span className="inline-flex items-center gap-1.5">
+                  {r.check}
+                  {r.soft && (
+                    <span className="rounded bg-status-grayBg px-1.5 py-0.5 font-sans text-[10px] font-semibold text-status-grayFg">
+                      מוסבר
+                    </span>
+                  )}
+                </span>
+              </TableCell>
               <TableCell className="text-ink-secondary">{r.storePlatform}</TableCell>
               <TableCell className="text-ink-secondary">
                 <bdi dir="ltr">{r.date}</bdi>

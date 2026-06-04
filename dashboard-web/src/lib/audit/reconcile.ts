@@ -2,6 +2,16 @@ export interface Violation {
   label: string;
   detail: string;
   values?: Record<string, number>;
+  /**
+   * Known-explainable / within-expected-tolerance gap (e.g. INV-9 product-vs-data,
+   * which legitimately differs by null-product-id custom-item refunds — see
+   * ARCHITECTURE §14.7). Soft violations stay in the operator diagnostic panel
+   * but must NOT trigger the Home alert banner.
+   */
+  soft?: boolean;
+  /** |actual − expected| / max(|expected|, 1) — the relative gap, when computable.
+   *  Lets the Home banner apply a materiality threshold (small gaps don't alarm). */
+  relGap?: number;
 }
 
 /** Cross-source (L2): agree if within 1% OR within $1, whichever is more lenient. */
@@ -86,7 +96,12 @@ export function reconcileWindow(input: {
   for (const r of [...dataRows, ...productRows, ...campaignRows, ...ordersRows]) cellKeys.add(`${r.date} ${r.storeName}`);
 
   for (const key of cellKeys) {
-    const [date, store] = key.split(' ');
+    // Split on the FIRST space only — store DISPLAY names can contain spaces
+    // ("Zol Plus"); a plain split(' ') would truncate the store and silently skip
+    // its reconciliation (date is YYYY-MM-DD, so the first space is the boundary).
+    const sep = key.indexOf(' ');
+    const date = key.slice(0, sep);
+    const store = key.slice(sep + 1);
     const tag = `${date}/${store}`;
     const dRows = dataRows.filter(r => r.date === date && r.storeName === store);
     const pRows = productRows.filter(r => r.date === date && r.storeName === store);

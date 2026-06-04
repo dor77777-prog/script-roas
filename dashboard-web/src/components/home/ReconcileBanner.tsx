@@ -15,22 +15,13 @@ import useSWR from 'swr';
 import { fetchJsonOrNull } from '@/lib/fetchJson';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { bannerViolations } from '@/lib/audit/reconcileRows';
+import type { Violation } from '@/lib/audit/reconcile';
 
 const KEY = '/api/reconcile';
 
-export interface ReconcileViolation {
-  check: string;
-  storeName?: string;
-  platform?: string;
-  date?: string;
-  expected?: number;
-  actual?: number;
-  delta?: number;
-  detail?: string;
-}
-
 export interface ReconcileResponse {
-  violations: ReconcileViolation[];
+  violations: Violation[];
   error?: string;
 }
 
@@ -40,12 +31,16 @@ export function ReconcileBanner() {
     revalidateOnFocus: false,
   });
 
-  // Quiet by default: nothing while loading, errored, or all-clear.
-  if (!data || !Array.isArray(data.violations) || data.violations.length === 0) {
+  // Quiet by default: nothing while loading or errored. And crucially, alarm
+  // ONLY on MATERIAL/hard discrepancies — soft known gaps (INV-9 custom-item
+  // refunds) + sub-threshold gaps stay in the operator panel, not the Home
+  // banner. So a clean-but-soft window shows no banner at all.
+  const material = data && Array.isArray(data.violations) ? bannerViolations(data.violations) : [];
+  if (material.length === 0) {
     return null;
   }
 
-  const n = data.violations.length;
+  const n = material.length;
 
   return (
     <Card

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Violation } from '../reconcile';
-import { reconcileRows, type ReconcileRowsInput } from '../reconcileRows';
+import { reconcileRows, bannerViolations, type ReconcileRowsInput } from '../reconcileRows';
 
 // A self-consistent (date, store) window: every cross-source figure agrees.
 const dataRows = [
@@ -57,5 +57,47 @@ describe('reconcileRows — TikTok account-vs-Σcampaigns gap stays tolerated', 
     const c = [{ date: '2026-05-21', storeName: 'uzoshop', platform: 'TikTok', spend: 23.46 }];
     const v = reconcileRows({ dataRows: d, productRows: [], campaignRows: c, ordersRows: [] });
     expect(v.some(x => x.label.includes('INV-7 TikTok'))).toBe(true);
+  });
+});
+
+describe('reconcileRows — store names containing a space ("Zol Plus") are NOT skipped', () => {
+  it('reconciles a space-named store and flags its INV-10 breach (regression: split(" ") dropped "Plus" → store never matched)', () => {
+    const d = [{ date: '2026-06-01', storeName: 'Zol Plus', fbSpend: 0, gaSpend: 0, ttSpend: 0, totalSpend: 0, revenue: 1000, roas: 0 }];
+    const o = [{ date: '2026-06-01', storeName: 'Zol Plus', totalCad: 5000 }]; // 5× off → INV-10 must fire
+    const v = reconcileRows({ dataRows: d, productRows: [], campaignRows: [], ordersRows: o });
+    const inv10 = v.find((x) => x.label.includes('INV-10'));
+    expect(inv10).toBeDefined();
+    expect(inv10!.label).toContain('Zol Plus'); // full store name preserved (not truncated to "Zol")
+  });
+
+  it('INV-9 carries soft + relGap so the banner can de-noise it', () => {
+    const d = [{ date: '2026-06-01', storeName: 'Zol Plus', fbSpend: 0, gaSpend: 0, ttSpend: 0, totalSpend: 0, revenue: 1000, roas: 0 }];
+    const p = [{ date: '2026-06-01', storeName: 'Zol Plus', revenue: 1100, netRevenue: 1100, orders: 5 }];
+    const inv9 = reconcileRows({ dataRows: d, productRows: p, campaignRows: [], ordersRows: [] }).find((x) => x.label.includes('INV-9'));
+    expect(inv9?.soft).toBe(true);
+    expect(inv9?.relGap).toBeCloseTo(0.1, 5); // |1100-1000|/1000
+  });
+});
+
+describe('bannerViolations — only material/hard discrepancies reach the Home banner', () => {
+  const soft: Violation = { label: 'INV-9 product vs data revenue 2026-06-01/uzoshop', detail: '…', soft: true, relGap: 0.08 };
+  const smallHard: Violation = { label: 'INV-10 orders vs data revenue 2026-05-31/uzoshop', detail: '…', relGap: 0.067 };
+  const bigHard: Violation = { label: 'INV-10 orders vs data revenue 2026-05-31/uzoshop', detail: '…', relGap: 0.5 };
+  const noGapHard: Violation = { label: 'INV-7 Meta spend 2026-05-31/uzoshop', detail: '…' };
+
+  it('excludes soft (INV-9 known custom-item gap)', () => {
+    expect(bannerViolations([soft])).toHaveLength(0);
+  });
+  it('excludes a sub-threshold hard gap (<10%)', () => {
+    expect(bannerViolations([smallHard])).toHaveLength(0);
+  });
+  it('includes a material hard gap (≥10%)', () => {
+    expect(bannerViolations([bigHard])).toHaveLength(1);
+  });
+  it('includes a hard violation with no relGap (INV-7/3/14 are always material)', () => {
+    expect(bannerViolations([noGapHard])).toHaveLength(1);
+  });
+  it('a clean-but-soft window yields an empty banner', () => {
+    expect(bannerViolations([soft, smallHard])).toHaveLength(0);
   });
 });

@@ -42,8 +42,8 @@ describe('ReconcileBanner (DQ-1)', () => {
   it('renders the banner with the count + /operator link when violations are present', async () => {
     stubFetch({
       violations: [
-        { check: 'INV-9 spend', storeName: 'uzoshop', platform: 'Meta', date: '30/05', expected: 1204, actual: 1180, delta: -24 },
-        { check: 'INV-10 revenue', storeName: 'zolplus', platform: 'Google', date: '30/05', expected: 3010, actual: 3142, delta: 132 },
+        { label: 'INV-7 Meta spend 2026-05-30/uzoshop', detail: 'data_daily 1204 vs campaigns_daily 1180' }, // hard, no relGap → material
+        { label: 'INV-10 orders vs data revenue 2026-05-30/Zol Plus', detail: 'data_daily 3010 vs orders_attribution 4515', relGap: 0.5 }, // ≥10% → material
       ],
     });
 
@@ -74,6 +74,18 @@ describe('ReconcileBanner (DQ-1)', () => {
       expect(global.fetch).toHaveBeenCalled();
     });
     expect(screen.queryByTestId('reconcile-banner')).toBeNull();
+    expect(container.querySelector('[data-testid="reconcile-banner"]')).toBeNull();
+  });
+
+  it('stays HIDDEN when the only violations are soft/sub-threshold (de-noise — no false alarm)', async () => {
+    stubFetch({
+      violations: [
+        { label: 'INV-9 product vs data revenue 2026-06-01/uzoshop', detail: 'custom-item refunds', soft: true, relGap: 0.08 },
+        { label: 'INV-10 orders vs data revenue 2026-05-31/uzoshop', detail: '6.7% gap', relGap: 0.067 },
+      ],
+    });
+    const { container } = renderBanner();
+    await waitFor(() => { expect(global.fetch).toHaveBeenCalled(); });
     expect(container.querySelector('[data-testid="reconcile-banner"]')).toBeNull();
   });
 });
