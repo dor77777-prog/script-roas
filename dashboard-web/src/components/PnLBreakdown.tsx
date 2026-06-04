@@ -9,6 +9,9 @@ import { sumRefundsInRange } from '@/lib/refundDayHeuristic';
 import { Button } from '@/components/ui/Button';
 import { TableBase } from '@/components/ui/TableBase';
 import { Heading } from '@/components/ui/Typography';
+import { ProvenanceFlag } from '@/components/ui/ProvenanceFlag';
+import { OverrideFlag } from '@/components/ui/OverrideFlag';
+import { provenanceForRange } from '@/lib/freshness/provenance';
 import type { DailyRow } from '@/lib/types';
 import {
   billingForRange,
@@ -44,6 +47,13 @@ type Props = {
   rangeTo?: string;
   /** Scoped DailyRow[] for the current period — used to compute refund total. */
   rows?: readonly DailyRow[];
+  /**
+   * DQ-3 (Wave 3 data-trust) — active manual-spend override summary for the
+   * current store scope. When present, a "● ידני" flag renders next to the
+   * Ad-Spend line. Both omitted → no flag.
+   */
+  overrideNote?: string;
+  overrideLastEditedAt?: string;
 };
 
 const SOURCE_LABEL: Record<CostSource, string> = {
@@ -66,7 +76,22 @@ const SOURCE_COLOR: Record<CostSource, string> = {
   other:          'text-ink-secondary',
 };
 
-export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [] }: Props) {
+export function PnLBreakdown({
+  current,
+  storeNames,
+  rangeFrom,
+  rangeTo,
+  rows = [],
+  overrideNote,
+  overrideLastEditedAt,
+}: Props) {
+  // DQ-4 (Wave 3 data-trust) — provenance verdict over the SAME scoped rows the
+  // cascade is built from. Drives a "סופי" / "אומדן חי" flag on the Ad-Spend
+  // line; 'unknown' (freshness-less historical rows) renders nothing.
+  const provenanceVerdict = useMemo(
+    () => provenanceForRange(rows as DailyRow[]).verdict,
+    [rows],
+  );
   // Default open: P&L is the "am I making money" question — too important to
   // hide behind a click. User can still collapse if they want a quieter view.
   const [open, setOpen] = useState(true);
@@ -268,6 +293,14 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
               tone="cost"
               note={`${(current.ttSpend ?? 0) > 0 ? 'Meta + Google + TikTok' : 'Meta + Google'} · MER ${current.roas > 0 ? current.roas.toFixed(2) : '—'}`}
               running={afterAd}
+              flags={
+                <>
+                  <ProvenanceFlag verdict={provenanceVerdict} />
+                  {(overrideNote || overrideLastEditedAt) && (
+                    <OverrideFlag note={overrideNote} lastEditedAt={overrideLastEditedAt} />
+                  )}
+                </>
+              }
             />
             <PnLLine
               label="עלות סחורה (COGS)"
@@ -470,6 +503,7 @@ function PnLLine({
   note,
   running,
   testid,
+  flags,
 }: {
   label: string;
   amount: number;
@@ -483,6 +517,9 @@ function PnLLine({
   /** Optional test hook on this line's own <li> (avoids an invalid li-in-li
    * wrapper). Used by the salaries line so it can be targeted directly. */
   testid?: string;
+  /** Optional data-trust flag(s) (DQ-3/DQ-4) rendered inline after the label.
+   * Omitted → nothing renders, so existing lines are visually unchanged. */
+  flags?: React.ReactNode;
 }) {
   return (
     <li
@@ -494,7 +531,10 @@ function PnLLine({
     >
       {/* Column 1: label + optional note */}
       <div className="min-w-0">
-        <div className="text-sm text-ink font-medium leading-snug">{label}</div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-sm text-ink font-medium leading-snug">{label}</span>
+          {flags}
+        </div>
         {note && <div className="text-[10px] sm:text-[11px] text-ink-muted mt-0.5 leading-snug">{note}</div>}
       </div>
 

@@ -75,6 +75,9 @@ import { CountUp } from '@/components/ui/CountUp';
 import { Badge } from '@/components/ui/Badge';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { CoverageChip } from '@/components/home/CoverageChip';
+import { ProvenanceFlag } from '@/components/ui/ProvenanceFlag';
+import { OverrideFlag } from '@/components/ui/OverrideFlag';
+import type { ProvenanceVerdict } from '@/lib/freshness/provenance';
 import type { CoverageChip as CoverageChipData } from '@/lib/home/adapters';
 import type { NcConfidence } from '@/lib/home/newCustomerMetrics';
 import type { ChannelMetric } from '@/lib/home/channelTruth';
@@ -241,6 +244,20 @@ export interface CommandCenterHeroProps {
   updatedAt?: StalenessInput;
   /** Optional NC-ROAS / nCAC subordinate-tile data. Omit to hide. */
   newCustomer?: CommandCenterNewCustomer;
+  /**
+   * DQ-4 (Wave 3 data-trust) — provenance verdict for the active range. Drives
+   * a <ProvenanceFlag> next to the Spend KPI: "סופי" (finalized) / "אומדן חי"
+   * (live estimate). 'unknown' or omitted → renders nothing (back-compat for
+   * freshness-less historical rows).
+   */
+  provenanceVerdict?: ProvenanceVerdict;
+  /**
+   * DQ-3 (Wave 3 data-trust) — active manual-spend override note + last-edited
+   * timestamp for the current store scope. When present, a <OverrideFlag>
+   * "● ידני" chip renders next to the Spend KPI. Both omitted → no flag.
+   */
+  overrideNote?: string;
+  overrideLastEditedAt?: string;
   className?: string;
 }
 
@@ -549,6 +566,9 @@ export function CommandCenterHero({
   secondarySparklines,
   updatedAt,
   newCustomer,
+  provenanceVerdict,
+  overrideNote,
+  overrideLastEditedAt,
   className,
 }: CommandCenterHeroProps) {
   // Business-ROAS band selector used by all 7 hero cards — Change
@@ -652,6 +672,17 @@ export function CommandCenterHero({
           >
             <Money value={current.spend} prefix="$" compactAbove={1_000_000} countUp />
           </bdi>
+          {/* DQ-3 / DQ-4 data-trust flags next to the Spend KPI. Each renders
+              null when its data is absent (provenance 'unknown'; no override) so
+              the card is visually unchanged when there's nothing to flag. */}
+          {(provenanceVerdict || overrideNote || overrideLastEditedAt) && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+              {provenanceVerdict && <ProvenanceFlag verdict={provenanceVerdict} />}
+              {(overrideNote || overrideLastEditedAt) && (
+                <OverrideFlag note={overrideNote} lastEditedAt={overrideLastEditedAt} />
+              )}
+            </div>
+          )}
           {/* spend ↑ is a NEGATIVE signal */}
           <DeltaLine
             text={fmtPctDelta(delta?.spendPct)}

@@ -104,9 +104,13 @@ export async function POST(req: Request) {
     if (typeof valid === 'string') {
       return NextResponse.json({ error: valid }, { status: 400 });
     }
+    // DQ-3 (2026-06-04): stamp updated_at on every write so the manual-spend
+    // audit trail (updated_at col, migration 20260604130000) populates going
+    // forward. overridesActive() prefers updated_at over created_at for its
+    // "last edited" timestamp.
     const { data, error } = await getSupabaseAdmin()
       .from('manual_overrides')
-      .upsert(valid, { onConflict: 'date,store_id,platform' })
+      .upsert({ ...valid, updated_at: new Date().toISOString() }, { onConflict: 'date,store_id,platform' })
       .select();
     if (error) {
       console.error('/api/operator/manual-overrides POST failed:', error.message);
@@ -187,6 +191,10 @@ export async function PATCH(req: Request) {
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: 'no fields to update' }, { status: 400 });
     }
+    // DQ-3 (2026-06-04): stamp updated_at on the write (after the empty-patch
+    // guard, so a body carrying only `id` is still rejected) — populates the
+    // manual-spend audit trail (updated_at col, migration 20260604130000).
+    patch.updated_at = new Date().toISOString();
     const { data, error } = await getSupabaseAdmin()
       .from('manual_overrides')
       .update(patch)

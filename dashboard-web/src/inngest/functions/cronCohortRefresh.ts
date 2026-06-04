@@ -75,6 +75,7 @@ import { getFxRate } from '@/lib/fetchers/fx';
 import { type CadConvert } from '@/lib/inngest/cadConvert';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { captureStepError } from '@/lib/sentry/capture';
+import { recordFreshness } from '@/lib/inngest/freshness';
 
 const STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
 
@@ -349,8 +350,33 @@ export async function runCohortRefreshStepped(input: {
       });
 
       refreshed += 1;
+
+      // DQ-6 (2026-06-04): record a successful cohort_monthly refresh so the
+      // cohort/LTV surface can show a "data as of" timestamp (fetchCohortAsOf
+      // reads max(last_success_at) for scope='cohort_monthly'). recordFreshness
+      // swallows its own errors, so this never breaks the per-store success.
+      // `store` is one of STORES ('uzoshop' | 'zolplus' | 'usmile360').
+      await recordFreshness({
+        storeId: store as 'uzoshop' | 'zolplus' | 'usmile360',
+        platform: 'shopify',
+        scope: 'cohort_monthly',
+        tableName: 'customer_cohort_monthly',
+        status: 'success',
+      });
     } catch (e) {
-      failures.push({ store, error: e instanceof Error ? e.message : String(e) });
+      const message = e instanceof Error ? e.message : String(e);
+      failures.push({ store, error: message });
+      // DQ-6: mirror the success record on failure so a stale cohort surfaces
+      // in data_freshness (preserves the prior last_success_at; only the
+      // status/lag flip). recordFreshness swallows its own errors.
+      await recordFreshness({
+        storeId: store as 'uzoshop' | 'zolplus' | 'usmile360',
+        platform: 'shopify',
+        scope: 'cohort_monthly',
+        tableName: 'customer_cohort_monthly',
+        status: 'transient_error',
+        errorMessage: message,
+      });
     }
   }
 

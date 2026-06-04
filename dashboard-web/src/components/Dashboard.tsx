@@ -51,7 +51,7 @@ import { useCogsSettings } from '@/lib/hooks/useCogsSettings';
 import { applyCogsToRows } from '@/lib/cogsSettings';
 import { useSalarySettings } from '@/lib/hooks/useSalarySettings';
 import { salariesForRange } from '@/lib/salarySettings';
-import { fetchJson } from '@/lib/fetchJson';
+import { fetchJson, fetchJsonOrNull } from '@/lib/fetchJson';
 import { useAutoRefresh } from '@/lib/hooks/useAutoRefresh';
 import { CogsSettings } from '@/components/CogsSettings';
 import { SalarySettings } from '@/components/SalarySettings';
@@ -64,6 +64,11 @@ import { PageSynthesis } from '@/components/ui/PageSynthesis';
 import { synthesizeDetail } from '@/lib/synthesis/detail';
 import { synthesizePnl } from '@/lib/synthesis/pnl';
 import { CommandCenterHero } from '@/components/home/CommandCenterHero';
+import { ReconcileBanner } from '@/components/home/ReconcileBanner';
+import { SourceHealthChip } from '@/components/home/SourceHealthChip';
+import { provenanceForRange } from '@/lib/freshness/provenance';
+import type { ActiveOverridesResponse } from '@/app/api/active-overrides/route';
+import type { OverridesActiveGroup } from '@/lib/home/overridesActive';
 import { PerStoreRow } from '@/components/home/PerStoreRow';
 import {
   RoasTargetChart,
@@ -227,6 +232,44 @@ export function Dashboard() {
     // (no offset per-hook timer). revalidateOnFocus stays for instant catch-up.
     { refreshInterval: 0, revalidateOnFocus: true },
   );
+
+  // DQ-3 (Wave 3 data-trust) — active manual-spend overrides for the visible
+  // range. When the operator pinned ad-spend by hand (e.g. during an account
+  // outage), the Hero Spend KPI + the P&L Ad-Spend line carry a "● ידני" flag
+  // so the number isn't mistaken for a live/source-pulled figure. Self-soft-
+  // fails to null (fetchJsonOrNull) → the flag simply doesn't show on a blip.
+  const { data: activeOverrides } = useSWR<ActiveOverridesResponse | null>(
+    buildDateRangeKey('/api/active-overrides', filters.range),
+    fetchJsonOrNull,
+    { refreshInterval: 0, revalidateOnFocus: true },
+  );
+
+  // Collapse byStorePlatform into ONE group for the current store scope.
+  // 'All' = any active override (across all stores/platforms); a specific store
+  // = only that store's groups. Notes from multiple matching groups are joined,
+  // and lastEditedAt is the latest across them. undefined → render no flag.
+  const overrideFlag = useMemo<{ note?: string; lastEditedAt?: string } | null>(() => {
+    const byStorePlatform = activeOverrides?.byStorePlatform;
+    if (!byStorePlatform) return null;
+    const entries = Object.entries(byStorePlatform).filter(([key]) => {
+      if (filters.store === 'All') return true;
+      // key = `${displayStore}::${platform}` — match the store portion.
+      return key.slice(0, key.indexOf('::')) === filters.store;
+    });
+    if (entries.length === 0) return null;
+    const notes: string[] = [];
+    let lastEditedAt: string | undefined;
+    for (const [, group] of entries as Array<[string, OverridesActiveGroup]>) {
+      if (group.note) notes.push(group.note);
+      if (group.lastEditedAt && (!lastEditedAt || group.lastEditedAt > lastEditedAt)) {
+        lastEditedAt = group.lastEditedAt;
+      }
+    }
+    return {
+      note: notes.length > 0 ? Array.from(new Set(notes)).join(' · ') : undefined,
+      lastEditedAt,
+    };
+  }, [activeOverrides, filters.store]);
 
   // BUG #3 fix (2026-06-04) — STABLE all-history window for the Customers-tab
   // blended nCAC. The headline LTV:nCAC / payback / verdict on the לקוחות tab
@@ -429,6 +472,15 @@ export function Dashboard() {
     // salarySettings/salaryTick: re-aggregate on salary edits (business-level
     // salaries subtract in trueNetProfit via salariesForRange above).
   }, [data, filters, billingTick, salarySettings, salaryTick]);
+
+  // DQ-4 (Wave 3 data-trust) — provenance verdict over the in-scope daily rows
+  // the hero KPIs are built from (filtered.cur). 'finalized' (green "סופי"),
+  // 'live_estimate' (blue "אומדן חי"), or 'unknown' (renders nothing). Computed
+  // here so it can thread into the Hero; the P&L computes its own from `rows`.
+  const provenanceVerdict = useMemo(
+    () => provenanceForRange(filtered?.cur ?? []).verdict,
+    [filtered],
+  );
 
   // Phase 05.7.8 — per-store order count map for the current range. Filters
   // the same way `filtered.cur` does so cards stay in sync with the global
@@ -637,20 +689,36 @@ export function Dashboard() {
                   for all 4 daily tables (they all bump on the same cron tick).
                   The refresh button fires sync-now for all 3 stores +
                   polls until backend is done + SWR-mutates every key. */}
-              <TabFreshnessHeader dataLastWriteAt={data.dataLastWriteAt ?? null} />
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <TabFreshnessHeader dataLastWriteAt={data.dataLastWriteAt ?? null} />
+                {/* DQ-5 (Wave 3 data-trust) — SourceHealthChip self-fetches
+                    /api/freshness-summary and renders nothing while healthy;
+                    it appears only when a store×platform pipe is stuck/broken,
+                    sitting beside the freshness header. */}
+                <SourceHealthChip />
+              </div>
               {activeTab === 'home' && (
-                <HomeTab
-                  data={data}
-                  filtered={filtered}
-                  filters={filters}
-                  setFilters={setFilters}
-                  aiReportSignal={aiReportSignal}
-                  ordersByStore={ordersByStore}
-                  ordersRows={ordersData?.rows}
-                  firstOrderRows={firstOrderRows}
-                  coverage={coverageChip}
-                  onSeeActivity={() => handleTabChange('activity')}
-                />
+                <>
+                  {/* DQ-1 (Wave 3 data-trust) — ReconcileBanner self-fetches
+                      /api/operator/reconcile and is INVISIBLE unless there are
+                      cross-source violations; mounted above the Home hero. */}
+                  <ReconcileBanner />
+                  <HomeTab
+                    data={data}
+                    filtered={filtered}
+                    filters={filters}
+                    setFilters={setFilters}
+                    aiReportSignal={aiReportSignal}
+                    ordersByStore={ordersByStore}
+                    ordersRows={ordersData?.rows}
+                    firstOrderRows={firstOrderRows}
+                    coverage={coverageChip}
+                    provenanceVerdict={provenanceVerdict}
+                    overrideNote={overrideFlag?.note}
+                    overrideLastEditedAt={overrideFlag?.lastEditedAt}
+                    onSeeActivity={() => handleTabChange('activity')}
+                  />
+                </>
               )}
               {activeTab === 'activity' && (
                 <ActivityEventsTab data={data} globalStore={filters.store} />
@@ -671,6 +739,8 @@ export function Dashboard() {
                   filtered={filtered}
                   filters={filters}
                   setFilters={setFilters}
+                  overrideNote={overrideFlag?.note}
+                  overrideLastEditedAt={overrideFlag?.lastEditedAt}
                 />
               )}
               {activeTab === 'archive' && (
@@ -744,6 +814,9 @@ function HomeTab({
   ordersRows,
   firstOrderRows,
   coverage,
+  provenanceVerdict,
+  overrideNote,
+  overrideLastEditedAt,
   onSeeActivity,
 }: {
   data: DashboardData;
@@ -777,6 +850,20 @@ function HomeTab({
    * it (no orders / unwired). Never passed to per-store cards.
    */
   coverage?: CoverageChipData | null;
+  /**
+   * DQ-4 (Wave 3 data-trust) — provenance verdict over the in-scope daily rows.
+   * Threaded to the Hero so the Spend/period cell shows a "סופי" / "אומדן חי"
+   * trust chip. 'unknown' (back-compat for freshness-less historical rows)
+   * renders nothing.
+   */
+  provenanceVerdict?: 'finalized' | 'live_estimate' | 'unknown';
+  /**
+   * DQ-3 (Wave 3 data-trust) — active manual-spend override summary for the
+   * current store scope: a "● ידני" flag next to the Hero Spend KPI. Both omit
+   * → no flag.
+   */
+  overrideNote?: string;
+  overrideLastEditedAt?: string;
   /**
    * Switches the dashboard to the "פעילות" (Activity) tab — wired to the
    * "ראה הכל" link in the Home <ActivityFeed> footer.
@@ -1345,6 +1432,9 @@ function HomeTab({
         secondarySparklines={secondarySparklines}
         updatedAt={data.dataLastWriteAt ?? undefined}
         newCustomer={heroNewCustomer}
+        provenanceVerdict={provenanceVerdict}
+        overrideNote={overrideNote}
+        overrideLastEditedAt={overrideLastEditedAt}
       />
 
       {/* 4. ROAS-vs-target chart — independent date range ------------------- */}
@@ -1386,11 +1476,19 @@ function PnLTab({
   filtered,
   filters,
   setFilters,
+  overrideNote,
+  overrideLastEditedAt,
 }: {
   data: DashboardData;
   filtered: FilteredView;
   filters: F;
   setFilters: (next: F) => void;
+  /**
+   * DQ-3 (Wave 3 data-trust) — active manual-spend override summary for the
+   * current store scope; threaded to the P&L Ad-Spend line's "● ידני" flag.
+   */
+  overrideNote?: string;
+  overrideLastEditedAt?: string;
 }) {
   const pnlSynthesis = synthesizePnl({ agg: filtered.curAgg });
   return (
@@ -1422,6 +1520,8 @@ function PnLTab({
         rangeFrom={filters.range.from}
         rangeTo={filters.range.to}
         rows={filtered.cur}
+        overrideNote={overrideNote}
+        overrideLastEditedAt={overrideLastEditedAt}
       />
 
       <div className="space-y-3">

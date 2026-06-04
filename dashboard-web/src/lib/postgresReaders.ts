@@ -43,6 +43,7 @@ import type { OrderAttributionRow, OrderLineItem } from './ordersAttribution';
 import type { CatalogProduct } from './productCatalog';
 import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
 import { categorizePaymentGateway, type PaymentCategory } from './payments';
+import type { OverrideRowAsRead } from '@/lib/home/overridesActive';
 
 /**
  * Generic row type. Without a generated `Database` schema, supabase-js's
@@ -292,7 +293,11 @@ export async function fetchDailyDataFromPostgres(
             'revenue_cad, roas, gross_profit_cad, cogs_cad, net_profit_cad, ' +
             'gross_revenue_cad, refund_deduction_cad, ' +
             // Phase 13.8 (2026-05-26) — per-platform impressions for live CPM.
-            'fb_impressions, ga_impressions, tt_impressions',
+            'fb_impressions, ga_impressions, tt_impressions, ' +
+            // DQ-4 (2026-06-04) — daily provenance projection. Finalization
+            // columns added by migration 20260530100002; additive optional
+            // fields on DailyRow → no consumer breaks.
+            'is_finalized, source, last_live_tick_at, reconciled_at',
         );
       if (opts?.range) {
         q = q.gte('date', opts.range.from).lte('date', opts.range.to);
@@ -377,6 +382,15 @@ export async function fetchDailyDataFromPostgres(
       fbImpressions,
       gaImpressions,
       ttImpressions,
+      // DQ-4 (2026-06-04) — daily provenance. PostgREST returns timestamptz as
+      // an ISO string already; we only normalise null/undefined → null and
+      // coerce the boolean. `is_finalized` is NOT NULL DEFAULT false in the
+      // schema, but historical rows read before the migration could be null —
+      // preserve that as null rather than coercing to false.
+      isFinalized: r.is_finalized == null ? null : Boolean(r.is_finalized),
+      source: r.source == null ? null : String(r.source),
+      lastLiveTickAt: r.last_live_tick_at == null ? null : String(r.last_live_tick_at),
+      reconciledAt: r.reconciled_at == null ? null : String(r.reconciled_at),
     });
   }
   return rows;
@@ -1529,5 +1543,207 @@ export async function upsertDashboardStateKeyPostgres(
     );
   if (error) {
     throw new Error(`dashboard_state upsert (${key}): ${error.message}`);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 10. fetchManualOverridesForRange — manual_overrides → OverrideRowAsRead[]
+//     DQ-3 (2026-06-04) — raw read for the overrides-active data-quality
+//     summary. Feeds the pure `overridesActive()` helper in
+//     src/lib/home/overridesActive.ts (which owns the OverrideRowAsRead type).
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Reads the `manual_overrides` rows whose `date` falls inside [range.from,
+ * range.to] (both inclusive), in the shape the pure `overridesActive()` helper
+ * consumes. The wire shape is OverrideRowAsRead — owned by overridesActive.ts;
+ * we IMPORT it (never redefine) so a column drift surfaces at the type
+ * boundary.
+ *
+ * `updated_at` + `applies_to` are added by migration
+ * 20260604130000_manual_overrides_audit_cols.sql (NULL on existing rows). The
+ * select requests them so they're present post-apply; before the migration
+ * runs the column doesn't exist and the query soft-fails to [] — the helper
+ * already treats both as forward-compat OPTIONAL fields.
+ *
+ * Soft-fail: a query error returns `[]` (console.warn), mirroring
+ * fetchCurrentCampaignStatuses — the data-quality badge is an enhancement,
+ * never a hard dependency, so a DB hiccup degrades to "no overrides flagged"
+ * rather than crashing the Home surface.
+ */
+export async function fetchManualOverridesForRange(
+  range: DateRange,
+): Promise<OverrideRowAsRead[]> {
+  let data: DbRow[];
+  try {
+    data = await paginate<DbRow>(() =>
+      getSupabase()
+        .from('manual_overrides')
+        .select(
+          'id, date, store_id, platform, spend, currency, notes, created_at, updated_at, applies_to',
+        )
+        .gte('date', range.from)
+        .lte('date', range.to),
+    );
+  } catch (e) {
+    console.warn(`postgresReaders.fetchManualOverridesForRange: ${(e as Error).message}`);
+    return [];
+  }
+
+  const rows: OverrideRowAsRead[] = [];
+  for (const r of data) {
+    rows.push({
+      id: Number(r.id),
+      date: String(r.date ?? '').trim(),
+      store_id: String(r.store_id ?? '').trim(),
+      platform: String(r.platform ?? '').trim(),
+      // spend is NUMERIC(14,4) — may decode as number or string; the
+      // OverrideRowAsRead type accepts `number | string`, so we pass through
+      // without coercion to preserve fidelity (the helper doesn't read it).
+      spend: (r.spend as number | string) ?? 0,
+      currency: String(r.currency ?? '').trim(),
+      notes: r.notes == null ? null : String(r.notes),
+      created_at: String(r.created_at ?? '').trim(),
+      updated_at: r.updated_at == null ? null : String(r.updated_at),
+      applies_to: r.applies_to == null ? null : String(r.applies_to),
+    });
+  }
+  return rows;
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 11. fetchCohortAsOf — data_freshness → ISO string | null
+//     DQ-6 (2026-06-04) — the "data as of" timestamp for the cohort/LTV
+//     surface: the freshest successful cohort_monthly refresh.
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns max(last_success_at) across data_freshness rows where
+ * scope = 'cohort_monthly' AND status = 'success', or null when no successful
+ * cohort refresh has been recorded yet.
+ *
+ * `last_success_at` is the success-timestamp column on data_freshness (see
+ * FreshnessRow in src/lib/inngest/freshness.ts) — recordFreshness sets it to
+ * NOW() on every success and preserves the prior value on failure.
+ *
+ * Implementation: order by last_success_at desc, take the first non-null —
+ * cheaper than a server-side aggregate and avoids relying on a NUMERIC/agg
+ * decode. Soft-fail to null (console.warn) — the UI degrades to "no as-of
+ * chip" rather than crashing.
+ */
+export async function fetchCohortAsOf(): Promise<string | null> {
+  try {
+    const { data, error } = await getSupabase()
+      .from('data_freshness')
+      .select('last_success_at')
+      .eq('scope', 'cohort_monthly')
+      .eq('status', 'success')
+      .not('last_success_at', 'is', null)
+      .order('last_success_at', { ascending: false })
+      .limit(1);
+    if (error) throw new Error(error.message);
+    const row = (data as unknown as DbRow[] | null)?.[0];
+    if (!row) return null;
+    const ts = row.last_success_at;
+    return ts == null ? null : String(ts);
+  } catch (e) {
+    console.warn(`postgresReaders.fetchCohortAsOf: ${(e as Error).message}`);
+    return null;
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 12. fetchTikTokCoverageInputs — data_daily + campaigns_daily → coverage feed
+//     DQ-7 (2026-06-04) — the inputs for the pure `tiktokCoverage()` helper
+//     (src/lib/home/tiktokCoverage.ts): account-level total vs Σ per-campaign.
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns the two inputs `tiktokCoverage()` needs over [range.from, range.to]:
+ *
+ *   - accountTotalCad: Σ data_daily.tt_spend_cad across ALL stores in the
+ *     range. TikTok runs a single shared ad account whose spend is attributed
+ *     to stores via the campaign-store-map; the per-store tt_spend_cad columns
+ *     therefore SUM back to the account total. This is the mapping-AGNOSTIC
+ *     account figure coverage compares against Σ-mapped-campaigns. Already
+ *     FX-converted to CAD by the writers (no FX work here).
+ *
+ *   - campaigns: one entry per TikTok campaigns_daily row in range →
+ *     { campaignId, advertiserId, spendCad }. The shape `tiktokCoverage()`
+ *     expects, used to build the `tiktok::<advertiserId>::<campaignId>` map
+ *     key.
+ *
+ * advertiserId resolution: campaigns_daily has NO advertiser_id column
+ * (campaigns are stored under the MAPPED store_id, not the advertiser). TikTok
+ * is a single shared account; its advertiser id is env-sourced via
+ * `UZOSHOP_TIKTOK_ADVERTISER_ID` (uzoshop is the default/owning store per
+ * ARCHITECTURE §A.5). We attach that single advertiser id to every campaign so
+ * the key matches the campaign-store-map (which is keyed the same way). When
+ * the env var is unset the advertiserId is '' — the pure helper still works,
+ * it just won't find map entries (every campaign falls to the default-store
+ * fallback or unmapped), which is the correct degraded behaviour.
+ *
+ * Soft-fail: any error returns `{ accountTotalCad: 0, campaigns: [] }`
+ * (console.warn) — the coverage badge degrades to "nothing to flag".
+ */
+export async function fetchTikTokCoverageInputs(
+  range: DateRange,
+): Promise<{
+  accountTotalCad: number;
+  campaigns: Array<{ campaignId: string; advertiserId: string; spendCad: number }>;
+}> {
+  // Single shared TikTok account → advertiser id from the default/owning
+  // store's env var. Trim to '' (not undefined) so the key shape stays a
+  // string in every branch.
+  const advertiserId =
+    process.env.UZOSHOP_TIKTOK_ADVERTISER_ID?.trim() || '';
+
+  try {
+    // 1. Account total = Σ tt_spend_cad across all stores in range. Project
+    //    only the one column we sum (cheaper than the full daily SELECT).
+    const dailyRows = await paginate<DbRow>(() =>
+      getSupabase()
+        .from('data_daily')
+        .select('tt_spend_cad')
+        .gte('date', range.from)
+        .lte('date', range.to),
+    );
+    let accountTotalCad = 0;
+    for (const r of dailyRows) {
+      accountTotalCad += toNumber(r.tt_spend_cad);
+    }
+
+    // 2. Per-campaign TikTok rows in range. campaigns_daily is ad-set-granular
+    //    (PK includes ad_set_id) — sum spend_cad per campaign_id so the
+    //    coverage feed is one entry per campaign (matching the helper's
+    //    campaign-keyed map). Rows with empty campaign_id are skipped.
+    const campRows = await paginate<DbRow>(() =>
+      getSupabase()
+        .from('campaigns_daily')
+        .select('campaign_id, spend_cad')
+        .eq('platform', 'tiktok')
+        .gte('date', range.from)
+        .lte('date', range.to),
+    );
+    const spendByCampaign = new Map<string, number>();
+    for (const r of campRows) {
+      const campaignId = String(r.campaign_id ?? '').trim();
+      if (!campaignId) continue;
+      spendByCampaign.set(
+        campaignId,
+        (spendByCampaign.get(campaignId) ?? 0) + toNumber(r.spend_cad),
+      );
+    }
+
+    const campaigns = [...spendByCampaign.entries()].map(([campaignId, spendCad]) => ({
+      campaignId,
+      advertiserId,
+      spendCad,
+    }));
+
+    return { accountTotalCad, campaigns };
+  } catch (e) {
+    console.warn(`postgresReaders.fetchTikTokCoverageInputs: ${(e as Error).message}`);
+    return { accountTotalCad: 0, campaigns: [] };
   }
 }

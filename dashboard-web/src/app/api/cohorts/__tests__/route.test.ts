@@ -11,6 +11,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/postgresReaders', () => ({
   fetchCohortMonthlyFromPostgres: vi.fn(),
+  // DQ-6: the route now also reads the cohort as-of timestamp in parallel.
+  fetchCohortAsOf: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@/lib/sentry/capture', () => ({
   captureRouteError: vi.fn(),

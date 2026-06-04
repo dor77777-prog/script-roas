@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { CohortMonthlyRow } from '@/lib/postgresReaders';
-import { fetchCohortMonthlyFromPostgres } from '@/lib/postgresReaders';
+import { fetchCohortMonthlyFromPostgres, fetchCohortAsOf } from '@/lib/postgresReaders';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { captureRouteError } from '@/lib/sentry/capture';
@@ -14,6 +14,15 @@ export const revalidate = 300; // matches CACHE_CONFIG.cohorts.revalidate; liter
 export type CohortsResponse = {
   rows: CohortMonthlyRow[];
   lastUpdated: string;
+  /**
+   * DQ-6 (2026-06-04) — "data as of" timestamp: the freshest successful
+   * cohort_monthly refresh (max data_freshness.last_success_at where
+   * scope='cohort_monthly'). `null` when no successful cohort refresh has been
+   * recorded yet (or on the degraded-error path). The customer-value tab shows
+   * this as an as-of chip so the operator knows how stale the weekly LTV
+   * re-aggregate is.
+   */
+  asOf: string | null;
   /** Present only on the degraded-error path (rows: []). Consumers that
    *  surface "synced N min ago" should treat the response as data-less when
    *  this is set, even though rows + lastUpdated still satisfy the type. */
@@ -28,9 +37,15 @@ export async function GET() {
   // analysis is per-store + business (selector), so the client needs the
   // full set in hand to switch scope without a refetch.
   try {
-    const rows = await fetchCohortMonthlyFromPostgres();
+    // DQ-6: fetch the cohort rows and the as-of timestamp in parallel.
+    // fetchCohortAsOf soft-fails to null on its own, so it never breaks the
+    // main read.
+    const [rows, asOf] = await Promise.all([
+      fetchCohortMonthlyFromPostgres(),
+      fetchCohortAsOf(),
+    ]);
     return NextResponse.json(
-      { rows, lastUpdated: new Date().toISOString() } satisfies CohortsResponse,
+      { rows, lastUpdated: new Date().toISOString(), asOf } satisfies CohortsResponse,
       {
         headers: {
           'Cache-Control': cacheControl('cohorts'),
@@ -53,6 +68,7 @@ export async function GET() {
       {
         rows: [],
         lastUpdated: new Date().toISOString(),
+        asOf: null,
         error: userFacingError(message),
       } satisfies CohortsResponse,
       { status: 200, headers: { 'Cache-Control': 'no-store' } },

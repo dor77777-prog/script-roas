@@ -8,6 +8,8 @@
 import { TokenFailuresTable } from '@/components/operator/TokenFailuresTable';
 import { MetaBucPanel } from '@/components/operator/MetaBucPanel';
 import { FreshnessPanel } from '@/components/operator/FreshnessPanel';
+import { ReconcilePanel } from '@/components/operator/ReconcilePanel';
+import { TikTokCoveragePanel } from '@/components/operator/TikTokCoveragePanel';
 import { Heading } from '@/components/ui/Typography';
 
 export function HealthTab() {
@@ -70,6 +72,35 @@ export function HealthTab() {
           </span>
         </Heading>
         <FreshnessPanel />
+      </section>
+
+      {/* DQ-1 (Wave 3 data-trust): ReconcilePanel — surfaces the live
+          reconciliation harness (INV-7/9/10 cross-source + INV-3/6 same-source
+          checks). Self-fetches /api/operator/reconcile @ 15 s; renders a calm
+          green "all clear" line when there are no violations, else a table. */}
+      <section>
+        <Heading level="hero" className="mb-3 flex items-center gap-2">
+          <span>התאמת מקורות</span>
+          <span className="text-ink-secondary text-xs font-normal">
+            (reconcile — בדיקות צולבות בין מקורות-נתונים)
+          </span>
+        </Heading>
+        <ReconcilePanel />
+      </section>
+
+      {/* DQ-7 (Wave 3 data-trust): TikTokCoveragePanel — TikTok runs one shared
+          ad-account; this surfaces how much spend is covered by an EXPLICIT
+          campaign↔store mapping vs unmapped/unattributed. Self-fetches
+          /api/operator/tiktok-coverage @ 15 s; carries its own static
+          disclaimer + live coverage stats. */}
+      <section>
+        <Heading level="hero" className="mb-3 flex items-center gap-2">
+          <span>כיסוי מיפוי TikTok</span>
+          <span className="text-ink-secondary text-xs font-normal">
+            (כמה מההוצאה ממופה במפורש לחנות)
+          </span>
+        </Heading>
+        <TikTokCoveragePanel />
       </section>
     </div>
   );

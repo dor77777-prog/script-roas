@@ -42,6 +42,21 @@ export type DailyRow = {
   fbImpressions: number | null;
   gaImpressions: number | null;
   ttImpressions: number | null;
+  /**
+   * DQ-4 (2026-06-04) — daily provenance projection from data_daily's
+   * finalization columns (migration 20260530100002). OPTIONAL + nullable so
+   * existing consumers don't break: `isFinalized` is true once a daily/weekly
+   * reconcile has sealed the row; `source` is the writer that last wrote it
+   * ('live_tick' | 'daily_reconcile' | 'weekly_reconcile' | 'backfill' |
+   * 'manual_override'); `lastLiveTickAt` is the freshest live-tick ISO ts;
+   * `reconciledAt` is when the row was last reconciled. `null` on rows that
+   * pre-date the column or where the value is unset. `undefined` when a reader
+   * doesn't project these fields at all.
+   */
+  isFinalized?: boolean | null;
+  source?: string | null;
+  lastLiveTickAt?: string | null;
+  reconciledAt?: string | null;
 };
 
 export type DashboardData = {

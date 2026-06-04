@@ -29,6 +29,7 @@ import { NativeSelect } from '@/components/ui/NativeSelect';
 import { Money } from '@/components/ui/Money';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { SectionIntro } from '@/components/SectionIntro';
+import { CohortAsOfBadge } from '@/components/customers/CohortAsOfBadge';
 import { cn } from '@/lib/utils';
 import { TRANSACTION_FEES_RATE } from '@/lib/costs';
 import {
@@ -331,6 +332,11 @@ export function CustomerValueTab({
         description="כמה רווח לקוח חדש מכניס לאורך זמן, מול כמה עלה לגייס אותו — ואם הגיוס משתלם."
         rightSlot={
           <div className="flex flex-wrap items-center gap-2">
+            {/* DQ-6 (Wave 3 data-trust) — "עודכן ל-" freshness flag for the
+                weekly cohort/LTV refresh. asOf comes from the /api/cohorts
+                response; renders nothing when null (no successful refresh yet,
+                or test-injected rows that bypass the SWR fetch). */}
+            <CohortAsOfBadge asOf={data?.asOf ?? null} />
             <div className="w-40">
               <NativeSelect
                 aria-label="היקף"
