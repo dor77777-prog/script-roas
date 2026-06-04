@@ -82,6 +82,12 @@ export function ChannelTruthPanel({
                   <span className="text-ink tabular-nums"><Money value={m.spend} /></span></div>
                 <div className="flex justify-between"><span className="text-ink-secondary">הזמנות חדשות</span>
                   <span className="text-ink tabular-nums">{m.ncOrders}</span></div>
+                <div className="flex justify-between border-t border-glass-edge pt-1 mt-0.5">
+                  <span className="text-ink-secondary">רווח-נטו (אחרי עלויות)</span>
+                  <span className={cn('tabular-nums font-bold', m.ncNetProfit == null ? 'text-ink-muted' : m.ncNetProfit >= 0 ? 'text-status-greenFg' : 'text-status-redFg')}>
+                    {m.ncNetProfit == null ? '—' : <Money value={m.ncNetProfit} />}
+                  </span>
+                </div>
               </div>
               <span className={cn('mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-extrabold', bandChip(b))}>
                 {bandLabel(b)}

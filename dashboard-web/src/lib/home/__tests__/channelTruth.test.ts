@@ -63,6 +63,19 @@ describe('computeChannelTruth', () => {
     expect(m.nCac).toBeCloseTo(50, 5); // unchanged (count-based)
   });
 
+  it('per-channel-net-profit: ncNetProfit = ncRevenue×keepRate − spend (contribution net)', () => {
+    const out = computeChannelTruth(rows, spend, undefined, 1, 0.7);
+    // meta: ncRevenue 300, spend 100 → 300×0.7 − 100 = 110 (profitable)
+    expect(out.find((c) => c.channel === 'meta')!.ncNetProfit).toBeCloseTo(110, 5);
+    // tiktok: ncRevenue 50, spend 100 → 50×0.7 − 100 = −65 (losing)
+    expect(out.find((c) => c.channel === 'tiktok')!.ncNetProfit).toBeCloseTo(-65, 5);
+  });
+
+  it('ncNetProfit null when a channel has neither spend nor attributed revenue', () => {
+    const out = computeChannelTruth([], { meta: 0, google: 0, tiktok: 0 }, undefined, 1, 0.7);
+    expect(out.every((c) => c.ncNetProfit === null)).toBe(true);
+  });
+
   it('storeName scopes the rows', () => {
     const mixed: FirstOrderInput[] = [
       r({ storeName: 'uzoshop', source: 'meta-paid', totalCad: 200, isFirstOrder: true }),

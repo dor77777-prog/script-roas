@@ -30,6 +30,7 @@ import {
   type NewCustomerMetrics,
 } from '@/lib/home/newCustomerMetrics';
 import { computeChannelTruth, type ChannelMetric } from '@/lib/home/channelTruth';
+import { TRANSACTION_FEES_RATE } from '@/lib/costs';
 import { netAdjustFactor } from '@/lib/home/revenueBasis';
 
 type PaidPlatform = 'meta' | 'google' | 'tiktok';
@@ -269,11 +270,14 @@ export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
   const newCustomer = computeNewCustomerMetrics(firstOrderRows, cur.spend, storeName, ncNetAdj);
   // Wave 2 channel-nc-roas-split — per-channel split for this store, same net
   // factor, per-platform spend from the store's StoreAgg.
+  const cogsRate = cur.revenue > 0 ? cur.cogs / cur.revenue : 0;
+  const keepRate = Math.max(0, 1 - cogsRate - TRANSACTION_FEES_RATE);
   const channelMetrics = computeChannelTruth(
     firstOrderRows,
     { meta: cur.fbSpend, google: cur.gaSpend, tiktok: cur.ttSpend },
     storeName,
     ncNetAdj,
+    keepRate,
   );
 
   return {

@@ -82,6 +82,7 @@ import {
   type FirstOrderInput,
 } from '@/lib/home/newCustomerMetrics';
 import { computeChannelTruth } from '@/lib/home/channelTruth';
+import { TRANSACTION_FEES_RATE } from '@/lib/costs';
 import { netAdjustFactor } from '@/lib/home/revenueBasis';
 import type { StoreAgg } from '@/lib/analytics';
 import { InsightsBoard } from './InsightsBoard';
@@ -981,12 +982,16 @@ function HomeTab({
     // so NC-ROAS reconciles in scale with the hero's net MER band.
     const { factor: ncNetAdj } = netAdjustFactor(filtered.curAgg.revenue, filtered.curAgg.grossRevenue);
     const m = computeNewCustomerMetrics(firstOrderRows, filtered.curAgg.spend, scope, ncNetAdj);
-    // Wave 2 channel-nc-roas-split — same range + net factor, per-platform spend.
+    // Wave 2 channel-nc-roas-split + per-channel-net-profit — same range + net
+    // factor; per-platform spend; keepRate = 1 − effective COGS% − fees%.
+    const cogsRate = filtered.curAgg.revenue > 0 ? filtered.curAgg.cogs / filtered.curAgg.revenue : 0;
+    const keepRate = Math.max(0, 1 - cogsRate - TRANSACTION_FEES_RATE);
     const channelMetrics = computeChannelTruth(
       firstOrderRows,
       { meta: filtered.curAgg.fbSpend, google: filtered.curAgg.gaSpend, tiktok: filtered.curAgg.ttSpend },
       scope,
       ncNetAdj,
+      keepRate,
     );
     return {
       ...m,

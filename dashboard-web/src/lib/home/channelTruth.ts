@@ -28,7 +28,7 @@ export function sourceToChannel(s: OrderSource | null | undefined): Channel | nu
 
 export interface ChannelMetric {
   channel: Channel;
-  /** First-order revenue (CAD) attributed to this paid channel. */
+  /** First-order revenue (CAD) attributed to this paid channel (net basis). */
   ncRevenue: number;
   /** Count of first-orders attributed to this paid channel. */
   ncOrders: number;
@@ -38,6 +38,13 @@ export interface ChannelMetric {
   ncRoas: number | null;
   /** spend ÷ ncOrders; null when no attributed first-orders. */
   nCac: number | null;
+  /**
+   * per-channel-net-profit (Wave 2) — CONTRIBUTION net on new-customer
+   * acquisition: ncRevenue × keepRate − spend (keepRate = 1 − COGS% − fees%).
+   * Excludes fixed costs / salaries (not channel-attributable). null when the
+   * channel has neither spend nor attributed revenue.
+   */
+  ncNetProfit: number | null;
 }
 
 /**
@@ -56,9 +63,16 @@ export function computeChannelTruth(
    * is reported NET (already scaled); nCac/ncOrders are count-based (untouched).
    */
   netAdjust = 1,
+  /**
+   * Keep-rate (1 − COGS% − fees%, 0..1) for the CONTRIBUTION net-profit metric.
+   * Default 1 → ncNetProfit = ncRevenue − spend (pre-COGS) for callers that
+   * don't pass it; real callers derive it from the period's COGS + fees.
+   */
+  keepRate = 1,
 ): ChannelMetric[] {
   const scoped = storeName ? rows.filter((r) => r.storeName === storeName) : rows;
   const factor = Number.isFinite(netAdjust) && netAdjust > 0 ? netAdjust : 1;
+  const keep = Number.isFinite(keepRate) ? Math.max(0, Math.min(1, keepRate)) : 1;
   return CHANNELS.map((channel) => {
     let ncRevenueGross = 0;
     let ncOrders = 0;
@@ -72,6 +86,7 @@ export function computeChannelTruth(
     const spend = Number.isFinite(spendByChannel[channel]) ? spendByChannel[channel] : 0;
     const ncRoas = spend > 0 && ncRevenue > 0 ? ncRevenue / spend : null;
     const nCac = ncOrders > 0 ? spend / ncOrders : null;
-    return { channel, ncRevenue, ncOrders, spend, ncRoas, nCac };
+    const ncNetProfit = spend > 0 || ncRevenue > 0 ? ncRevenue * keep - spend : null;
+    return { channel, ncRevenue, ncOrders, spend, ncRoas, nCac, ncNetProfit };
   });
 }
