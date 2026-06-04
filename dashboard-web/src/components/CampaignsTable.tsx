@@ -2663,6 +2663,20 @@ function SortHeader({
     align === 'start' ? 'justify-start' : align === 'end' ? 'justify-end' : 'justify-center';
   const textAlign =
     align === 'start' ? 'text-start' : align === 'end' ? 'text-end' : 'text-center';
+  // BUG #1 fix — for end-aligned (numeric) columns the sort arrow must render
+  // BEFORE the label, so under RTL + justify-end the label is the flush
+  // (leftmost) element and lines up with the text-end numeric body cells.
+  // The invisible inactive ArrowUpDown still occupies layout, so leaving it
+  // after the label pushes the label ~12-16px inboard of the numbers.
+  const sortArrow = isActive ? (
+    dir === 'asc' ? (
+      <ArrowUp size={12} className="text-accent" />
+    ) : (
+      <ArrowDown size={12} className="text-accent" />
+    )
+  ) : (
+    <ArrowUpDown size={12} className="text-ink-subtle opacity-0 group-hover:opacity-100 transition-opacity" />
+  );
   return (
     <ColumnHeaderTh
       className={cn('font-medium', textAlign, className)}
@@ -2683,15 +2697,16 @@ function SortHeader({
         )}
         aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
-        <span>{label}</span>
-        {isActive ? (
-          dir === 'asc' ? (
-            <ArrowUp size={12} className="text-accent" />
-          ) : (
-            <ArrowDown size={12} className="text-accent" />
-          )
+        {align === 'end' ? (
+          <>
+            {sortArrow}
+            <span>{label}</span>
+          </>
         ) : (
-          <ArrowUpDown size={12} className="text-ink-subtle opacity-0 group-hover:opacity-100 transition-opacity" />
+          <>
+            <span>{label}</span>
+            {sortArrow}
+          </>
         )}
       </Button>
     </ColumnHeaderTh>

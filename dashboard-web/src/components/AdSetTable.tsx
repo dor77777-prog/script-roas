@@ -276,6 +276,19 @@ function AdSetSortHeader({
     align === 'start' ? 'justify-start' : align === 'end' ? 'justify-end' : 'justify-center';
   const textAlign =
     align === 'start' ? 'text-start' : align === 'end' ? 'text-end' : 'text-center';
+  // BUG #1 fix — for end-aligned (numeric) columns render the sort arrow
+  // BEFORE the label so under RTL + justify-end the label is flush with the
+  // text-end numeric body cells. (The invisible inactive ArrowUpDown still
+  // occupies layout.)
+  const sortArrow = isActive ? (
+    dir === 'asc' ? (
+      <ArrowUp size={12} className="text-accent" />
+    ) : (
+      <ArrowDown size={12} className="text-accent" />
+    )
+  ) : (
+    <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-60 transition-opacity" />
+  );
   return (
     <th className={cn('font-medium px-3 py-2', textAlign)}>
       <Button
@@ -291,15 +304,16 @@ function AdSetSortHeader({
         )}
         aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
-        <span>{label}</span>
-        {isActive ? (
-          dir === 'asc' ? (
-            <ArrowUp size={12} className="text-accent" />
-          ) : (
-            <ArrowDown size={12} className="text-accent" />
-          )
+        {align === 'end' ? (
+          <>
+            {sortArrow}
+            <span>{label}</span>
+          </>
         ) : (
-          <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-60 transition-opacity" />
+          <>
+            <span>{label}</span>
+            {sortArrow}
+          </>
         )}
       </Button>
     </th>
