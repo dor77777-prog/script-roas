@@ -26,6 +26,7 @@ import useSWR from 'swr';
 import { fetchJsonOrNull } from '@/lib/fetchJson';
 import type { ReconcileResponse } from '@/app/api/reconcile/route';
 import type { Violation } from '@/lib/audit/reconcile';
+import { bannerViolations } from '@/lib/audit/reconcileRows';
 import {
   TableBase,
   TableHead,
@@ -159,15 +160,52 @@ export function ReconcilePanel() {
     );
   }
 
-  const rows = violations.map(parseViolation);
+  // Split into MATERIAL (hard, likely-real, ≥10% or no-relGap) vs EXPLAINED
+  // (soft INV-9 custom-item gaps + sub-threshold). Lead with the verdict and
+  // collapse the explained list so a long row of "known" gaps doesn't read as
+  // alarming — the same materiality the Home banner uses.
+  const material = bannerViolations(violations);
+  const materialSet = new Set(material);
+  const explained = violations.filter((v) => !materialSet.has(v));
 
   return (
+    <div className="space-y-3">
+      {material.length === 0 ? (
+        <div className="flex items-center gap-2.5 py-1.5 ps-0.5 text-sm font-semibold text-status-greenFg">
+          <span className="relative inline-flex h-2.5 w-2.5 shrink-0">
+            <span className="absolute inset-0 rounded-pill bg-status-green opacity-75 motion-safe:animate-ping" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-pill bg-status-green" />
+          </span>
+          <span>✓ אין אי-התאמות מהותיות — כל המקורות תואמים בתחום הסביר</span>
+        </div>
+      ) : (
+        <>
+          <div className="text-sm font-semibold text-status-warningFg">
+            ⚠️ {material.length} אי-התאמות מהותיות דורשות בדיקה
+          </div>
+          <ReconcileTable list={material} />
+        </>
+      )}
+
+      {explained.length > 0 && (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-ink-muted hover:text-ink">
+            הצג {explained.length} פערים מוסברים (הפרשי custom-item / החזרים — תקינים, ARCHITECTURE §14.7)
+          </summary>
+          <div className="mt-2">
+            <ReconcileTable list={explained} />
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+/** The reconcile table for a list of violations (material or explained). */
+function ReconcileTable({ list }: { list: Violation[] }) {
+  const rows = list.map(parseViolation);
+  return (
     <div className="overflow-x-auto">
-      <p className="mb-3 text-xs leading-relaxed text-ink-muted">
-        בדיקות-הצלבה בין מקורות-הנתונים. שורות המסומנות{' '}
-        <span className="rounded bg-status-grayBg px-1.5 py-0.5 text-[10px] font-semibold text-status-grayFg">מוסבר</span>{' '}
-        הן הפרשי-חשבונאות ידועים (למשל החזרי custom-item — ARCHITECTURE §14.7) ובתחום הסביר, ולא דורשות פעולה. באנר דף-הבית מתריע רק על אי-התאמות מהותיות.
-      </p>
       <TableBase className="text-xs sm:text-sm">
         <TableHead>
           <TableRow>
