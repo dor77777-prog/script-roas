@@ -310,6 +310,26 @@ describe('CustomerValueTab — B1 era reconciliation + A7 ratio precision (2026-
     // ltv12Profit = 100 × 0.685 = 68.5 ; 68.5 / 70 = 0.978 → "0.98×".
     expect(screen.getByTestId('cv-verdict').textContent ?? '').toMatch(/0\.98×/);
   });
+
+  it('A7 edge: a ratio that 2-dp-rounds to 1.00 while losing renders "0.99×", never "1.00×"', () => {
+    // ltv12Profit = 100 × 0.685 = 68.5 ; 68.5 / 68.7 = 0.99709 → toFixed(2) = "1.00"
+    // WITHOUT the floor. losing (ratio<1) → floored to 0.99 → "0.99×".
+    const edgeRows: CohortMonthlyRow[] = [
+      cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000 }),
+    ];
+    render(
+      <CustomerValueTab
+        stores={['uzoshop']}
+        injectedRows={edgeRows}
+        injectedBlendedNcac={68.7}
+        injectedSpendByMonth={{}}
+        todayMonth="2026-06"
+      />,
+    );
+    const verdict = screen.getByTestId('cv-verdict').textContent ?? '';
+    expect(verdict).toContain('0.99×');
+    expect(verdict).not.toContain('1.00×');
+  });
 });
 
 describe('CustomerValueTab — no-mature-cohort fallback curve has NO break-even', () => {

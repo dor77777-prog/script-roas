@@ -241,7 +241,12 @@ export function computeCustomerValue(
   // customer active in multiple months) for rows written before the backfill,
   // so there's no transient 0% regression between deploy and re-backfill.
   const m0Rows = scoped.filter((r) => r.monthSince === 0);
-  const hasRepeatCol = m0Rows.some((r) => r.repeatCustomers != null);
+  // All-or-nothing: only use the distinct column when EVERY M0 row is populated.
+  // A `some()` gate would, in a mixed backfill state, zero-fill the not-yet-
+  // backfilled cohorts in the numerator while still counting their M0 in the
+  // denominator → a silently understated rate. `every()` falls back to the proxy
+  // until the whole scope is backfilled (matches the migration's stated intent).
+  const hasRepeatCol = m0Rows.length > 0 && m0Rows.every((r) => r.repeatCustomers != null);
   const repeatRate =
     all.m0Active <= 0
       ? 0

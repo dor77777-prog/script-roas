@@ -63,6 +63,7 @@ const COHORT_COLUMNS = [
   'orders',
   'gross_cad',
   'net_cad',
+  'repeat_customers',
 ] as const;
 
 const fakeRows = [

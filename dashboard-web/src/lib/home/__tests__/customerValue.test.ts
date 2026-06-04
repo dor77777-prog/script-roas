@@ -90,6 +90,20 @@ describe('computeCustomerValue — retention + cumulative net (pooled, M0-weight
     const rr = computeCustomerValue(withRepeat, { basis: 'net', feesRate: 0, blendedNcac: null, todayMonth: '2026-06' });
     expect(rr.repeatRate).toBeCloseTo(0.35, 5);
   });
+
+  it('A6: MIXED backfill (one M0 row null) falls back to the proxy, NOT a zero-filled distinct', () => {
+    // 2025-01 populated (3 repeaters), 2025-02 NOT yet backfilled (null). A
+    // some()-gate would take the distinct branch and zero-fill 2025-02 →
+    // understated 3/20=0.15. every()-gate falls back to the proxy: (4+5)/20=0.45.
+    const mixed: CohortMonthlyRow[] = [
+      cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000, repeatCustomers: 3 }),
+      cell({ firstOrderMonth: '2025-01', monthSince: 1, activeCustomers: 4, orders: 4, netCad: 400 }),
+      cell({ firstOrderMonth: '2025-02', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 800, repeatCustomers: null }),
+      cell({ firstOrderMonth: '2025-02', monthSince: 1, activeCustomers: 5, orders: 5, netCad: 300 }),
+    ];
+    const rr = computeCustomerValue(mixed, { basis: 'net', feesRate: 0, blendedNcac: null, todayMonth: '2026-06' });
+    expect(rr.repeatRate).toBeCloseTo(0.45, 5); // proxy (4+5)/20, NOT 3/20
+  });
 });
 
 describe('computeCustomerValue — profit basis at render', () => {

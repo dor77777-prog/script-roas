@@ -461,7 +461,13 @@ export function Dashboard() {
   // compute keyed off its own in-tab selector → picking a store in the tab
   // divided that store's LTV by the business-wide nCAC. Initialized from /
   // synced to the global filter (the tab's selector then drives it locally).
-  const [customersScope, setCustomersScope] = useState<string>('all');
+  // Lazy-init from the synchronously-available global filter (from the URL) so a
+  // store-scoped deep link doesn't flash business-wide for one frame before the
+  // effect corrects it. (data?.stores is undefined at mount, so do NOT gate the
+  // initializer on it; the effect still corrects a URL store missing from data.)
+  const [customersScope, setCustomersScope] = useState<string>(() =>
+    filters.store !== 'All' ? filters.store : 'all',
+  );
   useEffect(() => {
     if (filters.store === 'All') return;
     if ((data?.stores ?? []).includes(filters.store)) setCustomersScope(filters.store);

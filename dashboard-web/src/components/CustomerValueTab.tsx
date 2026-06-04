@@ -238,18 +238,25 @@ export function CustomerValueTab({
   const losing = ratio != null && ratio < 1;
   const hasLtv = profitLtv != null;
   const hasNcac = ncac != null;
-  // net-per-customer (profit). Round components before subtracting so it
-  // reconciles with the displayed $LTV − $nCAC. A7: when losing but rounding
-  // lands on $0, floor to −$1 so "$0 net" never sits beside a "losing" badge.
+  // net-per-customer is ALWAYS profit-pinned (round(profitLtv) − round(ncac)).
+  // NOTE: in NET (revenue) basis the headline displayLtv shows ltv12Net
+  // (revenue), so this does NOT equal the displayed $LTV − $nCAC — that is the
+  // intentional B3 design (revenue headline, profit verdict, framed by the
+  // "ברווח נטו (אחרי עלויות)" clause). It reconciles with displayLtv − $nCAC
+  // only in profit basis. A7: when losing but rounding lands on $0, floor to
+  // −$1 so "$0 net" never sits beside a "losing" badge.
   const netPerCustomerRaw =
     hasLtv && hasNcac ? Math.round(profitLtv) - Math.round(ncac as number) : null;
   const netPerCustomer =
     netPerCustomerRaw != null && losing ? Math.min(-1, netPerCustomerRaw) : netPerCustomerRaw;
   const netIsGood = ratio != null ? ratio >= 1 : (netPerCustomer ?? 0) >= 0;
   // A7: 2 decimals near break-even so "0.97×"/"1.04×" never round to a "1.0×"
-  // that contradicts the (raw-ratio) badge tone.
+  // that contradicts the (raw-ratio) badge tone. Also floor the DISPLAYED ratio
+  // below 1 when losing so a value like 0.997 can't render "1.00×" beside a
+  // red "losing" badge (the same contradiction, pushed to the 2-decimal edge).
+  const ratioShown = ratio == null ? null : losing ? Math.min(ratio, 0.99) : ratio;
   const ratioText =
-    ratio == null ? null : ratio >= 0.9 && ratio < 1.1 ? ratio.toFixed(2) : ratio.toFixed(1);
+    ratioShown == null ? null : ratioShown >= 0.9 && ratioShown < 1.1 ? ratioShown.toFixed(2) : ratioShown.toFixed(1);
 
   // Curve break-even line (nCAC) ONLY on the PROFIT curve (comparing a revenue
   // curve to acquisition cost is the B3 category error), and only when there's
@@ -268,7 +275,9 @@ export function CustomerValueTab({
   const canCompare = cmpDepth >= 0 && old3 > 0 && recent3 > 0;
   const newVsOldDiff = canCompare ? Math.round(((recent3 - old3) / old3) * 100) : null;
   const cmpMax = Math.max(recent3, old3, 1);
-  const cmpMonthsLabel = `${(cmpDepth >= 0 ? cmpDepth : 2) + 1} החודשים הראשונים`;
+  // Hebrew: singular for a count of 1 ("החודש הראשון"), plural otherwise.
+  const cmpMonths = (cmpDepth >= 0 ? cmpDepth : 2) + 1;
+  const cmpMonthsLabel = cmpMonths === 1 ? 'החודש הראשון' : `${cmpMonths} החודשים הראשונים`;
 
   // ── B1: are the RECENT cohorts already paying back the current nCAC? ──────
   // The headline LTV is mature-only (older, weaker cohorts) while nCAC is the
@@ -279,7 +288,9 @@ export function CustomerValueTab({
   const recentPaysBack = hasNcac && recentEarlyProfit >= (ncac as number);
   // Show the bridge when the verdict is "losing" on mature cohorts but the
   // recent cohorts are stronger (improving) — so the two cards don't contradict.
-  const showRecentBridge = losing && (recentPaysBack || (newVsOldDiff != null && newVsOldDiff > 0));
+  // Gate on canCompare too: the bridge points the reader to the new-vs-old card,
+  // so it must not render when that card shows its empty state (old3 ≤ 0).
+  const showRecentBridge = losing && canCompare && (recentPaysBack || (newVsOldDiff != null && newVsOldDiff > 0));
   // B1 — downgrade the ABSOLUTE "losing" badge to a qualified amber one when the
   // recent cohorts already pay back: an absolute red "מפסידים" is misleading
   // when current acquisition is profitable and only the OLD (mature) cohorts lag.
