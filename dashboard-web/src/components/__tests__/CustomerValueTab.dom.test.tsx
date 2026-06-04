@@ -31,6 +31,7 @@ function cell(over: Partial<CohortMonthlyRow>): CohortMonthlyRow {
     orders: 0,
     grossCad: 0,
     netCad: 0,
+    repeatCustomers: null,
     ...over,
   };
 }

@@ -28,6 +28,7 @@ function cell(over: Partial<CohortMonthlyRow>): CohortMonthlyRow {
     orders: 0,
     grossCad: 0,
     netCad: 0,
+    repeatCustomers: null,
     ...over,
   };
 }
@@ -71,9 +72,23 @@ describe('computeCustomerValue — retention + cumulative net (pooled, M0-weight
     expect(r.ltv12Net).toBeCloseTo(135, 5);
   });
 
-  it('repeatRate = Σ active(m≥1) ÷ Σ M0, capped at 1', () => {
-    // m≥1 active = (4+2) + 5 = 11 ; 11/20 = 0.55
+  it('repeatRate FALLBACK proxy when repeat_customers is absent (pre-backfill)', () => {
+    // No repeatCustomers on any M0 row → fall back to the occurrence-sum proxy:
+    // Σ active(m≥1) ÷ Σ M0 = (4+2+5)/20 = 0.55.
     expect(r.repeatRate).toBeCloseTo(0.55, 5);
+  });
+
+  it('A6: repeatRate uses the DISTINCT repeat_customers column when populated', () => {
+    // Same two cohorts, but now M0 rows carry distinct repeaters: 2025-01 → 3,
+    // 2025-02 → 4. Honest rate = (3+4) ÷ 20 M0 = 0.35 (NOT the 0.55 proxy).
+    const withRepeat: CohortMonthlyRow[] = [
+      cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 1000, repeatCustomers: 3 }),
+      cell({ firstOrderMonth: '2025-01', monthSince: 1, activeCustomers: 4, orders: 4, netCad: 400 }),
+      cell({ firstOrderMonth: '2025-02', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 800, repeatCustomers: 4 }),
+      cell({ firstOrderMonth: '2025-02', monthSince: 1, activeCustomers: 5, orders: 5, netCad: 300 }),
+    ];
+    const rr = computeCustomerValue(withRepeat, { basis: 'net', feesRate: 0, blendedNcac: null, todayMonth: '2026-06' });
+    expect(rr.repeatRate).toBeCloseTo(0.35, 5);
   });
 });
 

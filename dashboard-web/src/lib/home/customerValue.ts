@@ -234,8 +234,20 @@ export function computeCustomerValue(
   // months-since), we re-bucket net-after-cost by months-since.
   const cumulativeProfit = pooledProfitCurve(scoped, opts);
 
-  // repeatRate — aggregate proxy: Σ active(m≥1) ÷ Σ M0, capped at 1.
-  const repeatRate = all.m0Active > 0 ? Math.min(1, all.repeatActive / all.m0Active) : 0;
+  // repeatRate — A6 (2026-06-04): the HONEST distinct repeat rate is
+  // Σ(M0-row repeat_customers) ÷ Σ M0 (each repeater counted ONCE per cohort).
+  // Use it whenever the column is populated (post-backfill); fall back to the
+  // old occurrence-sum proxy (Σ active(m≥1) ÷ M0 — overstates, double-counts a
+  // customer active in multiple months) for rows written before the backfill,
+  // so there's no transient 0% regression between deploy and re-backfill.
+  const m0Rows = scoped.filter((r) => r.monthSince === 0);
+  const hasRepeatCol = m0Rows.some((r) => r.repeatCustomers != null);
+  const repeatRate =
+    all.m0Active <= 0
+      ? 0
+      : hasRepeatCol
+        ? Math.min(1, m0Rows.reduce((s, r) => s + (r.repeatCustomers ?? 0), 0) / all.m0Active)
+        : Math.min(1, all.repeatActive / all.m0Active);
 
   // ── Mature-only LTV (cohorts ≥ 12 whole months old) ─────────────────────
   const matureCells = scoped.filter(

@@ -1151,7 +1151,7 @@ export async function fetchOrdersAttributionFromPostgres(
  * the consumed set — the UI never surfaces the per-cell write time.
  */
 export const COHORT_MONTHLY_SELECT =
-  'store_id, first_order_month, month_since, active_customers, orders, gross_cad, net_cad';
+  'store_id, first_order_month, month_since, active_customers, orders, gross_cad, net_cad, repeat_customers';
 
 /**
  * One normalized row of the customer_cohort_monthly aggregate. CamelCase to
@@ -1170,6 +1170,12 @@ export type CohortMonthlyRow = {
   orders: number;
   grossCad: number;
   netCad: number;
+  /**
+   * A6 (2026-06-04) — distinct in-window (12mo) repeaters for the cohort,
+   * populated ONLY on the M0 row (null elsewhere, and null on rows written
+   * before the column was backfilled). The honest repeat-rate numerator.
+   */
+  repeatCustomers: number | null;
 };
 
 /**
@@ -1219,6 +1225,7 @@ export async function fetchCohortMonthlyFromPostgres(
       orders: toNumber(r.orders),
       grossCad: toNumber(r.gross_cad),
       netCad: toNumber(r.net_cad),
+      repeatCustomers: r.repeat_customers == null ? null : toNumber(r.repeat_customers),
     });
   }
   return rows;

@@ -125,6 +125,8 @@ describe('fetchCohortMonthlyFromPostgres', () => {
       orders: 130,
       grossCad: 12000.5,
       netCad: 11000,
+      // repeat_customers absent in the raw row → null (pre-backfill rows).
+      repeatCustomers: null,
     });
     // String-typed numerics coerced to numbers.
     expect(rows[1].activeCustomers).toBe(15);
