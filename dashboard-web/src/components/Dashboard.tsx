@@ -277,10 +277,23 @@ export function Dashboard() {
   // consistent snapshot (operator-reported "data not uniform" fix). This is
   // READ-ONLY (revalidate = GET refetch — never a write; SWR dedupes in-flight
   // requests), so it cannot cause double-writes; the only writers are the
-  // idempotent crons + the manual "Refresh All" button. No reload → filters,
-  // scroll, and open panels are preserved.
+  // idempotent crons + the manual "Refresh All" button.
+  //
+  // BUG #2 fix (2026-06-04): call `mutate(() => true)` with NO data argument.
+  // The previous `mutate(() => true, undefined, { revalidate: true })` passed
+  // THREE args, so SWR did NOT take its "no data → just revalidate" early path;
+  // with `populateCache` defaulting to true it synchronously ran
+  // `set({ data: undefined })` for EVERY matched key before the refetch
+  // resolved (upstream comment: "Data can be `undefined` here."). Tabs that gate
+  // a loading/empty branch on `!data` then re-rendered that branch → the mounted
+  // view (open drawer / expanded sub-view / scroll / sub-selection) unmounted and
+  // remounted → the operator was bounced back to a default screen on every tick.
+  // With no data arg (SWR's bound mutate receives < 3 args), SWR revalidates in
+  // the BACKGROUND and keeps the previous data on screen throughout the refetch.
+  // No reload, no undefined blip → filters, scroll, and open panels are preserved.
+  // (Coverage: autoRefreshKeepsView.dom.test.tsx.)
   useAutoRefresh(
-    () => { void swrMutate(() => true, undefined, { revalidate: true }); },
+    () => { void swrMutate(() => true); },
     { intervalMs: 60_000 },
   );
 
