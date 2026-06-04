@@ -1931,7 +1931,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[80px]"
                     dataColId="spend"
                     tooltip="סך ההוצאה (CAD) על הקמפיין בטווח הנבחר. מקור: API של פלטפורמת הפרסום — Meta Ads Insights / Google Ads / TikTok Marketing API, ממירים מ-USD/ILS ל-CAD ברגע ההזנה."
@@ -1945,7 +1945,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[100px]"
                     dataColId="budget"
                     tooltip="התקציב היומי שהוגדר בפלטפורמה (CAD). במצב CBO התקציב נשמר ברמת הקמפיין ולכן זהה לכל האד-סטים שבו; במצב ABO כל אד-סט מחזיק תקציב נפרד. ערך — = אין תקציב יומי מוגדר (תקציב Lifetime או לא זמין)."
@@ -1959,7 +1959,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[80px]"
                     dataColId="conversionValue"
                     tooltip="ערך ההמרות שדווח ע״י הפלטפורמה עצמה (conversion_value מ-Meta Pixel / Google Ads). זו ההצהרה של הפלטפורמה — מה ש-Pixel ראה — לא בהכרח מה שקרה בפועל ב-Shopify. השווה לעמודות ה-Shopify מימין כדי לראות פערי attribution."
@@ -2049,7 +2049,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[92px] border-e border-glass-edge"
                     dataColId="shopifyValuePlatform"
                     tooltip="ערך המכירות (CAD) שסווגו דטרמיניסטית לפלטפורמה הזו דרך source / click-id ב-Shopify (utm_source, ttclid, fbclid, gclid). רק הזמנות שאנחנו 100% בטוחים שהן מהפלטפורמה הזו — בלי הקצאה פרופורציונלית. זה מה שאפשר להוכיח."
@@ -2068,7 +2068,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[92px]"
                     dataColId="shopifyValueAllocated"
                     tooltip={'הכנסת Shopify המוקצה לקמפיין — זהו המונה של ROAS Shopify. נוסחה: revenue דטרמיניסטי (click-id) + הקצאה פרופורציונלית של הזמנות לא-מתויגות של המוצרים המשויכים. מציג 2 ספרות אחרי הנקודה כדי שאפשר יהיה לשחזר את ROAS Shopify על המסך: מוקצה ÷ הוצאה = ROAS Shopify. (זהה ל-trueRevenue — לא שונה שום חישוב.)'}
@@ -2087,7 +2087,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[78px] border-e border-glass-edge"
                     dataColId="shopifyUnitsPlatform"
                     tooltip="מספר היחידות שנמכרו ב-Shopify מהזמנות שסווגו דטרמיניסטית לפלטפורמה הזו. סופר units (line_items.quantity) — לא orders. רק הזמנות עם source / click-id ברור."
@@ -2106,7 +2106,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[92px]"
                     dataColId="shopifyValueTotal"
                     tooltip="סך ערך המכירות (CAD) ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה (כולל direct, organic, ופלטפורמות אחרות). זהו ה״מכנה״ — מסגרת הייחוס לכמה מהמכירות הגיעו דרך הקמפיין הזה."
@@ -2125,7 +2125,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[78px]"
                     dataColId="shopifyUnitsTotal"
                     tooltip="סך היחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה. ה״מכנה״ ל-יח׳ פלטפורמה ממש כמו ש-ערך סה״כ הוא המכנה ל-ערך פלטפורמה."
@@ -2144,7 +2144,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[78px]"
                     dataColId="shopifyOrdersTotal"
                     tooltip="סך ההזמנות ב-Shopify שכללו את המוצרים המשויכים בטווח הנבחר, מכל הערוצים. מוצר מרובה הזמנות נספר פעם להזמנה. הזמנה אחת עם 2 מוצרים מסוכמת פר-מוצר."
@@ -2158,7 +2158,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[72px]"
                     dataColId="conversions"
                     tooltip="מספר ההמרות (purchase events) שהפלטפורמה ייחסה לקמפיין בטווח. ב-Meta: actions.purchase, ב-Google: conversions, ב-TikTok: complete_payment. זוהי הספירה של הפלטפורמה — לא בהכרח שווה למספר ההזמנות ב-Shopify."
@@ -2172,7 +2172,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[80px]"
                     dataColId="clicks"
                     tooltip="מספר הקליקים שדיווחה הפלטפורמה על הקמפיין בטווח. עמודה זו מוסתרת כברירת מחדל — אפשר להפעיל אותה דרך תפריט ״עמודות״."
@@ -2186,7 +2186,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[90px]"
                     dataColId="impressions"
                     tooltip="מספר החשיפות (impressions) שדיווחה הפלטפורמה על הקמפיין בטווח. עמודה זו מוסתרת כברירת מחדל — אפשר להפעיל אותה דרך תפריט ״עמודות״."
@@ -2200,7 +2200,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[72px]"
                     dataColId="ctr"
                     tooltip="Click-Through Rate — מה אחוז הצופים שלחצו על המודעה. נוסחה: קליקים ÷ חשיפות × 100. בנצ׳מארק כללי: <0.5% חלש, 0.5-1% סביר, 1-2% טוב, >2% מעולה (תלוי תעשייה ופלטפורמה)."
@@ -2214,7 +2214,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[72px]"
                     dataColId="cpc"
                     tooltip="Cost Per Click — כמה עלה לך כל קליק. נוסחה: הוצאה ÷ קליקים. ב-CAD. CPC נמוך לבד לא אומר כלום — צריך גם CTR בריא וגם המרות, אחרת זה רק קליקים זולים שלא קונים."
@@ -2228,7 +2228,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[80px]"
                     dataColId="cpm"
                     tooltip="Cost Per Mille — עלות לאלף חשיפות. נוסחה: (הוצאה ÷ חשיפות) × 1000. ב-CAD. אינדיקטור לרמת התחרות בקהל היעד / איכות היצירתיים: CPM עולה משמעו או יותר תחרות או יצירתיב גרוע יותר."
@@ -2242,7 +2242,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     activeKey={sortKey}
                     dir={sortDir}
                     onClick={handleSort}
-                    align="end"
+                    align="center"
                     className="px-3 py-2 w-[72px]"
                     dataColId="cpa"
                     tooltip="Cost Per Acquisition — כמה עלתה לך כל המרה. נוסחה: הוצאה ÷ המרות. ב-CAD. בריא אם CPA קטן מהרווח הממוצע למוצר. מתבסס על ספירת ההמרות של הפלטפורמה — לא של Shopify."
@@ -2606,7 +2606,7 @@ function ColumnHeaderTh({
             variant="rich"
             title={ariaLabel ?? undefined}
             content={tooltip}
-            align="end"
+            align="center"
           >
             <Button
               type="button"

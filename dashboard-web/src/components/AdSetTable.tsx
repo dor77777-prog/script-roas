@@ -97,9 +97,9 @@ export function AdSetTable({
             <tr className="text-ink-secondary">
               <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
               <AdSetSortHeader label="שם"          col="name"        sortKey={sortKey} dir={sortDir} onClick={onSort} align="start"  />
-              <AdSetSortHeader label="הוצאה"       col="spend"       sortKey={sortKey} dir={sortDir} onClick={onSort} align="end"    />
-              <AdSetSortHeader label="תקציב יומי"  col="budget"      sortKey={sortKey} dir={sortDir} onClick={onSort} align="end"    />
-              <AdSetSortHeader label="ערך"         col="value"       sortKey={sortKey} dir={sortDir} onClick={onSort} align="end"    />
+              <AdSetSortHeader label="הוצאה"       col="spend"       sortKey={sortKey} dir={sortDir} onClick={onSort} align="center"    />
+              <AdSetSortHeader label="תקציב יומי"  col="budget"      sortKey={sortKey} dir={sortDir} onClick={onSort} align="center"    />
+              <AdSetSortHeader label="ערך"         col="value"       sortKey={sortKey} dir={sortDir} onClick={onSort} align="center"    />
               <AdSetSortHeader label="ROAS"        col="roas"        sortKey={sortKey} dir={sortDir} onClick={onSort} align="center" />
               {/* Per-ad-set deterministic attribution. Header doesn't
                   sort (the data is shape-inferred per row). Tooltip
@@ -109,7 +109,7 @@ export function AdSetTable({
                   <span>ROAS Shopify</span>
                 </HelpTooltip>
               </th>
-              <AdSetSortHeader label="המרות"       col="conversions" sortKey={sortKey} dir={sortDir} onClick={onSort} align="end"    />
+              <AdSetSortHeader label="המרות"       col="conversions" sortKey={sortKey} dir={sortDir} onClick={onSort} align="center"    />
             </tr>
           </thead>
           <tbody>
@@ -180,8 +180,8 @@ export function AdSetTable({
                   <HelpTooltip content={a.name}>
                     <td className="px-3 py-2 text-ink truncate max-w-[200px]">{a.name}</td>
                   </HelpTooltip>
-                  <td className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
-                  <td className="px-3 py-2 text-end tabular-nums">
+                  <td className="px-3 py-2 text-center tabular-nums">{formatCurrency(a.spend)}</td>
+                  <td className="px-3 py-2 text-center tabular-nums">
                     {a.adSetBudgetCad && a.adSetBudgetCad > 0 ? (
                       <span className={cn('font-medium', tight && 'text-status-warningFg')}>
                         {formatCurrency(a.adSetBudgetCad)}
@@ -190,7 +190,7 @@ export function AdSetTable({
                       <span className="text-ink-muted">—</span>
                     )}
                   </td>
-                  <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-status-greenFg font-medium')}>
+                  <td className={cn('px-3 py-2 text-center tabular-nums', a.value > a.spend && 'text-status-greenFg font-medium')}>
                     {formatCurrency(a.value)}
                   </td>
                   <td className="px-3 py-2 text-center font-semibold tabular-nums">
@@ -239,7 +239,7 @@ export function AdSetTable({
                       );
                     })()}
                   </td>
-                  <td className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
+                  <td className="px-3 py-2 text-center tabular-nums">{formatNumber(a.conversions, 0)}</td>
                 </tr>
                 </HelpTooltip>
               );

@@ -418,12 +418,12 @@ export function CampaignsTableRow({
       // lock-step regardless of order.
       const metricCells: Record<string, React.ReactNode> = {
       spend: (
-        <td data-col-id="spend" className="metric-cell px-3 py-2 text-end tabular-nums">
+        <td data-col-id="spend" className="metric-cell px-3 py-2 text-center tabular-nums">
           <Money value={a.spend} prefix="none" locale="he-IL" compactAbove={100_000} />
         </td>
       ),
       budget: (
-        <td data-col-id="budget" className="metric-cell px-3 py-2 text-end tabular-nums">
+        <td data-col-id="budget" className="metric-cell px-3 py-2 text-center tabular-nums">
         {(() => {
           const budget = mode === 'campaign' ? a.campaignBudgetCad : a.adSetBudgetCad;
           if (!budget || budget <= 0) {
@@ -441,7 +441,7 @@ export function CampaignsTableRow({
         </td>
       ),
       conversionValue: (
-        <td data-col-id="conversionValue" className={cn('metric-cell px-3 py-2 text-end tabular-nums font-medium', a.conversionValue > a.spend && 'text-status-greenFg')}>
+        <td data-col-id="conversionValue" className={cn('metric-cell px-3 py-2 text-center tabular-nums font-medium', a.conversionValue > a.spend && 'text-status-greenFg')}>
         <Money value={a.conversionValue} prefix="none" locale="he-IL" compactAbove={100_000} />
         </td>
       ),
@@ -696,7 +696,7 @@ export function CampaignsTableRow({
       // useCampaignTrueRevenue.ts (deterministicRevenue/Units +
       // productTotals).
       shopifyValuePlatform: (
-      <td data-col-id="shopifyValuePlatform" className="metric-cell px-3 py-2 text-end tabular-nums border-e border-glass-edge/40">
+      <td data-col-id="shopifyValuePlatform" className="metric-cell px-3 py-2 text-center tabular-nums border-e border-glass-edge/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -731,7 +731,7 @@ export function CampaignsTableRow({
       // changed here — info.trueRevenue is read straight from the existing
       // allocator (useCampaignTrueRevenue.ts:trueRevenue = alloc.revenue).
       shopifyValueAllocated: (
-      <td data-col-id="shopifyValueAllocated" className="metric-cell px-3 py-2 text-end tabular-nums">
+      <td data-col-id="shopifyValueAllocated" className="metric-cell px-3 py-2 text-center tabular-nums">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -755,7 +755,7 @@ export function CampaignsTableRow({
       ),
       // [2] יח' Shopify · פלטפורמה — deterministic units
       shopifyUnitsPlatform: (
-      <td data-col-id="shopifyUnitsPlatform" className="px-3 py-2 text-end tabular-nums border-e border-glass-edge/40">
+      <td data-col-id="shopifyUnitsPlatform" className="px-3 py-2 text-center tabular-nums border-e border-glass-edge/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -790,7 +790,7 @@ export function CampaignsTableRow({
       ),
       // [3] ערך Shopify · סה"כ — total revenue across all platforms
       shopifyValueTotal: (
-      <td data-col-id="shopifyValueTotal" className="metric-cell px-3 py-2 text-end tabular-nums">
+      <td data-col-id="shopifyValueTotal" className="metric-cell px-3 py-2 text-center tabular-nums">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -809,7 +809,7 @@ export function CampaignsTableRow({
       ),
       // [4] יח' Shopify · סה"כ — total units across all platforms
       shopifyUnitsTotal: (
-      <td data-col-id="shopifyUnitsTotal" className="px-3 py-2 text-end tabular-nums">
+      <td data-col-id="shopifyUnitsTotal" className="px-3 py-2 text-center tabular-nums">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -835,7 +835,7 @@ export function CampaignsTableRow({
       // "product-orders" — same semantics as Shopify's own per-product
       // report. Hidden when no mapping exists.
       shopifyOrdersTotal: (
-      <td data-col-id="shopifyOrdersTotal" className="px-3 py-2 text-end tabular-nums">
+      <td data-col-id="shopifyOrdersTotal" className="px-3 py-2 text-center tabular-nums">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -854,39 +854,39 @@ export function CampaignsTableRow({
       </td>
       ),
       conversions: (
-        <td data-col-id="conversions" className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
+        <td data-col-id="conversions" className="px-3 py-2 text-center tabular-nums">{formatNumber(a.conversions, 0)}</td>
       ),
       // Column-audit 2026-06-01 (FIX 3) — clicks + impressions raw-volume
       // columns. Aggregated at campaignsAggregator.ts (a.clicks / a.impressions)
       // but had no column. HIDDEN by default (DEFAULT_HIDDEN_COLUMN_IDS) so the
       // table doesn't get wider unless the operator enables them.
       clicks: (
-        <td data-col-id="clicks" className="px-3 py-2 text-end tabular-nums text-ink-secondary">{formatNumber(a.clicks, 0)}</td>
+        <td data-col-id="clicks" className="px-3 py-2 text-center tabular-nums text-ink-secondary">{formatNumber(a.clicks, 0)}</td>
       ),
       impressions: (
-        <td data-col-id="impressions" className="px-3 py-2 text-end tabular-nums text-ink-secondary">{formatNumber(a.impressions, 0)}</td>
+        <td data-col-id="impressions" className="px-3 py-2 text-center tabular-nums text-ink-secondary">{formatNumber(a.impressions, 0)}</td>
       ),
       ctr: (
-        <td data-col-id="ctr" className="px-3 py-2 text-end tabular-nums text-ink-secondary">
+        <td data-col-id="ctr" className="px-3 py-2 text-center tabular-nums text-ink-secondary">
           {a.impressions > 0 ? `${(ctr * 100).toFixed(2)}%` : '—'}
         </td>
       ),
       cpc: (
-        <td data-col-id="cpc" className="metric-cell px-3 py-2 text-end tabular-nums text-ink-secondary">
+        <td data-col-id="cpc" className="metric-cell px-3 py-2 text-center tabular-nums text-ink-secondary">
           {a.clicks > 0 ? (
             <Money value={cpc} prefix="none" locale="he-IL" decimals={2} compactAbove={100_000} />
           ) : '—'}
         </td>
       ),
       cpm: (
-        <td data-col-id="cpm" className="metric-cell px-3 py-2 text-end tabular-nums text-ink-secondary">
+        <td data-col-id="cpm" className="metric-cell px-3 py-2 text-center tabular-nums text-ink-secondary">
           {a.impressions > 0 ? (
             <Money value={cpm} prefix="none" locale="he-IL" decimals={2} compactAbove={100_000} />
           ) : '—'}
         </td>
       ),
       cpa: (
-        <td data-col-id="cpa" className="metric-cell px-3 py-2 text-end tabular-nums text-ink-secondary">
+        <td data-col-id="cpa" className="metric-cell px-3 py-2 text-center tabular-nums text-ink-secondary">
           {a.conversions > 0 ? (
             <Money value={cpa} prefix="none" locale="he-IL" decimals={2} compactAbove={100_000} />
           ) : '—'}

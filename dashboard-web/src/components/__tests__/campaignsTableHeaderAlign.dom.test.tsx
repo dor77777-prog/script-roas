@@ -1,19 +1,15 @@
 // @vitest-environment jsdom
 //
-// BUG #1 — numeric column headers mis-align with their values.
+// Numeric column header↔value alignment (operator request 2026-06-05).
 //
-// Each SortHeader rendered `<span>{label}</span>` THEN the sort arrow. Even the
-// invisible inactive ArrowUpDown (opacity-0) still occupies layout, so with the
-// Button's justify-end (RTL) the arrow sat at the flush edge and pushed the
-// header LABEL ~12-16px inboard of the text-end numeric body cells.
-//
-// Fix: for align='end' columns render the sort arrow BEFORE the label, so the
-// label becomes the flush (leftmost under RTL) element and lines up with the
-// end-aligned numbers. align='start'/'center' keep label-first.
+// The earlier end-alignment left the (short) numbers clustered at the cell's
+// flush edge, not under the header — "leaning". Per the operator the data
+// columns are now CENTER-aligned (header label centered + value centered), so
+// each value sits directly under the center of its column header. Only the
+// numeric/data columns center; the campaign-name column stays start-aligned.
 //
 // We render the FULL CampaignsTable (SWR fetch stubbed) so the assertions hit
-// the real painted <thead>, then inspect DOM child order inside each header's
-// sort Button.
+// the real painted <thead> + a body <td>, and check the center classes.
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, cleanup, waitFor } from '@testing-library/react';
@@ -94,45 +90,32 @@ function sortButton(cell: HTMLElement): HTMLElement {
   return btn as HTMLElement;
 }
 
-describe('CampaignsTable header alignment — sort arrow before label for numeric columns (BUG #1)', () => {
-  it('an align="end" numeric column (conversions) renders the sort arrow BEFORE the label span', async () => {
+describe('CampaignsTable — numeric columns are CENTER-aligned (value under the column header)', () => {
+  it('a numeric column (conversions) is center-aligned in BOTH the header and the body cell', async () => {
     installFetchMock();
     const { container } = render(<CampaignsTable {...PROPS} />);
     await waitFor(() => {
       expect(container.querySelector('[data-col-id="conversions"]')).not.toBeNull();
     });
-    const cell = container.querySelector('[data-col-id="conversions"]') as HTMLElement;
-    const btn = sortButton(cell);
-    const svg = btn.querySelector('svg') as SVGElement | null;
-    const span = btn.querySelector('span') as HTMLElement | null;
-    expect(svg, 'sort arrow svg should exist').not.toBeNull();
-    expect(span, 'label span should exist').not.toBeNull();
-    // The label span is the LAST child → it comes AFTER the arrow svg.
-    const kids = Array.from(btn.children);
-    expect(kids[kids.length - 1]).toBe(span);
-    expect(
-      svg!.compareDocumentPosition(span!) & Node.DOCUMENT_POSITION_FOLLOWING,
-      'label span must follow the sort arrow svg in DOM order',
-    ).toBeTruthy();
+    const th = container.querySelector('th[data-col-id="conversions"]') as HTMLElement;
+    const td = container.querySelector('td[data-col-id="conversions"]') as HTMLElement;
+    expect(th, 'conversions header cell').not.toBeNull();
+    expect(td, 'conversions body cell').not.toBeNull();
+    // Header th + its sort button are centered → the label sits in the column center.
+    expect(th.className).toContain('text-center');
+    expect(sortButton(th).className).toContain('justify-center');
+    // Body value is centered → it sits directly UNDER the centered header (operator
+    // request 2026-06-05: align numeric values to the center of each column).
+    expect(td.className).toContain('text-center');
   });
 
-  it('an align="start" column (campaign name) keeps the label BEFORE the sort arrow', async () => {
+  it('the campaign-name column stays start-aligned (only numeric/data columns center)', async () => {
     installFetchMock();
     const { container } = render(<CampaignsTable {...PROPS} />);
     await waitFor(() => {
       expect(container.querySelector('[data-col-id="campaignName"]')).not.toBeNull();
     });
-    const cell = container.querySelector('[data-col-id="campaignName"]') as HTMLElement;
-    const btn = sortButton(cell);
-    const svg = btn.querySelector('svg') as SVGElement | null;
-    const span = btn.querySelector('span') as HTMLElement | null;
-    expect(svg, 'sort arrow svg should exist').not.toBeNull();
-    expect(span, 'label span should exist').not.toBeNull();
-    // The label span is the FIRST child → it comes BEFORE the arrow svg.
-    expect(btn.children[0]).toBe(span);
-    expect(
-      span!.compareDocumentPosition(svg!) & Node.DOCUMENT_POSITION_FOLLOWING,
-      'sort arrow svg must follow the label span in DOM order',
-    ).toBeTruthy();
+    const th = container.querySelector('th[data-col-id="campaignName"]') as HTMLElement;
+    expect(th.className).toContain('text-start');
   });
 });
