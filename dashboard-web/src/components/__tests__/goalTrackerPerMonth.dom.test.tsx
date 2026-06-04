@@ -145,6 +145,28 @@ describe('<GoalTracker> per-month + range-aware (T3)', () => {
     expect(screen.getByText('קבע יעד')).toBeInTheDocument();
   });
 
+  it('CURRENT month → renders the net run-rate panel (projected net / spend / ROAS)', () => {
+    // profit-net-runrate-surfaced (Wave 1): forecastMonthEnd already computes
+    // projectedNet/Spend/Roas; surface them so a green revenue bar can't hide
+    // net sliding to break-even.
+    const cur = todayInIsrael().slice(0, 7);
+    setGoals({ [cur]: 100000 });
+    swrRows = [row({ revenue: 4000, totalSpend: 1000, fbSpend: 1000, hasCogs: true, cogs: 1000, grossProfit: 3000, netProfit: 2000 })];
+    render(<GoalTracker data={dashboardData(swrRows)} range={monthRange(cur)} />);
+    const panel = screen.getByTestId('goal-runrate');
+    expect(panel).toBeInTheDocument();
+    expect(panel.textContent).toContain('רווח-נטו צפוי');
+    expect(panel.textContent).toMatch(/×/); // projected ROAS rendered as "N.N×"
+  });
+
+  it('PAST complete month → NO run-rate panel (forecast chrome hidden)', () => {
+    const pm = pastMonth();
+    setGoals({ [pm]: 100000 });
+    swrRows = [row({ date: `${pm}-10`, revenue: 120000 })];
+    render(<GoalTracker data={dashboardData(swrRows)} range={monthRange(pm)} />);
+    expect(screen.queryByTestId('goal-runrate')).not.toBeInTheDocument();
+  });
+
   it('the ‹ › stepper changes the viewed month label', () => {
     const cur = todayInIsrael().slice(0, 7);
     setGoals({ [cur]: 100000 });

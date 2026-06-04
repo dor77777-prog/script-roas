@@ -618,6 +618,47 @@ export function GoalTracker({ data, range }: Props) {
             יעד יומי: {(expectedPct * 100).toFixed(0)}%
           </span>
         </div>
+
+        {/* profit-net-runrate-surfaced (Wave 1, 2026-06-04) — the goal bar is
+            revenue-only; surface the end-of-month PROFIT run-rate (already
+            computed in forecastMonthEnd) so a green revenue bar can't hide net
+            sliding toward break-even. Net is after COGS + fees + fixed costs. */}
+        {!isFuture && (
+          <div
+            data-testid="goal-runrate"
+            className="mt-3 rounded-xl border border-dashed border-glass-edge bg-glass-2 p-3"
+          >
+            <div className="text-[11px] font-bold text-ink mb-2 inline-flex items-center gap-1.5">
+              <TrendingUp size={12} /> בקצב הנוכחי · סוף החודש
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <div className="text-[10px] text-ink-muted">רווח-נטו צפוי</div>
+                <div className={cn(
+                  'text-base font-extrabold tabular-nums',
+                  forecast.projectedNet >= 0 ? 'text-status-greenFg' : 'text-status-redFg',
+                )}>
+                  <Money value={forecast.projectedNet} prefix="none" locale="he-IL" compactAbove={1_000_000} />
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] text-ink-muted">הוצאת-פרסום צפויה</div>
+                <div className="text-base font-extrabold tabular-nums text-ink-secondary">
+                  <Money value={forecast.projectedSpend} prefix="none" locale="he-IL" compactAbove={1_000_000} />
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] text-ink-muted">ROAS צפוי</div>
+                <div className="text-base font-extrabold tabular-nums text-ink">
+                  {forecast.projectedRoas.toFixed(1)}×
+                </div>
+              </div>
+            </div>
+            <div className="mt-1.5 text-[10px] text-ink-muted">
+              רווח-נטו אחרי עלויות-מוצר, עמלות והוצאות-קבועות.
+            </div>
+          </div>
+        )}
       </div>
     </Card>
   );
