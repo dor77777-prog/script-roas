@@ -1,3 +1,5 @@
+> ⚠️ **PARTIALLY DESCOPED — operator 2026-06-04.** BUILD ONLY the 3 IN-APP features: `native-prioritized-action-list`, `campaign-died-detection`, `creative-ad-fatigue-signal` (surface them in the in-app insights board, NOT WhatsApp). **Do NOT build** the WhatsApp-push features: `push-insights-digest`, `break-even-flag-digest`, `day-over-day-deltas-digest`, `goal-pacing-alert-push`. The EXISTING WhatsApp alerts (token-failure + the `roas_daily_summary` at 12:00/18:00/00:10 IL) stay UNCHANGED — add nothing to them.
+
 # Alerts & Action Digest (Push the Intelligence) Implementation Plan
 > For agentic workers: REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (- [ ]) syntax for tracking.
 

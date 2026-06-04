@@ -1,3 +1,5 @@
+> ⚠️ **PARTIALLY DESCOPED — operator 2026-06-04.** BUILD `unknown-bucket-decomposition` + `organic-baseline-incrementality-proxy`. **Do NOT build** `survey-hdyhau-rollup` (post-purchase survey) — out of scope.
+
 # Attribution Depth (within the CAPI-safe ceiling) Implementation Plan
 > For agentic workers: REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (- [ ]) syntax for tracking.
 

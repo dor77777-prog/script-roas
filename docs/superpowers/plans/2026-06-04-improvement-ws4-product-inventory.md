@@ -1,3 +1,5 @@
+> 🚫 **DESCOPED — operator 2026-06-04. Do NOT build this workstream.** All 7 product/inventory features are out of scope for now. Plan kept for reference only if revisited.
+
 # Product & Inventory Profit Implementation Plan
 > For agentic workers: REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (- [ ]) syntax for tracking.
 

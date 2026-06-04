@@ -4,6 +4,27 @@
 
 This is the program-level roadmap that ties the **7 workstream plans** together. Each workstream plan is the implementation contract (real files, real functions, failing-test-first, per-task commits). This document sequences the **39 vetted gaps** across workstreams into **execution waves** and names the single highest-leverage next move.
 
+---
+
+## ⚠️ SCOPE UPDATE — operator-approved 2026-06-04 (SUPERSEDES the table + waves below)
+
+**APPROVED — 28 improvements across 6 workstreams:** WS1 (4) · WS2 (4) · WS3 **in-app only** (3: `native-prioritized-action-list`, `campaign-died-detection`, `creative-ad-fatigue-signal` — surfaced in the in-app insights board, NOT pushed) · WS5 (7) · WS6 (8) · WS7 **partial** (2: `unknown-bucket-decomposition`, `organic-baseline-incrementality-proxy`).
+
+**DESCOPED — do NOT build:**
+- **WS3 WhatsApp push:** `push-insights-digest`, `break-even-flag-digest`, `day-over-day-deltas-digest`, `goal-pacing-alert-push`. → The **existing** WhatsApp alerts stay UNCHANGED: token-failure/auth alerts + the `roas_daily_summary` daily summary at 12:00/18:00/00:10 IL. We simply add nothing new to WhatsApp.
+- **WS4 (product-inventory):** ALL 7 items.
+- **WS7:** `survey-hdyhau-rollup` (post-purchase survey).
+
+**Revised waves (cross-workstream):**
+- **Wave 1 — quick wins:** `ux-home-default-today` (operator hard-req, FIRST) · `profit-net-runrate-surfaced` · `DQ-2` FX-failure alert · `ux-table-search` · `ux-csv-export`. *(break-even/deltas WhatsApp REMOVED.)*
+- **Wave 2 — channel truth + in-app intelligence:** WS2 (`channel-nc-roas-split` first — highest leverage · `per-channel-net-profit` · `channel-overcount-delta`; `channel-payback-curve` deferred) + WS3 in-app (`native-prioritized-action-list`, `campaign-died-detection`, `creative-ad-fatigue-signal`).
+- **Wave 3 — data trust + UX:** WS5 (`DQ-1`,`DQ-3`,`DQ-4`,`DQ-5`,`DQ-6`,`DQ-7`) + WS6 (`ux-period-compare`, `ux-saved-views`, `ux-annotations-on-trends`, `ux-store-compare-grid`, `ux-command-palette-actions`).
+- **Wave 4 — attribution depth:** WS7 (`unknown-bucket-decomposition`, `organic-baseline-incrementality-proxy`).
+
+Total approved ≈ 28 items. The detailed workstream plans below still contain the descoped features — IGNORE the DESCOPED ones (their plan files carry a banner). Everything else stands.
+
+---
+
 The 7 workstream plans:
 
 | WS | Plan file | Theme |
