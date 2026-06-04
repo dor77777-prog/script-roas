@@ -24,7 +24,7 @@
 
 import useSWR from 'swr';
 import { fetchJsonOrNull } from '@/lib/fetchJson';
-import type { ReconcileResponse } from '@/app/api/operator/reconcile/route';
+import type { ReconcileResponse } from '@/app/api/reconcile/route';
 import type { Violation } from '@/lib/audit/reconcile';
 import {
   TableBase,
@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/TableBase';
 import { Money } from '@/components/ui/Money';
 
-const ENDPOINT = '/api/operator/reconcile';
+const ENDPOINT = '/api/reconcile';
 
 // ---------------------------------------------------------------------------
 // Violation → table-column parser.

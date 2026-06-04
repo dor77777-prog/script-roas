@@ -50,7 +50,7 @@ import {
   TableCell,
 } from '@/components/ui/TableBase';
 
-const ENDPOINT = '/api/operator/tiktok-coverage';
+const ENDPOINT = '/api/tiktok-coverage';
 
 export interface TikTokCoverageResp {
   /** Account-level total spend (CAD) for the period — data_daily TikTok. */

@@ -19,7 +19,7 @@ import { SWRConfig } from 'swr';
 vi.mock('@/lib/hooks/useIsMobile', () => ({ useIsMobile: () => false }));
 
 import { ReconcilePanel } from '@/components/operator/ReconcilePanel';
-import type { ReconcileResponse } from '@/app/api/operator/reconcile/route';
+import type { ReconcileResponse } from '@/app/api/reconcile/route';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 

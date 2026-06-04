@@ -16,7 +16,7 @@ import { fetchJsonOrNull } from '@/lib/fetchJson';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
-const KEY = '/api/operator/reconcile';
+const KEY = '/api/reconcile';
 
 export interface ReconcileViolation {
   check: string;
