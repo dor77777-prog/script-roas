@@ -119,10 +119,12 @@ export function useDashboardRefresh(): RefreshState {
         );
       }
 
-      // 3. Mutate every SWR cache entry so each tab re-fetches fresh data.
-      //    The undefined predicate triggers ALL keys.
+      // 3. Revalidate every SWR cache entry so each tab re-fetches fresh data.
+      //    Single-arg mutate (predicate only) = background revalidate that KEEPS
+      //    the previous data on screen — no undefined blip, so the operator's
+      //    current view / scroll / open panels survive the refresh (2026-06-05).
       if (!signal.aborted) {
-        await mutate(() => true, undefined, { revalidate: true });
+        await mutate(() => true);
       }
     } catch (e) {
       // sync-now POST itself can throw on abort — that's expected during

@@ -46,8 +46,11 @@ describe('<OperatorRefreshButton>', () => {
     expect((predicate as (k: string) => boolean)('/api/operator/freshness')).toBe(true);
     expect((predicate as (k: string) => boolean)('/api/operator/jobs?limit=50')).toBe(true);
     expect((predicate as (k: string) => boolean)('anything')).toBe(true);
+    // Single-arg mutate (predicate only, no data payload / no opts) =
+    // background revalidate that KEEPS previous data — no undefined blip, so the
+    // operator's view/scroll survive the refresh (2026-06-05 view-reset fix).
     expect(payload).toBeUndefined();
-    expect(opts).toEqual({ revalidate: true });
+    expect(opts).toBeUndefined();
   });
 
   it('uses the lucide RotateCw icon as the affordance', () => {

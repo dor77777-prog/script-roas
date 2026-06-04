@@ -40,9 +40,11 @@ export function OperatorRefreshButton() {
     setBusy(true);
     startTransition(() => {});
     try {
-      // Revalidate every key in the SWR cache. `mutate` accepts a predicate
-      // form: `(key) => boolean`. Returning `true` matches all keys.
-      await mutate(() => true, undefined, { revalidate: true });
+      // Revalidate every key in the SWR cache. Single-arg mutate (predicate
+      // only, `(key) => boolean` matching all keys) = background revalidate that
+      // KEEPS previous data on screen — no undefined blip, so the view/scroll
+      // survive the refresh (2026-06-05, same fix as the auto-refresh).
+      await mutate(() => true);
     } finally {
       setBusy(false);
     }
