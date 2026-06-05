@@ -16,9 +16,8 @@
  *   under a campaign, so we carry the PARENT campaignId — the drawer + link
  *   resolve at the campaign level.
  *
- * The frequency leg of fatigue detection (flagging on rising impression
- * frequency) is intentionally OUT of this base rule and deferred; `freqNote`
- * in the `why` copy is therefore the empty string here.
+ * `freqNote` is populated when reach data is present on both halves
+ * (Meta/TikTok). It appends a relative frequency-trend sentence to `detail`.
  *
  * Thresholds / gating (all CONJUNCTIONS where stated):
  *   - >= 12 unique dates per ad (>= 6 per half) — else skip.
@@ -43,21 +42,21 @@ type AdGroup = {
   rows: AdRow[];
 };
 
-type HalfAgg = { impr: number; clicks: number; spend: number };
+type HalfAgg = { impr: number; clicks: number; spend: number; reach: number };
 
 function aggregateHalf(rows: AdRow[], dates: Set<string>): HalfAgg {
-  const agg: HalfAgg = { impr: 0, clicks: 0, spend: 0 };
+  const agg: HalfAgg = { impr: 0, clicks: 0, spend: 0, reach: 0 };
   for (const r of rows) {
     if (!dates.has(r.date)) continue;
     agg.impr += r.impressions;
     agg.clicks += r.clicks;
     agg.spend += r.spend;
+    agg.reach += r.reach ?? 0;
   }
   return agg;
 }
 
-export function detectAdFatigue(ads: AdRow[]): Insight[] {
-  // 1. Group by store::platform::adId, carrying the parent campaign + names.
+function groupAds(ads: AdRow[]): Map<string, AdGroup> {
   const groups = new Map<string, AdGroup>();
   for (const a of ads) {
     const key = `${a.storeId}::${a.platform}::${a.adId}`;
@@ -77,30 +76,31 @@ export function detectAdFatigue(ads: AdRow[]): Insight[] {
     }
     g.rows.push(a);
   }
+  return groups;
+}
 
+/** Split an ad's rows into prior/recent half-aggregates, or null if too few
+ *  unique dates (>=12 total, >=6 per half). Shared by both fatigue detectors. */
+function splitHalves(rows: AdRow[]): { prior: HalfAgg; recent: HalfAgg } | null {
+  const uniqueDates = Array.from(new Set(rows.map((r) => r.date))).sort();
+  if (uniqueDates.length < 12) return null;
+  const midIdx = Math.floor(uniqueDates.length / 2);
+  const priorDates = uniqueDates.slice(0, midIdx);
+  const recentDates = uniqueDates.slice(midIdx);
+  if (priorDates.length < 6 || recentDates.length < 6) return null;
+  return {
+    prior: aggregateHalf(rows, new Set(priorDates)),
+    recent: aggregateHalf(rows, new Set(recentDates)),
+  };
+}
+
+export function detectAdFatigue(ads: AdRow[]): Insight[] {
   const insights: Insight[] = [];
-
-  for (const g of groups.values()) {
-    // 2. Sorted UNIQUE dates. Need >= 12 (>= 6 per half).
-    const uniqueDates = Array.from(new Set(g.rows.map((r) => r.date))).sort();
-    if (uniqueDates.length < 12) continue;
-
-    const midIdx = Math.floor(uniqueDates.length / 2);
-    const priorDates = uniqueDates.slice(0, midIdx);
-    const recentDates = uniqueDates.slice(midIdx);
-    if (priorDates.length < 6 || recentDates.length < 6) continue;
-
-    const priorSet = new Set(priorDates);
-    const recentSet = new Set(recentDates);
-
-    // 3. Aggregate each half across its dates.
-    const prior = aggregateHalf(g.rows, priorSet);
-    const recent = aggregateHalf(g.rows, recentSet);
-
-    // 4. Noise floor.
+  for (const g of groupAds(ads).values()) {
+    const halves = splitHalves(g.rows);
+    if (!halves) continue;
+    const { prior, recent } = halves;
     if (prior.impr + recent.impr < 5000) continue;
-
-    // 5. Divide-by-zero guard.
     if (prior.impr <= 0 || recent.impr <= 0) continue;
     const priorCtr = prior.clicks / prior.impr;
     const recentCtr = recent.clicks / recent.impr;
@@ -108,17 +108,24 @@ export function detectAdFatigue(ads: AdRow[]): Insight[] {
     const recentCpm = (recent.spend / recent.impr) * 1000;
     if (priorCtr <= 0 || priorCpm <= 0) continue;
 
-    // 6. Conjunction.
     const ctrFatigued = recentCtr <= 0.7 * priorCtr;
     const cpmRising = recentCpm >= 1.2 * priorCpm;
     if (!ctrFatigued || !cpmRising) continue;
 
-    // 7. Magnitudes.
     const ctrDropPct = Math.round((1 - recentCtr / priorCtr) * 100);
     const cpmRisePct = Math.round((recentCpm / priorCpm - 1) * 100);
 
-    // 8. Emit.
-    const freqNote = '';
+    // Frequency note — populated only when reach is present on both halves
+    // (Meta/TikTok). Relative trend, never an absolute weekly-frequency claim.
+    let freqNote = '';
+    if (prior.reach > 0 && recent.reach > 0) {
+      const priorFreq = prior.impr / prior.reach;
+      const recentFreq = recent.impr / recent.reach;
+      if (priorFreq > 0 && recentFreq > priorFreq) {
+        freqNote = ` התדירות עלתה ${Math.round((recentFreq / priorFreq - 1) * 100)}%.`;
+      }
+    }
+
     insights.push({
       id: `fatigue-${g.adId}`,
       severity: 'opportunity',
@@ -137,6 +144,5 @@ export function detectAdFatigue(ads: AdRow[]): Insight[] {
       storeName: g.storeName,
     });
   }
-
   return insights;
 }
