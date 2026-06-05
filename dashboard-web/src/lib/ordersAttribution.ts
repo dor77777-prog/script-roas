@@ -77,6 +77,9 @@ export type OrderAttributionRow = {
   firstUtmId: string | null;
   firstUtmTerm: string | null;
   firstSeenAt: string | null;
+  /** תשלומים — raw primary Shopify payment gateway name (credit/paypal/other
+   *  via categorizePaymentGateway). NULL = not backfilled / order lists none. */
+  paymentGateway: string | null;
 };
 
 /**

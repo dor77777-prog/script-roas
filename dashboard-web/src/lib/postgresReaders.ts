@@ -75,7 +75,7 @@ export const ORDERS_ATTRIBUTION_SELECT =
   'first_touch_source, first_fbclid_present, first_gclid_present, ' +
   'first_ttclid_present, first_utm_source, first_utm_medium, ' +
   'first_utm_campaign, first_utm_content, first_utm_id, ' +
-  'first_utm_term, first_seen_at';
+  'first_utm_term, first_seen_at, payment_gateway';
 
 /**
  * Name-preference rule for the Campaigns/Ads readers (2026-06-05).
@@ -1283,6 +1283,8 @@ export async function fetchOrdersAttributionFromPostgres(
         r.first_utm_term == null ? null : String(r.first_utm_term).trim() || null,
       firstSeenAt:
         r.first_seen_at == null ? null : String(r.first_seen_at).trim() || null,
+      paymentGateway:
+        r.payment_gateway == null ? null : String(r.payment_gateway).trim() || null,
     });
   }
   return rows;

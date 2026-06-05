@@ -158,6 +158,7 @@ function makeOrder(overrides: Partial<OrderAttributionRow>): OrderAttributionRow
     firstUtmId: null,
     firstUtmTerm: null,
     firstSeenAt: null,
+    paymentGateway: null,
     ...overrides,
   };
 }

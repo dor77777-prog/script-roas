@@ -18,6 +18,7 @@ function row(overrides: Partial<OrderAttributionRow>): OrderAttributionRow {
     firstTtclidPresent: false, firstUtmSource: null, firstUtmMedium: null,
     firstUtmCampaign: null, firstUtmContent: null, firstUtmId: null,
     firstUtmTerm: null, firstSeenAt: null,
+    paymentGateway: null,
     ...overrides,
   };
 }

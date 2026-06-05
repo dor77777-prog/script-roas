@@ -186,6 +186,7 @@ function order(date: string, totalCad: number): OrderAttributionRow {
     firstUtmId: null,
     firstUtmTerm: null,
     firstSeenAt: null,
+    paymentGateway: null,
   };
 }
 

@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WS7 · פירוק הבלתי-מזוהה — מוקאפ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Rubik:wght@400;500;600;700;800&family=Geist+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* MOCKUP-ONLY token mirror — EXACT hex from dashboard-web/src/app/globals.css. */
+:root{
+  --canvas-1:#0d0f1e; --canvas-2:#0a0c18;
+  --glass-1:#171a2e; --glass-2:#1d2138; --glass-3:#20243a;
+  --glass-edge:rgba(255,255,255,0.08); --glass-edge-hot:rgba(124,108,255,0.5);
+  --surface-sunken:#191d31;
+  --text:#eef1ff; --text-2:#b3b9d8; --text-muted:#8c96ba; --text-subtle:#8c93bf;
+  --status-red:#ef4d5b; --status-red-bg:rgba(239,77,91,0.18); --status-red-fg:#ff9aa8;
+  --status-warning:#ef9331; --status-warning-bg:rgba(239,147,49,0.16); --status-warning-fg:#f7c897;
+  --status-green:#0fb37a; --status-green-bg:rgba(15,179,122,0.16); --status-green-fg:#5cf0c3;
+  --status-blue:#3b82f6; --status-blue-bg:rgba(59,130,246,0.18); --status-blue-fg:#8bbcff;
+  --accent:#7c6cff; --accent-link:#a99cff; --accent-bg:rgba(124,108,255,0.12); --accent-soft:rgba(124,108,255,0.16); --accent-fg:#fff; --accent-btn:#6354e6;
+  --pf-meta:#1877f2; --pf-google:#f4a200; --pf-tiktok:#ff2e7e;
+  --shadow-glass:0 1px 2px rgba(0,0,0,0.35),0 12px 32px rgba(0,0,0,0.42);
+  --radius-card:1.125rem; --radius-chip:0.6875rem; --radius-pill:9999px; --radius-control:0.625rem;
+}
+[data-theme="light"]{
+  --canvas-1:#edf0f8; --canvas-2:#f4f6fc;
+  --glass-1:#ffffff; --glass-2:#f6f7fb; --glass-3:#eef1f8;
+  --glass-edge:rgba(22,26,48,0.08); --glass-edge-hot:rgba(14,165,183,0.4);
+  --surface-sunken:#f1f3f9;
+  --text:#171a2b; --text-2:#565d78; --text-muted:#666b84; --text-subtle:#696b7d;
+  --status-red:#ef4d5b; --status-red-bg:#ffe9ec; --status-red-fg:#c62333;
+  --status-warning:#ef9331; --status-warning-bg:#fbe6d0; --status-warning-fg:#8e4f0b;
+  --status-green:#0fb37a; --status-green-bg:#effaf5; --status-green-fg:#00734e;
+  --status-blue:#3b82f6; --status-blue-bg:#e9f1ff; --status-blue-fg:#1f5fdb;
+  --accent:#0ea5b7; --accent-link:#0c8090; --accent-bg:rgba(14,165,183,0.10); --accent-soft:#def5f7; --accent-fg:#fff; --accent-btn:#0c8090;
+  --shadow-glass:0 1px 2px rgba(22,26,48,0.06),0 12px 28px rgba(22,26,48,0.10);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background-color:var(--canvas-1)}
+body{color:var(--text); font-family:'Rubik','Heebo',system-ui,sans-serif; background:linear-gradient(180deg,var(--canvas-1),var(--canvas-2)); min-height:100vh; padding-bottom:80px; -webkit-font-smoothing:antialiased;}
+.tnum{font-variant-numeric:tabular-nums lining-nums; white-space:nowrap}
+.ltr{direction:ltr; unicode-bidi:isolate}
+.topbar{position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 20px; backdrop-filter:blur(8px); background:color-mix(in srgb,var(--canvas-1) 80%,transparent); border-bottom:1px solid var(--glass-edge);}
+.topbar h1{font-size:15px; font-weight:800; margin:0}
+.topbar .sub{color:var(--text-muted); font-size:12px; font-weight:500}
+.toggle{display:inline-flex; align-items:center; gap:7px; cursor:pointer; border:1px solid var(--glass-edge); background:var(--glass-2); color:var(--text); border-radius:var(--radius-pill); padding:7px 14px; font:inherit; font-size:13px; font-weight:600;}
+.wrap{max-width:900px; margin:0 auto; padding:22px 16px 0}
+.sec-h{display:flex; align-items:center; gap:9px; margin:26px 2px 12px}
+.sec-h .n{width:22px; height:22px; border-radius:7px; display:grid; place-items:center; font-size:11px; font-weight:800; background:var(--accent-bg); color:var(--accent-link); flex:none}
+.sec-h h2{font-size:14px; font-weight:800; margin:0}
+.sec-h .id{font-size:11px; font-weight:700; color:var(--text-muted); background:var(--surface-sunken); border:1px solid var(--glass-edge); border-radius:var(--radius-chip); padding:1px 7px; font-family:'Geist Mono',monospace}
+.card{background:var(--glass-1); border:1px solid var(--glass-edge); border-radius:var(--radius-card); box-shadow:var(--shadow-glass); padding:15px 16px; margin-bottom:10px}
+.note{color:var(--text-subtle); font-size:11.5px; line-height:1.6; margin:8px 2px 0}
+.row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.lbl{font-size:11px; color:var(--text-muted); font-weight:600}
+.statelabel{font-size:11px; font-weight:700; color:var(--text-muted); margin:18px 2px 8px; text-transform:uppercase; letter-spacing:.4px}
+
+/* hero strip context (where the chip lives) */
+.herostrip{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:6px}
+.cell{background:var(--glass-2); border:1px solid var(--glass-edge); border-radius:14px; padding:11px 12px}
+.kpi-label{font-size:11px; color:var(--text-muted); font-weight:600; margin-bottom:3px}
+.kpi-val{font-size:20px; font-weight:800; letter-spacing:-.3px}
+
+/* attribution-coverage chip */
+.cov-chip{display:inline-flex; align-items:center; gap:8px; cursor:pointer; border:1px solid var(--glass-edge); background:var(--surface-sunken); color:var(--text); border-radius:var(--radius-pill); padding:7px 13px; font:inherit; font-size:12.5px; font-weight:600; transition:border-color .15s}
+.cov-chip:hover{border-color:var(--glass-edge-hot)}
+.cov-chip .dot-cov{width:9px; height:9px; border-radius:var(--radius-pill); background:var(--status-warning); flex:none}
+.cov-chip .pct{font-family:'Geist Mono',monospace; font-weight:700}
+.cov-chip .caret{color:var(--text-muted); font-size:11px}
+.cov-chip.open{border-color:var(--accent); background:var(--accent-bg)}
+
+/* mini coverage bar */
+.covbar{display:flex; height:8px; border-radius:var(--radius-pill); overflow:hidden; border:1px solid var(--glass-edge); margin-top:9px}
+.covbar i{display:block; height:100%}
+
+/* unknown-bucket panel */
+.ubp{background:var(--glass-2); border:1px solid var(--glass-edge); border-radius:var(--radius-card); padding:0; margin-top:10px; overflow:hidden}
+.ubp-head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:14px 16px; background:var(--status-warning-bg); border-bottom:1px solid var(--glass-edge)}
+.ubp-head .ttl{font-size:14px; font-weight:800; margin:0; display:flex; align-items:center; gap:7px}
+.ubp-head .ttl .ic{width:20px; height:20px; border-radius:6px; display:grid; place-items:center; font-size:11px; background:var(--status-warning); color:#fff; flex:none}
+.ubp-head .sub{font-size:11px; color:var(--text-2); font-weight:500; margin-top:3px; max-width:420px; line-height:1.5}
+.ubp-head .totals{display:flex; gap:18px; text-align:end; flex:none}
+.ubp-head .totals .t-l{font-size:10.5px; color:var(--text-muted); font-weight:600}
+.ubp-head .totals .t-v{font-size:18px; font-weight:800; letter-spacing:-.3px}
+.ubp-body{padding:14px 16px}
+
+/* breakdown blocks */
+.block{margin-bottom:16px}
+.block:last-child{margin-bottom:0}
+.block-h{display:flex; align-items:baseline; gap:8px; margin:0 0 9px}
+.block-h .bt{font-size:12px; font-weight:700}
+.block-h .bd{font-size:10.5px; color:var(--text-muted); font-weight:500}
+.grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:10px}
+.tile{background:var(--glass-1); border:1px solid var(--glass-edge); border-radius:12px; padding:11px 12px}
+.tile .tl{font-size:11px; color:var(--text-muted); font-weight:600; display:flex; align-items:center; gap:6px}
+.tile .tl .sw{width:8px; height:8px; border-radius:2px; flex:none}
+.tile .tv{font-size:19px; font-weight:800; letter-spacing:-.3px; margin-top:5px}
+.tile .ts{font-size:11px; color:var(--text-2); font-weight:600; margin-top:2px}
+.tile .tbar{height:5px; border-radius:var(--radius-pill); background:var(--surface-sunken); overflow:hidden; margin-top:8px}
+.tile .tbar i{display:block; height:100%; border-radius:var(--radius-pill)}
+
+/* per-store list */
+.storelist{display:flex; flex-direction:column; gap:8px}
+.srow{display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:12px; background:var(--glass-1); border:1px solid var(--glass-edge); border-radius:12px; padding:10px 12px}
+.srow .snm{font-weight:700; font-size:13px; display:flex; align-items:center; gap:8px}
+.srow .snm .pdot{width:9px; height:9px; border-radius:var(--radius-pill); flex:none}
+.srow .scol{text-align:end}
+.srow .scol .cl{font-size:10px; color:var(--text-muted); font-weight:600}
+.srow .scol .cv{font-size:14px; font-weight:800; letter-spacing:-.2px}
+.srow .smeta{font-size:10.5px; color:var(--text-muted); font-weight:500; margin-top:2px}
+
+.disclaimer{display:flex; gap:9px; align-items:flex-start; background:var(--accent-bg); border:1px solid var(--glass-edge); border-radius:12px; padding:11px 13px; margin-top:14px}
+.disclaimer .di{font-size:13px; flex:none; margin-top:1px}
+.disclaimer p{margin:0; font-size:11.5px; line-height:1.6; color:var(--text-2)}
+.disclaimer b{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div><h1>WS7 · פירוק הבלתי-מזוהה — מוקאפ</h1>
+  <div class="sub">צ׳יפ כיסוי-ייחוס ב-Hero · מצב רגיל + מצב מורחב (UnknownBucketPanel) · לא נבנה עד אישורך</div></div>
+  <button class="toggle" onclick="tg()"><span id="ico">☀︎</span><span id="lbl">מצב בהיר</span></button>
+</div>
+<div class="wrap">
+
+  <!-- STATE 1: NORMAL CHIP -->
+  <div class="sec-h"><span class="n">A</span><h2>מצב רגיל — הצ׳יפ ב-Hero</h2><span class="id">attr-coverage-chip</span></div>
+  <div class="card">
+    <div class="herostrip">
+      <div class="cell"><div class="kpi-label">הכנסה</div><div class="kpi-val ltr">$3,264</div></div>
+      <div class="cell"><div class="kpi-label">הוצאה</div><div class="kpi-val ltr">$1,339</div></div>
+      <div class="cell"><div class="kpi-label">ROAS</div><div class="kpi-val ltr">2.44×</div></div>
+      <div class="cell">
+        <div class="kpi-label">כיסוי-ייחוס</div>
+        <div class="row" style="gap:8px; margin-top:2px">
+          <button class="cov-chip" onclick="toggleUbp()">
+            <span class="dot-cov"></span>
+            <span>מיוחס <span class="pct ltr">68%</span></span>
+            <span class="caret" id="caret">⌄</span>
+          </button>
+        </div>
+        <div class="covbar" title="68% מיוחס · 32% בלתי-מזוהה">
+          <i style="width:68%; background:var(--status-green)"></i>
+          <i style="width:32%; background:var(--status-warning)"></i>
+        </div>
+      </div>
+    </div>
+    <p class="note"><b>מצב רגיל:</b> הצ׳יפ מציג את <b>שיעור-ההזמנות-המיוחסות</b> (68%) עם פס-זעיר ירוק/כתום. נקודה כתומה = יש בלתי-מזוהה. לחיצה פותחת את הפנל למטה. בונה על שדה ה-<code>source</code> הקיים מ-Shopify — בלי פיקסל, בלי CAPI. (לחצו על הצ׳יפ למעלה כדי להחליף מצב.)</p>
+  </div>
+
+  <!-- STATE 2: EXPANDED PANEL -->
+  <div class="sec-h"><span class="n">B</span><h2>מצב מורחב — UnknownBucketPanel</h2><span class="id">unknown-bucket-panel</span></div>
+  <div class="card" id="ubpCard">
+
+    <button class="cov-chip open" onclick="toggleUbp()" style="margin-bottom:2px">
+      <span class="dot-cov"></span>
+      <span>מיוחס <span class="pct ltr">68%</span></span>
+      <span class="caret">⌃</span>
+    </button>
+
+    <div class="ubp" id="ubpPanel">
+      <!-- header -->
+      <div class="ubp-head">
+        <div>
+          <h3 class="ttl"><span class="ic">?</span>פירוק הבלתי-מזוהה</h3>
+          <div class="sub">ההזמנות שמקור-ההפניה שלהן לא נקלט (ערוץ ישיר / חסר UTM / דפדפן חוסם). <b>תיאור בלבד</b> — לא חלוקה-מחדש לערוצים.</div>
+        </div>
+        <div class="totals">
+          <div><div class="t-l">הזמנות</div><div class="t-v tnum">41</div></div>
+          <div><div class="t-l">הכנסה</div><div class="t-v ltr">$1,044</div></div>
+        </div>
+      </div>
+
+      <div class="ubp-body">
+
+        <!-- new vs returning -->
+        <div class="block">
+          <div class="block-h"><span class="bt">חדשים מול חוזרים</span><span class="bd">לפי לקוח Shopify · בתוך הבלתי-מזוהה</span></div>
+          <div class="grid3">
+            <div class="tile">
+              <div class="tl"><span class="sw" style="background:var(--status-blue)"></span>חדשים</div>
+              <div class="tv tnum">23</div>
+              <div class="ts ltr">$546 · 56%</div>
+              <div class="tbar"><i style="width:56%; background:var(--status-blue)"></i></div>
+            </div>
+            <div class="tile">
+              <div class="tl"><span class="sw" style="background:var(--status-green)"></span>חוזרים</div>
+              <div class="tv tnum">14</div>
+              <div class="ts ltr">$402 · 34%</div>
+              <div class="tbar"><i style="width:34%; background:var(--status-green)"></i></div>
+            </div>
+            <div class="tile">
+              <div class="tl"><span class="sw" style="background:var(--text-muted)"></span>לא מסווג</div>
+              <div class="tv tnum">4</div>
+              <div class="ts ltr">$96 · 10%</div>
+              <div class="tbar"><i style="width:10%; background:var(--text-muted)"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AOV bands -->
+        <div class="block">
+          <div class="block-h"><span class="bt">סלי-קנייה (AOV)</span><span class="bd">פילוח לפי גובה ההזמנה · בלתי-מזוהה</span></div>
+          <div class="grid3">
+            <div class="tile">
+              <div class="tl"><span class="sw" style="background:var(--status-warning)"></span>נמוך <span class="ltr">&lt;$50</span></div>
+              <div class="tv tnum">11</div>
+              <div class="ts ltr">$352 · 27%</div>
+              <div class="tbar"><i style="width:27%; background:var(--status-warning)"></i></div>
+            </div>
+            <div class="tile">
+              <div class="tl"><span class="sw" style="background:var(--status-blue)"></span>בינוני <span class="ltr">$50–120</span></div>
+              <div class="tv tnum">22</div>
+              <div class="ts ltr">$498 · 54%</div>
+              <div class="tbar"><i style="width:54%; background:var(--status-blue)"></i></div>
+            </div>
+            <div class="tile">
+              <div class="tl"><span class="sw" style="background:var(--status-green)"></span>גבוה <span class="ltr">&gt;$120</span></div>
+              <div class="tv tnum">8</div>
+              <div class="ts ltr">$194 · 19%</div>
+              <div class="tbar"><i style="width:19%; background:var(--status-green)"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- payment category -->
+        <div class="block">
+          <div class="block-h"><span class="bt">אמצעי-תשלום</span><span class="bd">לפי gateway · בלתי-מזוהה</span></div>
+          <div class="grid3">
+            <div class="tile">
+              <div class="tl"><span class="sw" style="background:var(--accent)"></span>אשראי</div>
+              <div class="tv tnum">29</div>
+              <div class="ts ltr">$742 · 71%</div>
+              <div class="tbar"><i style="width:71%; background:var(--accent)"></i></div>
+            </div>
+            <div class="tile">
+              <div class="tl"><span class="sw" style="background:var(--status-blue)"></span>PayPal</div>
+              <div class="tv tnum">9</div>
+              <div class="ts ltr">$231 · 22%</div>
+              <div class="tbar"><i style="width:22%; background:var(--status-blue)"></i></div>
+            </div>
+            <div class="tile">
+              <div class="tl"><span class="sw" style="background:var(--text-muted)"></span>אחר</div>
+              <div class="tv tnum">3</div>
+              <div class="ts ltr">$71 · 7%</div>
+              <div class="tbar"><i style="width:7%; background:var(--text-muted)"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- per-store list -->
+        <div class="block">
+          <div class="block-h"><span class="bt">פילוח לפי חנות</span><span class="bd">הבלתי-מזוהה בכל חנות · ושיעורו מתוך כלל-ההזמנות שלה</span></div>
+          <div class="storelist">
+            <div class="srow">
+              <div>
+                <div class="snm"><span class="pdot" style="background:var(--pf-meta)"></span>uzoshop</div>
+                <div class="smeta">28% מההזמנות לא-מיוחסות</div>
+              </div>
+              <div class="scol"><div class="cl">הזמנות</div><div class="cv tnum">26</div></div>
+              <div class="scol"><div class="cl">הכנסה</div><div class="cv ltr">$662</div></div>
+            </div>
+            <div class="srow">
+              <div>
+                <div class="snm"><span class="pdot" style="background:var(--pf-tiktok)"></span>Zol Plus</div>
+                <div class="smeta">41% מההזמנות לא-מיוחסות</div>
+              </div>
+              <div class="scol"><div class="cl">הזמנות</div><div class="cv tnum">11</div></div>
+              <div class="scol"><div class="cl">הכנסה</div><div class="cv ltr">$284</div></div>
+            </div>
+            <div class="srow">
+              <div>
+                <div class="snm"><span class="pdot" style="background:var(--pf-google)"></span>360usmile</div>
+                <div class="smeta">19% מההזמנות לא-מיוחסות</div>
+              </div>
+              <div class="scol"><div class="cl">הזמנות</div><div class="cv tnum">4</div></div>
+              <div class="scol"><div class="cl">הכנסה</div><div class="cv ltr">$98</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- honest framing disclaimer -->
+        <div class="disclaimer">
+          <span class="di">⚠︎</span>
+          <p><b>מסגור ישר:</b> הפנל <b>מתאר</b> את ההזמנות הבלתי-מזוהות — מי הלקוח, גודל הסל, אמצעי-התשלום ובאיזו חנות. הוא <b>אינו</b> מנחש לאיזה ערוץ (Meta/Google/TikTok) הן שייכות ו<b>אינו</b> מחלק-מחדש את ה-32% לערוצים. ה-ROAS לכל ערוץ נשאר כפי שהוא — בלי ניפוח.</p>
+        </div>
+
+      </div>
+    </div>
+
+    <p class="note"><b>בונה על הקיים:</b> כל המספרים נגזרים מטבלת-ה-orders הקיימת (source, customer new/returning, total_price, gateway, store-map) — אין מקור-נתונים חדש, אין פיקסל/CAPI. הפנל נפתח inline מתחת ל-Hero (אקורדיון), נסגר באותו צ׳יפ. כל המספרים דרך &lt;Money&gt; (tabular, ללא חיתוך). תואם WCAG-AA בשני המצבים.</p>
+  </div>
+
+</div>
+<script>
+function tg(){const r=document.documentElement,n=r.getAttribute('data-theme')==='dark'?'light':'dark';r.setAttribute('data-theme',n);document.getElementById('ico').textContent=n==='dark'?'☀︎':'☾';document.getElementById('lbl').textContent=n==='dark'?'מצב בהיר':'מצב כהה';}
+function toggleUbp(){const p=document.getElementById('ubpPanel');p.style.display=(p.style.display==='none')?'':'none';document.getElementById('ubpCard').scrollIntoView({behavior:'smooth',block:'start'});}
+</script>
+</body>
+</html>

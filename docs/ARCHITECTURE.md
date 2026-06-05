@@ -3379,3 +3379,15 @@ primitive so the Trends chart shows the **same** pins (one source of truth).
 **Google ad-name gap closed.** `lib/fetchers/googleStatus.ts` now selects `ad_group_ad.ad.name` in the ad-level GAQL follow-up and sources the ad registry row's name from it (previously null → the full-row upsert would clobber the backfilled name), so Google **ad** renames are now self-maintaining like Meta/TikTok (campaign + ad-set already were).
 
 **Net:** a rename on any platform reflects across **all** historical date ranges automatically on the next status tick — no backfill, no manual step. Verified in prod post-deploy: 360 campaign + 366 ad-set rows overriding stale day-names, 0 NULL `reg_campaign_name`.
+
+## 38. Unknown-bucket decomposition (Wave 5 / WS7 Feature A, 2026-06-05)
+
+Deepens attribution within the CAPI-safe ceiling: a **descriptive** drill-down of the unknown/direct order bucket. Pure compute over fields already on each order — never sends a pixel/CAPI event, never redistributes the unknown share across channels.
+
+- **`lib/home/unknownBucket.ts`** (new) — `decomposeUnknownBucket(rows)` → `UnknownBucketBreakdown`. Operates ONLY on rows that FAIL `hasAttributionSignal` (now `export`ed from `lib/home/adapters.ts` so the panel uses the EXACT same predicate as the hero CoverageChip — covered + unknown always = 100%). Slices the bucket by: new-vs-returning (`isFirstOrder`), AOV bands (low `<50` / mid `50–70` / high `>70` CAD — home-aligned per operator 2026-06-05), per-store (display name), top products (`lineItems`, capped), and payment category (`categorizePaymentGateway`). Pure, no I/O.
+- **`paymentGateway` read-side passthrough** — the existing `orders_attribution.payment_gateway` column (write/store-only since migration `20260603110000`) is now projected onto `OrderAttributionRow` (`lib/ordersAttribution.ts`) via `ORDERS_ATTRIBUTION_SELECT` + the row map in `lib/postgresReaders.ts`. Made a required field, so 9 test fixtures gained `paymentGateway: null`.
+- **`components/home/UnknownBucketPanel.tsx`** (new) — token-driven, light+dark, RTL panel; counts via `<bdi dir="ltr">`, revenue via `<Money>`; honest "תיאור בלבד — לא חלוקה-מחדש" framing.
+- **`components/home/CoverageChip.tsx`** — gains an optional `breakdown` prop. When the chip is prominent (>30% unknown) AND a breakdown is present, it becomes an inline accordion (real `<Button>` + `aria-expanded`/`aria-controls`, the codebase's established disclosure idiom — NOT a hand-rolled overlay) revealing `UnknownBucketPanel`. Backward-compatible: with no breakdown the static honest chip is byte-identical.
+- **`components/Dashboard.tsx`** — `unknownBreakdown` memo over the SAME store-filtered orders the chip consumes (so chip % and panel counts can't disagree), threaded via `CommandCenterHero` `coverageBreakdown` → CoverageChip.
+
+CAPI-safe; mapping-aware (orders are written mapping-resolved). Feature C (organic-baseline incrementality proxy) from the same WS7 plan was **deferred** by the operator pending a more rigorous, experiment-calibrated method (observational methods cannot reach the ~99% bar; see the incrementality research synthesis).

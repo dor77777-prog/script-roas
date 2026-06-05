@@ -504,7 +504,7 @@ export interface CoverageResult {
 }
 
 /** An order is "covered" when it carries ANY attribution signal. */
-function hasAttributionSignal(o: OrderAttributionRow): boolean {
+export function hasAttributionSignal(o: OrderAttributionRow): boolean {
   // 'direct' and '' are the UNKNOWN bucket, NOT a signal. The writer's
   // catch-all for an unattributed order is 'direct' (never ''), so a bare
   // `source.trim() !== ''` check would count EVERY order as covered. Only an

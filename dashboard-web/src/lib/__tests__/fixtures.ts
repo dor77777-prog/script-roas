@@ -47,6 +47,7 @@ export function makeOrder(overrides: Partial<OrderAttributionRow> = {}): OrderAt
     firstUtmId: null,
     firstUtmTerm: null,
     firstSeenAt: null,
+    paymentGateway: null,
     ...overrides,
   };
 }

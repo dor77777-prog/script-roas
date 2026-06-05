@@ -106,6 +106,10 @@ import {
   toCoverageChip,
   type CoverageChip as CoverageChipData,
 } from '@/lib/home/adapters';
+import {
+  decomposeUnknownBucket,
+  type UnknownBucketBreakdown,
+} from '@/lib/home/unknownBucket';
 import type { OrderAttributionRow } from '@/lib/ordersAttribution';
 
 // All client fetchers route through fetchJson → `cache: 'no-store'` so mobile
@@ -309,6 +313,22 @@ export function Dashboard() {
           (ordersData?.rows ?? []).filter(
             (r) => filters.store === 'All' || r.storeName === filters.store,
           ),
+        ),
+      ),
+    [ordersData, filters.store],
+  );
+
+  // WS7 A.3 — descriptive decomposition of the unknown/direct order bucket,
+  // feeding the hero CoverageChip's expand/disclosure. Built from the SAME
+  // `filters.store`-filtered current-range rows the coverage chip consumes
+  // above (no second fetch), so the chip's "{unknown}%" and the panel's
+  // "{unknownOrders}" can never disagree. DESCRIPTIVE only — it never
+  // redistributes the unknown share across channels.
+  const unknownBreakdown: UnknownBucketBreakdown = useMemo(
+    () =>
+      decomposeUnknownBucket(
+        (ordersData?.rows ?? []).filter(
+          (r) => filters.store === 'All' || r.storeName === filters.store,
         ),
       ),
     [ordersData, filters.store],
@@ -721,6 +741,7 @@ export function Dashboard() {
                     ordersRows={ordersData?.rows}
                     firstOrderRows={firstOrderRows}
                     coverage={coverageChip}
+                    coverageBreakdown={unknownBreakdown}
                     provenanceVerdict={provenanceVerdict}
                     overrideNote={overrideFlag?.note}
                     overrideLastEditedAt={overrideFlag?.lastEditedAt}
@@ -822,6 +843,7 @@ function HomeTab({
   ordersRows,
   firstOrderRows,
   coverage,
+  coverageBreakdown,
   provenanceVerdict,
   overrideNote,
   overrideLastEditedAt,
@@ -858,6 +880,13 @@ function HomeTab({
    * it (no orders / unwired). Never passed to per-store cards.
    */
   coverage?: CoverageChipData | null;
+  /**
+   * WS7 A.3 — descriptive decomposition of the unknown/direct order bucket,
+   * computed upstream from the same `filters.store`-filtered current-range rows
+   * the coverage chip consumes. Threaded into <CommandCenterHero> so the hero
+   * CoverageChip can expand into an inline <UnknownBucketPanel> when prominent.
+   */
+  coverageBreakdown?: UnknownBucketBreakdown;
   /**
    * DQ-4 (Wave 3 data-trust) — provenance verdict over the in-scope daily rows.
    * Threaded to the Hero so the Spend/period cell shows a "סופי" / "אומדן חי"
@@ -1462,6 +1491,7 @@ function HomeTab({
         delta={heroDelta}
         rangeLabel={heroRangeLabel}
         coverage={coverage ?? null}
+        coverageBreakdown={coverageBreakdown}
         comparisonLabel={compare.caption}
         netSparkValues={netSparkValues}
         secondarySparklines={secondarySparklines}

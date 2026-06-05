@@ -101,6 +101,7 @@ const FIRST_CLICK_ORDER: OrderAttributionRow = {
   firstUtmId: 'c1', // ← first-touch matches the campaign id
   firstUtmTerm: null,
   firstSeenAt: null,
+  paymentGateway: null,
 };
 
 const ORDERS_RESPONSE: OrdersAttributionResponse = {

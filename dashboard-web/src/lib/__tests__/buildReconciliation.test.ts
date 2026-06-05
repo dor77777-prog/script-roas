@@ -124,6 +124,7 @@ function makeOrderRow(overrides: Partial<OrderAttributionRow>): OrderAttribution
     firstUtmId: null,
     firstUtmTerm: null,
     firstSeenAt: null,
+    paymentGateway: null,
     ...overrides,
   };
 }

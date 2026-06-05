@@ -79,6 +79,7 @@ import { ProvenanceFlag } from '@/components/ui/ProvenanceFlag';
 import { OverrideFlag } from '@/components/ui/OverrideFlag';
 import type { ProvenanceVerdict } from '@/lib/freshness/provenance';
 import type { CoverageChip as CoverageChipData } from '@/lib/home/adapters';
+import type { UnknownBucketBreakdown } from '@/lib/home/unknownBucket';
 import type { NcConfidence } from '@/lib/home/newCustomerMetrics';
 import type { ChannelMetric } from '@/lib/home/channelTruth';
 import { ChannelTruthPanel } from '@/components/home/ChannelTruthPanel';
@@ -217,6 +218,15 @@ export interface CommandCenterHeroProps {
   rangeLabel: string;
   /** Honest attribution-coverage chip — hero-only. Pass null to hide. */
   coverage?: CoverageChipData | null;
+  /**
+   * WS7 A.3 — descriptive decomposition of the unknown/direct order bucket.
+   * When supplied AND the coverage chip is prominent (>30% unknown), the chip
+   * becomes an inline disclosure that reveals <UnknownBucketPanel>. Omit to
+   * keep the chip a static summary (back-compat). Computed upstream from the
+   * SAME current-range orders rows the coverage chip consumes, so chip + panel
+   * never disagree.
+   */
+  coverageBreakdown?: UnknownBucketBreakdown;
   /**
    * "vs <previous period>" caption for the featured card's delta line. The
    * delta compares against the previous equal-length period, so this must track
@@ -561,6 +571,7 @@ export function CommandCenterHero({
   delta,
   rangeLabel,
   coverage,
+  coverageBreakdown,
   comparisonLabel = 'מול אתמול',
   netSparkValues,
   secondarySparklines,
@@ -606,7 +617,7 @@ export function CommandCenterHero({
       */}
       {coverage != null && (
         <div className="flex items-center justify-end" data-testid="hero-coverage-row">
-          <CoverageChip coverage={coverage} />
+          <CoverageChip coverage={coverage} breakdown={coverageBreakdown} />
         </div>
       )}
 
