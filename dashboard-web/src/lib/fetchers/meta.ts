@@ -116,6 +116,8 @@ export type MetaAdRow = {
   currency: string;
   /** purchase VALUE in account currency (mirror of MetaAdSetRow.conversionValue) */
   conversionValue: number;
+  /** ad-level daily unique reach (people); null if Meta omits it */
+  reach: number | null;
 };
 
 /** Per-day store-level aggregate returned by `fetchMetaSpendForDay`. */
@@ -220,11 +222,12 @@ type MetaInsightsBody = {
   paging?: { next?: string };
 };
 
-// Ad-level rows additionally carry ad_id + ad_name. Other fields overlap
-// with MetaInsightsRow, so we extend rather than duplicate.
+// Ad-level rows additionally carry ad_id + ad_name + reach. Other fields
+// overlap with MetaInsightsRow, so we extend rather than duplicate.
 type MetaInsightsAdRow = MetaInsightsRow & {
   ad_id?: string;
   ad_name?: string;
+  reach?: string;
 };
 type MetaInsightsAdBody = {
   data?: MetaInsightsAdRow[];
@@ -519,6 +522,7 @@ export async function fetchMetaAdInsights(
     'ad_name',
     'spend',
     'impressions',
+    'reach',
     'clicks',
     'actions',
     'action_values',
@@ -549,6 +553,8 @@ export async function fetchMetaAdInsights(
     for (const r of body.data ?? []) {
       const spend = parseFloat(r.spend ?? '0') || 0;
       const impressions = parseInt(r.impressions ?? '0', 10) || 0;
+      const reachParsed = r.reach == null ? NaN : parseInt(r.reach, 10);
+      const reach = Number.isFinite(reachParsed) ? reachParsed : null;
       const conv = extractMetaPurchases(r.actions ?? [], r.action_values ?? []);
       // Same activity filter as adset-level (MetaAds.gs:51-56 + meta.ts:229-234).
       if (spend === 0 && impressions === 0 && conv.count === 0) continue;
@@ -563,6 +569,7 @@ export async function fetchMetaAdInsights(
         adId: r.ad_id ?? '',
         adName: r.ad_name ?? '',
         impressions,
+        reach,
         clicks: parseInt(r.clicks ?? '0', 10) || 0,
         conversions: conv.count,
         // 2026-05-21: expose raw account-currency values. The cronDaily.ts
