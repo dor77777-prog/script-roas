@@ -1191,8 +1191,21 @@ function HomeTab({
     campaignsData?.rows,
     ordersRows,
   ]);
+  // A non-default compare baseline is ON, but the prior period has NO spend/
+  // revenue panel to compare against. KEY OFF data_daily emptiness (revenue +
+  // spend both 0), NOT orders: data_daily ad-spend/revenue starts May-2026, so
+  // a 2025 "שנה שעברה" baseline is empty even though orders_attribution still
+  // has 2023+ orders (prevOrdersTotal > 0). Requiring orders==0 too meant the
+  // hint never fired for prev_year. When unavailable we hide EVERY delta line
+  // (heroDelta = undefined) and show one explicit hint instead of leaking a
+  // lone orders-vs-partial-baseline delta.
+  const comparisonUnavailable = useMemo(() => {
+    if (!compare.show) return false;
+    const p = prevAggFromPrevData;
+    return !p || ((p.revenue ?? 0) === 0 && (p.spend ?? 0) === 0);
+  }, [compare.show, prevAggFromPrevData]);
   const heroDelta = useMemo(() => {
-    if (!compare.show || !prevAggFromPrevData) return undefined;
+    if (comparisonUnavailable || !prevAggFromPrevData) return undefined;
     return toHeroDelta(
       filtered.curAgg,
       prevAggFromPrevData,
@@ -1201,18 +1214,7 @@ function HomeTab({
       heroOrders,
       prevOrdersTotal,
     );
-  }, [compare.show, filtered.curAgg, prevAggFromPrevData, heroCpm, heroCpmPrev, heroOrders, prevOrdersTotal]);
-  // A non-default compare baseline is ON, but the prior period has NO data to
-  // compare against (e.g. "שנה שעברה" on a <1-year-old business) — surfaced as
-  // an explicit hero hint instead of silently hiding every delta line.
-  const comparisonUnavailable = useMemo(() => {
-    if (!compare.show) return false;
-    const p = prevAggFromPrevData;
-    return (
-      !p ||
-      ((p.revenue ?? 0) === 0 && (p.spend ?? 0) === 0 && (prevOrdersTotal ?? 0) === 0)
-    );
-  }, [compare.show, prevAggFromPrevData, prevOrdersTotal]);
+  }, [comparisonUnavailable, filtered.curAgg, prevAggFromPrevData, heroCpm, heroCpmPrev, heroOrders, prevOrdersTotal]);
   const netSparkValues = useMemo(
     () => toNetSparkValues(filtered.series),
     [filtered.series],
