@@ -89,6 +89,8 @@ export type TikTokAdRow = {
    *  /open_api/v1.3/adgroup/get/. Populated by fetchTikTokAdGroupStatuses
    *  inside fetchTikTokAdInsights — same call site, additional API hop. */
   effectiveStatus: string | null;
+  /** ad-level daily unique reach (people); null if TikTok omits it */
+  reach: number | null;
 
   /** Phase A.5 — store_id from campaign-store-map (or fallback storeId arg).
    *  Persisters use this instead of their function-arg storeId for TikTok rows. */
@@ -196,6 +198,14 @@ function parseNum(v: unknown): number {
     return Number.isFinite(n) ? n : 0;
   }
   return 0;
+}
+
+/** Parse TikTok BASIC `metrics.reach` → integer reach, or null when absent. */
+export function parseTikTokAdReach(m: Record<string, unknown>): number | null {
+  const raw = m.reach;
+  if (raw == null) return null;
+  const n = parseInt(String(raw), 10);
+  return Number.isFinite(n) ? n : null;
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -463,6 +473,7 @@ export async function fetchTikTokAdInsights(
     metrics?: {
       spend?: string | number;
       impressions?: string | number;
+      reach?: string | number;
       clicks?: string | number;
       conversion?: string | number;
       /**
@@ -513,7 +524,7 @@ export async function fetchTikTokAdInsights(
         // Meta's `action_value:purchase`. See TikTok Marketing API v1.3
         // metrics reference: business-api.tiktok.com/portal/docs?id=1738864915188737
         metrics:
-          '["spend","impressions","clicks","conversion","complete_payment",' +
+          '["spend","impressions","reach","clicks","conversion","complete_payment",' +
           '"value_per_complete_payment",' +
           '"campaign_id","campaign_name","adgroup_id","adgroup_name","ad_name"]',
         start_date: dateStr,
@@ -537,6 +548,7 @@ export async function fetchTikTokAdInsights(
       // complete_payment keeps the columns internally consistent.
       const spend = parseNum(m.spend);
       const impressions = parseNum(m.impressions);
+      const reach = parseTikTokAdReach(m as Record<string, unknown>);
       const purchases = parseNum(m.complete_payment);
       // Drop empty rows (no spend, no impressions, no purchases) — matches
       // meta.ts:fetchMetaAdSetInsights line 57 convention.
@@ -561,6 +573,7 @@ export async function fetchTikTokAdInsights(
         spend,
         currency: info.currency,
         impressions,
+        reach,
         clicks: parseNum(m.clicks),
         conversions,
         conversionValue,
