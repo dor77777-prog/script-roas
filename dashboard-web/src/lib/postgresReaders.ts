@@ -1084,7 +1084,7 @@ export async function fetchAdsFromPostgres(
             // reader PREFERS these (via preferName) so the Ads UI shows each
             // entity's current name, not a stale per-day name.
             'reg_campaign_name, reg_ad_set_name, reg_ad_name, ' +
-            'spend_cad, impressions, clicks, ' +
+            'spend_cad, impressions, clicks, reach, ' +
             'conversions, conversion_value_cad, ' +
             // Phase D (2026-05-30) — registry-backed status columns from
             // ad_registry, joined server-side via the ads_enriched VIEW.
@@ -1143,6 +1143,9 @@ export async function fetchAdsFromPostgres(
       clicks: toNumber(r.clicks),
       conversions,
       conversionValue: toNumber(r.conversion_value_cad),
+      reach: (r as { reach?: unknown }).reach == null
+        ? null
+        : toNumber((r as { reach?: unknown }).reach),
       // Phase D (2026-05-30) — registry-backed status fields joined via the
       // ads_enriched VIEW. NULL in production until Phase B/C ad-level
       // status workers populate ad_registry (none exist yet; the registry

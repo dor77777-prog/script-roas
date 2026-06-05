@@ -26,6 +26,12 @@ export type AdRow = {
   conversions: number;
   conversionValue: number;  // CAD
   /**
+   * Ad-level daily unique reach (people). Meta + TikTok populate it; Google
+   * leaves it null (no per-user frequency on Search/Shopping/PMax). Drives the
+   * creative-fatigue early-warning's frequency = impressions / reach.
+   */
+  reach?: number | null;
+  /**
    * Phase D (2026-05-30) — registry-backed status fields. Joined server-side
    * via the `ads_enriched` VIEW. Will be null in production until Phase B/C
    * ad-level status workers populate `ad_registry` (none exist yet — the
