@@ -94,6 +94,17 @@ function splitHalves(rows: AdRow[]): { prior: HalfAgg; recent: HalfAgg } | null 
   };
 }
 
+/** Thresholds for the strong CTR+CPM fatigue rule (shared with the early-warning suppression guard). */
+const STRONG_CTR_DROP = 0.7; // recentCtr <= 0.7 × priorCtr
+const STRONG_CPM_RISE = 1.2; // recentCpm >= 1.2 × priorCpm
+
+/** Early-warning frequency thresholds (tunable). */
+const EW_FREQ_CLIMB_RATIO = 1.2; // recent half-frequency >= 1.2x prior (>=20% climb)
+const EW_FREQ_FLOOR = 1.3; // recent half-frequency must clear this absolute floor
+
+const STRONG_FATIGUE_WEIGHT = 68;
+const EW_FATIGUE_WEIGHT = 52; // softer than the strong rule (68) so it ranks below it for the same ad
+
 export function detectAdFatigue(ads: AdRow[]): Insight[] {
   const insights: Insight[] = [];
   for (const g of groupAds(ads).values()) {
@@ -108,8 +119,8 @@ export function detectAdFatigue(ads: AdRow[]): Insight[] {
     const recentCpm = (recent.spend / recent.impr) * 1000;
     if (priorCtr <= 0 || priorCpm <= 0) continue;
 
-    const ctrFatigued = recentCtr <= 0.7 * priorCtr;
-    const cpmRising = recentCpm >= 1.2 * priorCpm;
+    const ctrFatigued = recentCtr <= STRONG_CTR_DROP * priorCtr;
+    const cpmRising = recentCpm >= STRONG_CPM_RISE * priorCpm;
     if (!ctrFatigued || !cpmRising) continue;
 
     const ctrDropPct = Math.round((1 - recentCtr / priorCtr) * 100);
@@ -121,7 +132,7 @@ export function detectAdFatigue(ads: AdRow[]): Insight[] {
     if (prior.reach > 0 && recent.reach > 0) {
       const priorFreq = prior.impr / prior.reach;
       const recentFreq = recent.impr / recent.reach;
-      if (priorFreq > 0 && recentFreq > priorFreq) {
+      if (recentFreq > priorFreq) {
         freqNote = ` התדירות עלתה ${Math.round((recentFreq / priorFreq - 1) * 100)}%.`;
       }
     }
@@ -135,8 +146,66 @@ export function detectAdFatigue(ads: AdRow[]): Insight[] {
       detail: `CTR ירד ${ctrDropPct}% ו-CPM עלה ${cpmRisePct}% בחצי האחרון. שקול לרענן קריאייטיב.${freqNote}`,
       why: `CTR ${(priorCtr * 100).toFixed(2)}%→${(recentCtr * 100).toFixed(2)}%, CPM ${fmtMoneyString(priorCpm)}→${fmtMoneyString(recentCpm)} (חציון לחצי).`,
       href: adsManagerLink(g.platform, g.campaignId) ?? undefined,
-      weight: 68,
+      weight: STRONG_FATIGUE_WEIGHT,
       // Carry the PARENT campaign so the drawer + Ads-Manager link resolve.
+      campaignId: g.campaignId,
+      campaignName: g.campaignName,
+      platform: g.platform as Insight['platform'],
+      storeId: g.storeId,
+      storeName: g.storeName,
+    });
+  }
+  return insights;
+}
+
+/**
+ * Earlier, softer creative-fatigue signal: fires when an ad's impression
+ * frequency (impressions / reach) is climbing — the same people are being
+ * shown the creative more often — BEFORE CTR craters and CPM climbs. Suppressed
+ * when the strong `detectAdFatigue` rule already fires for the ad (no
+ * double-surface). Meta + TikTok only (Google rows have null reach → skipped).
+ * Frequency here is a RELATIVE trend (reach is not additive across days; the
+ * same bias applies to both halves so the recent/prior ratio stays valid).
+ */
+export function detectAdFatigueEarlyWarning(ads: AdRow[]): Insight[] {
+  const insights: Insight[] = [];
+  for (const g of groupAds(ads).values()) {
+    const halves = splitHalves(g.rows);
+    if (!halves) continue;
+    const { prior, recent } = halves;
+    if (prior.impr + recent.impr < 5000) continue;
+    if (prior.impr <= 0 || recent.impr <= 0) continue;
+    // Reach required on both halves — Google (null reach) is skipped here.
+    if (prior.reach <= 0 || recent.reach <= 0) continue;
+
+    const priorFreq = prior.impr / prior.reach;
+    const recentFreq = recent.impr / recent.reach;
+    if (priorFreq <= 0) continue;
+
+    // Suppress when the strong rule owns this ad.
+    const priorCtr = prior.clicks / prior.impr;
+    const recentCtr = recent.clicks / recent.impr;
+    const priorCpm = (prior.spend / prior.impr) * 1000;
+    const recentCpm = (recent.spend / recent.impr) * 1000;
+    const strongFires =
+      priorCtr > 0 && priorCpm > 0 &&
+      recentCtr <= STRONG_CTR_DROP * priorCtr && recentCpm >= STRONG_CPM_RISE * priorCpm;
+    if (strongFires) continue;
+
+    if (recentFreq < EW_FREQ_CLIMB_RATIO * priorFreq) continue;
+    if (recentFreq < EW_FREQ_FLOOR) continue;
+
+    const climbPct = Math.round((recentFreq / priorFreq - 1) * 100);
+    insights.push({
+      id: `ew-fatigue-${g.adId}`,
+      severity: 'opportunity',
+      kind: 'recommendation',
+      scope: `${g.platform} · ${g.storeName ?? ''}`,
+      title: `אזהרה מוקדמת — שחיקה מתקרבת: ${g.adName || 'מודעה'}`,
+      detail: `התדירות עלתה ${climbPct}% — אותם אנשים רואים את המודעה יותר ויותר. שקול לרענן קריאייטיב לפני שהביצועים נפגעים.`,
+      why: `תדירות ${priorFreq.toFixed(2)}→${recentFreq.toFixed(2)} (חשיפות לאדם, מגמה יחסית — לא תדירות שבועית מוחלטת).`,
+      href: adsManagerLink(g.platform, g.campaignId) ?? undefined,
+      weight: EW_FATIGUE_WEIGHT,
       campaignId: g.campaignId,
       campaignName: g.campaignName,
       platform: g.platform as Insight['platform'],

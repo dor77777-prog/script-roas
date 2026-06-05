@@ -1,5 +1,5 @@
 /**
- * detectAdFatigue — base CTR+CPM creative-fatigue rule (frequency leg deferred).
+ * detectAdFatigue — CTR+CPM creative-fatigue rule (+ freqNote when reach present).
  *
  * Flags an ad IFF, comparing the recent half of its date window to the prior
  * half: recentCtr <= 0.7*priorCtr AND recentCpm >= 1.2*priorCpm (CONJUNCTION).
@@ -51,8 +51,8 @@ function adRow(patch: Partial<AdRow> & { date: string }): AdRow {
  */
 function buildWindow(opts: {
   base?: string;
-  priorPerDay: { impressions: number; clicks: number; spend: number };
-  recentPerDay: { impressions: number; clicks: number; spend: number };
+  priorPerDay: { impressions: number; clicks: number; spend: number; reach?: number };
+  recentPerDay: { impressions: number; clicks: number; spend: number; reach?: number };
   days?: number; // total days; split evenly. default 12.
   patch?: Partial<AdRow>;
 }): AdRow[] {
@@ -68,6 +68,7 @@ function buildWindow(opts: {
         impressions: half.impressions,
         clicks: half.clicks,
         spend: half.spend,
+        ...(half.reach !== undefined ? { reach: half.reach } : {}),
         ...opts.patch,
       }),
     );
@@ -193,5 +194,20 @@ describe('detectAdFatigue — base CTR+CPM conjunction', () => {
     const byId = new Map(out.map((i) => [i.id, i]));
     expect(byId.get('fatigue-ad-A')!.campaignId).toBe('camp-A');
     expect(byId.get('fatigue-ad-B')!.campaignId).toBe('camp-B');
+  });
+
+  it('(h) freqNote appended to detail when reach present on both halves and frequency climbs', () => {
+    // Strong rule fires: CTR 3.0%→1.8% (<=0.7×) AND CPM 5→7 (>=1.2×).
+    // Reach present on both halves with climbing frequency: prior reach=800 → freq 1.25,
+    // recent reach=640 → freq ≈ 1.56 → climbs.
+    // prior: 1000 impr / 800 reach = 1.25; recent: 1000 impr / 640 reach ≈ 1.5625 → climbs
+    const rows = buildWindow({
+      priorPerDay: { impressions: 1000, clicks: 30, spend: 5, reach: 800 },
+      recentPerDay: { impressions: 1000, clicks: 18, spend: 7, reach: 640 },
+      // reach 640 → freq = 1000/640 = 1.5625 > prior 1.25 → freqNote fires
+    });
+    const out = fatigueIds(detectAdFatigue(rows));
+    expect(out).toHaveLength(1);
+    expect(out[0].detail).toContain('התדירות עלתה');
   });
 });
