@@ -43,6 +43,7 @@ import { Input } from '@/components/ui/Input';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import type { DashboardData, Filters as F, PresetKey } from '@/lib/types';
 import { PRESET_LABELS, computePresetRange } from '@/lib/presets';
+import { getTodayInIsraelTz, buildDateRangeKey } from '@/lib/dateRange';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { ProductsResponse } from '@/app/api/products/route';
 import { drillToCampaigns, type TabKey } from '@/lib/urlState';
@@ -120,13 +121,24 @@ export function CommandPalette({
 
   // Fetch enriched data lazily (only after the palette has been opened once).
   const [warmCache, setWarmCache] = useState(false);
+  // /api/campaigns + /api/products REQUIRE ?from&to (parseRangeParams 400s
+  // otherwise → an error object with no `.rows`, so a param-less fetch left the
+  // palette unable to search campaigns/products despite the placeholder
+  // promising it). Fetch a fixed trailing 30-day window — the same window the
+  // corpus is capped to client-side below.
+  const corpusRange = useMemo(() => {
+    const to = getTodayInIsraelTz();
+    const d = new Date(to + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() - 30);
+    return { from: d.toISOString().slice(0, 10), to };
+  }, []);
   const { data: products } = useSWR<ProductsResponse | null>(
-    warmCache ? '/api/products' : null,
+    warmCache ? buildDateRangeKey('/api/products', corpusRange) : null,
     fetchJsonOrNull,
     { revalidateOnFocus: false },
   );
   const { data: campaigns } = useSWR<CampaignsResponse | null>(
-    warmCache ? '/api/campaigns' : null,
+    warmCache ? buildDateRangeKey('/api/campaigns', corpusRange) : null,
     fetchJsonOrNull,
     { revalidateOnFocus: false },
   );

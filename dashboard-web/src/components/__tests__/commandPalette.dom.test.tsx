@@ -39,7 +39,10 @@ vi.mock('swr', () => {
   }).format(new Date());
   return {
     default: (key: string | null) => {
-      if (key === '/api/campaigns') {
+      // The palette now fetches /api/campaigns?from=…&to=… (a 30-day window) —
+      // param-less 400s and yields no rows. Require the date params so a
+      // regression to a param-less key surfaces as an empty corpus here.
+      if (typeof key === 'string' && key.startsWith('/api/campaigns') && key.includes('from=')) {
         return {
           data: {
             rows: [
