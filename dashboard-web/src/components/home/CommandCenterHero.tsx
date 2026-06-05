@@ -235,6 +235,13 @@ export interface CommandCenterHeroProps {
    */
   comparisonLabel?: string;
   /**
+   * True when a non-default compare baseline is selected but the previous
+   * period has NO data to compare against (e.g. "שנה שעברה" on a business
+   * younger than a year). The featured card then shows an explicit
+   * "אין נתוני השוואה" hint instead of silently hiding every delta line.
+   */
+  comparisonUnavailable?: boolean;
+  /**
    * Daily Net Profit values across the active range, in ISO date order.
    * Drives the row-1 featured-card sparkline. Pass [] to suppress.
    */
@@ -573,6 +580,7 @@ export function CommandCenterHero({
   coverage,
   coverageBreakdown,
   comparisonLabel = 'מול אתמול',
+  comparisonUnavailable = false,
   netSparkValues,
   secondarySparklines,
   updatedAt,
@@ -730,21 +738,30 @@ export function CommandCenterHero({
           >
             <Money value={current.operatingProfit} prefix="$" compactAbove={1_000_000} countUp />
           </bdi>
-          <DeltaLine
-            text={fmtMoneyDelta(delta?.operatingProfit)}
-            pctText={fmtPctDelta(
-              delta?.operatingProfit != null && current.operatingProfit != null
-                ? delta.operatingProfit /
-                    Math.max(
-                      1,
-                      Math.abs(current.operatingProfit - delta.operatingProfit),
-                    )
-                : null,
-            )}
-            label={comparisonLabel}
-            positive={(delta?.operatingProfit ?? 0) >= 0}
-            className="text-sm mt-2.5"
-          />
+          {comparisonUnavailable ? (
+            // Non-default baseline chosen but no prior-period data to compare
+            // against — say so explicitly instead of silently hiding the delta.
+            // `hero-delta` keeps it legible (repainted white) on the vivid band.
+            <div className="hero-delta flex items-baseline text-sm mt-2.5 text-ink-muted">
+              אין נתוני השוואה לתקופה זו
+            </div>
+          ) : (
+            <DeltaLine
+              text={fmtMoneyDelta(delta?.operatingProfit)}
+              pctText={fmtPctDelta(
+                delta?.operatingProfit != null && current.operatingProfit != null
+                  ? delta.operatingProfit /
+                      Math.max(
+                        1,
+                        Math.abs(current.operatingProfit - delta.operatingProfit),
+                      )
+                  : null,
+              )}
+              label={comparisonLabel}
+              positive={(delta?.operatingProfit ?? 0) >= 0}
+              className="text-sm mt-2.5"
+            />
+          )}
           {netSparkValues && netSparkValues.length >= 2 && (
             <NetSparkline
               values={netSparkValues}

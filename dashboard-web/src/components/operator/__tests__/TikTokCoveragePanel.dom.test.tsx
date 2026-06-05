@@ -67,4 +67,23 @@ describe('TikTokCoveragePanel', () => {
     const countCell = countLabel.closest('div');
     expect(countCell?.textContent).toContain('1');
   });
+
+  it('surfaces the unmapped-campaign SPEND total, not just the count', async () => {
+    // Two unmapped campaigns (empty store-map) carrying CAD 43 + 35 = 78. The
+    // panel must show that 78 (the QA bug: it previously showed only the count
+    // + "mapped 0 / unattributed 0", reading as "no spend issue").
+    stubFetch({
+      accountTotalCad: 78,
+      campaigns: [
+        { campaignId: '1866979241538642', advertiserId: 'adv_730', spendCad: 43 },
+        { campaignId: '1867060827812098', advertiserId: 'adv_730', spendCad: 35 },
+      ],
+    });
+
+    renderPanel();
+
+    const spendLabel = await screen.findByText('הוצאה לא-ממופה');
+    const spendCell = spendLabel.closest('div');
+    expect(spendCell?.textContent).toContain('78');
+  });
 });

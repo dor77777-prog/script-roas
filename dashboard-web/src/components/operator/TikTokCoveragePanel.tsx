@@ -89,6 +89,14 @@ export function TikTokCoveragePanel() {
 
   const unmappedSet = new Set(unmappedCampaignIds);
   const unmappedRows = campaigns.filter((c) => unmappedSet.has(c.campaignId));
+  // Surface the SPEND riding on un-explicitly-mapped campaigns. Without this the
+  // panel showed only the unmapped COUNT plus "mapped 0 / unattributed 0", which
+  // read as "no spend issue" even when campaigns carried real spend (they fall
+  // back to the uzoshop default — attributed, but not explicitly mapped).
+  const unmappedSpendCad = unmappedRows.reduce(
+    (s, c) => s + (Number.isFinite(c.spendCad) ? c.spendCad : 0),
+    0,
+  );
 
   return (
     <Card className="space-y-4">
@@ -101,15 +109,18 @@ export function TikTokCoveragePanel() {
       </p>
 
       {/* LIVE panel. */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCell label="קמפיינים לא-ממופים">
           <span className="tabular-nums">{unmappedCampaignIds.length}</span>
         </StatCell>
-        <StatCell label="הוצאה לא-מיוחסת">
-          <Money value={unattributedSpendCad} prefix="CAD" />
+        <StatCell label="הוצאה לא-ממופה">
+          <Money value={unmappedSpendCad} prefix="CAD" />
         </StatCell>
         <StatCell label="הוצאה ממופה">
           <Money value={mappedSpendCad} prefix="CAD" />
+        </StatCell>
+        <StatCell label="הוצאה לא-מיוחסת">
+          <Money value={unattributedSpendCad} prefix="CAD" />
         </StatCell>
       </div>
 

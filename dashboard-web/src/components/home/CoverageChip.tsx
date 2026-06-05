@@ -62,10 +62,13 @@ export function CoverageChip({
   const pct = Math.round(coverage.coverageShare * 100);
   const prominent = coverage.prominent;
 
-  // Disclosure only when there is something to disclose AND the chip is loud.
-  // The panel itself renders null when unknownOrders === 0, so guard on that
-  // too — a prominent chip with an empty breakdown stays the quiet summary.
-  const canExpand = prominent && !!breakdown && breakdown.unknownOrders > 0;
+  // Disclosure whenever there is something to disclose — the operator wants to
+  // inspect the unknown bucket even when coverage is healthy (the >30% prominent
+  // gate hid the feature entirely at normal coverage). The chip's COLOR still
+  // tracks `prominent` (quiet when healthy, warning band when bad); only the
+  // expandability is unconditional. The panel renders null when unknownOrders
+  // === 0, so a zero-unknown chip stays the static summary.
+  const canExpand = !!breakdown && breakdown.unknownOrders > 0;
 
   if (!canExpand) {
     // Backward-compatible path — unchanged static chip + tooltip.
@@ -91,7 +94,7 @@ export function CoverageChip({
           size="sm"
           type="button"
           data-testid="coverage-chip"
-          data-prominent="true"
+          data-prominent={prominent ? 'true' : 'false'}
           aria-expanded={open}
           // Only reference the panel while it's mounted (it renders only when
           // open) so aria-controls never dangles on the collapsed accordion.
@@ -99,15 +102,17 @@ export function CoverageChip({
           onClick={() => setOpen((v) => !v)}
           // twMerge lets these win over the ghost/sm defaults: collapse the
           // h-8/px-3/text-xs sizing back down to the micro-chip, then layer on
-          // the warning-band tokens so the loud chip matches the static path.
+          // the band tokens. COLOR tracks `prominent` (warning band when the
+          // unknown share is bad, quiet muted ink when coverage is healthy) so
+          // an always-expandable healthy chip never looks alarming.
           className={cn(
             'h-auto',
             CHIP_BASE,
-            CHIP_PROMINENT,
+            prominent ? CHIP_PROMINENT : CHIP_QUIET,
             'cursor-pointer hover:brightness-110',
           )}
         >
-          <ChipContent pct={pct} prominent />
+          <ChipContent pct={pct} prominent={prominent} />
           <ChevronDown
             size={11}
             aria-hidden

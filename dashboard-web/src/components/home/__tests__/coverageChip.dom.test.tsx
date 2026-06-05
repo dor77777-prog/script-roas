@@ -74,13 +74,31 @@ describe('CoverageChip (2026-06-02)', () => {
     expect(screen.getByTestId('unknown-bucket-panel')).toBeInTheDocument();
   });
 
-  // Back-compat: a breakdown alone (no prominent state) does NOT turn the chip
-  // into a disclosure — the chip stays the honest quiet summary.
-  it('does not expose a disclosure when not prominent even if a breakdown is given', () => {
+  // Operator-approved (2026-06-05): the chip is ALWAYS expandable when there
+  // are unknown orders — even when coverage is healthy (not prominent) — so the
+  // operator can always inspect the bucket. The COLOR stays quiet (not the
+  // warning band) when not prominent.
+  it('is expandable when not prominent (quiet color) if the breakdown has unknown orders', async () => {
+    const user = userEvent.setup();
     render(
       <CoverageChip
         coverage={{ coverageShare: 0.82, unknownShare: 0.18, prominent: false }}
         breakdown={sampleBreakdown()}
+      />,
+    );
+    const chip = screen.getByTestId('coverage-chip');
+    expect(chip).toHaveAttribute('data-prominent', 'false'); // quiet color, not the warning band
+    const trigger = screen.getByTestId('coverage-chip-expand');
+    await user.click(trigger);
+    expect(screen.getByTestId('unknown-bucket-panel')).toBeInTheDocument();
+  });
+
+  // True back-compat: with NO breakdown the chip stays a static summary (no
+  // disclosure trigger) regardless of prominence.
+  it('stays a static summary (no disclosure) when no breakdown is given', () => {
+    render(
+      <CoverageChip
+        coverage={{ coverageShare: 0.82, unknownShare: 0.18, prominent: false }}
       />,
     );
     expect(screen.queryByTestId('coverage-chip-expand')).toBeNull();

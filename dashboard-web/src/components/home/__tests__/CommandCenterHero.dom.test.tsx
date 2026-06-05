@@ -125,6 +125,20 @@ describe('<CommandCenterHero>', () => {
     expect(getByTestId('hero-roas').getAttribute('data-band')).toBe('red');
   });
 
+  it('shows a "no comparison data" hint when comparisonUnavailable', () => {
+    // A non-default baseline (e.g. "שנה שעברה") with no prior-period data must
+    // say so explicitly rather than silently dropping the delta line.
+    const { getByText } = render(
+      <CommandCenterHero
+        current={PERIOD_GREEN}
+        rangeLabel="היום"
+        comparisonUnavailable
+        comparisonLabel="מול שנה שעברה"
+      />,
+    );
+    expect(getByText('אין נתוני השוואה לתקופה זו')).toBeInTheDocument();
+  });
+
   describe('Inventory (COGS) card — informational, muted band', () => {
     it('label includes "מלאי" and echoes the range label', () => {
       const { getByTestId } = render(

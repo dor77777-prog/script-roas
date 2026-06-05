@@ -1202,6 +1202,17 @@ function HomeTab({
       prevOrdersTotal,
     );
   }, [compare.show, filtered.curAgg, prevAggFromPrevData, heroCpm, heroCpmPrev, heroOrders, prevOrdersTotal]);
+  // A non-default compare baseline is ON, but the prior period has NO data to
+  // compare against (e.g. "שנה שעברה" on a <1-year-old business) — surfaced as
+  // an explicit hero hint instead of silently hiding every delta line.
+  const comparisonUnavailable = useMemo(() => {
+    if (!compare.show) return false;
+    const p = prevAggFromPrevData;
+    return (
+      !p ||
+      ((p.revenue ?? 0) === 0 && (p.spend ?? 0) === 0 && (prevOrdersTotal ?? 0) === 0)
+    );
+  }, [compare.show, prevAggFromPrevData, prevOrdersTotal]);
   const netSparkValues = useMemo(
     () => toNetSparkValues(filtered.series),
     [filtered.series],
@@ -1493,6 +1504,7 @@ function HomeTab({
         coverage={coverage ?? null}
         coverageBreakdown={coverageBreakdown}
         comparisonLabel={compare.caption}
+        comparisonUnavailable={comparisonUnavailable}
         netSparkValues={netSparkValues}
         secondarySparklines={secondarySparklines}
         updatedAt={data.dataLastWriteAt ?? undefined}
