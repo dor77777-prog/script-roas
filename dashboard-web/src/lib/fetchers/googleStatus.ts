@@ -176,7 +176,11 @@ export async function fetchGoogleStatusForStore(input: GoogleStatusInput): Promi
     const rows = await customer.searchStream({
       // IMP-B: include campaign.id so the ad-row gets a non-empty
       // campaign_id (ad_registry.campaign_id is NOT NULL per Phase B).
-      query: `SELECT campaign.id, ad_group_ad.ad.id, ad_group_ad.ad_group, ad_group_ad.status FROM ad_group_ad WHERE ad_group_ad.ad.id IN (${ids})`,
+      // Phase G (2026-06-05): also SELECT ad_group_ad.ad.name (mirrors the
+      // campaign/ad_group name selects above; same field googleHotMetrics
+      // uses) so the registry ad row carries the live ad name instead of
+      // null — otherwise the full-row upsert clobbers backfilled names.
+      query: `SELECT campaign.id, ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group_ad.ad_group, ad_group_ad.status FROM ad_group_ad WHERE ad_group_ad.ad.id IN (${ids})`,
     });
     for (const r of rows) {
       // CRIT-C: JSON uses camelCase key `adGroupAd` even though GAQL uses
@@ -247,11 +251,17 @@ function toAdRow(
   // to '' only if the row genuinely lacks the field (should not happen with
   // the updated query).
   const campaignId = String((camp ?? {}).id ?? '');
+  // Phase G (2026-06-05): the ad name lives on the inner `ad` object
+  // (ad_group_ad.ad.name, camelCase `ad.name` in the JSON response), NOT on
+  // the ad_group_ad row itself. toCampaignRow reads `aga.name` which is
+  // absent here → it would force the registry name to null and the full-row
+  // upsert would clobber any backfilled ad name. Source it from `ad.name`.
   return {
     ...toCampaignRow(storeId, aga),
     campaign_id: campaignId,
     adset_id: adgroupId,
     ad_id: String(adInner.id ?? ''),
+    name: (adInner.name as string | undefined) ?? null,
   };
 }
 

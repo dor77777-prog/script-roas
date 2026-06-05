@@ -107,6 +107,48 @@ describe('fetchGoogleStatusForStore()', () => {
     expect(out.ads[0]).toMatchObject({ ad_id: '55555444' });
   });
 
+  // Phase G (2026-06-05) — close the Google ad-level name gap. The ad-level
+  // follow-up GAQL must SELECT ad_group_ad.ad.name (mirroring the campaign
+  // and ad_group name selects) and toAdRow must source the registry row's
+  // `name` from that ad name. Without this the registry ad name is forced to
+  // null and the full-row upsert clobbers any backfilled Google ad name.
+  it('Phase G: ad-level follow-up SELECTs ad_group_ad.ad.name and the ad row name equals it', async () => {
+    const searchStream = vi.fn();
+    searchStream.mockResolvedValueOnce([
+      {
+        changeStatus: {
+          resourceType: 'AD_GROUP_AD',
+          resourceName: 'customers/123/changeStatus/1780118362096500-13-88888333',
+          adGroupAd: 'customers/123/adGroupAds/77777222~55555444',
+          lastChangeDateTime: '2026-05-30 14:02:00',
+        },
+      },
+    ]);
+    // Follow-up: ad_group_ad entity now carries the ad name (camelCase JSON).
+    searchStream.mockResolvedValueOnce([
+      {
+        campaign: { id: '22542818628' },
+        adGroupAd: {
+          adGroup: 'customers/123/adGroups/77777222',
+          ad: { id: '55555444', name: 'My Google Ad Name' },
+          status: 'ENABLED',
+        },
+      },
+    ]);
+    const customer = { searchStream } as unknown as Parameters<typeof fetchGoogleStatusForStore>[0]['customer'];
+    const out = await fetchGoogleStatusForStore({ storeId: 'uzoshop', customer });
+
+    // The GAQL must request the ad name (the correct GAQL field is
+    // ad_group_ad.ad.name — same field googleHotMetrics already selects).
+    const followUpQuery = searchStream.mock.calls[1][0].query as string;
+    expect(followUpQuery).toContain('ad_group_ad.ad.name');
+
+    expect(out.ads).toHaveLength(1);
+    expect(out.ads[0].ad_id).toBe('55555444');
+    expect(out.ads[0].name).toBe('My Google Ad Name');
+    expect(out.ads[0].name).not.toBeNull();
+  });
+
   it('returns empty when change_status yields no rows', async () => {
     const searchStream = vi.fn().mockResolvedValue([]);
     const customer = { searchStream } as unknown as Parameters<typeof fetchGoogleStatusForStore>[0]['customer'];

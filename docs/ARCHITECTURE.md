@@ -3364,3 +3364,18 @@ primitive so the Trends chart shows the **same** pins (one source of truth).
 - **`components/ui/ChartAnnotationPins.tsx`** (new) — the reusable pin/popover layer (name · date · ROAS on hover/click), drawn with legible on-band ink/casing per the readability standard.
 - **`components/home/RoasTargetChart.tsx`** adopts it (the hero chart becomes the canonical consumer rather than owning a bespoke copy).
 - **`components/RoasChart.tsx`** + **`components/AnalysisTrendsTab.tsx`** — the Trends-tab ROAS chart now renders the same primitive, so annotations are consistent across hero and Trends.
+
+## 37. Retroactive entity names (registry-preferred, 2026-06-05)
+
+**Problem.** Campaign/ad-set/ad names are stored per-day on `campaigns_daily` / `ads_daily` (a copy on every row), and the campaigns aggregator seeds the displayed name *first-seen*. So renaming an entity in the ad platform only showed the new name on freshly-written days (today/yesterday) — historical date ranges kept the old name, and a range spanning the rename showed the stale one.
+
+**Fix (read-layer; retroactive by construction + future-proof).** The three Phase-D enriched views already `LEFT JOIN` each daily to its registry (`campaign_registry` / `adset_registry` / `ad_registry`), whose `name` column is refreshed on **every status tick** by all three platform workers (full-row `ON CONFLICT DO UPDATE`). Migration `20260605120000_enriched_views_coalesce_name.sql` (additive `CREATE OR REPLACE VIEW`) projects the registry's *current* name with a same-day fallback:
+- `campaigns_enriched`: adds a `LEFT JOIN adset_registry` and projects `reg_campaign_name = COALESCE(NULLIF(cr.name,''), cd.campaign_name)` and `reg_ad_set_name = COALESCE(NULLIF(ar.name,''), cd.ad_set_name)`.
+- `ads_enriched`: adds `LEFT JOIN campaign_registry` + `LEFT JOIN adset_registry` and projects `reg_campaign_name`, `reg_ad_set_name`, `reg_ad_name` (each `COALESCE(NULLIF(registry.name,''), daily.name)`).
+- `NULLIF(...,'')` treats a blank registry name as absent so it never shadows a present per-day name. Additive (columns appended; old readers unaffected) → **apply the migration BEFORE the code deploy** (the new reader `.select()`s the `reg_*` columns; deploying code first would error the Campaigns/Ads queries until the view exists).
+
+**Reader.** `lib/postgresReaders.ts` adds `preferName(reg, daily)` (trim-aware `reg || daily || '—'`, mirroring the view's `NULLIF`) and prefers the `reg_*` aliases at all five name sites in `fetchCampaignsFromPostgres` / `fetchAdsFromPostgres`. Because the registry holds ONE current name per entity (date-independent), every historical row renders the current name; the daily fallback covers archived/deleted/never-discovered rows. The aggregator (`campaignsAggregator.ts`) is unchanged — its first-seen seed now inherits the corrected name. Consumer sweep confirmed these two readers are the only name-display path (everything else is a writer or selects no name columns).
+
+**Google ad-name gap closed.** `lib/fetchers/googleStatus.ts` now selects `ad_group_ad.ad.name` in the ad-level GAQL follow-up and sources the ad registry row's name from it (previously null → the full-row upsert would clobber the backfilled name), so Google **ad** renames are now self-maintaining like Meta/TikTok (campaign + ad-set already were).
+
+**Net:** a rename on any platform reflects across **all** historical date ranges automatically on the next status tick — no backfill, no manual step. Verified in prod post-deploy: 360 campaign + 366 ad-set rows overriding stale day-names, 0 NULL `reg_campaign_name`.

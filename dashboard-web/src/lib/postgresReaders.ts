@@ -78,6 +78,37 @@ export const ORDERS_ATTRIBUTION_SELECT =
   'first_utm_term, first_seen_at';
 
 /**
+ * Name-preference rule for the Campaigns/Ads readers (2026-06-05).
+ *
+ * The `campaigns_enriched` / `ads_enriched` VIEWs now expose a registry-backed
+ * name alias per entity — `reg_campaign_name` / `reg_ad_set_name` /
+ * `reg_ad_name` — each computed server-side as
+ * `COALESCE(<registry>.name, <daily>.name)`. The registry holds the CURRENT
+ * (latest-seen) name for an entity, whereas the per-day `*_daily` row holds the
+ * name as it was on that specific date. Preferring the registry alias keeps the
+ * Campaigns/Ads UI showing the up-to-date name even when an old in-range row
+ * still carries a stale name.
+ *
+ * Preference order: registry alias → per-day name → em-dash. The reg argument
+ * may be `null`/`undefined` (LEFT JOIN miss, or pre-Phase-D rows). We use `??`
+ * (not `||`) so the SQL COALESCE semantics carry through: a registry name is
+ * "present" unless it is NULL/undefined; only then do we fall back to the
+ * daily name, then to the em-dash placeholder shared by both readers.
+ */
+export function preferName(
+  reg: string | null | undefined,
+  daily: string | null | undefined,
+): string {
+  // A blank-after-trim registry name (a genuine '' the platform returned, or
+  // whitespace) is treated as ABSENT so we fall through to the per-day name
+  // rather than rendering the em-dash. Mirrors the views' NULLIF(name,'')
+  // inside COALESCE — defense-in-depth on both sides.
+  const r = (reg ?? '').trim();
+  const d = (daily ?? '').trim();
+  return r || d || '—';
+}
+
+/**
  * Pagination helper — works around Supabase Cloud's `db-max-rows = 1000`
  * PostgREST cap. `.range(0, 49999)` alone returns only 1000 rows because
  * PostgREST clamps to the project setting, not the client request.
@@ -642,7 +673,13 @@ export async function fetchCampaignsFromPostgres(
         .from('campaigns_enriched')
         .select(
           'date, store_id, platform, campaign_id, campaign_name, ' +
-            'ad_set_id, ad_set_name, spend_cad, impressions, clicks, conversions, ' +
+            'ad_set_id, ad_set_name, ' +
+            // 2026-06-05 — registry-backed name aliases
+            // (COALESCE(registry.name, daily.name)) added to campaigns_enriched.
+            // The reader PREFERS these (via preferName) so the Campaigns UI
+            // shows the entity's current name, not a stale per-day name.
+            'reg_campaign_name, reg_ad_set_name, ' +
+            'spend_cad, impressions, clicks, conversions, ' +
             'conversion_value_cad, campaign_budget_cad, ad_set_budget_cad, ' +
             // Phase 05.7.x — effective_status column added in migration
             // 20260522180000. NULL for rows written before the migration; the
@@ -733,9 +770,15 @@ export async function fetchCampaignsFromPostgres(
       storeName: STORE_NAME_BY_ID[storeId] ?? storeId,
       platform: titleCasePlatform(r.platform),
       campaignId: String(r.campaign_id),
-      campaignName: String(r.campaign_name ?? '').trim() || '—',
+      campaignName: preferName(
+        (r as { reg_campaign_name?: string | null }).reg_campaign_name,
+        r.campaign_name as string | null | undefined,
+      ),
       adSetId: String(r.ad_set_id),
-      adSetName: String(r.ad_set_name ?? '').trim() || '—',
+      adSetName: preferName(
+        (r as { reg_ad_set_name?: string | null }).reg_ad_set_name,
+        r.ad_set_name as string | null | undefined,
+      ),
       spend,
       impressions,
       clicks: toNumber(r.clicks),
@@ -1035,7 +1078,13 @@ export async function fetchAdsFromPostgres(
         .from('ads_enriched')
         .select(
           'date, store_id, platform, campaign_id, campaign_name, ad_set_id, ' +
-            'ad_set_name, ad_id, ad_name, spend_cad, impressions, clicks, ' +
+            'ad_set_name, ad_id, ad_name, ' +
+            // 2026-06-05 — registry-backed name aliases
+            // (COALESCE(registry.name, daily.name)) added to ads_enriched. The
+            // reader PREFERS these (via preferName) so the Ads UI shows each
+            // entity's current name, not a stale per-day name.
+            'reg_campaign_name, reg_ad_set_name, reg_ad_name, ' +
+            'spend_cad, impressions, clicks, ' +
             'conversions, conversion_value_cad, ' +
             // Phase D (2026-05-30) — registry-backed status columns from
             // ad_registry, joined server-side via the ads_enriched VIEW.
@@ -1075,11 +1124,20 @@ export async function fetchAdsFromPostgres(
       storeName: STORE_NAME_BY_ID[storeId] ?? storeId,
       platform: titleCasePlatform(r.platform),
       campaignId: String(r.campaign_id),
-      campaignName: String(r.campaign_name ?? '').trim() || '—',
+      campaignName: preferName(
+        (r as { reg_campaign_name?: string | null }).reg_campaign_name,
+        r.campaign_name as string | null | undefined,
+      ),
       adSetId: String(r.ad_set_id),
-      adSetName: String(r.ad_set_name ?? '').trim() || '—',
+      adSetName: preferName(
+        (r as { reg_ad_set_name?: string | null }).reg_ad_set_name,
+        r.ad_set_name as string | null | undefined,
+      ),
       adId: String(r.ad_id),
-      adName: String(r.ad_name ?? '').trim() || '—',
+      adName: preferName(
+        (r as { reg_ad_name?: string | null }).reg_ad_name,
+        r.ad_name as string | null | undefined,
+      ),
       spend,
       impressions,
       clicks: toNumber(r.clicks),

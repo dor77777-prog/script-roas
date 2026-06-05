@@ -82,6 +82,65 @@ describe('fetchCampaignsFromPostgres → campaigns_enriched', () => {
     expect(r.regLastStatusSuccessAt).toBe('2026-05-30T09:50:00Z');
   });
 
+  it('PREFERS the registry name (reg_campaign_name / reg_ad_set_name) over the per-day name', async () => {
+    fromMock.mockReturnValue(
+      buildSupabaseChain([
+        {
+          date: '2026-05-30',
+          store_id: 'uzoshop',
+          platform: 'meta',
+          campaign_id: 'C1',
+          campaign_name: 'OLD campaign name', // stale per-day name
+          reg_campaign_name: 'NEW campaign name', // registry current name
+          ad_set_id: 'A1',
+          ad_set_name: 'OLD adset name',
+          reg_ad_set_name: 'NEW adset name',
+          spend_cad: 10,
+          impressions: 100,
+          clicks: 5,
+          conversions: 1,
+          conversion_value_cad: 25,
+          effective_status: 'ACTIVE',
+        },
+      ]),
+    );
+    const rows = await fetchCampaignsFromPostgres({
+      range: { from: '2026-05-30', to: '2026-05-30' },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].campaignName).toBe('NEW campaign name');
+    expect(rows[0].adSetName).toBe('NEW adset name');
+  });
+
+  it('falls back to the per-day name when the registry alias is null', async () => {
+    fromMock.mockReturnValue(
+      buildSupabaseChain([
+        {
+          date: '2026-05-30',
+          store_id: 'uzoshop',
+          platform: 'meta',
+          campaign_id: 'C1',
+          campaign_name: 'Daily campaign name',
+          reg_campaign_name: null, // registry LEFT JOIN miss
+          ad_set_id: 'A1',
+          ad_set_name: 'Daily adset name',
+          reg_ad_set_name: null,
+          spend_cad: 10,
+          impressions: 100,
+          clicks: 5,
+          conversions: 1,
+          conversion_value_cad: 25,
+          effective_status: 'ACTIVE',
+        },
+      ]),
+    );
+    const rows = await fetchCampaignsFromPostgres({
+      range: { from: '2026-05-30', to: '2026-05-30' },
+    });
+    expect(rows[0].campaignName).toBe('Daily campaign name');
+    expect(rows[0].adSetName).toBe('Daily adset name');
+  });
+
   it('returns null for reg_* when the LEFT JOIN missed (defensive path)', async () => {
     fromMock.mockReturnValue(
       buildSupabaseChain([
