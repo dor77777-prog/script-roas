@@ -1315,6 +1315,7 @@ async function runDailyForStoreInner(
         impressions: number;
         clicks: number;
         conversions: number;
+        reach: number | null;
         roas: null;
         spend_cad?: number;
         conversion_value_cad?: number;
@@ -1341,6 +1342,7 @@ async function runDailyForStoreInner(
             impressions: Math.round(r.impressions),
             clicks: Math.round(r.clicks),
             conversions: Math.round(r.conversions),
+            reach: r.reach ?? null,
             roas: null,
             // Phase A 2026-05-29 (Task 13) — finalization fields.
             source: 'daily_reconcile',
@@ -1392,6 +1394,7 @@ async function runDailyForStoreInner(
         impressions: number;
         clicks: number;
         conversions: number;
+        reach: number | null;
         roas: null;
         spend_cad?: number;
         conversion_value_cad?: number;
@@ -1417,6 +1420,7 @@ async function runDailyForStoreInner(
             impressions: Math.round(r.impressions),
             clicks: Math.round(r.clicks),
             conversions: Math.round(r.conversions),
+            reach: r.reach ?? null,
             roas: null,
             // Phase A 2026-05-29 (Task 13) — finalization fields.
             source: 'daily_reconcile',
