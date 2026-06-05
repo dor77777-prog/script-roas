@@ -1,3 +1,4 @@
+-- DESTRUCTIVE: rebuild ads_enriched view (DROP VIEW + CREATE VIEW) to expose new ads_daily.reach — view is a query definition, zero data loss
 -- supabase/migrations/20260605130000_add_reach_to_ads_daily.sql
 --
 -- Creative-fatigue frequency leg (2026-06-05).
