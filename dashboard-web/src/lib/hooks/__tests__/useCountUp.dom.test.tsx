@@ -89,20 +89,25 @@ describe('useCountUp', () => {
     expect(rafQueue.length).toBe(0);
   });
 
-  it('retargets from the currently-displayed value, not back to 0', () => {
+  it('animates only the FIRST reveal; subsequent target changes snap instantly (no re-animation)', () => {
+    // Operator report 2026-06-05: re-animating every number on each
+    // edit/filter/refresh made the whole dashboard "shake". The fix: the
+    // count-up tween plays ONCE (the first reveal); every later target change
+    // updates instantly with no rAF tween.
     installReducedMotion(false);
     const { result, rerender } = renderHook(
       ({ t }: { t: number }) => useCountUp(t, { durationMs: 1000 }),
       { initialProps: { t: 100 } },
     );
+    // First reveal animates 0 → 100.
     flushFrame(0);
-    flushFrame(1000); // settle on 100
+    flushFrame(1000);
     expect(result.current).toBe(100);
-    // New target — the next animation must START from 100, never snap to 0.
+    // New target (filter / edit / refresh) must SNAP — no intermediate tween,
+    // no new animation frame scheduled.
+    rafQueue = [];
     rerender({ t: 200 });
-    flushFrame(2000);
-    expect(result.current).toBeGreaterThanOrEqual(100);
-    flushFrame(3000);
     expect(result.current).toBe(200);
+    expect(rafQueue.length).toBe(0);
   });
 });

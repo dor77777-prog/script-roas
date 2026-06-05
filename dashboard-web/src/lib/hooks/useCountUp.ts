@@ -28,10 +28,12 @@ function prefersReducedMotion(): boolean {
  * `target`, easing out over `durationMs`, using `requestAnimationFrame`.
  *
  * Behaviour:
- *   • First client mount climbs from 0 → target (the "numbers come alive"
- *     effect). Subsequent target changes (e.g. switching the date range)
- *     spring from the CURRENTLY-DISPLAYED value → the new target, so a
- *     mid-flight retarget continues smoothly instead of snapping back to 0.
+ *   • The count-up tween plays ONCE — the first reveal climbs from 0 → target
+ *     (the "numbers come alive" effect). Every SUBSEQUENT target change
+ *     (filter / edit / auto-refresh) updates the value INSTANTLY, no tween.
+ *     Re-animating every number on each change made the whole dashboard
+ *     "shake" (operator report 2026-06-05); snapping after the first reveal
+ *     fixes it while keeping the one-time load delight.
  *   • `prefers-reduced-motion: reduce` → no animation; the value jumps to the
  *     target immediately (accessibility default, also how the DOM tests run).
  *   • `target == null` / `NaN` → returns 0 and resets the spring origin to 0,
@@ -67,6 +69,10 @@ export function useCountUp(
   valueRef.current = value;
 
   const rafRef = useRef<number | null>(null);
+  // Whether the one-time reveal tween has already played. After it has, every
+  // subsequent target change snaps instantly (no rAF tween) — re-animating on
+  // each filter/edit/refresh made the whole dashboard "shake" (2026-06-05).
+  const hasAnimatedRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (safeTarget == null) {
@@ -77,12 +83,19 @@ export function useCountUp(
       setValue(safeTarget);
       return;
     }
+    // Subsequent changes after the first reveal: snap, don't re-animate.
+    if (hasAnimatedRef.current) {
+      setValue(safeTarget);
+      return;
+    }
     const from = valueRef.current;
     const to = safeTarget;
     if (from === to) {
       setValue(to);
+      hasAnimatedRef.current = true;
       return;
     }
+    hasAnimatedRef.current = true;
     let start: number | null = null;
     const tick = (ts: number) => {
       if (start == null) start = ts;
