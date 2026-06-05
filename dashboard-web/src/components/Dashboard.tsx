@@ -13,7 +13,7 @@ import {
   Building2,
 } from 'lucide-react';
 import type { DashboardData, Filters as F } from '@/lib/types';
-import { computePresetRange, previousRange } from '@/lib/presets';
+import { computePresetRange, previousRange, resolveCompare } from '@/lib/presets';
 import { aggregate, aggregateByStore, dailySeries, filterRows } from '@/lib/analytics';
 import { cn } from '@/lib/utils';
 import { Filters } from './Filters';
@@ -24,7 +24,7 @@ import { CampaignsTable } from './CampaignsTable';
 import { CampaignsTopList, type CampaignTopListPoint } from './CampaignsTopList';
 import { aggregate as aggregateCampaigns } from '@/lib/campaignsAggregator';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
-import { rangeLabelHebrew, comparisonLabelHebrew } from '@/lib/presets';
+import { rangeLabelHebrew } from '@/lib/presets';
 import { AiReportButton } from './AiReportButton';
 import { TabHeader } from './TabHeader';
 import { PnLBreakdown } from './PnLBreakdown';
@@ -70,6 +70,7 @@ import { provenanceForRange } from '@/lib/freshness/provenance';
 import type { ActiveOverridesResponse } from '@/app/api/active-overrides/route';
 import type { OverridesActiveGroup } from '@/lib/home/overridesActive';
 import { PerStoreRow } from '@/components/home/PerStoreRow';
+import { StoreCompareGrid } from '@/components/home/StoreCompareGrid';
 import {
   RoasTargetChart,
   readChartRangeFromUrl,
@@ -945,7 +946,16 @@ function HomeTab({
     campaignsFetcher,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
-  const prevRange = useMemo(() => previousRange(filters.range), [filters.range]);
+  // Period-compare resolution — chosen baseline + active range + preset →
+  // UI-ready { range, show, caption }. `compare.range` is ALWAYS a valid
+  // window (falls back to previousRange when baseline is 'none'), so every
+  // prev-period fetch + aggregate below keeps working; `compare.show` gates
+  // whether the delta lines render at all.
+  const compare = useMemo(
+    () => resolveCompare(filters.compareBaseline, filters.range, filters.preset),
+    [filters.compareBaseline, filters.range, filters.preset],
+  );
+  const prevRange = compare.range;
   const { data: campaignsDataPrev } = useSWR<CampaignsResponse>(
     buildDateRangeKey('/api/campaigns', prevRange),
     campaignsFetcher,
@@ -1153,7 +1163,7 @@ function HomeTab({
     ordersRows,
   ]);
   const heroDelta = useMemo(() => {
-    if (!prevAggFromPrevData) return undefined;
+    if (!compare.show || !prevAggFromPrevData) return undefined;
     return toHeroDelta(
       filtered.curAgg,
       prevAggFromPrevData,
@@ -1162,7 +1172,7 @@ function HomeTab({
       heroOrders,
       prevOrdersTotal,
     );
-  }, [filtered.curAgg, prevAggFromPrevData, heroCpm, heroCpmPrev, heroOrders, prevOrdersTotal]);
+  }, [compare.show, filtered.curAgg, prevAggFromPrevData, heroCpm, heroCpmPrev, heroOrders, prevOrdersTotal]);
   const netSparkValues = useMemo(
     () => toNetSparkValues(filtered.series),
     [filtered.series],
@@ -1204,7 +1214,7 @@ function HomeTab({
         // tab already computes) + delta-vs-prev-range chip (from the prev
         // SWR payload the hero delta already fetched). Desktop ignores both.
         filtered.series,
-        prevRoasByStore,
+        compare.show ? prevRoasByStore : undefined,
       ),
     [
       filtered.storeAggs,
@@ -1214,6 +1224,7 @@ function HomeTab({
       storeIdByName,
       data?.dataLastWriteAt,
       filtered.series,
+      compare.show,
       prevRoasByStore,
     ],
   );
@@ -1241,12 +1252,16 @@ function HomeTab({
       storeId: modalStoreId,
       storeName,
       cur,
-      prev: prevStoreAggByName?.[storeName] ?? null,
+      prev: compare.show ? (prevStoreAggByName?.[storeName] ?? null) : null,
       series: filtered.series,
       campaignRows: campaignsData?.rows,
       range: filters.range,
       orders: ordersByStore[storeName] ?? 0,
-      prevOrders: prevOrdersByStore ? (prevOrdersByStore[storeName] ?? 0) : null,
+      prevOrders: compare.show
+        ? prevOrdersByStore
+          ? (prevOrdersByStore[storeName] ?? 0)
+          : null
+        : null,
       updatedAt: data?.dataLastWriteAt ?? null,
       // Phase 3 — per-store NC-ROAS / nCAC. toStoreDetail filters these by
       // storeName internally; MER spend = the store's mapping-aware cur.spend.
@@ -1263,6 +1278,7 @@ function HomeTab({
     filters.range,
     ordersByStore,
     prevOrdersByStore,
+    compare.show,
     data?.dataLastWriteAt,
     firstOrderRows,
   ]);
@@ -1380,7 +1396,15 @@ function HomeTab({
       <TabHeader
         title="בית"
         description="שנה טווח או חנות לעדכון כל המסך."
-        filterSlot={<Filters filters={filters} stores={data.stores} onChange={setFilters} />}
+        filterSlot={
+          <Filters
+            filters={filters}
+            stores={data.stores}
+            onChange={setFilters}
+            showCompareBaseline
+            showSavedViews
+          />
+        }
         actionSlot={<AiReportButton data={data} filters={filters} openSignal={aiReportSignal} />}
       />
       <PageScope
@@ -1401,6 +1425,10 @@ function HomeTab({
         description="מצב ה-ROAS, ההוצאה, ההכנסה וה-CPM של כל חנות בנפרד — לטווח הנבחר."
       />
       <PerStoreRow stores={perStoreData} onStoreSelect={handleStoreSelect} rangeLabel={rangeLabel} />
+
+      {/* Cross-store comparison grid — renders its own section heading. Shares
+          the exact per-store data array PerStoreRow consumes. */}
+      <StoreCompareGrid stores={perStoreData} />
 
       {/* Per-store drill-down MODAL — opens on store-card click; reuses the
           campaign modal's Sheet shell. Renders nothing while closed (data null).
@@ -1434,7 +1462,7 @@ function HomeTab({
         delta={heroDelta}
         rangeLabel={heroRangeLabel}
         coverage={coverage ?? null}
-        comparisonLabel={comparisonLabelHebrew(filters.preset)}
+        comparisonLabel={compare.caption}
         netSparkValues={netSparkValues}
         secondarySparklines={secondarySparklines}
         updatedAt={data.dataLastWriteAt ?? undefined}

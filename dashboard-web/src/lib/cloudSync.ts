@@ -72,6 +72,9 @@ export const STATE_KEYS = [
   // carry-forward default. Replaces the legacy single-number
   // 'monthly-revenue-goal' (kept above for back-compat hydrate + migration).
   'roas-dashboard:goal-settings',
+  // Saved Views (2026-06-04) — named Filters snapshots (preset+range+store),
+  // keyed by opaque id with createdAt/lastUsedAt. Device-synced.
+  'roas-dashboard:saved-views',
 ] as const;
 export type StateKey = (typeof STATE_KEYS)[number];
 
@@ -89,6 +92,7 @@ const CHANGE_EVENTS: Record<StateKey, string> = {
   'roas-dashboard:salary-settings': 'roas-salary-changed',
   // Shares the legacy goal event so both writers drive one re-render signal.
   'roas-dashboard:goal-settings': 'roas-goal-changed',
+  'roas-dashboard:saved-views': 'roas-saved-views-changed',
 };
 
 /** ms epoch of the last push we sent for each key. Used to skip stomping

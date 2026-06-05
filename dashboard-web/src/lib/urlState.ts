@@ -16,10 +16,12 @@
  *   from    = YYYY-MM-DD   (only used when preset=custom)
  *   to      = YYYY-MM-DD
  *   store   = "All" | <store name>
+ *   compare = prev_7d | prev_month | prev_year | none
+ *             (the default 'prev_period' is omitted from the URL)
  */
 
 import type { Filters, PresetKey, DateRange } from './types';
-import { computePresetRange } from './presets';
+import { computePresetRange, type CompareBaseline } from './presets';
 
 export type TabKey =
   | 'home'
@@ -39,6 +41,10 @@ const TAB_VALUES = new Set<TabKey>([
 const PRESET_VALUES = new Set<PresetKey>([
   'today', 'yesterday', 'this_month', 'this_week',
   'last_7_days', 'last_month', 'last_30_days', 'custom',
+]);
+
+const COMPARE_VALUES = new Set<CompareBaseline>([
+  'prev_period', 'prev_7d', 'prev_month', 'prev_year', 'none',
 ]);
 
 const DATE_RX = /^\d{4}-\d{2}-\d{2}$/;
@@ -97,15 +103,27 @@ export function readDashboardState(
 
   const store = params.get('store') ?? defaults.filters.store;
 
+  // Period-compare baseline. The default/unset baseline is 'prev_period', so
+  // it's never written to the URL — only a valid non-default value lands on
+  // filters.compareBaseline. 'prev_period', an invalid value, and an absent
+  // param all read back as undefined (which the app treats as the default).
+  const rawCompare = params.get('compare');
+  const compareBaseline: CompareBaseline | undefined =
+    rawCompare &&
+    (COMPARE_VALUES as Set<string>).has(rawCompare) &&
+    rawCompare !== 'prev_period'
+      ? (rawCompare as CompareBaseline)
+      : undefined;
+
   return {
     tab,
-    filters: { preset, range, store },
+    filters: { preset, range, store, compareBaseline },
   };
 }
 
 /** Param names this module owns. Anything else in the URL is preserved
  *  (per-tab `c_*` / `p_*` written by syncTabLocalUrl, drill state, etc.). */
-const GLOBAL_PARAMS = new Set(['tab', 'preset', 'from', 'to', 'store']);
+const GLOBAL_PARAMS = new Set(['tab', 'preset', 'from', 'to', 'store', 'compare']);
 
 /**
  * Build a search string for the current state, omitting defaults so the URL
@@ -133,6 +151,11 @@ export function writeDashboardState(
     params.set('to', state.filters.range.to);
   }
   if (state.filters.store !== 'All') params.set('store', state.filters.store);
+  // Compare baseline: omit the default 'prev_period' (and undefined) so the URL
+  // stays clean — only a non-default baseline is serialized.
+  if (state.filters.compareBaseline && state.filters.compareBaseline !== 'prev_period') {
+    params.set('compare', state.filters.compareBaseline);
+  }
   const s = params.toString();
   return s ? `?${s}` : '';
 }

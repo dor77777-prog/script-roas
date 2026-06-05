@@ -27,6 +27,7 @@ import {
   Bot,
   Command as CmdIcon,
   Receipt,
+  CreditCard,
   X,
   Sun,
   Moon,
@@ -44,7 +45,7 @@ import type { DashboardData, Filters as F, PresetKey } from '@/lib/types';
 import { PRESET_LABELS, computePresetRange } from '@/lib/presets';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { ProductsResponse } from '@/app/api/products/route';
-import type { TabKey } from '@/lib/urlState';
+import { drillToCampaigns, type TabKey } from '@/lib/urlState';
 
 /**
  * Cmd-K command palette — Linear / Notion / Superhuman pattern.
@@ -191,6 +192,7 @@ export function CommandPalette({
       { key: 'trends',    label: 'מעבר ל-מגמות',              icon: <TrendingUp size={15} />,  search: 'מגמות trends גרף roas over time מגמה' },
       { key: 'campaigns', label: 'מעבר ל-קמפיינים',           icon: <Megaphone size={15} />,   search: 'קמפיינים campaigns ads מודעות' },
       { key: 'products',  label: 'מעבר ל-מוצרים',             icon: <Package size={15} />,      search: 'מוצרים products items' },
+      { key: 'payments',  label: 'מעבר ל-תשלומים',            icon: <CreditCard size={15} />,   search: 'תשלומים payments gateway gateways סליקה שער תשלום' },
       { key: 'detail',    label: 'מעבר ל-פירוט',              icon: <Table size={15} />,        search: 'פירוט detail rows daily' },
     ];
     for (const t of tabs) {
@@ -221,6 +223,25 @@ export function CommandPalette({
           close();
         },
       });
+    });
+
+    // Custom range — the preset loop above skips 'custom' (it has no fixed
+    // computed range). Selecting it just flips the active preset to 'custom';
+    // the Filters component reacts by auto-opening its custom-date inputs
+    // (showAdvanced = … || filters.preset === 'custom'). Keep the existing
+    // range so the operator edits from where they are rather than a reset.
+    cmds.push({
+      id: 'preset-custom',
+      kind: 'preset',
+      label: PRESET_LABELS.custom,
+      labelText: PRESET_LABELS.custom,
+      subtitle: 'בחר תאריכי התחלה וסיום',
+      icon: <CalendarDays size={15} />,
+      search: `${PRESET_LABELS.custom} custom range תאריכים מותאם בחירת טווח`.toLowerCase(),
+      perform: () => {
+        setFilters({ ...filters, preset: 'custom' });
+        close();
+      },
     });
 
     // Stores
@@ -263,6 +284,7 @@ export function CommandPalette({
       const agg = new Map<string, {
         campaignId: string;
         campaignName: string;
+        storeId: string;
         store: string;
         platform: string;
         spend: number;
@@ -275,6 +297,7 @@ export function CommandPalette({
           agg.set(k, {
             campaignId: r.campaignId,
             campaignName: r.campaignName,
+            storeId: r.storeId,
             store: r.storeName,
             platform: r.platform,
             spend: 0,
@@ -316,8 +339,17 @@ export function CommandPalette({
           icon: <Megaphone size={15} />,
           search: `${c.campaignName} ${c.platform} ${c.store} קמפיין`.toLowerCase(),
           perform: () => {
-            setFilters({ ...filters, store: c.store });
-            setActiveTab('campaigns');
+            // Deep-link straight to this campaign's drawer via ?c_drill, rather
+            // than only setting the store filter + switching tab. Mirror the
+            // title-case → lowercase platform mapping used in Dashboard's
+            // `roas-open-campaign-drawer` bridge (CampaignRow.platform is
+            // 'Meta' | 'Google' | 'TikTok').
+            const lower = c.platform === 'Meta' ? 'meta' : c.platform === 'Google' ? 'google' : 'tiktok';
+            drillToCampaigns({
+              store: c.store,
+              platform: lower,
+              campaign: { storeId: c.storeId, platform: lower, campaignId: c.campaignId },
+            });
             close();
           },
         });
@@ -391,7 +423,7 @@ export function CommandPalette({
       kind: 'action',
       label: 'רענן נתונים',
       labelText: 'רענן נתונים',
-      subtitle: 'משוך מחדש מ-Sheets',
+      subtitle: 'משוך נתונים עדכניים מחדש',
       icon: <RefreshCw size={15} />,
       search: 'רענן refresh reload עדכן'.toLowerCase(),
       perform: () => { onRefresh(); close(); },
@@ -604,15 +636,6 @@ export function CommandPalette({
                 <X size={14} />
               </Button>
             </div>
-
-            {/* NL query placeholder slot (wired in Plan 2) */}
-            {query.length > 0 && (
-              <div className="px-3 py-2 border-b border-glass-edge text-xs text-ink-muted">
-                <Sparkles size={12} className="inline-block me-1" />
-                שאלת AI: <span className="text-ink">{query}</span>
-                <span className="opacity-50">{' '}— יזמין ב-Plan 2</span>
-              </div>
-            )}
 
             {/* Results */}
             <div

@@ -45,6 +45,9 @@ export const ALLOWED_STATE_KEYS = [
   // Per-month monthly revenue goal (2026-06-02) — byMonth map, business-wide.
   // Must match cloudSync.ts:STATE_KEYS ('roas-dashboard:goal-settings') for cross-device sync.
   'goal-settings',
+  // Saved Views (2026-06-04) — named Filters snapshots, device-synced.
+  // Must match cloudSync.ts:STATE_KEYS ('roas-dashboard:saved-views') for cross-device sync.
+  'saved-views',
 ] as const;
 
 export type AllowedStateKey = (typeof ALLOWED_STATE_KEYS)[number];

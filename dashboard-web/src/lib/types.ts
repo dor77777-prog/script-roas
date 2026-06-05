@@ -1,3 +1,5 @@
+import type { CompareBaseline } from './presets';
+
 export type DailyRow = {
   date: string;        // YYYY-MM-DD
   storeId: string;
@@ -99,4 +101,10 @@ export type Filters = {
   preset: PresetKey;
   range: DateRange;
   store: string;   // 'All' or store name
+  /**
+   * Period-compare baseline (Phase A). Optional so existing Filters consumers
+   * and persisted URL/state shapes keep working; when unset the UI treats it
+   * as "no comparison chosen yet". See `resolveCompareRange` for resolution.
+   */
+  compareBaseline?: CompareBaseline;
 };

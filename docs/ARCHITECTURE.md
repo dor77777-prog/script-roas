@@ -3315,3 +3315,52 @@ Post-launch deep audit (DB ground-truth + adversarial code audit; 11 core system
 - **Cohort grid** marks the current partial month "(חלקי)"; **cohort profit curve** no longer exceeds the net curve when a cohort-month net is negative (`net>=0 ? net*keepRate : net`).
 - **CampaignDrawer** uses `effectiveStoreId` consistently for cohort/reconciliation/attribution (was raw `storeId` → cohort vanished + reconciliation zeroed for remapped-store TikTok campaigns).
 - **Overcount basis (documented, no change):** `overcountByChannelFromCampaigns` verified-revenue is GROSS (`total_price`) — intentional + correct because the platform claim is also gross; overcount is a like-for-like gross comparison (NC-ROAS is net by design; overcount is gross by design).
+
+## 36. Wave 4 — UX/Workflow (WS6) (2026-06-05)
+
+Five Home/command-palette workflow upgrades. All **client-side over existing
+state + endpoints** — no new cron, no new API route, no migration. READ-ONLY:
+no pixel/CAPI events; no change to data, aggregation, or computation (these only
+re-frame which baseline the existing period-over-period math compares against,
+and re-present already-computed per-store data).
+
+### 36.1 Period-compare baseline (`compare`)
+Lets Home pick what its period-over-period deltas compare against, consistently
+across the hero KPI cards, the per-store delta chips, and the per-store drill modal.
+
+- **`lib/presets.ts`** adds:
+  - the **`CompareBaseline`** type — `'prev_period' | 'prev_7d' | 'prev_month' | 'prev_year' | 'none'` (`prev_period` is the default).
+  - **`resolveCompareRange(range, baseline)`** — maps a selected `DateRange` + baseline to the comparison `DateRange` (prev_period = same length immediately before; prev_7d = the 7 days before; prev_month = the previous calendar month; prev_year = the same range shifted one year back).
+  - **`resolveCompare(range, baseline)`** → `{ range, show, caption }` — the single resolver the UI consumes: `range` is the comparison window, `show` is `false` for `'none'` (gates every delta off), and `caption` is the hero "vs …" label.
+  - **`COMPARE_BASELINE_LABELS`** — Hebrew pill labels (תקופה קודמת / 7 ימים קודמים / חודש קודם / שנה שעברה / ללא השוואה).
+- **`lib/types.ts`** — `Filters` gains optional `compareBaseline?: CompareBaseline` (omitted ⇒ `prev_period`, backward-compatible).
+- **`lib/urlState.ts`** — reads/writes the **`compare`** query param. Omitted when it equals the `prev_period` default (clean URLs), parsed back into `filters.compareBaseline`.
+- **`Dashboard.tsx`** — derives `compare = resolveCompare(range, filters.compareBaseline)`, feeds `compare.range` as `prevRange` to the hero + per-store + store-drill data, gates all delta rendering on `compare.show`, and passes `compare.caption` as the hero `comparisonLabel`. **GoalTracker is untouched** — it stays business-wide vs the monthly target, never vs the compare baseline.
+
+### 36.2 Saved views
+Save the current view (preset + date range + store + compare baseline) under a
+name, then apply / rename / delete. Device-synced via the **existing** cloudSync
+mechanism (same layer as COGS / insight settings) — no new storage, no DB.
+
+- **`lib/savedViews.ts`** (new) — the CRUD + persistence helpers: `readSavedViews()`, `saveView()`, `deleteView()`, `renameView()`, `touchView()`. A saved view captures the preset, date range, store, and `compareBaseline`. **Relative presets re-derive on apply** — applying e.g. a "this month" view recomputes its range to the current period rather than restoring the frozen save-time dates.
+- **`lib/hooks/useSavedViews.ts`** (new) — the React hook wrapping the CRUD over the synced store.
+- **Cloud-sync key `'roas-dashboard:saved-views'`** is registered in **both** `lib/cloudSync.ts` **and** `lib/dashboardStateKeys.ts` — the two lists are parity-guarded (see the COGS-sync parity incident), so a new synced key must appear in both or the guard fails.
+
+### 36.3 Store-compare grid
+A side-by-side all-stores table directly below `PerStoreRow` on Home — columns
+חנות · הוצאה · הכנסה · ROAS · CPM · AOV · הזמנות.
+
+- **`components/home/StoreCompareGrid.tsx`** (new), mounted in `Dashboard.tsx` below the per-store cards. It **reuses the same per-store data already computed for the cards** — no new fetch or aggregation, and the cards remain (no info loss). Spend is tinted red, revenue green, ROAS is a band-colored pill (red <2 / orange <2.7 / green ≤3 / blue >3), CPM/AOV/orders neutral. All money renders through the shared `<Money>` primitive (overflow-safe, tabular-nums).
+
+### 36.4 Command-palette upgrades (`components/CommandPalette.tsx`)
+- Picking a **campaign** result now deep-links straight into that campaign's drawer via `drillToCampaigns` (was a plain tab switch).
+- Added a **"מעבר ל-תשלומים"** navigation action and a **"מותאם אישית"** custom-range action.
+- Removed dead/stale copy: the old natural-language-query placeholder and the obsolete "Sheets" refresh subtitle.
+
+### 36.5 Shared annotation pins (`components/ui/ChartAnnotationPins.tsx`)
+Extracted the hero ROAS-vs-target chart's annotation pins into a single shared
+primitive so the Trends chart shows the **same** pins (one source of truth).
+
+- **`components/ui/ChartAnnotationPins.tsx`** (new) — the reusable pin/popover layer (name · date · ROAS on hover/click), drawn with legible on-band ink/casing per the readability standard.
+- **`components/home/RoasTargetChart.tsx`** adopts it (the hero chart becomes the canonical consumer rather than owning a bespoke copy).
+- **`components/RoasChart.tsx`** + **`components/AnalysisTrendsTab.tsx`** — the Trends-tab ROAS chart now renders the same primitive, so annotations are consistent across hero and Trends.

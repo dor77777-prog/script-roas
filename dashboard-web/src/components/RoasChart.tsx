@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, type Key } from 'react';
+import { useEffect, useMemo, useRef, useState, type Key } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import { TrendingUp } from 'lucide-react';
 import type { DailySeries } from '@/lib/analytics';
@@ -17,6 +17,23 @@ import {
 } from '@/components/ui/chart/ChartTooltip';
 import { CHART_WARNING_COLOR } from '@/lib/chartColors';
 import { Heading } from '@/components/ui/Typography';
+import { ChartAnnotationPins } from '@/components/ui/ChartAnnotationPins';
+import {
+  annotationsInScope,
+  readAnnotations,
+  type Annotation,
+} from '@/lib/annotations';
+import { annotationsToPins } from '@/lib/home/adapters';
+
+// Recharts plot geometry — kept as named constants so the annotation-pin
+// overlay math (which maps a date index → left%) can't drift from the
+// <LineChart> margin + <YAxis width> below. The plot's inner band runs from
+// `MARGIN_LEFT + Y_AXIS_WIDTH` to `containerWidth − MARGIN_RIGHT`.
+const MARGIN_LEFT = 8;
+const MARGIN_RIGHT = 12;
+const Y_AXIS_WIDTH = 32;
+const PLOT_INSET_LEFT = MARGIN_LEFT + Y_AXIS_WIDTH; // 40px
+const PLOT_INSET_RIGHT = MARGIN_RIGHT; // 12px
 
 // The cyan primary color is the visual anchor — the first store's line
 // gets bold label treatment to guide the eye. Using STORE_COLORS directly
@@ -36,9 +53,16 @@ type Props = {
   /** When true, render only the chart with no surrounding card/title.
    *  Used when wrapped in a CollapsibleSection that already provides the title. */
   bare?: boolean;
+  /** Active date range — scopes which logged annotations show as pins.
+   *  Matches the AnnotationsPanel's `annotationsInScope(items, range, store)`.
+   *  Omit to suppress pins (back-compat for callers without filter context). */
+  range?: { from: string; to: string };
+  /** Active store filter ("All" or a store name) — same scope contract as
+   *  the AnnotationsPanel. Defaults to "All" when a `range` is given. */
+  store?: string;
 };
 
-export function RoasChart({ data, stores, rows, bare = false }: Props) {
+export function RoasChart({ data, stores, rows, bare = false, range, store = 'All' }: Props) {
   // Build an O(1) lookup Set for heavy-refund (date|store) keys so the
   // dot renderer and tooltip body can check cheaply without filtering.
   const refundDayKeys = useMemo(() => {
@@ -49,12 +73,72 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
     return set;
   }, [rows]);
 
+  // Annotation pins — read the SAME store the AnnotationsPanel writes to and
+  // re-read on the `roas-annotations-changed` event so a freshly-logged event
+  // appears on the chart without a reload. Single source of truth: the pins
+  // are converted via the shared `annotationsToPins` adapter (same as the hero
+  // RoasTargetChart) and rendered with the shared <ChartAnnotationPins>.
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  useEffect(() => {
+    setAnnotations(readAnnotations());
+    const onChange = () => setAnnotations(readAnnotations());
+    window.addEventListener('roas-annotations-changed', onChange);
+    return () => window.removeEventListener('roas-annotations-changed', onChange);
+  }, []);
+  const pins = useMemo(() => {
+    if (!range) return [];
+    return annotationsToPins(annotationsInScope(annotations, range, store));
+  }, [annotations, range, store]);
+
+  // Measure the plot wrapper width so the overlay can convert a date index →
+  // left% against Recharts' inner plot band (which is inset by the YAxis +
+  // margins). A ResizeObserver keeps the pins glued to their day on resize.
+  const plotRef = useRef<HTMLDivElement | null>(null);
+  const [plotWidth, setPlotWidth] = useState(0);
+  useEffect(() => {
+    const el = plotRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? el.clientWidth;
+      setPlotWidth(w);
+    });
+    ro.observe(el);
+    setPlotWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
   if (!data.length) return null;
   const chartData = data.map(d => ({
     date: d.date,
     dateLabel: formatDate(d.date).slice(0, 5), // DD/MM
     ...d.byStore,
   }));
+
+  const dates = data.map(d => d.date);
+
+  // index → overlay left% across the FULL wrapper width. The plot band sits
+  // between PLOT_INSET_LEFT and (width − PLOT_INSET_RIGHT); a single point
+  // centres on the band. Falls back to a flat band-edge estimate before the
+  // first width measurement (pins still render, just re-snap on the next tick).
+  const leftPctForIndex = (idx: number): number => {
+    const w = plotWidth > 0 ? plotWidth : 0;
+    if (w <= 0) {
+      // Pre-measure fallback: spread evenly across [0,100] so SSR / first
+      // paint isn't blank; ResizeObserver corrects it on mount.
+      return dates.length <= 1 ? 50 : (idx / (dates.length - 1)) * 100;
+    }
+    const bandLeft = PLOT_INSET_LEFT;
+    const bandWidth = Math.max(1, w - PLOT_INSET_LEFT - PLOT_INSET_RIGHT);
+    const frac = dates.length <= 1 ? 0.5 : idx / (dates.length - 1);
+    return ((bandLeft + frac * bandWidth) / w) * 100;
+  };
+
+  // ISO date → that day's blended ROAS, for the pin tooltip context line.
+  const roasForDate = (date: string): number | null => {
+    const row = data.find(d => d.date === date);
+    const v = row?.totalRoas;
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  };
 
   const chart = (
     <div className="space-y-3">
@@ -86,8 +170,12 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
         </span>
       </div>
 
+      {/* Relative plot wrapper — hosts the Recharts surface AND the shared
+          annotation-pin overlay. `plotRef` is measured so the overlay can map
+          a date index → left% against the inset plot band. */}
+      <div ref={plotRef} className="relative">
       <ChartContainer className="h-64 sm:h-80" height="100%">
-        <LineChart data={chartData} margin={{ top: 10, right: 12, left: 8, bottom: 0 }}>
+        <LineChart data={chartData} margin={{ top: 10, right: MARGIN_RIGHT, left: MARGIN_LEFT, bottom: 0 }}>
             {/* Very quiet grid — guidance, not decoration. */}
             <CartesianGrid strokeDasharray="2 4" stroke="var(--chart-grid)" strokeOpacity={0.55} vertical={false} />
             <XAxis
@@ -102,7 +190,7 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
               axisLine={false}
               tickLine={false}
               domain={[0, 'auto']}
-              width={32}
+              width={Y_AXIS_WIDTH}
               tickFormatter={v => (Number.isInteger(v) ? String(v) : v.toFixed(1))}
             />
             <ReferenceLine
@@ -212,6 +300,20 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
             })}
         </LineChart>
       </ChartContainer>
+
+      {/* Annotation pins — same pipeline as the hero RoasTargetChart. Guides
+          ON because Recharts can't draw the dashed verticals for us here. The
+          pins are absolutely positioned over the plot band; they only render
+          when their date falls inside the active range. */}
+      <ChartAnnotationPins
+        pins={pins}
+        dates={dates}
+        leftPctForIndex={leftPctForIndex}
+        valueForDate={roasForDate}
+        valueLabel="ROAS"
+        showGuides
+      />
+      </div>
     </div>
   );
 

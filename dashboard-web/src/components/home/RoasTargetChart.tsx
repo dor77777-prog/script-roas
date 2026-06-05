@@ -30,8 +30,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
+import { ChartAnnotationPins } from '@/components/ui/ChartAnnotationPins';
 import { Heading } from '@/components/ui/Typography';
 import { cn, formatCurrency, formatNumber, formatDate } from '@/lib/utils';
 import {
@@ -295,11 +295,10 @@ export function RoasTargetChart({
   // don't get a "—" chip pinned in the header.
   const freshness = useStaleness(updatedAt);
   /* --- pin tooltip state ----------------------------------------------- */
-  // Single `openPinId` — hover sets it, click toggles it, document-level
-  // click clears it. Per [[home-visual-rules]] pin tooltips are NEVER
-  // always-visible.
-  const [openPinId, setOpenPinId] = useState<string | null>(null);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
+  // Pin open/close + hover-and-click + dismiss-on-outside now live in the
+  // shared <ChartAnnotationPins> primitive ([[home-visual-rules]]: pin
+  // tooltips are NEVER always-visible). This component only owns the
+  // crosshair readout below.
 
   /* --- crosshair + rich tooltip state (V4) ----------------------------- */
   // `hoverIndex` is the nearest data point under the pointer; null = no
@@ -307,31 +306,24 @@ export function RoasTargetChart({
   // plot. The custom tooltip (date · ROAS · target · delta-vs-target) renders
   // in HTML over the chart.
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  // Dismiss-on-tap-outside (touch-friendly) for BOTH the open pin tooltip and
-  // the crosshair readout. On a phone there is no pointerleave, so a tap
-  // outside the chart wrap is what closes a lingering pin/crosshair. The
-  // pointerdown listener fires before click, so a tap on a pin still toggles
-  // the right one. Active whenever something is open.
+  // Dismiss-on-tap-outside (touch-friendly) for the crosshair readout. On a
+  // phone there is no pointerleave, so a tap outside the chart wrap is what
+  // closes a lingering crosshair. Active whenever the crosshair is open.
   useEffect(() => {
-    if (openPinId === null && hoverIndex === null) return;
+    if (hoverIndex === null) return;
     const handler = (e: MouseEvent | PointerEvent) => {
       const target = e.target as Node | null;
       if (!target) return;
       const wrap = wrapRef.current;
       if (!wrap) return;
-      // If the tap landed outside the chart-wrap, close. We can't trust
-      // `closest('.pin-anchor')` here because the pointer might land on a
-      // sibling pin — handled inside the pin's onClick.
-      if (!wrap.contains(target)) {
-        setOpenPinId(null);
-        setHoverIndex(null);
-      }
+      if (!wrap.contains(target)) setHoverIndex(null);
     };
     document.addEventListener('pointerdown', handler);
     return () => document.removeEventListener('pointerdown', handler);
-  }, [openPinId, hoverIndex]);
+  }, [hoverIndex]);
 
   /* --- derived ----------------------------------------------------------- */
   const { points, pins, kpis, prevPeriod, daysActive } = data;
@@ -441,15 +433,17 @@ export function RoasTargetChart({
     [points.length],
   );
 
-  // Per-pin date + ROAS for the richer popover (event name + date + ROAS).
-  const pinMetaById = useMemo(() => {
-    const m = new Map<string, { date: string; roas: number | null }>();
-    for (const { pin, index } of renderablePins) {
-      const p = points[index];
-      m.set(pin.id, { date: pin.date, roas: p?.roas ?? null });
-    }
+  // ISO date → that day's ROAS, for the pin tooltip's context line. Passed to
+  // <ChartAnnotationPins valueForDate> so the bubble can append "· ROAS 2.84".
+  const roasByDate = useMemo(() => {
+    const m = new Map<string, number | null>();
+    for (const p of points) m.set(p.date, p.roas ?? null);
     return m;
-  }, [renderablePins, points]);
+  }, [points]);
+  const roasForDate = useCallback(
+    (date: string) => roasByDate.get(date) ?? null,
+    [roasByDate],
+  );
 
   const todayLeftPct = useMemo(
     () => (todayPoint ? leftPctForIndex(todayPoint.index) : null),
@@ -899,88 +893,25 @@ export function RoasTargetChart({
           ))}
         </svg>
 
-        {/* Pins overlay --------------------------------------------------- */}
-        {/* RTL note: pins are positioned via `left:` percentages on a wrapper
-            with explicit `dir="ltr"` so the percentage is measured from the
-            SVG's visual-left edge regardless of the page's text direction.
-            Without this, RTL flips the % anchor and the pin lands on the
-            wrong day. */}
+        {/* Pins overlay — shared <ChartAnnotationPins> primitive (single
+            source of truth, also mounted on the Trends-tab RoasChart). It
+            owns hover/click + dismiss-on-outside and forces dir="ltr" so the
+            left-% anchors from the visual-left edge under the page's RTL. The
+            SVG already draws the dashed vertical guides above, so guides stay
+            OFF here to avoid doubling them. */}
+        <ChartAnnotationPins
+          pins={pins}
+          dates={points.map((p) => p.date)}
+          leftPctForIndex={leftPctForIndex}
+          valueForDate={roasForDate}
+          valueLabel="ROAS"
+        />
+
+        {/* Today + crosshair overlay ------------------------------------- */}
         <div
           className="absolute inset-0 pointer-events-none"
           dir="ltr"
         >
-          {renderablePins.map(({ pin, leftPct }) => {
-            const isOpen = openPinId === pin.id;
-            return (
-              <div
-                key={pin.id}
-                className="absolute"
-                style={{ left: `${leftPct}%`, top: 0 }}
-              >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  data-testid={`chart-pin-${pin.id}`}
-                  aria-label={pin.label}
-                  aria-expanded={isOpen}
-                  onMouseEnter={() => setOpenPinId(pin.id)}
-                  onMouseLeave={() => setOpenPinId((prev) => (prev === pin.id ? null : prev))}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenPinId((prev) => (prev === pin.id ? null : pin.id));
-                  }}
-                  className={cn(
-                    'pointer-events-auto absolute p-0 h-auto bg-transparent hover:bg-transparent',
-                    'text-lg leading-none cursor-pointer rounded-sm',
-                  )}
-                  style={{
-                    transform: 'translateX(-50%)',
-                    top: -6,
-                    textShadow: '0 0 8px oklch(from var(--chart-pin-line) l c h / 0.7)',
-                  }}
-                >
-                  {pin.icon ?? '💰'}
-                </Button>
-                {isOpen && (
-                  <div
-                    role="tooltip"
-                    data-testid={`chart-pin-tooltip-${pin.id}`}
-                    className={cn(
-                      // Shared rich-card chrome (surface/blur/radius/shadow)
-                      // matching RichPopover + Toggletip. The amber
-                      // border-status-warning is kept as the milestone-pin
-                      // accent (ties the bubble to the amber pin glyph/chip).
-                      'absolute z-10 w-max max-w-[14rem] text-ink px-3 py-2 rounded-card',
-                      'bg-glass-1/95 backdrop-blur-sm border border-status-warning shadow-overlay',
-                      // Wave-6 Task 6.1 — pin tooltip entrance: 120 ms
-                      // opacity + ~4 px Y translate via tailwindcss-animate.
-                      // slide-in-from-bottom-1 = 0.25 rem (4 px) — see the
-                      // plugin's CSS-var-driven utility. prefers-reduced-motion
-                      // (Task 6.2) collapses the keyframe to instant via the
-                      // targeted `[role="tooltip"]` rule in globals.css.
-                      'animate-in fade-in-0 slide-in-from-bottom-1 duration-snap ease-out',
-                    )}
-                    style={{ transform: 'translateX(-50%)', top: -64 }}
-                    dir="rtl"
-                  >
-                    {/* V4 popover: event name (bold) + date · ROAS context. */}
-                    <div className="flex items-center gap-1.5 text-[12px] font-bold leading-snug">
-                      <span aria-hidden>{pin.icon ?? '💰'}</span>
-                      {pin.label}
-                    </div>
-                    <div className="mt-0.5 font-mono text-[10px] tabular-nums text-ink-muted">
-                      {formatDate(pin.date)}
-                      {pinMetaById.get(pin.id)?.roas != null && (
-                        <> · ROAS {pinMetaById.get(pin.id)!.roas!.toFixed(2)}</>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
           {/* "היום" today label — HTML badge above the SVG today marker
               (SVG text would distort under preserveAspectRatio="none"). */}
           {todayLeftPct != null && (

@@ -168,3 +168,134 @@ export function previousRange(range: DateRange): DateRange {
   const prevFrom = addDays(prevTo, -(days - 1));
   return { from: fmt(prevFrom), to: fmt(prevTo) };
 }
+
+/**
+ * Period-compare baselines (Phase A). The operator picks WHAT the active
+ * range is compared against:
+ *  - 'prev_period' — the equal-length window ending the day before the range
+ *    (delegates to `previousRange` so the math has a single source of truth);
+ *  - 'prev_7d'     — the 7 days immediately before `range.from` (fixed length,
+ *    independent of the range size);
+ *  - 'prev_month'  — the same window shifted back exactly 1 calendar month;
+ *  - 'prev_year'   — the same window shifted back exactly 1 year;
+ *  - 'none'        — comparison off.
+ */
+export type CompareBaseline =
+  | 'prev_period'
+  | 'prev_7d'
+  | 'prev_month'
+  | 'prev_year'
+  | 'none';
+
+/** Hebrew labels for the period-compare baseline picker. */
+export const COMPARE_BASELINE_LABELS: Record<CompareBaseline, string> = {
+  prev_period: 'תקופה קודמת',
+  prev_7d: '7 ימים קודמים',
+  prev_month: 'חודש קודם',
+  prev_year: 'שנה שעברה',
+  none: 'ללא השוואה',
+};
+
+/**
+ * Shift a single YYYY-MM-DD date back by `months` calendar months and/or
+ * `years` years, anchored in UTC so the result is DST-immune. Day-of-month is
+ * preserved by JS Date month arithmetic, which clamps overflow (e.g. shifting
+ * 2026-03-31 back one month yields 2026-02-28/-29 via the standard rollover).
+ */
+function shiftDateBack(date: string, months: number, years: number): string {
+  const d = new Date(date + 'T00:00:00Z');
+  return fmt(
+    new Date(
+      Date.UTC(
+        d.getUTCFullYear() - years,
+        d.getUTCMonth() - months,
+        d.getUTCDate(),
+      ),
+    ),
+  );
+}
+
+/**
+ * Resolve the window the active `range` should be compared against, per the
+ * chosen `baseline`. Returns `null` when comparison is off ('none'). All other
+ * baselines return a concrete DateRange (see `CompareBaseline`).
+ */
+export function resolveCompareRange(
+  baseline: CompareBaseline,
+  range: DateRange,
+): DateRange | null {
+  switch (baseline) {
+    case 'none':
+      return null;
+    case 'prev_period':
+      return previousRange(range);
+    case 'prev_7d': {
+      const from = new Date(range.from + 'T00:00:00Z');
+      const prevTo = addDays(from, -1);
+      const prevFrom = addDays(prevTo, -6);
+      return { from: fmt(prevFrom), to: fmt(prevTo) };
+    }
+    case 'prev_month':
+      return {
+        from: shiftDateBack(range.from, 1, 0),
+        to: shiftDateBack(range.to, 1, 0),
+      };
+    case 'prev_year':
+      return {
+        from: shiftDateBack(range.from, 0, 1),
+        to: shiftDateBack(range.to, 0, 1),
+      };
+    default: {
+      // Exhaustiveness guard — a new baseline must be handled above.
+      const _exhaustive: never = baseline;
+      return _exhaustive;
+    }
+  }
+}
+
+/** Display-resolution shape consumed by the compare UI (see `resolveCompare`). */
+export interface ResolvedCompare {
+  /**
+   * Effective compare window — ALWAYS a valid DateRange (never null), so
+   * downstream fetches have a window even when comparison is off ('none').
+   */
+  range: DateRange;
+  /** Whether to render the compare delta (false for 'none' or when off). */
+  show: boolean;
+  /** Hebrew caption for the compare line ('' when comparison is off). */
+  caption: string;
+}
+
+/**
+ * Single display-resolution helper for period-compare. Combines the chosen
+ * `baseline` (defaults to 'prev_period' when undefined), the active `range`,
+ * and the current `preset` into a UI-ready shape:
+ *  - `range` is always valid: `resolveCompareRange` when non-null, else
+ *    `previousRange(range)` (so 'none' still yields a fetchable window);
+ *  - `show` is true only when the baseline is not 'none' AND
+ *    `resolveCompareRange` returned a concrete window;
+ *  - `caption` is '' for 'none', the preset-aware caption for 'prev_period',
+ *    and "מול " + the baseline label otherwise.
+ * Pure and side-effect-free.
+ */
+export function resolveCompare(
+  baseline: CompareBaseline | undefined,
+  range: DateRange,
+  preset: PresetKey,
+): ResolvedCompare {
+  const b: CompareBaseline = baseline ?? 'prev_period';
+  const resolved = resolveCompareRange(b, range);
+  const effectiveRange = resolved ?? previousRange(range);
+  const show = b !== 'none' && resolved !== null;
+
+  let caption: string;
+  if (b === 'none') {
+    caption = '';
+  } else if (b === 'prev_period') {
+    caption = comparisonLabelHebrew(preset);
+  } else {
+    caption = 'מול ' + COMPARE_BASELINE_LABELS[b];
+  }
+
+  return { range: effectiveRange, show, caption };
+}

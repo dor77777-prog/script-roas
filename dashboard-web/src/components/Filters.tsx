@@ -1,20 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   PRESET_FEATURED,
   PRESET_LABELS,
   PRESET_SECONDARY,
+  COMPARE_BASELINE_LABELS,
   computePresetRange,
 } from '@/lib/presets';
+import type { CompareBaseline } from '@/lib/presets';
 import type { Filters as F, PresetKey } from '@/lib/types';
-import { Calendar, ChevronDown, Store, Zap } from 'lucide-react';
+import { Bookmark, Calendar, ChevronDown, Pencil, Store, Trash2, Zap } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { applyFromCandidate, applyToCandidate } from '@/lib/rangeClamp';
+import { useSavedViews } from '@/lib/hooks/useSavedViews';
+import {
+  saveView,
+  deleteView,
+  renameView,
+  touchView,
+  type SavedView,
+} from '@/lib/savedViews';
 
 /**
  * Asia/Jerusalem "today" as YYYY-MM-DD. Capped value for the custom-range
@@ -39,7 +49,26 @@ type Props = {
   filters: F;
   stores: string[];
   onChange: (next: F) => void;
+  /**
+   * Wave 4 (opt-in) — render the period-compare baseline pills below the main
+   * strip. Defaults false so every existing call-site is byte-identical.
+   */
+  showCompareBaseline?: boolean;
+  /**
+   * Wave 4 (opt-in) — render the saved-views dropdown in the strip. Defaults
+   * false so existing call-sites are unaffected.
+   */
+  showSavedViews?: boolean;
 };
+
+/** Canonical compare-baseline order for the pill row. */
+const COMPARE_BASELINE_ORDER: CompareBaseline[] = [
+  'prev_period',
+  'prev_7d',
+  'prev_month',
+  'prev_year',
+  'none',
+];
 
 /**
  * Short pill labels for the MOBILE A3 bar. The two long presets are shortened
@@ -52,7 +81,13 @@ const PILL_SHORT_LABELS: Partial<Record<PresetKey, string>> = {
   this_month: 'מהחודש',
 };
 
-export function Filters({ filters, stores, onChange }: Props) {
+export function Filters({
+  filters,
+  stores,
+  onChange,
+  showCompareBaseline = false,
+  showSavedViews = false,
+}: Props) {
   // Advanced presets are folded behind a toggle on small screens to reduce
   // visual noise — the two featured options + store + range cover the 95% case.
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -242,7 +277,45 @@ export function Filters({ filters, stores, onChange }: Props) {
             />
             טווחים נוספים
           </Button>
+
+          {/* Saved views — opt-in dropdown (Wave 4) */}
+          {showSavedViews && (
+            <SavedViewsDropdown filters={filters} onChange={onChange} />
+          )}
         </div>
+
+        {/* Compare-baseline pills — opt-in row (Wave 4) */}
+        {showCompareBaseline && (
+          <div
+            data-testid="filters-compare-row"
+            className="flex flex-wrap items-center gap-1.5 pt-2.5 mt-2.5 border-t border-glass-edge"
+          >
+            <span className="text-[11px] sm:text-xs font-medium text-ink-muted whitespace-nowrap me-1">
+              בסיס השוואה:
+            </span>
+            {COMPARE_BASELINE_ORDER.map(b => {
+              const isActive = (filters.compareBaseline ?? 'prev_period') === b;
+              return (
+                <Button
+                  key={b}
+                  type="button"
+                  variant={isActive ? 'primary' : 'secondary'}
+                  size="sm"
+                  onClick={() => onChange({ ...filters, compareBaseline: b })}
+                  aria-pressed={isActive}
+                  className={cn(
+                    'rounded-lg text-xs sm:text-sm font-semibold',
+                    isActive
+                      ? 'border-accent shadow-glass'
+                      : 'hover:border-glass-edge-hot active:scale-[0.98]',
+                  )}
+                >
+                  {COMPARE_BASELINE_LABELS[b]}
+                </Button>
+              );
+            })}
+          </div>
+        )}
 
         {showAdvanced && (
           <div className="space-y-2.5 pt-2.5 mt-2.5 border-t border-glass-edge animate-fade-in">
@@ -302,5 +375,187 @@ export function Filters({ filters, stores, onChange }: Props) {
         )}
       </div>
     </Card>
+  );
+}
+
+/**
+ * Saved-views dropdown (Wave 4). Lists persisted named filter snapshots
+ * (most-recently-used first), applies one with relative-range re-derivation,
+ * and saves the current filters under a typed name. Renders inline in the page
+ * filter bar (not over a Sheet) so a plain absolutely-positioned panel is fine.
+ */
+function SavedViewsDropdown({
+  filters,
+  onChange,
+}: {
+  filters: F;
+  onChange: (next: F) => void;
+}) {
+  const { views } = useSavedViews();
+  const [open, setOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  // Per-row rename editing — { id, value } while a row is in edit mode.
+  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  // Dismiss-on-outside-pointerdown (page-bar dropdown convention — same pattern
+  // as RoasTargetChart's crosshair dismissal). Self-scoped to this wrapper.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent | PointerEvent) => {
+      const target = e.target as Node | null;
+      const wrap = wrapRef.current;
+      if (!target || !wrap) return;
+      if (!wrap.contains(target)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [open]);
+
+  // Most-recently-used first.
+  const sorted = Object.entries(views).sort(
+    ([, a], [, b]) => (a.meta.lastUsedAt < b.meta.lastUsedAt ? 1 : -1),
+  );
+
+  function applyView(id: string, view: SavedView) {
+    // Relative ranges re-derive so a saved "this month" tracks the CURRENT
+    // month rather than freezing the stored range; 'custom' applies verbatim.
+    // Either way `store` AND the saved `compareBaseline` come straight from the
+    // view (spreading view.filters preserves the optional compareBaseline), so
+    // applying a view restores its comparison baseline rather than resetting it.
+    const next: F =
+      view.filters.preset === 'custom'
+        ? { ...view.filters }
+        : { ...view.filters, range: computePresetRange(view.filters.preset) };
+    onChange(next);
+    touchView(id);
+    setOpen(false);
+  }
+
+  function commitRename() {
+    if (!editing) return;
+    const name = editing.value.trim();
+    if (name) renameView(editing.id, name);
+    setEditing(null);
+  }
+
+  function handleSave() {
+    const name = newName.trim();
+    if (!name) return;
+    saveView(name, filters);
+    setNewName('');
+  }
+
+  return (
+    <div ref={wrapRef} className="relative" data-testid="filters-savedviews">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        className="h-8 px-2 text-[11px] sm:text-xs text-ink-secondary hover:text-ink gap-1 font-medium"
+      >
+        <Bookmark size={13} aria-hidden="true" />
+        תצוגות שמורות
+        <ChevronDown
+          size={13}
+          className={cn('transition-transform duration-DEFAULT', open && 'rotate-180')}
+        />
+      </Button>
+
+      {open && (
+        <div
+          className="absolute z-20 mt-1 w-72 max-w-sm rounded-control border border-glass-edge bg-glass-2 p-1.5 shadow-glass animate-fade-in"
+          style={{ insetInlineEnd: 0 }}
+        >
+          {sorted.length === 0 ? (
+            <p className="px-2 py-1.5 text-xs text-ink-muted">אין תצוגות שמורות</p>
+          ) : (
+            <ul className="space-y-0.5">
+              {sorted.map(([id, view]) =>
+                editing?.id === id ? (
+                  <li key={id} className="px-1 py-1">
+                    <Input
+                      autoFocus
+                      value={editing.value}
+                      onChange={e => setEditing({ id, value: e.target.value })}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') commitRename();
+                        if (e.key === 'Escape') setEditing(null);
+                      }}
+                      onBlur={commitRename}
+                      className="h-9 text-xs"
+                      aria-label="שם תצוגה"
+                    />
+                  </li>
+                ) : (
+                  <li
+                    key={id}
+                    className="flex items-center gap-1 rounded-md hover:bg-glass-1"
+                  >
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => applyView(id, view)}
+                      dir="auto"
+                      className="flex-1 justify-start h-auto min-h-[44px] px-2 text-start text-xs sm:text-sm font-medium text-ink hover:bg-transparent"
+                    >
+                      {view.name || '(ללא שם)'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setEditing({ id, value: view.name })}
+                      aria-label={`שנה שם: ${view.name}`}
+                      className="min-h-11 min-w-11 text-ink-muted hover:text-ink"
+                    >
+                      <Pencil size={14} aria-hidden="true" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteView(id)}
+                      aria-label={`מחק תצוגה: ${view.name}`}
+                      className="min-h-11 min-w-11 text-ink-muted hover:text-status-redFg"
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                    </Button>
+                  </li>
+                ),
+              )}
+            </ul>
+          )}
+
+          <div className="my-1.5 border-t border-glass-edge" />
+
+          <div className="flex items-center gap-1.5 px-1 pb-0.5">
+            <Input
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleSave();
+              }}
+              placeholder="שם לתצוגה הנוכחית"
+              className="h-9 text-xs"
+              aria-label="שם לתצוגה הנוכחית"
+            />
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleSave}
+              disabled={newName.trim().length === 0}
+              className="shrink-0 rounded-lg text-xs font-semibold"
+            >
+              שמור תצוגה
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

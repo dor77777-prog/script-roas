@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wave 4 · UX/Workflow — מוקאפ אצווה</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Rubik:wght@400;500;600;700;800&family=Geist+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* MOCKUP-ONLY token mirror — EXACT hex from dashboard-web/src/app/globals.css. */
+:root{
+  --canvas-1:#0d0f1e; --canvas-2:#0a0c18;
+  --glass-1:#171a2e; --glass-2:#1d2138; --glass-3:#20243a;
+  --glass-edge:rgba(255,255,255,0.08); --glass-edge-hot:rgba(124,108,255,0.5);
+  --surface-sunken:#191d31;
+  --text:#eef1ff; --text-2:#b3b9d8; --text-muted:#8c96ba; --text-subtle:#8c93bf;
+  --status-red:#ef4d5b; --status-red-bg:rgba(239,77,91,0.18); --status-red-fg:#ff9aa8;
+  --status-warning:#ef9331; --status-warning-bg:rgba(239,147,49,0.16); --status-warning-fg:#f7c897;
+  --status-green:#0fb37a; --status-green-bg:rgba(15,179,122,0.16); --status-green-fg:#5cf0c3;
+  --status-blue:#3b82f6; --status-blue-bg:rgba(59,130,246,0.18); --status-blue-fg:#8bbcff;
+  --accent:#7c6cff; --accent-link:#a99cff; --accent-bg:rgba(124,108,255,0.12); --accent-soft:rgba(124,108,255,0.16); --accent-fg:#fff; --accent-btn:#6354e6;
+  --pf-meta:#1877f2; --pf-google:#f4a200; --pf-tiktok:#ff2e7e;
+  --shadow-glass:0 1px 2px rgba(0,0,0,0.35),0 12px 32px rgba(0,0,0,0.42);
+  --radius-card:1.125rem; --radius-chip:0.6875rem; --radius-pill:9999px; --radius-control:0.625rem;
+}
+[data-theme="light"]{
+  --canvas-1:#edf0f8; --canvas-2:#f4f6fc;
+  --glass-1:#ffffff; --glass-2:#f6f7fb; --glass-3:#eef1f8;
+  --glass-edge:rgba(22,26,48,0.08); --glass-edge-hot:rgba(14,165,183,0.4);
+  --surface-sunken:#f1f3f9;
+  --text:#171a2b; --text-2:#565d78; --text-muted:#666b84; --text-subtle:#696b7d;
+  --status-red:#ef4d5b; --status-red-bg:#ffe9ec; --status-red-fg:#c62333;
+  --status-warning:#ef9331; --status-warning-bg:#fbe6d0; --status-warning-fg:#8e4f0b;
+  --status-green:#0fb37a; --status-green-bg:#effaf5; --status-green-fg:#00734e;
+  --status-blue:#3b82f6; --status-blue-bg:#e9f1ff; --status-blue-fg:#1f5fdb;
+  --accent:#0ea5b7; --accent-link:#0c8090; --accent-bg:rgba(14,165,183,0.10); --accent-soft:#def5f7; --accent-fg:#fff; --accent-btn:#0c8090;
+  --shadow-glass:0 1px 2px rgba(22,26,48,0.06),0 12px 28px rgba(22,26,48,0.10);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background-color:var(--canvas-1)}
+body{color:var(--text); font-family:'Rubik','Heebo',system-ui,sans-serif; background:linear-gradient(180deg,var(--canvas-1),var(--canvas-2)); min-height:100vh; padding-bottom:80px; -webkit-font-smoothing:antialiased;}
+.tnum{font-variant-numeric:tabular-nums lining-nums; white-space:nowrap}
+.ltr{direction:ltr; unicode-bidi:isolate}
+.topbar{position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 20px; backdrop-filter:blur(8px); background:color-mix(in srgb,var(--canvas-1) 80%,transparent); border-bottom:1px solid var(--glass-edge);}
+.topbar h1{font-size:15px; font-weight:800; margin:0}
+.topbar .sub{color:var(--text-muted); font-size:12px; font-weight:500}
+.toggle{display:inline-flex; align-items:center; gap:7px; cursor:pointer; border:1px solid var(--glass-edge); background:var(--glass-2); color:var(--text); border-radius:var(--radius-pill); padding:7px 14px; font:inherit; font-size:13px; font-weight:600;}
+.wrap{max-width:900px; margin:0 auto; padding:22px 16px 0}
+.sec-h{display:flex; align-items:center; gap:9px; margin:26px 2px 12px}
+.sec-h .n{width:22px; height:22px; border-radius:7px; display:grid; place-items:center; font-size:11px; font-weight:800; background:var(--accent-bg); color:var(--accent-link); flex:none}
+.sec-h h2{font-size:14px; font-weight:800; margin:0}
+.sec-h .id{font-size:11px; font-weight:700; color:var(--text-muted); background:var(--surface-sunken); border:1px solid var(--glass-edge); border-radius:var(--radius-chip); padding:1px 7px; font-family:'Geist Mono',monospace}
+.card{background:var(--glass-1); border:1px solid var(--glass-edge); border-radius:var(--radius-card); box-shadow:var(--shadow-glass); padding:15px 16px; margin-bottom:10px}
+.note{color:var(--text-subtle); font-size:11.5px; line-height:1.6; margin:8px 2px 0}
+.row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.lbl{font-size:11px; color:var(--text-muted); font-weight:600}
+.statelabel{font-size:11px; font-weight:700; color:var(--text-muted); margin:14px 2px 6px; text-transform:uppercase; letter-spacing:.4px}
+
+/* pills (range + compare baseline) */
+.pill{font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; border-radius:var(--radius-control); padding:7px 13px; border:1px solid var(--glass-edge); background:var(--glass-2); color:var(--text-2)}
+.pill.on{background:var(--accent-btn); color:var(--accent-fg); border-color:transparent}
+.pill:hover{border-color:var(--glass-edge-hot)}
+
+/* hero mini */
+.hero{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:6px}
+.cell{background:var(--glass-2); border:1px solid var(--glass-edge); border-radius:14px; padding:11px 12px}
+.kpi-label{font-size:11px; color:var(--text-muted); font-weight:600; margin-bottom:3px}
+.kpi-val{font-size:20px; font-weight:800; letter-spacing:-.3px}
+.delta{font-size:11.5px; font-weight:700; margin-top:4px}
+.delta.dn{color:var(--status-red-fg)} .delta.up{color:var(--status-green-fg)} .delta.muted{color:var(--text-muted)}
+
+/* saved views dropdown */
+.dd{background:var(--glass-2); border:1px solid var(--glass-edge); border-radius:var(--radius-control); padding:6px; max-width:360px}
+.dd .item{display:flex; align-items:center; gap:8px; padding:8px 9px; border-radius:9px; cursor:pointer}
+.dd .item:hover{background:var(--surface-sunken)}
+.dd .item .nm{font-size:13px; font-weight:600; flex:1}
+.dd .item .meta{font-size:10.5px; color:var(--text-muted)}
+.dd .item .act{color:var(--text-muted); font-size:12px; padding:3px 6px; border-radius:6px}
+.dd .item .act:hover{color:var(--text); background:var(--glass-1)}
+.dd .save{display:flex; gap:6px; align-items:center; padding:8px 9px; margin-top:4px; border-top:1px solid var(--glass-edge)}
+.dd .save input{flex:1; background:var(--glass-1); border:1px solid var(--glass-edge); border-radius:8px; padding:6px 9px; color:var(--text); font:inherit; font-size:12.5px}
+.btn{font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; border-radius:var(--radius-control); padding:6px 12px; border:1px solid transparent; background:var(--accent-btn); color:var(--accent-fg)}
+.btn.ghost{background:transparent; color:var(--text-2); border-color:var(--glass-edge)}
+
+/* compare grid table */
+table{width:100%; border-collapse:collapse; font-size:13px; margin-top:4px}
+th,td{padding:9px 10px; border-bottom:1px solid var(--glass-edge); text-align:start}
+th{color:var(--text-muted); font-weight:600; font-size:11px}
+td.num,th.num{text-align:end; font-variant-numeric:tabular-nums}
+td.store{font-weight:700}
+.dot{width:8px;height:8px;border-radius:var(--radius-pill);display:inline-block;margin-inline-end:6px;vertical-align:middle}
+.t-red{background:var(--status-red-bg); color:var(--status-red-fg)}
+.t-green{background:var(--status-green-bg); color:var(--status-green-fg)}
+.t-roasR{background:var(--status-red-bg); color:var(--status-red-fg)}
+.t-roasO{background:var(--status-warning-bg); color:var(--status-warning-fg)}
+.t-roasB{background:var(--status-blue-bg); color:var(--status-blue-fg)}
+.roaspill{font-family:'Geist Mono',monospace; font-weight:700; border-radius:var(--radius-chip); padding:2px 8px; font-size:12px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div><h1>Wave 4 · UX / Workflow — מוקאפ אצווה</h1>
+  <div class="sub">3 פריטים שדורשים UI חדש · השאר (palette + pins) ללא-מוקאפ · לא נבנה עד אישורך</div></div>
+  <button class="toggle" onclick="tg()"><span id="ico">☀︎</span><span id="lbl">מצב בהיר</span></button>
+</div>
+<div class="wrap">
+
+  <!-- 1. PERIOD COMPARE -->
+  <div class="sec-h"><span class="n">1</span><h2>השוואה לתקופה (period-compare)</h2><span class="id">ux-period-compare</span></div>
+  <div class="card">
+    <div class="row"><span class="lbl">בסיס-השוואה:</span>
+      <button class="pill on">תקופה קודמת</button>
+      <button class="pill">7 ימים קודמים</button>
+      <button class="pill">חודש קודם</button>
+      <button class="pill">שנה שעברה</button>
+      <button class="pill">ללא השוואה</button>
+    </div>
+    <div class="hero">
+      <div class="cell"><div class="kpi-label">הכנסה</div><div class="kpi-val ltr">$448</div><div class="delta dn">▾ −86% <span style="color:var(--text-muted);font-weight:500">מול תקופה קודמת</span></div></div>
+      <div class="cell"><div class="kpi-label">הוצאה</div><div class="kpi-val ltr">$36</div><div class="delta dn">▾ −97% <span style="color:var(--text-muted);font-weight:500">מול תקופה קודמת</span></div></div>
+      <div class="cell"><div class="kpi-label">רווח תפעולי</div><div class="kpi-val ltr">$300</div><div class="delta muted">— ללא השוואה</div></div>
+    </div>
+    <p class="note"><b>בונה על הקיים:</b> מנוע-הדלתא של ה-Hero כבר מחשב הכל; משנים רק את <b>בסיס-ההשוואה</b> (במקום "התקופה הקודמת" הקבועה). "ללא השוואה" מסתיר את שורת-הדלתא (כמו בכרטיס רווח-תפעולי משמאל). הבחירה נשמרת ב-URL (שיתופי). מופיע רק בבית/מגמות. <b>יעד-הרווח-החודשי לא מושפע</b> (הוא תמיד כלל-עסקי).</p>
+  </div>
+
+  <!-- 2. SAVED VIEWS -->
+  <div class="sec-h"><span class="n">2</span><h2>תצוגות שמורות (saved-views)</h2><span class="id">ux-saved-views</span></div>
+  <div class="card">
+    <div class="row" style="margin-bottom:10px"><button class="btn ghost">⌄ תצוגות שמורות</button><span class="lbl">בחר תצוגה או שמור את הנוכחית</span></div>
+    <div class="dd">
+      <div class="item"><span class="nm">📌 uzoshop · החודש</span><span class="meta">לאחרונה</span><span class="act">✎</span><span class="act">🗑</span></div>
+      <div class="item"><span class="nm">כל החנויות · 7 ימים</span><span class="meta">לפני 2ש׳</span><span class="act">✎</span><span class="act">🗑</span></div>
+      <div class="item"><span class="nm">Zol Plus · אתמול</span><span class="meta">אתמול</span><span class="act">✎</span><span class="act">🗑</span></div>
+      <div class="save"><input value="שם לתצוגה הנוכחית…" /><button class="btn">שמור תצוגה</button></div>
+    </div>
+    <p class="note"><b>בונה על הקיים:</b> אותו מנגנון device-sync של הגדרות-ה-COGS/תובנות (cloudSync) — אין שכבת-אחסון חדשה, אין DB. שמירה = preset+טווח+חנות (+בסיס-השוואה). תצוגה יחסית כמו "החודש" <b>נגזרת-מחדש לחודש-הנוכחי</b> בטעינה (לא קופאת). מסונכרן בין מכשירים.</p>
+  </div>
+
+  <!-- 3. STORE COMPARE GRID -->
+  <div class="sec-h"><span class="n">3</span><h2>רשת-השוואת-חנויות (store-compare-grid)</h2><span class="id">ux-store-compare-grid</span></div>
+  <div class="card">
+    <div class="row" style="margin-bottom:6px"><b style="font-size:14px">ניתוח השוואתי</b><span class="lbl">— כל החנויות זו-לצד-זו · לטווח הנבחר</span></div>
+    <table>
+      <thead><tr><th>חנות</th><th class="num">הוצאה</th><th class="num">הכנסה</th><th class="num">ROAS</th><th class="num">CPM</th><th class="num">AOV</th><th class="num">הזמנות</th></tr></thead>
+      <tbody>
+        <tr><td class="store"><span class="dot" style="background:var(--pf-meta)"></span>uzoshop</td>
+          <td class="num t-red ltr">$1,176</td><td class="num t-green ltr">$2,783</td>
+          <td class="num"><span class="roaspill t-roasO">2.37×</span></td><td class="num ltr">$17.6</td><td class="num ltr">$99</td><td class="num tnum">28</td></tr>
+        <tr><td class="store"><span class="dot" style="background:var(--pf-tiktok)"></span>Zol Plus</td>
+          <td class="num t-red ltr">$95</td><td class="num t-green ltr">$356</td>
+          <td class="num"><span class="roaspill t-roasB">3.73×</span></td><td class="num ltr">$14.2</td><td class="num ltr">$89</td><td class="num tnum">4</td></tr>
+        <tr><td class="store"><span class="dot" style="background:var(--pf-google)"></span>360usmile</td>
+          <td class="num t-red ltr">$68</td><td class="num t-green ltr">$125</td>
+          <td class="num"><span class="roaspill t-roasR">1.83×</span></td><td class="num ltr">$22.1</td><td class="num ltr">$125</td><td class="num tnum">1</td></tr>
+      </tbody>
+    </table>
+    <p class="note"><b>בונה על הקיים:</b> אותם נתוני-PerStoreData הממופים שכבר מחושבים לכרטיסי-החנות (לא חישוב חדש). יושב כ<b>סקשן חדש "ניתוח השוואתי" מתחת לכרטיסי-החנות</b> — אין איבוד-מידע, הכרטיסים נשארים. תאית-לפי-מטריקה: הוצאה אדום, הכנסה ירוק, ROAS לפי באנד (אדום/כתום/ירוק/כחול), CPM/AOV/הזמנות ניטרלי. כל המספרים דרך &lt;Money&gt;.</p>
+  </div>
+
+  <p class="note" style="margin-top:24px; text-align:center">
+    שני פריטים נבנים כבר עכשיו ללא-מוקאפ: <b>פעולות-בפנל-הפקודות</b> (deep-link לקמפיין + מעבר-לתשלומים + טווח-מותאם) ו<b>סיכות-אנוטציה על גרף-המגמות</b> (אותן סיכות מאושרות מגרף-ה-Hero). אם המוקאפ הזה טוב — אבנה גם את 3 אלו, אריץ gates, ואפרוס.
+  </p>
+</div>
+<script>
+function tg(){const r=document.documentElement,n=r.getAttribute('data-theme')==='dark'?'light':'dark';r.setAttribute('data-theme',n);document.getElementById('ico').textContent=n==='dark'?'☀︎':'☾';document.getElementById('lbl').textContent=n==='dark'?'מצב בהיר':'מצב כהה';}
+</script>
+</body>
+</html>
