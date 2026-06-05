@@ -42,7 +42,7 @@ import {
 } from './salarySettings';
 import { adsManagerLink } from './insights/adsManagerLink';
 import { detectCampaignDied } from './insights/campaignDied';
-import { detectAdFatigue } from './insights/adFatigue';
+import { detectAdFatigue, detectAdFatigueEarlyWarning } from './insights/adFatigue';
 
 export type Severity = 'critical' | 'warning' | 'opportunity' | 'positive' | 'info';
 
@@ -882,5 +882,6 @@ export function buildAllInsights(
   // WS3 — in-app intelligence: campaign-went-dark + creative-fatigue detectors.
   const died = detectCampaignDied(campaigns, opts?.currentEffectiveStatus);
   const fatigue = detectAdFatigue(ads);
-  return [...anomalies, ...recs, ...died, ...fatigue].sort((a, b) => b.weight - a.weight);
+  const fatigueEarly = detectAdFatigueEarlyWarning(ads);
+  return [...anomalies, ...recs, ...died, ...fatigue, ...fatigueEarly].sort((a, b) => b.weight - a.weight);
 }
