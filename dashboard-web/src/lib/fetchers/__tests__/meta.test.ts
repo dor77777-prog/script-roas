@@ -609,6 +609,7 @@ describe('Phase 05.6.1 — meta.ts fetchMetaAdInsights (level=ad port)', () => {
       spend: 42.5,
       currency: 'ILS',
       conversionValue: 120,
+      reach: null,
     });
   });
 

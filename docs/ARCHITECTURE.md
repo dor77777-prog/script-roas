@@ -68,7 +68,7 @@ Apps Script triggers יורדים ידנית במהלך 28.4 cutover.
 | `stores` | 3 שורות חנות + FK target | seed migration | כל route |
 | `data_daily` | פר (date, store): `fb_spend_cad`, `ga_spend_cad`, `tt_spend_cad`, `total_spend_cad`, `fb_impressions`, `ga_impressions`, `tt_impressions`, `revenue_cad`, `gross_revenue_cad`, `refund_deduction_cad` | Inngest cron-daily + cron-live | `/api/data` |
 | `campaigns_daily` | פר (date, store, platform, campaign, ad_set): `spend`, `impressions`, `clicks`, `conversions`, `conversion_value`, `budget`, `effective_status` | Inngest cron-daily + cron-live | `/api/campaigns` |
-| `ads_daily` | פר (date, store, platform, campaign, ad_set, ad): spend/impressions/etc | Inngest cron-live (Meta-only) | `/api/ads` |
+| `ads_daily` | פר (date, store, platform, campaign, ad_set, ad): spend/impressions/etc; `reach` BIGINT nullable (migration `20260605130000`) | Inngest cron-live (Meta-only) | `/api/ads` |
 | `products_daily` | פר (date, store, product): units/orders/revenue/refunds | Inngest cron-daily | `/api/products` |
 | `orders_attribution` | פר order: `source` (meta-paid / google-paid / tiktok-paid / direct / etc), `utm_id`, `utm_campaign`, `fbclid`, `gclid`, `customer_id`/`order_created_at`/`is_first_order` (NC-ROAS), `first_*` (first-click), `payment_gateway` (שם-שער התשלום הגולמי — תשלומים) | Inngest cron-daily + cron-live | `/api/orders-attribution`, `/api/payment-methods` |
 | `customer_cohort_monthly` | פר (store, first_order_month, month_since 0..11): `active_customers`, `orders`, `gross_cad`, `net_cad` — אגרגט cohort/LTV (Wave 2) | `cron-cohort-refresh` (weekly) + seed runner | `/api/cohorts` |
@@ -3241,9 +3241,8 @@ descoped).
   0.7·priorCtr` **and** `recentCpm ≥ 1.2·priorCpm` above a 5,000-combined-impression
   noise floor. Severity `opportunity`, weight **68**, carrying the **parent
   campaignId** so the drawer + Ads-Manager link resolve. The **frequency-climb leg**
-  (the strongest fatigue signal) is **deferred** — it needs an `ads_daily.frequency`
-  column + a Meta fetcher field that don't exist yet; do NOT fabricate frequency from
-  impressions.
+  is shipped in the follow-on commit (2026-06-05) via `ads_daily.reach` + the
+  `detectAdFatigueEarlyWarning` detector — see §32.4.
 
 ### 32.2 Ranking + wiring
 - **`lib/insights/prioritize.ts` → `prioritizeInsights(insights, n)`** — pure dedup +
@@ -3281,6 +3280,11 @@ descoped).
 `campaignDied` (8) + `prioritize` (11) + `adFatigue` (8) node tests; `ActionListPanel`
 (7) DOM test. All pure-logic detectors are deterministic (a `today` seam on
 `detectCampaignDied` for fixtures; the others read no clock).
+
+### 32.4 Creative-fatigue early warning — frequency leg (2026-06-05)
+
+- **ads_daily.reach** (BIGINT, nullable; migration `20260605130000`): ad-level daily unique reach. Populated by `fetchMetaAdInsights` + `fetchTikTokAdInsights` and written nightly by `cronDaily` (Google omits it — no per-user frequency). Surfaced via the rebuilt `ads_enriched` view (`a.*`). One-off history fill: `scripts/backfillAdsReach.ts`.
+- **Creative-fatigue early warning** (`detectAdFatigueEarlyWarning`, `lib/insights/adFatigue.ts`): fires when impression frequency (impressions ÷ reach) climbs ≥20% with a recent floor, suppressed when the strong CTR↓+CPM↑ rule fires. Relative trend only (reach is not additive across days). Surfaced in the insights board via `lib/insights.ts`.
 
 ## 33. Last-known budget_type (CBO/ABO chip stability, 2026-06-05)
 
