@@ -86,8 +86,14 @@ export function CoverageChip({
   }
 
   // Disclosure path — the chip is a button that toggles an inline panel below.
+  // The wrapper spans the full width of the hero coverage row (`w-full`) so the
+  // expanded <UnknownBucketPanel> stretches edge-to-edge and aligns with the
+  // hero cards. `items-end` still tucks the collapsed micro-chip into the row's
+  // end corner; only the full-width panel ignores it (explicit cross-size wins).
+  // Without `w-full` the column shrinks to the chip's width and the panel — even
+  // with its own `w-full` — renders narrow and shoved to the side.
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className="flex w-full flex-col items-end gap-2">
       <HelpTooltip content={TOOLTIP}>
         <Button
           variant="ghost"

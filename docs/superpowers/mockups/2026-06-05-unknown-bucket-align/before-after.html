@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>פירוק הבלתי-מזוהה — יישור פנל (לפני / אחרי)</title>
+<style>
+  :root {
+    --canvas:#0b0e14; --glass1:#161b26; --glass2:#1b212e; --edge:#2a3344;
+    --ink:#e8edf6; --ink2:#aab3c5; --muted:#7b8499;
+    --warnBg:#3a2a12; --warnFg:#f0b65a; --warn:#7a5a22;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--canvas); color:var(--ink);
+         font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; padding:28px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  .sub { color:var(--ink2); font-size:13px; margin:0 0 22px; }
+  .frame { max-width:980px; margin:0 auto 30px; border:1px solid var(--edge);
+           border-radius:14px; padding:18px; background:#0e131c; }
+  .frame > .tag { display:inline-block; font-size:12px; font-weight:700; letter-spacing:.02em;
+                  padding:3px 10px; border-radius:999px; margin-bottom:14px; }
+  .tag.bad { background:#3a1620; color:#ff96a8; border:1px solid #6a2030; }
+  .tag.good { background:#13301f; color:#7ee0a3; border:1px solid #235a39; }
+
+  /* hero section — full width, like the real CommandCenterHero */
+  .hero { display:flex; flex-direction:column; gap:12px; }
+
+  /* hero-coverage-row: flex items-center justify-end */
+  .cov-row { display:flex; align-items:center; justify-content:flex-end; }
+
+  /* the chip itself */
+  .chip { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600;
+          padding:3px 8px; border-radius:7px; background:var(--warnBg); color:var(--warnFg);
+          border:1px solid var(--warn); cursor:pointer; }
+  .chip .caret { transform:rotate(180deg); }
+
+  /* DISCLOSURE WRAPPER — flex flex-col items-end gap-2 */
+  .wrap { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+  .wrap.full { width:100%; }            /* <-- the one-class fix */
+
+  .mount { }
+  .mount.full { width:100%; }
+
+  /* the unknown-bucket panel (simplified) */
+  .panel { border:1px solid var(--edge); border-radius:12px; background:var(--glass2);
+           overflow:hidden; width:100%; }
+  .panel .head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+                 padding:10px 14px; border-bottom:1px solid var(--edge); background:var(--warnBg); }
+  .panel .head .t { font-size:13px; font-weight:800; color:var(--warnFg); }
+  .panel .head .d { font-size:11px; color:var(--ink2); margin-top:3px; max-width:420px; }
+  .panel .totals { display:flex; gap:18px; text-align:end; }
+  .panel .totals .lab { font-size:10px; color:var(--muted); font-weight:700; }
+  .panel .totals .val { font-size:18px; font-weight:800; }
+  .panel .body { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:14px; }
+  .stat { border:1px solid var(--edge); border-radius:9px; background:var(--glass1);
+          padding:8px; text-align:center; }
+  .stat .lab { font-size:11px; color:var(--muted); font-weight:600; }
+  .stat .val { font-size:18px; font-weight:800; margin-top:4px; }
+
+  /* hero cards row — to show the alignment reference */
+  .cards { display:grid; grid-template-columns:1fr 1fr 1.15fr; gap:12px; }
+  .card { border:1px solid var(--edge); border-radius:12px; background:var(--glass1);
+          padding:16px; }
+  .card .lab { font-size:12px; color:var(--ink2); font-weight:600; }
+  .card .big { font-size:26px; font-weight:800; margin-top:8px; }
+  .guide { position:relative; }
+  .guide::before, .guide::after { content:""; position:absolute; top:-6px; bottom:-6px;
+            width:2px; background:#ff5d7a55; }
+  .guide::before { right:0; } .guide::after { left:0; }
+  .note { color:var(--ink2); font-size:12px; margin-top:10px; }
+</style>
+</head>
+<body>
+  <h1>פירוק הבלתי-מזוהה — יישור הפנל</h1>
+  <p class="sub">שחזור מדויק של מבנה ה-flex מתוך <code>CoverageChip</code> בתוך ה-<code>hero-coverage-row</code> (RTL). הקווים האדומים = גבולות ה-hero (רוחב הכרטיסיות).</p>
+
+  <!-- BEFORE -->
+  <div class="frame">
+    <span class="tag bad">לפני — הפנל נדחק שמאלה וצר</span>
+    <div class="hero guide">
+      <div class="cov-row">
+        <div class="wrap"><!-- no w-full -->
+          <span class="chip">🛡 68% כיסוי ייחוס <span class="caret">⌄</span></span>
+          <div class="mount">
+            <div class="panel">
+              <div class="head">
+                <div>
+                  <div class="t">פירוק הבלתי-מזוהה</div>
+                  <div class="d">ההזמנות שמקור-ההפניה שלהן לא נקלט — תיאור בלבד, לא חלוקה-מחדש.</div>
+                </div>
+                <div class="totals">
+                  <div><div class="lab">הזמנות</div><div class="val">41</div></div>
+                  <div><div class="lab">הכנסה</div><div class="val">$1,044</div></div>
+                </div>
+              </div>
+              <div class="body">
+                <div class="stat"><div class="lab">חדשים</div><div class="val">23</div></div>
+                <div class="stat"><div class="lab">חוזרים</div><div class="val">14</div></div>
+                <div class="stat"><div class="lab">לא מסווג</div><div class="val">4</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="lab">הכנסה</div><div class="big">$54,200</div></div>
+        <div class="card"><div class="lab">הוצאה</div><div class="big">$18,900</div></div>
+        <div class="card"><div class="lab">רווח תפעולי</div><div class="big">$22,400</div></div>
+      </div>
+    </div>
+    <p class="note">⛔ הפנל יושב בעמודה צרה (רוחב = הצ'יפ) ומיושר ל-<b>קצה (שמאל)</b> — לא נפרש כמו הכרטיסיות.</p>
+  </div>
+
+  <!-- AFTER -->
+  <div class="frame">
+    <span class="tag good">אחרי — רוחב מלא, מיושר עם הכרטיסיות (התיקון: <code>w-full</code> על העמודה)</span>
+    <div class="hero guide">
+      <div class="cov-row">
+        <div class="wrap full"><!-- w-full -->
+          <span class="chip">🛡 68% כיסוי ייחוס <span class="caret">⌄</span></span>
+          <div class="mount full">
+            <div class="panel">
+              <div class="head">
+                <div>
+                  <div class="t">פירוק הבלתי-מזוהה</div>
+                  <div class="d">ההזמנות שמקור-ההפניה שלהן לא נקלט — תיאור בלבד, לא חלוקה-מחדש.</div>
+                </div>
+                <div class="totals">
+                  <div><div class="lab">הזמנות</div><div class="val">41</div></div>
+                  <div><div class="lab">הכנסה</div><div class="val">$1,044</div></div>
+                </div>
+              </div>
+              <div class="body">
+                <div class="stat"><div class="lab">חדשים</div><div class="val">23</div></div>
+                <div class="stat"><div class="lab">חוזרים</div><div class="val">14</div></div>
+                <div class="stat"><div class="lab">לא מסווג</div><div class="val">4</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="lab">הכנסה</div><div class="big">$54,200</div></div>
+        <div class="card"><div class="lab">הוצאה</div><div class="big">$18,900</div></div>
+        <div class="card"><div class="lab">רווח תפעולי</div><div class="big">$22,400</div></div>
+      </div>
+    </div>
+    <p class="note">✅ הצ'יפ נשאר בקצה; הפנל נפרש <b>קצה-לקצה</b> ומיושר בדיוק עם שורת הכרטיסיות שמתחתיו.</p>
+  </div>
+</body>
+</html>

@@ -93,6 +93,27 @@ describe('CoverageChip (2026-06-02)', () => {
     expect(screen.getByTestId('unknown-bucket-panel')).toBeInTheDocument();
   });
 
+  // Regression (2026-06-05): the expanded panel must span the FULL hero width
+  // and align with the hero cards — not render narrow + shoved to the side. The
+  // disclosure wrapper AND the panel's mount node both carry `w-full`; without
+  // the wrapper's `w-full` the flex column collapses to the chip's width and the
+  // panel (despite its own `w-full`) renders constrained to that narrow column.
+  it('renders the expanded panel full-width (aligned with the hero cards, not shoved aside)', async () => {
+    const user = userEvent.setup();
+    render(
+      <CoverageChip
+        coverage={{ coverageShare: 0.68, unknownShare: 0.32, prominent: true }}
+        breakdown={sampleBreakdown()}
+      />,
+    );
+    await user.click(screen.getByTestId('coverage-chip-expand'));
+    const panel = screen.getByTestId('unknown-bucket-panel');
+    const mountNode = panel.parentElement!; // div#panelId
+    expect(mountNode.className).toContain('w-full');
+    const disclosureWrapper = mountNode.parentElement!; // flex w-full flex-col items-end
+    expect(disclosureWrapper.className).toContain('w-full');
+  });
+
   // True back-compat: with NO breakdown the chip stays a static summary (no
   // disclosure trigger) regardless of prominence.
   it('stays a static summary (no disclosure) when no breakdown is given', () => {
