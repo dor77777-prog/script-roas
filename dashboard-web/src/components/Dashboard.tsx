@@ -1258,6 +1258,8 @@ function HomeTab({
         // SWR payload the hero delta already fetched). Desktop ignores both.
         filtered.series,
         compare.show ? prevRoasByStore : undefined,
+        data?.adStateMap ?? {},
+        data?.storeApplicablePlatforms ?? {},
       ),
     [
       filtered.storeAggs,
@@ -1269,6 +1271,8 @@ function HomeTab({
       filtered.series,
       compare.show,
       prevRoasByStore,
+      data?.adStateMap,
+      data?.storeApplicablePlatforms,
     ],
   );
 

@@ -104,6 +104,10 @@ export interface PerStoreData {
    * (back-compat — existing consumers pass none). Desktop ignores this field.
    */
   roasDeltaPct?: number | null;
+  /** ads-off Phase 2 — true when ALL of this store's applicable platforms are
+   *  toggled off. Drives the off-display (organic/neutral) at the card +
+   *  comparative surfaces. Undefined/false ⇒ normal. */
+  adOff?: boolean;
 }
 
 export interface PerStoreRowProps {

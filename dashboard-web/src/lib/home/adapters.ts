@@ -38,6 +38,7 @@ import {
   ANNOTATION_KIND_EMOJI,
   type Annotation,
 } from '@/lib/annotations';
+import { isStoreFullyOff, type AdStateMap, type AdPlatform } from '@/lib/adState';
 
 /* --------------------------------------------------------------------------
  * CommandCenterHero
@@ -312,6 +313,8 @@ export function toPerStoreData(
   dataLastWriteAt: string | null = null,
   series?: DailySeries[],
   prevRoasByStore?: Record<string, number | null>,
+  adStateMap: AdStateMap = {},
+  storeApplicablePlatforms: Record<string, AdPlatform[]> = {},
 ): PerStoreData[] {
   // Aggregate per (store, platform) once so the inner loop below is O(1) per
   // store. Spend + impressions are summed across the requested range only.
@@ -377,27 +380,31 @@ export function toPerStoreData(
     return (curRoas - prev) / prev;
   }
 
-  return storeAggs.map((s) => ({
-    storeId: storeIdByName[s.store] ?? s.store,
-    storeName: s.store,
-    spend: s.spend,
-    revenue: s.revenue,
-    orders: ordersByStore[s.store] ?? 0,
-    // AOV = gross order value at checkout ÷ order count. The per-store CARD is
-    // the only surface carrying the AOV emphasis band ($50/$70), so it MUST use
-    // the same gross÷orders basis as the StoreDetailModal (storeDetail.ts) —
-    // never net÷orders, which would false-flip the band on a refund day and
-    // disagree with the modal for the same store (Wave 1 cross-surface fix).
-    aov:
-      (ordersByStore[s.store] ?? 0) > 0
-        ? s.grossRevenue / (ordersByStore[s.store] ?? 1)
-        : null,
-    roas: s.roas > 0 ? s.roas : null,
-    updatedAt: dataLastWriteAt,
-    perPlatformCpm: perPlatformCpm(s.store),
-    roasSpark: roasSparkFor(s.store),
-    roasDeltaPct: roasDeltaPctFor(s.store, s.roas),
-  }));
+  return storeAggs.map((s) => {
+    const storeId = storeIdByName[s.store] ?? s.store;
+    return {
+      storeId,
+      storeName: s.store,
+      spend: s.spend,
+      revenue: s.revenue,
+      orders: ordersByStore[s.store] ?? 0,
+      // AOV = gross order value at checkout ÷ order count. The per-store CARD is
+      // the only surface carrying the AOV emphasis band ($50/$70), so it MUST use
+      // the same gross÷orders basis as the StoreDetailModal (storeDetail.ts) —
+      // never net÷orders, which would false-flip the band on a refund day and
+      // disagree with the modal for the same store (Wave 1 cross-surface fix).
+      aov:
+        (ordersByStore[s.store] ?? 0) > 0
+          ? s.grossRevenue / (ordersByStore[s.store] ?? 1)
+          : null,
+      roas: s.roas > 0 ? s.roas : null,
+      updatedAt: dataLastWriteAt,
+      perPlatformCpm: perPlatformCpm(s.store),
+      roasSpark: roasSparkFor(s.store),
+      roasDeltaPct: roasDeltaPctFor(s.store, s.roas),
+      adOff: isStoreFullyOff(storeId, adStateMap, storeApplicablePlatforms[storeId] ?? []),
+    };
+  });
 }
 
 /* --------------------------------------------------------------------------
