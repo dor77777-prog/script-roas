@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>ניהול חנויות — הוספה / ארכוב / שחזור / מחיקה (מוקאפ)</title>
+<style>
+  :root{ font-family: "Rubik","Heebo",-apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
+  *{ box-sizing:border-box; }
+  /* ---- theme tokens (faithful to the dashboard mesh re-skin) ---- */
+  [data-theme=dark]{
+    --bg:#0a0f1a; --bg2:#0c1322; --surf:#171a2e; --surf2:#1d2138; --tx:#e7ecf5; --mut:#8a96ac; --sub:#6b7689;
+    --bd:rgba(255,255,255,.08); --bd2:rgba(255,255,255,.14); --head:#aab4c8; --accent:#7c6cff; --accent-fg:#fff;
+    --field:#10142a; --ok:#26b562; --warn:#f0922e;
+    --mesh1:rgba(124,108,255,.13); --mesh2:rgba(91,141,240,.10);
+  }
+  [data-theme=light]{
+    --bg:#eef1f6; --bg2:#f7f9fc; --surf:#ffffff; --surf2:#f4f7fb; --tx:#0f1722; --mut:#5f6b7e; --sub:#8a94a6;
+    --bd:#e3e8f0; --bd2:#d2dae6; --head:#647184; --accent:#6354e6; --accent-fg:#fff;
+    --field:#f3f6fb; --ok:#0f9d6b; --warn:#c2740c;
+    --mesh1:rgba(14,165,183,.10); --mesh2:rgba(99,84,230,.07);
+  }
+  body{ margin:0; color:var(--tx); padding:0 0 90px; min-height:100vh;
+    background:
+      radial-gradient(1100px 560px at 82% -8%, var(--mesh1), transparent 55%),
+      radial-gradient(900px 500px at 12% 108%, var(--mesh2), transparent 60%),
+      var(--bg);
+  }
+  header{ position:sticky; top:0; z-index:9; backdrop-filter:blur(8px);
+    background:color-mix(in oklab, var(--surf) 86%, transparent); border-bottom:1px solid var(--bd);
+    padding:11px 22px; display:flex; gap:14px; align-items:center; }
+  header h1{ font-size:16px; margin:0; flex:1; font-weight:700; }
+  .tbtn{ border:1px solid var(--bd2); background:transparent; color:var(--tx); border-radius:999px; padding:6px 13px; font-size:13px; cursor:pointer; font-weight:600; }
+  .tbtn:hover{ border-color:var(--accent); }
+  main{ max-width:1120px; margin:0 auto; padding:22px 16px; }
+  h2.sec{ font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--mut); margin:30px 0 12px; font-weight:700; }
+  .sub{ font-size:12.5px; color:var(--mut); line-height:1.6; margin:0 0 12px; }
+  .card{ background:var(--surf); border:1px solid var(--bd); border-radius:16px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .accent{ color:var(--accent); font-weight:700; }
+  /* ---------- store-count selector ---------- */
+  .seg{ display:inline-flex; gap:0; border:1px solid var(--bd2); border-radius:999px; overflow:hidden; }
+  .seg button{ border:0; background:transparent; color:var(--mut); padding:7px 15px; font-size:13px; font-weight:700; cursor:pointer; }
+  .seg button.on{ background:var(--accent); color:var(--accent-fg); }
+  /* ---------- per-store vivid band cards (operator-locked V4: vivid gradient + white text) ---------- */
+  .store-grid{ display:grid; gap:14px; grid-template-columns:repeat(auto-fit, minmax(232px, 1fr)); }
+  .scard{ border-radius:16px; padding:16px 16px 18px; position:relative; overflow:hidden; color:#fff; min-height:150px;
+    border:1px solid rgba(255,255,255,.14); box-shadow:0 6px 22px rgba(0,0,0,.18); }
+  .scard::before{ content:""; position:absolute; inset:0 0 auto 0; height:4px; background:var(--glow); filter:saturate(1.3); }
+  .scard.blue{ background:linear-gradient(150deg,#4170d1,#2563eb); --glow:#5b8df0; }
+  .scard.green{ background:linear-gradient(150deg,#0a8a59,#067a4f); --glow:#34e2ad; }
+  .scard.orange{ background:linear-gradient(150deg,#ef9331,#d97c16); --glow:#ef9331; }
+  .scard.red{ background:linear-gradient(150deg,#d83a4e,#b52138); --glow:#ff6b81; }
+  .scard.gray{ background:linear-gradient(150deg,#3a4256,#2c3344); --glow:#828aae; }
+  .scard .nm{ font-size:14px; font-weight:800; display:flex; align-items:center; justify-content:space-between; gap:6px; }
+  .scard .chip{ font-size:9px; font-weight:800; padding:2px 7px; border-radius:999px; background:rgba(0,0,0,.22); letter-spacing:.04em; }
+  .scard .cap{ font-size:10px; opacity:.8; margin:11px 0 1px; text-transform:uppercase; letter-spacing:.07em; }
+  .scard .roas{ font-size:34px; font-weight:300; line-height:1; letter-spacing:-.02em; }
+  .scard .rev{ font-size:11.5px; opacity:.9; margin-top:11px; border-top:1px solid rgba(255,255,255,.18); padding-top:9px; display:flex; justify-content:space-between; }
+  .scard .new{ outline:2px dashed rgba(255,255,255,.7); outline-offset:3px; }
+  .pulse{ animation:pp 1.4s ease-in-out infinite; } @keyframes pp{ 0%,100%{opacity:1} 50%{opacity:.55} }
+  /* ---------- wizard ---------- */
+  .wrap2{ display:grid; gap:16px; grid-template-columns:1fr 1fr; } @media(max-width:860px){ .wrap2{ grid-template-columns:1fr; } }
+  label.fld{ display:block; margin:0 0 11px; }
+  label.fld .lab{ font-size:11.5px; color:var(--head); font-weight:600; margin-bottom:4px; display:block; }
+  .inp{ width:100%; background:var(--field); border:1px solid var(--bd2); border-radius:9px; padding:8px 11px; color:var(--tx); font-size:13px; font-family:inherit; }
+  .inp::placeholder{ color:var(--sub); }
+  .row{ display:flex; gap:10px; } .row > *{ flex:1; }
+  .radio{ display:flex; gap:8px; }
+  .radio .opt{ flex:1; border:1px solid var(--bd2); border-radius:10px; padding:9px; font-size:12.5px; text-align:center; cursor:pointer; color:var(--mut); }
+  .radio .opt.on{ border-color:var(--accent); background:var(--accent); color:var(--accent-fg); font-weight:700; }
+  .plats{ display:flex; gap:8px; flex-wrap:wrap; }
+  .plat{ display:flex; align-items:center; gap:7px; border:1px solid var(--bd2); border-radius:999px; padding:6px 11px; font-size:12.5px; }
+  .tog{ width:34px; height:19px; border-radius:999px; position:relative; background:#5b6678; flex:none; }
+  .tog.on{ background:var(--ok); } .tog::after{ content:""; position:absolute; top:2px; width:15px; height:15px; border-radius:50%; background:#fff; }
+  [dir=rtl] .tog.on::after{ left:2px; } [dir=rtl] .tog::after{ right:2px; }
+  .swatch{ display:inline-block; width:22px; height:22px; border-radius:6px; border:2px solid #fff3; vertical-align:middle; }
+  .btn{ background:var(--accent); color:var(--accent-fg); border:0; border-radius:10px; padding:10px 18px; font-size:13.5px; font-weight:700; cursor:pointer; }
+  .btn.ghost{ background:transparent; border:1px solid var(--bd2); color:var(--tx); }
+  .btn.danger{ background:#d83a4e; }
+  /* completion panel */
+  .done h3{ font-size:13px; margin:14px 0 7px; display:flex; align-items:center; gap:7px; }
+  .code{ background:var(--field); border:1px solid var(--bd2); border-radius:10px; padding:11px 13px; font-family:"Geist Mono",ui-monospace,Menlo,monospace; font-size:11.5px; line-height:1.7; color:var(--tx); white-space:pre-wrap; overflow-x:auto; }
+  .code .k{ color:var(--accent); } .code .c{ color:var(--mut); }
+  .chk{ list-style:none; margin:0; padding:0; font-size:12.5px; line-height:1.85; }
+  .chk li::before{ content:"☐ "; color:var(--mut); }
+  .pill-ok{ font-size:10px; font-weight:800; color:var(--ok); border:1px solid var(--ok); border-radius:999px; padding:1px 8px; }
+  /* ---------- removed-stores area ---------- */
+  .rrow{ display:flex; align-items:center; gap:12px; padding:11px 4px; border-bottom:1px solid var(--bd); }
+  .rrow:last-child{ border-bottom:0; }
+  .rdot{ width:10px; height:10px; border-radius:50%; flex:none; }
+  .rname{ font-weight:700; font-size:13.5px; }
+  .rtag{ font-size:9.5px; font-weight:800; padding:2px 8px; border-radius:999px; background:color-mix(in oklab,var(--mut) 22%, transparent); color:var(--mut); letter-spacing:.04em; }
+  .rmeta{ font-size:11.5px; color:var(--mut); flex:1; }
+  .note{ font-size:12px; color:var(--mut); margin-top:12px; line-height:1.6; background:var(--surf2); border:1px solid var(--bd); border-radius:10px; padding:10px 12px; }
+  .tag-new{ font-size:9.5px; font-weight:800; color:var(--accent); border:1px solid var(--accent); border-radius:999px; padding:1px 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ניהול חנויות — הוספה · ארכוב · שחזור · מחיקה</h1>
+  <span class="sub" style="margin:0">מוקאפ עיצובי</span>
+  <button class="tbtn" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">🌓 בהיר / כהה</button>
+</header>
+<main>
+
+  <!-- ============ A. RESPONSIVE STORE GRID ============ -->
+  <h2 class="sec">① כרטיסי-הבית מתארגנים מחדש לפי מספר החנויות</h2>
+  <p class="sub">לחץ על מספר חנויות — הרשת מתאזנת לבד (auto-fit). היום הרשת קשיחה ל-3; אחרי הריפוטור היא רספונסיבית: 2→2-up, 3→3-up, 4→2×2/4-up, 5+→זורם נקי. הכרטיסים הם בדיוק כרטיסי-הבית שלך (gradient לפי באנד-ROAS + טקסט לבן).</p>
+  <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px; flex-wrap:wrap">
+    <span class="sub" style="margin:0">מספר חנויות:</span>
+    <div class="seg" id="seg">
+      <button data-n="2">2</button><button data-n="3" class="on">3</button><button data-n="4">4</button><button data-n="5">5</button>
+    </div>
+    <span class="sub" style="margin:0">· ונסה גם להגדיל/להקטין את החלון</span>
+  </div>
+  <div class="store-grid" id="grid"></div>
+
+  <!-- ============ B. ADD-STORE WIZARD ============ -->
+  <h2 class="sec">② אשף הוספת חנות (ב-/operator)</h2>
+  <div class="wrap2">
+    <div class="card">
+      <div style="font-size:13px; font-weight:800; margin-bottom:14px">פרטי החנות החדשה</div>
+      <label class="fld"><span class="lab">מזהה (slug)</span><input class="inp" value="glowlab" placeholder="lowercase, ללא רווחים"></label>
+      <label class="fld"><span class="lab">שם תצוגה</span><input class="inp" value="Glow Lab"></label>
+      <label class="fld"><span class="lab">סוג חנות</span>
+        <div class="radio"><div class="opt on">Themed (תבנית Shopify)</div><div class="opt">Headless (Lovable)</div></div>
+      </label>
+      <label class="fld"><span class="lab">דומיין Shopify</span><input class="inp" value="glowlab.myshopify.com"></label>
+      <div class="row">
+        <label class="fld"><span class="lab">Meta Ad-Account ID</span><input class="inp" value="800776975668"></label>
+        <label class="fld"><span class="lab">Google Customer ID</span><input class="inp" value="4014537400" placeholder="ריק = ללא Google"></label>
+      </div>
+      <label class="fld"><span class="lab">פלטפורמות פעילות</span>
+        <div class="plats">
+          <span class="plat"><span class="tog on"></span> Meta</span>
+          <span class="plat"><span class="tog on"></span> Google</span>
+          <span class="plat"><span class="tog"></span> TikTok <span class="sub" style="margin:0;font-size:10px">(חשבון משותף)</span></span>
+        </div>
+      </label>
+      <label class="fld"><span class="lab">צבע-מותג</span>
+        <span class="swatch" style="background:linear-gradient(150deg,#8b5cf6,#6d28d9)"></span>
+        <span class="sub" style="margin-inline-start:8px">סגול · (ריד fallback אוטומטי אם לא נבחר)</span>
+      </label>
+      <div style="display:flex; gap:10px; margin-top:6px">
+        <button class="btn">צור חנות →</button>
+        <button class="btn ghost">בטל</button>
+      </div>
+    </div>
+
+    <!-- completion panel -->
+    <div class="card done">
+      <div style="font-size:13px; font-weight:800; display:flex; align-items:center; gap:8px">
+        ✅ נוצר ב-DB <span class="pill-ok">stores · store_webhooks · store_ad_state</span>
+      </div>
+      <p class="sub" style="margin-top:8px">השלם 3 צעדים שה-UI לא יכול לבצע לבד (טוקנים=Vercel · קוד=deploy · Shopify):</p>
+
+      <h3>1 · משתני-סביבה ב-Vercel</h3>
+      <div class="code"><span class="k">GLOWLAB_SHOPIFY_DOMAIN</span> = glowlab.myshopify.com
+<span class="k">GLOWLAB_SHOPIFY_CLIENT_ID</span> = ••••••
+<span class="k">GLOWLAB_SHOPIFY_CLIENT_SECRET</span> = ••••••
+<span class="k">GLOWLAB_META_ACCESS_TOKEN</span> = ••••••
+<span class="k">GLOWLAB_META_AD_ACCOUNT_ID</span> = 800776975668
+<span class="k">GLOWLAB_GOOGLEADS_CUSTOMER_ID</span> = 4014537400  <span class="c">// refresh = גלובלי משותף</span></div>
+
+      <h3>2 · Snippet להטמעה <span class="tag-new">themed → Shopify Custom Pixel</span></h3>
+      <div class="code"><span class="c">// Shopify Admin → Settings → Customer events → Add custom pixel</span>
+const <span class="k">CART_TOKEN</span> = "ct_9f3a…b71"; <span class="c">// נוצר אוטומטית, פר-חנות</span>
+analytics.subscribe("product_added_to_cart", e =&gt; {
+  browser.localStorage.getItem("roas_ft").then(ft =&gt;
+    fetch("https://…/api/events/cart", {method:"POST",
+      body: JSON.stringify({ token: CART_TOKEN, …e, ft }) }));
+});</div>
+      <p class="sub" style="margin:6px 0 0">(headless → במקום זה: beacon מ-Lovable + עדכון edge-fn <code>roas-cart-event</code> עם הטוקן)</p>
+
+      <h3>3 · Shopify + פריסה</h3>
+      <ul class="chk">
+        <li>custom-app עם scopes: read_orders, read_products, read_customers</li>
+        <li>רישום webhooks → /api/webhooks/shopify (orders.created, refunds.created…)</li>
+        <li>redeploy אחד ב-Vercel (טוען את ה-env + רושם את הקרונים)</li>
+      </ul>
+      <p class="note" style="margin-top:12px">אחרי 3 הצעדים — Glow Lab מופיעה <b>מלאה</b> בכל הטאבים (בית/אופטימיזציה/קמפיינים/מוצרים/לקוחות), בדיוק כמו כל חנות קיימת.</p>
+    </div>
+  </div>
+
+  <!-- ============ C. REMOVED STORES AREA ============ -->
+  <h2 class="sec">③ חנויות שהוסרו (ארכוב · שחזור · מחיקה)</h2>
+  <div class="card">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
+      <div style="font-size:13px; font-weight:800">חנויות מאורכבות</div>
+      <span class="sub" style="margin:0">הדאטה נשמרת ומתויגת · ניתנת לשחזור</span>
+    </div>
+    <div class="rrow">
+      <span class="rdot" style="background:#e0a44a"></span>
+      <span class="rname">Beauty Box</span><span class="rtag">הוסרה · 12/04/26</span>
+      <span class="rmeta">~8,400 הזמנות · נתונים נשמרו (data_daily, campaigns_daily, orders_attribution…)</span>
+      <button class="btn ghost" style="padding:6px 13px">↩︎ שחזר</button>
+      <button class="btn danger" style="padding:6px 13px">🗑 מחק לצמיתות</button>
+    </div>
+    <div class="rrow">
+      <span class="rdot" style="background:#5aa0e0"></span>
+      <span class="rname">Pet Corner</span><span class="rtag">הוסרה · 28/02/26</span>
+      <span class="rmeta">~2,100 הזמנות · נתונים נשמרו</span>
+      <button class="btn ghost" style="padding:6px 13px">↩︎ שחזר</button>
+      <button class="btn danger" style="padding:6px 13px">🗑 מחק לצמיתות</button>
+    </div>
+    <p class="note">
+      <b>שחזר</b> → החנות חוזרת ל-active ומופיעה שוב בכל מקום עם כל ההיסטוריה (לא "זרה").<br>
+      <b>מחק לצמיתות</b> → דורש הקלדת אישור (כמו Reset); מוחק את שורת-החנות + כל הדאטה הפר-חנותית מה-DB. בלתי-הפיך.<br>
+      <b>ארכוב</b> (מהתצוגה החיה, לא כאן) → מוריד את החנות מהבית/טבלאות/קמפיינים/סיכומים, הדאטה נשארת מתויגת "הוסרה".
+    </p>
+  </div>
+
+  <p class="note" style="margin-top:26px">
+    <b>איך כל הדשבורד מתעדכן דינמית:</b> רוב המשטחים כבר עושים <code>map</code> על רשימת-החנויות (טבלת השוואה, טבלאות חודשיות, קמפיינים, מוצרים, לקוחות, מטריצת מצב-פרסום) → מתעדכנים לבד לכל מספר חנויות.
+    ה-fix-ים: רשת-כרטיסי-הבית (למעלה) → רספונסיבית; ~8 מפות-שמות/רשימות-טפסים → קריאה מטבלת <code>stores</code>; WhatsApp (תבנית-Meta 3-סלוטים) → כלל ל-4+.
+  </p>
+</main>
+
+<script>
+  // store fixtures (band = ROAS health) — demonstrates the reflow + the new store
+  const STORES = [
+    { nm:'uzoshop',  band:'orange', roas:'2.03x', rev:'C$2,310', spend:'C$1,137', chip:'פעיל' },
+    { nm:'Zol Plus', band:'green',  roas:'2.84x', rev:'C$1,940', spend:'C$683',  chip:'פעיל' },
+    { nm:'360usmile',band:'blue',   roas:'3.41x', rev:'C$3,120', spend:'C$915',  chip:'פעיל' },
+    { nm:'Glow Lab', band:'red',    roas:'1.62x', rev:'C$880',   spend:'C$543',  chip:'חדש', isNew:true },
+    { nm:'Aura',     band:'gray',   roas:'—',     rev:'C$120',   spend:'C$0',    chip:'אורגני' },
+  ];
+  const grid = document.getElementById('grid');
+  function render(n){
+    grid.innerHTML = STORES.slice(0,n).map(s => `
+      <div class="scard ${s.band} ${s.isNew?'new pulse':''}">
+        <div class="nm">${s.nm} <span class="chip">${s.chip}</span></div>
+        <div class="cap">ROAS · היום</div>
+        <div class="roas">${s.roas}</div>
+        <div class="rev"><span>הכנסות ${s.rev}</span><span>הוצאה ${s.spend}</span></div>
+      </div>`).join('');
+  }
+  document.getElementById('seg').addEventListener('click', e => {
+    if(e.target.tagName!=='BUTTON') return;
+    [...e.currentTarget.children].forEach(b=>b.classList.remove('on'));
+    e.target.classList.add('on');
+    render(+e.target.dataset.n);
+  });
+  render(3);
+</script>
+</body>
+</html>
