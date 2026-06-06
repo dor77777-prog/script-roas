@@ -197,6 +197,12 @@ type MockState = {
    * its mocked value. Test 6 uses this to verify step.run errors propagate.
    */
   throwIn: null | 'shopify' | 'meta' | 'google' | 'tiktok' | 'merge' | 'upsert';
+  /**
+   * ads-off Phase 3 (fetch-gate): `fetchAdStateFromPostgres` return value.
+   * Default `{}` ⇒ all platforms ON (missing key = enabled). Tests that need
+   * a store/platform OFF populate this explicitly.
+   */
+  adStateMap: Record<string, boolean>;
 };
 
 const mockState = vi.hoisted<MockState>(() => ({
@@ -344,6 +350,7 @@ const mockState = vi.hoisted<MockState>(() => ({
   tiktokAdResult: [],
   fxRate: 1.35,
   throwIn: null,
+  adStateMap: {},
 }));
 
 // ---------------------------------------------------------------------------
@@ -481,9 +488,31 @@ vi.mock('@/lib/sentry/capture', () => ({
   captureStepError: vi.fn().mockResolvedValue(undefined),
 }));
 
+// ads-off Phase 3 (fetch-gate) — mock fetchAdStateFromPostgres so tests can
+// drive per-store/platform off states without a real Supabase connection.
+vi.mock('@/lib/postgresReaders', async (orig) => ({
+  ...(await orig<typeof import('@/lib/postgresReaders')>()),
+  fetchAdStateFromPostgres: vi.fn(async () => mockState.adStateMap),
+}));
+
 // ---- SUT import (after mocks) ----------------------------------------------
 
 import { cronDailyFunctions, runDailyForStore } from '../cronDaily';
+import {
+  fetchMetaSpendForDay,
+  fetchMetaAdSetInsights,
+  fetchMetaAdInsights,
+  fetchMetaBudgets,
+} from '@/lib/fetchers/meta';
+import {
+  fetchGoogleAdsSpendForDay,
+  fetchGoogleAdsAdGroupInsights,
+  fetchGoogleAdsAdInsights,
+} from '@/lib/fetchers/googleAds';
+import {
+  fetchTikTokSpendForDay,
+  fetchTikTokAdInsights,
+} from '@/lib/fetchers/tiktok';
 
 // ---- Shared helpers --------------------------------------------------------
 
@@ -534,11 +563,15 @@ beforeEach(() => {
   mockState.upserts = [];
   mockState.upsertError = null;
   mockState.throwIn = null;
+  mockState.adStateMap = {};
   // Reset the Phase 05.6.1 fixture arrays so Test 8's emptying does not leak.
   mockState.shopifyOrdersResult = structuredClone(INITIAL_SHOPIFY_ORDERS);
   mockState.shopifyCatalogResult = structuredClone(INITIAL_SHOPIFY_CATALOG);
   mockState.metaAdResult = structuredClone(INITIAL_META_ADS);
   mockState.googleAdResult = structuredClone(INITIAL_GOOGLE_ADS);
+  // ads-off Phase 3: clear spy call counts so `not.toHaveBeenCalled()` only
+  // sees calls from the current test, not accumulated across the suite.
+  vi.clearAllMocks();
 });
 
 // ===========================================================================
@@ -583,7 +616,10 @@ describe('cronDaily — factory + handler', () => {
     // when one half fails. Step count: 6 → 8.
     // Phase A 2026-05-29 (Task 13): added pre-flight-meta-buc step.
     // Step count: 8 → 9.
+    // ads-off Phase 3 (fetch-gate): added fetch-ad-state as the first step
+    // (before fetch-shopify). Step count: 9 → 10.
     expect(ids).toEqual([
+      'fetch-ad-state',
       'pre-flight-meta-buc-uzoshop',
       'fetch-shopify-day',
       'fetch-shopify-orders',
@@ -594,10 +630,10 @@ describe('cronDaily — factory + handler', () => {
       'apply-manual-overrides',
       'persist-batch',
     ]);
-    // Free-tier guard: total step count must stay ≤ 10 (1 function + 9
-    // steps = 10 execs/run; × 3 stores × 1 run/day × 30 days = 900
+    // Free-tier guard: total step count must stay ≤ 11 (1 function + 10
+    // steps = 11 execs/run; × 3 stores × 1 run/day × 30 days = 990
     // execs/month from cron-daily — still well under 50K/mo free-tier).
-    expect(ids.length).toBeLessThanOrEqual(10);
+    expect(ids.length).toBeLessThanOrEqual(11);
   });
 
   it('Test 5: persist-batch upserts use the correct `onConflict` strings (match migration PK/UNIQUE)', async () => {
@@ -994,6 +1030,89 @@ describe('cronDaily — factory + handler', () => {
       // Meta + Google unaffected.
       expect(row?.fb_spend_cad).toBe(36);
       expect(row?.ga_spend_cad).toBe(50);
+    });
+
+    // ===========================================================================
+    // ads-off Phase 3 (fetch-gate) — Test 11: per-platform gate via adStateMap.
+    //
+    // When a store/platform is OFF, the corresponding fetchers must NOT be called
+    // and the run still completes (persist-batch writes the existing zero sentinel).
+    // Default empty map ⇒ all platforms ON ⇒ unchanged behaviour.
+    // ===========================================================================
+
+    describe('Test 11 (ads-off Phase 3): fetch-gate skips fetchers when platform is OFF', () => {
+      it('Meta OFF for uzoshop → Meta fetchers never called; run completes', async () => {
+        mockState.adStateMap = { 'uzoshop:meta': false };
+
+        const { step } = makeMockStep();
+        await expect(
+          runDailyForStore('uzoshop', '2026-05-20', { step }),
+        ).resolves.toBeDefined();
+
+        expect(vi.mocked(fetchMetaSpendForDay)).not.toHaveBeenCalled();
+        expect(vi.mocked(fetchMetaAdSetInsights)).not.toHaveBeenCalled();
+        expect(vi.mocked(fetchMetaAdInsights)).not.toHaveBeenCalled();
+        expect(vi.mocked(fetchMetaBudgets)).not.toHaveBeenCalled();
+
+        // persist-batch still ran (data_daily was upserted)
+        expect(mockState.upserts.some((u) => u.table === 'data_daily')).toBe(true);
+      });
+
+      it('Google OFF for uzoshop → Google fetchers never called; run completes', async () => {
+        mockState.adStateMap = { 'uzoshop:google': false };
+
+        const { step } = makeMockStep();
+        await expect(
+          runDailyForStore('uzoshop', '2026-05-20', { step }),
+        ).resolves.toBeDefined();
+
+        expect(vi.mocked(fetchGoogleAdsSpendForDay)).not.toHaveBeenCalled();
+        expect(vi.mocked(fetchGoogleAdsAdGroupInsights)).not.toHaveBeenCalled();
+        expect(vi.mocked(fetchGoogleAdsAdInsights)).not.toHaveBeenCalled();
+
+        // persist-batch still ran
+        expect(mockState.upserts.some((u) => u.table === 'data_daily')).toBe(true);
+      });
+
+      it('TikTok OFF for BOTH shared stores → TikTok fetchers never called', async () => {
+        // Both uzoshop + usmile360 off ⇒ tiktokAccountFetchEnabled returns false
+        mockState.adStateMap = {
+          'uzoshop:tiktok': false,
+          'usmile360:tiktok': false,
+        };
+
+        const { step } = makeMockStep();
+        await expect(
+          runDailyForStore('uzoshop', '2026-05-20', { step }),
+        ).resolves.toBeDefined();
+
+        expect(vi.mocked(fetchTikTokSpendForDay)).not.toHaveBeenCalled();
+        expect(vi.mocked(fetchTikTokAdInsights)).not.toHaveBeenCalled();
+      });
+
+      it('TikTok OFF for only uzoshop → TikTok fetchers still called (account-level gate requires ALL shared stores OFF)', async () => {
+        // Only one of the two shared stores is off → account-level fetch must proceed
+        mockState.adStateMap = { 'uzoshop:tiktok': false };
+
+        const { step } = makeMockStep();
+        await expect(
+          runDailyForStore('uzoshop', '2026-05-20', { step }),
+        ).resolves.toBeDefined();
+
+        // usmile360 is still ON, so the shared account fetch proceeds
+        expect(vi.mocked(fetchTikTokSpendForDay)).toHaveBeenCalled();
+        expect(vi.mocked(fetchTikTokAdInsights)).toHaveBeenCalled();
+      });
+
+      it('empty adStateMap (default) → all platform fetchers called (unchanged behaviour)', async () => {
+        // mockState.adStateMap is already {} from beforeEach
+        const { step } = makeMockStep();
+        await runDailyForStore('uzoshop', '2026-05-20', { step });
+
+        expect(vi.mocked(fetchMetaSpendForDay)).toHaveBeenCalled();
+        expect(vi.mocked(fetchGoogleAdsSpendForDay)).toHaveBeenCalled();
+        expect(vi.mocked(fetchTikTokSpendForDay)).toHaveBeenCalled();
+      });
     });
 
     // TikTok manual-override unblock (2026-06-02) — end-to-end consumer proof.

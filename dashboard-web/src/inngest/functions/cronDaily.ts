@@ -80,6 +80,11 @@ import { recordFreshness } from '@/lib/inngest/freshness';
 // constants. Aliased to `STORES_WITH_TIKTOK` to preserve the historical
 // local name at the use sites (minimizes diff churn).
 import { STORES_WITH_TIKTOK_IDS as STORES_WITH_TIKTOK } from '@/lib/platformsByStore';
+// ads-off Phase 3 (2026-06-06) — fetch-gate: skip per-platform fetches when
+// the store/platform is toggled off. Lightweight DB read loaded as the first
+// step so every downstream step in the same run can branch on it.
+import { isAdsEnabled, tiktokAccountFetchEnabled } from '@/lib/adState';
+import { fetchAdStateFromPostgres } from '@/lib/postgresReaders';
 
 /**
  * Phase 0 (2026-06-02) — single source of truth for the orders_attribution
@@ -447,6 +452,18 @@ async function runDailyForStoreInner(
   // share the same reconciled_at".
   const reconciledAt = new Date().toISOString();
 
+  // ---- Step 0: Load ad-state map (ads-off Phase 3, 2026-06-06) ---------------
+  // Lightweight DB read — fetches store_ad_state in one paginated query.
+  // Missing key ⇒ ON (isAdsEnabled defaults to true) so an empty table is
+  // fully backwards-compatible. Gates Meta/Google per (store, platform);
+  // TikTok uses account-level gate (tiktokAccountFetchEnabled) since the
+  // shared account serves multiple stores. Steps 1 (Shopify), 4 (overrides),
+  // 5 (persist) and the agg RPCs are intentionally NOT gated — revenue/
+  // product data must always land regardless of ad state.
+  const adStateMap = (await step.run('fetch-ad-state', () =>
+    fetchAdStateFromPostgres(),
+  )) as Awaited<ReturnType<typeof fetchAdStateFromPostgres>>;
+
   // ------------------------------------------------------------------
   // Pre-flight Meta BUC gate (Phase A 2026-05-29, Task 13)
   //
@@ -630,6 +647,17 @@ async function runDailyForStoreInner(
         budgets: { currency: 'ILS', campaigns: {}, adSets: {} },
       };
     }
+    // ads-off Phase 3 (2026-06-06): per-store/platform gate. Returns the same
+    // zero sentinel shape so persist-batch writes nothing for this platform
+    // (spend=0 + empty arrays). data_freshness is worker-owned; no write here.
+    if (!isAdsEnabled(adStateMap, storeId, 'meta')) {
+      return {
+        spend: { storeId, date: dateStr, spend: 0, currency: 'ILS', impressions: 0 },
+        adsetRows: [],
+        adRows: [],
+        budgets: { currency: 'ILS', campaigns: {}, adSets: {} },
+      };
+    }
     try {
       const [spend, adsetRows, adRows, budgets] = await Promise.all([
         fetchMetaSpendForDay(storeId, dateStr),
@@ -681,6 +709,14 @@ async function runDailyForStoreInner(
   // a uniform per-store row.
   // Audit fix 2026-05-23 (HG-01 pipeline): same soft-fail wrap as Meta above.
   const google = (await step.run('fetch-google', async () => {
+    // ads-off Phase 3 (2026-06-06): per-store/platform gate.
+    if (!isAdsEnabled(adStateMap, storeId, 'google')) {
+      return {
+        spend: { storeId, date: dateStr, spend: 0, currency: 'CAD', impressions: 0 },
+        adGroupRows: [],
+        adRows: [],
+      };
+    }
     try {
       const [spend, adGroupRows, adRows] = await Promise.all([
         fetchGoogleAdsSpendForDay(storeId, dateStr),
@@ -721,7 +757,10 @@ async function runDailyForStoreInner(
   // TikTok token expiry failed the ENTIRE cron-daily run for uzoshop —
   // Shopify revenue + Meta + Google all rolled back too.
   const tiktok = (await step.run('fetch-tiktok', async () => {
-    if (!STORES_WITH_TIKTOK.has(storeId)) {
+    // ads-off Phase 3 (2026-06-06): account-level gate. TikTok is a shared
+    // account (uzoshop + usmile360); skip the fetch only when ALL shared stores
+    // have TikTok off — one store still ON means the account fetch must run.
+    if (!STORES_WITH_TIKTOK.has(storeId) || !tiktokAccountFetchEnabled(adStateMap)) {
       return {
         spend: {
           storeId,
