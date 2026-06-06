@@ -43,6 +43,7 @@ import { cn, formatNumber } from '@/lib/utils';
 import { Money } from '@/components/ui/Money';
 import { Heading } from '@/components/ui/Typography';
 import { roasLabel } from '@/lib/analytics';
+import { adDisplayState, type AdDisplayState } from '@/lib/adState';
 import {
   TableBase,
   TableHead,
@@ -119,9 +120,30 @@ function fmtOrders(n: number | null): string {
  * ROAS pill — the only value-coloured token in the grid.
  * -------------------------------------------------------------------------- */
 
-function RoasPill({ roas }: { roas: number | null }) {
-  const tone: RoasTone = roas != null && roas > 0 ? roasLabel(roas).tone : 'gray';
-  const text = roas != null && roas > 0 ? `${roas.toFixed(2)}x` : '—';
+function RoasPill({
+  roas,
+  revenue,
+  spend,
+  off,
+}: {
+  roas: number | null;
+  revenue: number | null;
+  spend: number | null;
+  off: boolean;
+}) {
+  const state: AdDisplayState = adDisplayState({ revenue, spend, off });
+  let tone: RoasTone;
+  let text: string;
+  if (state === 'organic') {
+    tone = 'blue';
+    text = 'אורגני';
+  } else if (state === 'off-empty' || state === 'off-negative') {
+    tone = 'gray';
+    text = '0';
+  } else {
+    tone = roas != null && roas > 0 ? roasLabel(roas).tone : 'gray';
+    text = roas != null && roas > 0 ? `${roas.toFixed(2)}x` : '—';
+  }
   return (
     <span
       data-testid="roas-pill"
@@ -132,7 +154,7 @@ function RoasPill({ roas }: { roas: number | null }) {
         PILL_TONE_CLASS[tone],
       )}
     >
-      <bdi dir="ltr">{text}</bdi>
+      <bdi dir={state === 'organic' ? 'rtl' : 'ltr'}>{text}</bdi>
     </span>
   );
 }
@@ -201,7 +223,12 @@ export function StoreCompareGrid({ stores, className }: StoreCompareGridProps) {
                   {/* ROAS — band-coloured pill (the value-coloured token). */}
                   <TableCell numeric>
                     <span data-cell="roas">
-                      <RoasPill roas={store.roas} />
+                      <RoasPill
+                        roas={store.roas}
+                        revenue={store.revenue}
+                        spend={store.spend}
+                        off={store.adOff ?? false}
+                      />
                     </span>
                   </TableCell>
 

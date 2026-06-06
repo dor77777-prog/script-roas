@@ -163,4 +163,83 @@ describe('StoreCompareGrid', () => {
     expect(pill).toHaveAttribute('data-tone', 'gray');
     expect(pill?.textContent).toContain('—');
   });
+
+  // ── ads-off Phase 2 — RoasPill off-display ────────────────────────────────
+
+  it('ads-off organic: blue tone + "אורגני" when adOff=true, spend=0, revenue>0', () => {
+    const organicStore: PerStoreData = {
+      storeId: 'store-organic',
+      storeName: 'organicstore',
+      spend: 0,
+      revenue: 250,
+      orders: 12,
+      aov: 20.8,
+      roas: null,
+      updatedAt: null,
+      perPlatformCpm: {},
+      adOff: true,
+    };
+    const { container } = render(<StoreCompareGrid stores={[organicStore]} />);
+    const pill = container.querySelector('[data-testid="roas-pill"]');
+    expect(pill).toHaveAttribute('data-tone', 'blue');
+    expect(pill?.textContent).toContain('אורגני');
+  });
+
+  it('ads-off empty: gray tone + "0" when adOff=true, spend=0, revenue=0', () => {
+    const emptyStore: PerStoreData = {
+      storeId: 'store-off-empty',
+      storeName: 'emptystore',
+      spend: 0,
+      revenue: 0,
+      orders: 0,
+      aov: null,
+      roas: null,
+      updatedAt: null,
+      perPlatformCpm: {},
+      adOff: true,
+    };
+    const { container } = render(<StoreCompareGrid stores={[emptyStore]} />);
+    const pill = container.querySelector('[data-testid="roas-pill"]');
+    expect(pill).toHaveAttribute('data-tone', 'gray');
+    expect(pill?.textContent).toContain('0');
+  });
+
+  it('ads-off historical spend>0: normal pill (number, not off-state) when adOff=true but spend>0', () => {
+    // spend>0 → adDisplayState returns 'normal' regardless of adOff
+    const historicalStore: PerStoreData = {
+      storeId: 'store-historical',
+      storeName: 'historicalstore',
+      spend: 40,
+      revenue: 120,
+      orders: 5,
+      aov: 24,
+      roas: 3,       // 3.0 → green tone
+      updatedAt: null,
+      perPlatformCpm: {},
+      adOff: true,
+    };
+    const { container } = render(<StoreCompareGrid stores={[historicalStore]} />);
+    const pill = container.querySelector('[data-testid="roas-pill"]');
+    expect(pill).toHaveAttribute('data-tone', 'green');
+    expect(pill?.textContent).toContain('3.00x');
+  });
+
+  it('regression: adOff=false with spend=100, revenue=300, roas=3 → normal green pill', () => {
+    const normalStore: PerStoreData = {
+      storeId: 'store-normal',
+      storeName: 'normalstore',
+      spend: 100,
+      revenue: 300,
+      orders: 10,
+      aov: 30,
+      roas: 3,       // 3.0 → green tone
+      updatedAt: null,
+      perPlatformCpm: {},
+      adOff: false,
+    };
+    const { container } = render(<StoreCompareGrid stores={[normalStore]} />);
+    const pill = container.querySelector('[data-testid="roas-pill"]');
+    expect(pill).toHaveAttribute('data-tone', 'green');
+    expect(pill?.textContent).toContain('3.00x');
+  });
 });
