@@ -135,6 +135,67 @@ function fatigueWindow(patch: Partial<AdRow> = {}): AdRow[] {
   return rows;
 }
 
+// ---- Helpers for store-level rec inputs (rebalance + underperformance) ------
+
+/**
+ * Build CampaignRow[] that trigger rec-rebalance-uzoshop:
+ *  Meta ROAS 4.0, Google ROAS 1.5 → ratio 2.67 > 1.6 threshold, both spend ≥200.
+ */
+function rebalanceCampaigns(): CampaignRow[] {
+  // Use dates 2 days ago so they fall within the 14-day lookback
+  // (generateRecommendations uses real todayInIsrael(), so anchor to today-2)
+  const now = new Date();
+  const day = (offset: number) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() + offset);
+    return d.toISOString().slice(0, 10);
+  };
+
+  return [
+    // Meta campaigns: 240 spend, value 960 → ROAS 4.0
+    campaignRow({ date: day(-1), storeId: 'uzoshop', storeName: 'uzoshop', platform: 'Meta', campaignId: 'meta-1', spend: 120, conversionValue: 480 }),
+    campaignRow({ date: day(-2), storeId: 'uzoshop', storeName: 'uzoshop', platform: 'Meta', campaignId: 'meta-1', spend: 120, conversionValue: 480 }),
+    // Google campaigns: 240 spend, value 360 → ROAS 1.5
+    campaignRow({ date: day(-1), storeId: 'uzoshop', storeName: 'uzoshop', platform: 'Google', campaignId: 'goog-1', spend: 120, conversionValue: 180 }),
+    campaignRow({ date: day(-2), storeId: 'uzoshop', storeName: 'uzoshop', platform: 'Google', campaignId: 'goog-1', spend: 120, conversionValue: 180 }),
+  ];
+}
+
+/**
+ * Build DailyRow[] that trigger rec-store-uzoshop (underperformance vs. avg).
+ * usmile360 ROAS ~5, uzoshop ROAS ~1.0 → uzoshop < 70% of blended avg.
+ * Both stores have ≥200 spend in the 14-day window.
+ */
+function underperformanceRows(): DailyRow[] {
+  const now = new Date();
+  const day = (offset: number) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() + offset);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const rows: DailyRow[] = [];
+  for (let i = 1; i <= 7; i++) {
+    // usmile360: ROAS 5.0
+    rows.push(dailyRow({
+      date: day(-i),
+      storeId: 'usmile360',
+      storeName: 'usmile360',
+      totalSpend: 50,
+      revenue: 250,
+    }));
+    // uzoshop: ROAS 0.8 (way below blended average → triggers underperformance)
+    rows.push(dailyRow({
+      date: day(-i),
+      storeId: 'uzoshop',
+      storeName: 'uzoshop',
+      totalSpend: 50,
+      revenue: 40,
+    }));
+  }
+  return rows;
+}
+
 // ---- Tests ------------------------------------------------------------------
 
 describe('buildAllInsights — ads-off suppression', () => {
@@ -213,5 +274,64 @@ describe('buildAllInsights — ads-off suppression', () => {
 
     expect(uzoshopAnomaliesOn.length).toBeGreaterThan(0);
     expect(uzoshopAnomaliesOff).toHaveLength(0);
+  });
+
+  // ---- Phase 4 review: store-level rec storeId fix ----------------------------
+
+  it('(off-5) store-level recs carry storeId — rec-rebalance and rec-store-underperformance both have storeId set', () => {
+    const campaigns = rebalanceCampaigns();
+    const rows = underperformanceRows();
+    const all = buildAllInsights(rows, campaigns, [], [], {}, {});
+
+    const rebalance = all.find((i) => i.id === 'rec-rebalance-uzoshop');
+    const underperf = all.find((i) => i.id === 'rec-store-uzoshop');
+
+    // Both recs must be present (confirms our fixtures trigger them)
+    expect(rebalance).toBeDefined();
+    expect(underperf).toBeDefined();
+
+    // Both must carry the real storeId (not undefined)
+    expect(rebalance?.storeId).toBe('uzoshop');
+    expect(underperf?.storeId).toBe('uzoshop');
+  });
+
+  it('(off-6) fully-off store → rec-rebalance and rec-store-underperformance suppressed', () => {
+    const campaigns = rebalanceCampaigns();
+    const rows = underperformanceRows();
+
+    const map: AdStateMap = {
+      'uzoshop:meta': false,
+      'uzoshop:google': false,
+      'uzoshop:tiktok': false,
+    };
+    const applicable: Record<string, AdPlatform[]> = {
+      uzoshop: ['meta', 'google', 'tiktok'],
+    };
+
+    // Confirm both recs fire with ads on
+    const allOn = buildAllInsights(rows, campaigns, [], [], {}, {}, applicable);
+    expect(allOn.find((i) => i.id === 'rec-rebalance-uzoshop')).toBeDefined();
+    expect(allOn.find((i) => i.id === 'rec-store-uzoshop')).toBeDefined();
+
+    // With uzoshop fully off, both must be suppressed
+    const allOff = buildAllInsights(rows, campaigns, [], [], {}, map, applicable);
+    expect(allOff.find((i) => i.id === 'rec-rebalance-uzoshop')).toBeUndefined();
+    expect(allOff.find((i) => i.id === 'rec-store-uzoshop')).toBeUndefined();
+  });
+
+  it('(off-7) partially-off store → store-level recs NOT suppressed (not fully off)', () => {
+    const campaigns = rebalanceCampaigns();
+    const rows = underperformanceRows();
+
+    // Only meta off, google still on → store is not fully off
+    const map: AdStateMap = { 'uzoshop:meta': false };
+    const applicable: Record<string, AdPlatform[]> = {
+      uzoshop: ['meta', 'google'],
+    };
+
+    const all = buildAllInsights(rows, campaigns, [], [], {}, map, applicable);
+    // Store-level recs must still pass through (partial off ≠ full off)
+    expect(all.find((i) => i.id === 'rec-rebalance-uzoshop')).toBeDefined();
+    expect(all.find((i) => i.id === 'rec-store-uzoshop')).toBeDefined();
   });
 });

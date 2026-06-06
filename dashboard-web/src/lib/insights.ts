@@ -275,6 +275,17 @@ export function generateRecommendations(
   const lookback = addDays(today, -13); // last 14 days
   const insights: Insight[] = [];
 
+  // Phase 4 review fix — build storeName→storeId map from rows so store-level
+  // recs (rebalance, underperformance) carry storeId and can be suppressed by
+  // isInsightSuppressedByAdState when a store is fully off.
+  const storeIdByName = new Map<string, string>(
+    rows.map(r => [r.storeName, r.storeId]),
+  );
+  // Also fold in campaign rows in case rows[] is sparse/empty for a store.
+  for (const c of campaigns) {
+    if (!storeIdByName.has(c.storeName)) storeIdByName.set(c.storeName, c.storeId);
+  }
+
   // ---- Campaign-level ------------------------------------------------------
   type CAgg = {
     campaignId: string;
@@ -423,6 +434,8 @@ export function generateRecommendations(
         severity: 'opportunity',
         kind: 'recommendation',
         scope: store,
+        storeId: storeIdByName.get(store),
+        storeName: store,
         title: `שקול להעביר תקציב מ-${bot.platform} ל-${top.platform} ב-${store}`,
         detail: `${top.platform} ROAS ${top.roas.toFixed(2)}, ${bot.platform} ROAS ${bot.roas.toFixed(2)} — פער של ${((top.roas / bot.roas - 1) * 100).toFixed(0)}%.`,
         why: `מבחן הקצאת תקציב: ${bot.platform} מקבל ${fmtMoneyString(bot.spend)} ב-14 ימים אבל מחזיר ROAS נמוך משמעותית. נסה לחתוך 20% מהפלטפורמה החלשה והעבר לחזקה.`,
@@ -489,6 +502,8 @@ export function generateRecommendations(
           severity: 'warning',
           kind: 'recommendation',
           scope: sr.store,
+          storeId: storeIdByName.get(sr.store),
+          storeName: sr.store,
           title: `${sr.store} מתחת לממוצע הכללי`,
           detail: `ROAS ${sr.roas.toFixed(2)} מול ממוצע משוקלל ${blendRoas.toFixed(2)} בכל החנויות.`,
           why: `הוצאה של ${fmtMoneyString(sr.spend)} ב-14 ימים אחרונים. בדוק קמפיינים פעילים, יחסי המרה, וקריאייטיב.`,
