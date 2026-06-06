@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildHealthByKey, type BuildHealthByKeyInputs } from '../campaignsIntelligence';
+import type { AdStateMap } from '../adState';
 
 function inputs(overrides: Partial<BuildHealthByKeyInputs> = {}): BuildHealthByKeyInputs {
   return {
@@ -12,6 +13,23 @@ function inputs(overrides: Partial<BuildHealthByKeyInputs> = {}): BuildHealthByK
     localRange: { from: '2026-05-01', to: '2026-05-28' },
     ...overrides,
   };
+}
+
+/** Minimal aggregated row for a campaign with spend=0 */
+function makeOffAgg(overrides: Record<string, unknown> = {}) {
+  return {
+    key: 'uzoshop::Meta::c1',
+    storeId: 'uzoshop',
+    platform: 'Meta',
+    campaignId: 'c1',
+    campaignName: 'Paused Campaign',
+    spend: 0,
+    conversions: 0,
+    conversionValue: 0,
+    impressions: 0,
+    clicks: 0,
+    ...overrides,
+  } as never;
 }
 
 describe('buildHealthByKey', () => {
@@ -48,5 +66,112 @@ describe('buildHealthByKey', () => {
       { key: 'uzo|meta|c1', storeId: 'uzoshop', platform: 'meta' as const, campaignId: 'c1', campaignName: 'A', spend: 1000, conversions: 10, conversionValue: 2500 } as never,
     ];
     expect(() => buildHealthByKey(inputs({ aggregated: agg }))).not.toThrow();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// ads-off Phase 4 — guard: off campaign with zero spend → insufficient/unknown
+// ─────────────────────────────────────────────────────────────────────────
+
+describe('buildHealthByKey — ads-off guard', () => {
+  // KEY FAILING TEST: off campaign with spend=0 → grade must be 'unknown'
+  // AND the reason must mention "כבויים" (ads off), not the generic "מדגם קטן מדי".
+  // Before the guard is implemented, reason[0] will say "מדגם קטן מדי" (existing
+  // insufficient gate), not the ads-off reason. After the guard, it says "מודעות כבויות".
+  it('reason string mentions ads-off (not generic small-sample) when OFF+spend=0', () => {
+    const adStateMap: AdStateMap = { 'uzoshop:meta': false };
+    const agg = [makeOffAgg({ platform: 'Meta', storeId: 'uzoshop', spend: 0 })];
+    const result = buildHealthByKey(inputs({ aggregated: agg, adStateMap }));
+    const health = result.get('uzoshop::Meta::c1');
+    expect(health).toBeDefined();
+    expect(health!.insufficient).toBe(true);
+    expect(health!.grade).toBe('unknown');
+    // The reason must come from the ads-off guard, not from the generic isInsufficient path.
+    expect(health!.reasons[0]).toMatch(/כבויות|כבוי/);
+  });
+
+  it('returns insufficient/unknown when (store,platform) is OFF and spend===0', () => {
+    const adStateMap: AdStateMap = { 'uzoshop:meta': false };
+    const agg = [makeOffAgg({ platform: 'Meta', storeId: 'uzoshop', spend: 0 })];
+    const result = buildHealthByKey(inputs({ aggregated: agg, adStateMap }));
+    const health = result.get('uzoshop::Meta::c1');
+    expect(health).toBeDefined();
+    expect(health!.insufficient).toBe(true);
+    expect(health!.grade).toBe('unknown');
+  });
+
+  it('returns normal computed grade when ads are ON and spend===0 (organic/normal insufficient path)', () => {
+    // With ads ON + spend=0, the existing insufficient gate in computeCampaignHealth fires.
+    // The reason should be the generic "מדגם קטן מדי", NOT the ads-off reason.
+    const adStateMap: AdStateMap = {}; // empty = everything ON
+    const agg = [makeOffAgg({ platform: 'Meta', storeId: 'uzoshop', spend: 0 })];
+    const result = buildHealthByKey(inputs({ aggregated: agg, adStateMap }));
+    const health = result.get('uzoshop::Meta::c1');
+    expect(health).toBeDefined();
+    expect(health!.insufficient).toBe(true);
+    // NOT the ads-off reason — the generic insufficient reason fires here
+    expect(health!.reasons[0]).not.toMatch(/כבויות|כבוי/);
+  });
+
+  it('returns NORMAL computed grade when ads are OFF but spend>0 (historical data)', () => {
+    const adStateMap: AdStateMap = { 'uzoshop:meta': false };
+    // Campaign has real historical spend — must still score normally
+    const agg = [makeOffAgg({ platform: 'Meta', storeId: 'uzoshop', spend: 500, conversions: 10, conversionValue: 1500 })];
+    const result = buildHealthByKey(inputs({ aggregated: agg, adStateMap }));
+    const health = result.get('uzoshop::Meta::c1');
+    expect(health).toBeDefined();
+    // Has real spend → NOT insufficient from ads-off guard
+    expect(health!.insufficient).toBe(false);
+    expect(health!.grade).not.toBe('unknown');
+  });
+
+  it('platform case: "Meta" (title-case) matches adStateMap key "uzoshop:meta" (lowercase)', () => {
+    // Platform in Aggregated is 'Meta'; adStateKey uses lowercase 'meta'.
+    const adStateMap: AdStateMap = { 'uzoshop:meta': false };
+    const agg = [makeOffAgg({ platform: 'Meta', storeId: 'uzoshop', spend: 0 })];
+    const result = buildHealthByKey(inputs({ aggregated: agg, adStateMap }));
+    const health = result.get('uzoshop::Meta::c1');
+    expect(health!.insufficient).toBe(true);
+    expect(health!.grade).toBe('unknown');
+    expect(health!.reasons[0]).toMatch(/כבויות|כבוי/);
+  });
+
+  it('different platform (TikTok) still ON → normal insufficient path, not ads-off reason', () => {
+    // uzoshop:meta is OFF but TikTok for uzoshop is ON
+    const adStateMap: AdStateMap = { 'uzoshop:meta': false };
+    const agg = [makeOffAgg({
+      key: 'uzoshop::TikTok::c2',
+      platform: 'TikTok',
+      storeId: 'uzoshop',
+      spend: 0,
+    })];
+    const result = buildHealthByKey(inputs({ aggregated: agg, adStateMap }));
+    const health = result.get('uzoshop::TikTok::c2');
+    expect(health).toBeDefined();
+    // TikTok is ON → ads-off guard NOT triggered; generic insufficient reason fires
+    expect(health!.insufficient).toBe(true);
+    expect(health!.reasons[0]).not.toMatch(/כבויות|כבוי/);
+  });
+
+  it('empty adStateMap (all ON) — behavior unchanged, no regression', () => {
+    // This is the default path: adStateMap={} means nothing is off.
+    const agg = [
+      { key: 'uzo|meta|c1', storeId: 'uzoshop', platform: 'Meta' as const, campaignId: 'c1', campaignName: 'A', spend: 1000, conversions: 10, conversionValue: 2500 } as never,
+    ];
+    const result = buildHealthByKey(inputs({ aggregated: agg, adStateMap: {} }));
+    const health = result.get('uzo|meta|c1');
+    expect(health).toBeDefined();
+    expect(health!.insufficient).toBe(false);
+  });
+
+  it('omitted adStateMap (undefined) — behavior unchanged, no regression', () => {
+    // adStateMap optional — absence treated as empty (all ON)
+    const agg = [
+      { key: 'uzo|meta|c1', storeId: 'uzoshop', platform: 'Meta' as const, campaignId: 'c1', campaignName: 'A', spend: 1000, conversions: 10, conversionValue: 2500 } as never,
+    ];
+    const result = buildHealthByKey(inputs({ aggregated: agg }));
+    const health = result.get('uzo|meta|c1');
+    expect(health).toBeDefined();
+    expect(health!.insufficient).toBe(false);
   });
 });

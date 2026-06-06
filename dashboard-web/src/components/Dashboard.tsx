@@ -1702,6 +1702,7 @@ function CampaignsTab({
           store={filters.store}
           stores={data.stores}
           dailyRows={data.rows}
+          adStateMap={data.adStateMap}
         />
       </div>
     </div>

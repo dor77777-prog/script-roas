@@ -279,11 +279,17 @@ type Props = {
    *  attribution gap panel — Shopify revenue is the source of truth, Meta's
    *  conversion_value is the platform's self-report. */
   dailyRows: import('@/lib/types').DailyRow[];
+  /**
+   * ads-off Phase 4 — per (store,platform) toggle map (missing key = ON).
+   * Threaded into `buildHealthByKey` so off campaigns with zero spend render
+   * ⏳ instead of a misleading F grade. Optional — absence = all ON.
+   */
+  adStateMap?: import('@/lib/adState').AdStateMap;
 };
 
 const TOP_N_DEFAULT = 10;
 
-export function CampaignsTable({ range, store: globalStore, stores, dailyRows }: Props) {
+export function CampaignsTable({ range, store: globalStore, stores, dailyRows, adStateMap = {} }: Props) {
   // NOTE: localRange is declared BEFORE the useSWR calls so buildDateRangeKey
   // can use it as the SWR key. It is now simply an alias of the page-global
   // `range` prop.
@@ -1004,8 +1010,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           netRevenue: r.netRevenue ?? 0,
         })),
         localRange,
+        adStateMap,
       }),
-    [aggregated, trueRevenueByKey, dailyByCampaign, productMap, data, productsResp, localRange],
+    [aggregated, trueRevenueByKey, dailyByCampaign, productMap, data, productsResp, localRange, adStateMap],
   );
 
   const totals = useMemo(() => {

@@ -42,6 +42,7 @@ import { campaignKey, type ProductMap } from './campaignProductMap';
 import type { Aggregated } from './campaignsAggregator';
 import type { TrueRevenueInfo } from './hooks/useCampaignTrueRevenue';
 import type { DateRange } from './types';
+import { isAdsEnabled, type AdStateMap, type AdPlatform } from './adState';
 
 export interface CampaignsDailyRow {
   date: string;
@@ -74,6 +75,14 @@ export interface BuildHealthByKeyInputs {
   productsDaily: ProductsDailyRow[];
   /** Visible date range. */
   localRange: DateRange;
+  /**
+   * ads-off Phase 4 — per (store,platform) toggle map (missing key = ON).
+   * When a campaign's (storeId, platform) is OFF and spend === 0, the health
+   * score is forced to the existing insufficient/unknown state so the operator
+   * sees ⏳ instead of a misleading F/red grade for a campaign with no data.
+   * Optional — absence treated as empty map (all ON, existing behaviour).
+   */
+  adStateMap?: AdStateMap;
 }
 
 /**
@@ -97,6 +106,7 @@ export function buildHealthByKey(inputs: BuildHealthByKeyInputs): Map<string, Ca
     campaignsDaily,
     productsDaily,
     localRange,
+    adStateMap = {},
   } = inputs;
 
   const out = new Map<string, CampaignHealth>();
@@ -121,6 +131,28 @@ export function buildHealthByKey(inputs: BuildHealthByKeyInputs): Map<string, Ca
   }
 
   for (const a of aggregated) {
+    // ads-off Phase 4 guard: a campaign whose (storeId, platform) is toggled OFF
+    // and has no spend in this range has no meaningful health signal. Return the
+    // existing insufficient/unknown shape so the operator sees ⏳ instead of a
+    // misleading F/red grade.
+    //
+    // Note: platform in Aggregated is title-case ('Meta', 'Google', 'TikTok');
+    // adStateKey expects lowercase — mirror the same toLowerCase used in
+    // isInsightSuppressedByAdState (adState.ts line 88).
+    //
+    // off-but-spend>0 campaigns (historical data before the toggle) are left
+    // alone — they carry real performance data that should still be graded.
+    if (a.spend === 0 && !isAdsEnabled(adStateMap, a.storeId, a.platform.toLowerCase() as AdPlatform)) {
+      out.set(a.key, {
+        score: 0,
+        grade: 'unknown',
+        components: { profitability: 0, volume: 0, trajectory: 0, attributionClarity: 0, cohortAdjustment: 0 },
+        reasons: ['מודעות כבויות עבור פלטפורמה זו — אין נתוני הוצאה לניקוד. הפעל את הפלטפורמה כדי לקבל ציון.'],
+        insufficient: true,
+      });
+      continue;
+    }
+
     const info = trueRevenueByKey.get(campaignKey(a.storeId, a.platform, a.campaignId));
     const series = dailyByCampaign.get(a.key);
     const trajectory =
