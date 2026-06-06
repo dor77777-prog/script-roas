@@ -22,6 +22,9 @@ describe('isAdsEnabled — missing key defaults to ON', () => {
     expect(isAdsEnabled(m, 'uzoshop', 'google')).toBe(false);
     expect(isAdsEnabled(m, 'uzoshop', 'meta')).toBe(true);
   });
+  it('returns true when explicitly enabled (locks fail-open: only false is OFF)', () => {
+    expect(isAdsEnabled({ 'uzoshop:meta': true }, 'uzoshop', 'meta')).toBe(true);
+  });
 });
 
 describe('applicablePlatforms — derived from config', () => {
@@ -49,6 +52,9 @@ describe('tiktokAccountFetchEnabled — shared account', () => {
   it('false only when ALL shared-account stores are off', () => {
     const m: AdStateMap = { 'uzoshop:tiktok': false, 'usmile360:tiktok': false };
     expect(tiktokAccountFetchEnabled(m)).toBe(false);
+  });
+  it('true on empty map (both members default ON = today\'s behavior)', () => {
+    expect(tiktokAccountFetchEnabled({})).toBe(true);
   });
   it('exposes the shared-store list', () => {
     expect(TIKTOK_SHARED_STORES).toContain('uzoshop');
