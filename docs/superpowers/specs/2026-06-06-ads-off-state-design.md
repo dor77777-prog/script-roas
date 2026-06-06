@@ -263,3 +263,24 @@ as today, alerts fire as today, WhatsApp identical. A guard test asserts
 `tsc` · vitest (node+DOM) · lint · User Manual bump (new /operator panel + the
 off-state display) · ARCHITECTURE note (store_ad_state + adState helpers + fetch-gate
 + TikTok rule) · supervised migration → single push per phase.
+
+---
+
+## Phase 2 — locked implementation semantics (2026-06-06)
+
+**Off-gate:** `adDisplayState` returns a non-normal state **only when `off && spend===0`**. The current toggle is a plain boolean with no history; the `spend===0` guard ensures that historical rows that recorded real spend before the operator turned the flag off are **never retroactively rewritten** — their spend columns and ROAS values remain exactly as stored.
+
+**Display rules (operator-locked, immutable):**
+- `off && spend===0 && revenue > 0` → **blue "אורגני"** (reuses existing best-tier blue).
+- `off && spend===0 && revenue ≤ 0` → **neutral "0"** (NOT black — black means "wasted spend"; you didn't spend). Off-negative folds into neutral; it is NOT colored red.
+- `spend > 0` (any row with real spend) → normal band logic, untouched.
+
+**Store-level "all off":** `isStoreFullyOff(storeId, map, applicablePlatforms)` returns true **only when every applicable platform for that store is toggled off**. A partially-off store (e.g. Meta on, Google off) stays in normal mode — the on-platform's spend still drives the band.
+
+**Business-wide summary / hero:** `CommandCenterHero`, `RoasTargetChart`, and `GoalTracker` are **not touched** — they are business-wide aggregates and remain unchanged regardless of per-store off state.
+
+**Call sites wired in Phase 2:** `roasCell` (backward-compatible `off=false` default), `PerStoreRow`, `StoreDetailModal`, `StoreCompareGrid` RoasPill, `MonthlyTables`, and `DetailTable`.
+
+**Deferred to later phases:** Campaigns/Ads tables (`"⏻ כבוי"` chip) and fetch-gate (Phase 3), alert/WhatsApp suppression (Phase 4).
+
+**Off-state visual (Playwright) snapshots deferred:** no store is actually off in production yet, so end-to-end visual snapshots cannot be taken against real data. The rendering contract is fully locked by the DOM-level unit tests (`adDisplayState` + `roasCell` + component render tests); the Playwright gap is documented and not silent.
