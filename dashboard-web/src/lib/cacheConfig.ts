@@ -32,6 +32,8 @@ export const CACHE_CONFIG = {
   // orders every ~10 min). Mirror the ordersAttribution window (60/120).
   paymentMethods: { revalidate: 60, swr: 120 },
   storeMeta: { revalidate: 3600, swr: 86400 },
+  // ads-off: the toggle changes rarely (operator action) → same cadence as storeMeta.
+  adState: { revalidate: 3600, swr: 86400 },
   productCatalog: { revalidate: 60, swr: 300 },
   // dashboardState revalidate raised from 10s → 30s (WR-05). With 3 partners
   // × 2 tabs polling + Vercel edge fan-out, a 10s window could push us past
