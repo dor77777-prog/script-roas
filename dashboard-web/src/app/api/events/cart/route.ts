@@ -43,6 +43,7 @@
 
 import { NextResponse } from 'next/server';
 import { lookupStoreByCartToken, insertStoreEvent } from '@/lib/webhooks/store';
+import { classifyOrderSource } from '@/lib/attribution/classifyOrderSource';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -112,6 +113,8 @@ export async function POST(req: Request): Promise<NextResponse> {
     quantity?: unknown;
     event_id?: unknown;
     occurred_at?: unknown;
+    landing_site?: unknown;
+    referring_site?: unknown;
   };
   try {
     body = (await req.json()) as typeof body;
@@ -153,6 +156,20 @@ export async function POST(req: Request): Promise<NextResponse> {
   //    Wrapped so a transient DB error never 5xxes → never blocks the storefront.
   const productTitle = safeProductTitle(body.product_title);
   const quantity = safeQuantity(body.quantity);
+  // Classify source from the first-touch landing_site the storefront snippet
+  // sends. landing_site is NOT stored in raw (keep raw PII-free as-is).
+  // Defensive wrapper: a future change to the classifier must never 500 the
+  // storefront — any throw falls back to 'direct'.
+  let source = 'direct';
+  try {
+    source = classifyOrderSource({
+      landing_site: typeof body.landing_site === 'string' ? body.landing_site : null,
+      referring_site: typeof body.referring_site === 'string' ? body.referring_site : null,
+    });
+  } catch {
+    // never let attribution classification block the storefront's add-to-cart
+    source = 'direct';
+  }
   try {
     await insertStoreEvent({
       store_id: store.store_id,
@@ -163,7 +180,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       product_title: productTitle,
       quantity,
       customer_label: null,
-      source: null, // cart beacon has no ad-platform signal at ingest time
+      source,
       occurred_at: safeIso(body.occurred_at),
       dedupe_key: `cart:${eventId}`,
       // raw carries NO PII — only the (already display-safe) fields we surface.
