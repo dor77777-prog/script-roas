@@ -4,6 +4,7 @@
 // (store, platform)". Pure helpers; consumed by crons, readers, UI, alerts,
 // WhatsApp. See docs/superpowers/specs/2026-06-06-ads-off-state-design.md.
 import type { StoreMetaRow } from '@/lib/postgresReaders';
+import type { RoasBand } from '@/lib/format/useRoasBandGradient';
 
 export type AdPlatform = 'meta' | 'google' | 'tiktok';
 
@@ -38,4 +39,48 @@ export function applicablePlatforms(store: StoreMetaRow, tiktokStores: Set<strin
  *  store on the account (otherwise an off store would kill the others' data). */
 export function tiktokAccountFetchEnabled(map: AdStateMap): boolean {
   return TIKTOK_SHARED_STORES.some((s) => isAdsEnabled(map, s, 'tiktok'));
+}
+
+export type AdDisplayState = 'normal' | 'organic' | 'off-empty' | 'off-negative';
+
+/** A per-store surface counts as "off" only when ALL its applicable platforms
+ *  are toggled off — a partially-off store still advertises (remaining spend),
+ *  so it must render a normal ROAS. */
+export function isStoreFullyOff(
+  storeId: string,
+  map: AdStateMap,
+  applicable: readonly AdPlatform[],
+): boolean {
+  if (!applicable || applicable.length === 0) return false;
+  return applicable.every((p) => !isAdsEnabled(map, storeId, p));
+}
+
+/** Off-display classifier. Off-state ONLY applies when intentionally off AND
+ *  spend is 0 — so a historical row that carried real spend before the toggle
+ *  (spend>0) stays 'normal' and is never retroactively rewritten. */
+export function adDisplayState(opts: {
+  revenue: number | null;
+  spend: number | null;
+  off: boolean;
+}): AdDisplayState {
+  const spend = opts.spend ?? 0;
+  if (!opts.off || spend !== 0) return 'normal';
+  const rev = opts.revenue ?? 0;
+  if (rev > 0) return 'organic';
+  if (rev < 0) return 'off-negative';
+  return 'off-empty';
+}
+
+/** Off-state → band override (reusing existing AA-cleared bands). Returns null
+ *  for 'normal' so callers keep their existing numeric-band logic. */
+export function adDisplayBand(state: AdDisplayState): RoasBand | null {
+  switch (state) {
+    case 'organic':
+      return 'blue';
+    case 'off-empty':
+    case 'off-negative':
+      return 'gray';
+    default:
+      return null;
+  }
 }
