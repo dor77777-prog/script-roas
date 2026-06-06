@@ -36,6 +36,8 @@
 import { inngest } from '@/inngest/client';
 import { GOOGLE_JOB_REQUESTED } from '@/lib/registries/eventNames';
 import { recordFreshness } from '@/lib/inngest/freshness';
+import { isAdsEnabled, type AdStateMap } from '@/lib/adState';
+import { fetchAdStateFromPostgres } from '@/lib/postgresReaders';
 import { fetchGoogleStatusForStore } from '@/lib/fetchers/googleStatus';
 import type { GoogleStatusInput, GoogleStatusResult } from '@/lib/fetchers/googleStatus';
 import { fetchGoogleHotMetricsForStore } from '@/lib/fetchers/googleHotMetrics';
@@ -159,6 +161,13 @@ export type RunGoogleWorkerJobInput = {
    * (re-throw on error). Replaces Phase E1.6 fetchAccountSpend path.
    */
   aggregateDataDaily?: (date: string) => Promise<void>;
+  /**
+   * Phase 3 (ads-off) — optional map of `${storeId}:${platform}` → enabled.
+   * When omitted (or `{}`), all ads are considered ON (existing behaviour).
+   * When a (store, platform) pair is OFF, the fetch is skipped but freshness
+   * is still recorded as `success` so the operator panel stays green.
+   */
+  adStateMap?: AdStateMap;
 };
 
 function checkGoogleConfigured(
@@ -233,6 +242,15 @@ async function runGoogleStatusBranch(input: RunGoogleWorkerJobInput): Promise<vo
   // resulting in zero status freshness rows and a permanently empty
   // operator panel for Google status.
   if (!checkGoogleConfigured(storeId, input.isGoogleConfigured)) {
+    await recAllStatusScopes('success');
+    return;
+  }
+
+  // Phase 3 (ads-off) — skip the API fetch when this (store, platform) is
+  // toggled OFF. Record freshness success for all 3 status scopes so the
+  // operator Health tab does NOT show a false-red. Gate sits after the
+  // "not configured" short-circuit and BEFORE any network calls.
+  if (!isAdsEnabled(input.adStateMap ?? {}, storeId, 'google')) {
     await recAllStatusScopes('success');
     return;
   }
@@ -389,6 +407,15 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
   // touching `recordFreshness`. This gate moves the no-creds case to
   // the top so it's not creds-vs-hot-ids order-dependent.
   if (!checkGoogleConfigured(storeId, input.isGoogleConfigured)) {
+    await recHotPair('success');
+    return;
+  }
+
+  // Phase 3 (ads-off) — skip the API fetch when this (store, platform) is
+  // toggled OFF. Record freshness success for campaign_metrics + ad_metrics
+  // so the operator panel stays green. Gate sits after "not configured" and
+  // BEFORE any hot-set or network calls.
+  if (!isAdsEnabled(input.adStateMap ?? {}, storeId, 'google')) {
     await recHotPair('success');
     return;
   }
@@ -550,10 +577,13 @@ export const googleWorker = inngest.createFunction(
         };
       };
 
+      const adStateMap = await fetchAdStateFromPostgres();
+
       await runGoogleWorkerJob({
         jobData: data,
         fetchStatus: fetchGoogleStatusForStore,
         fetchHotMetrics: fetchGoogleHotMetricsForStore,
+        adStateMap,
         getHotCampaignIds: (sid: StoreId) =>
           getHotCampaignIdsHelper({ admin: sb, storeId: sid, platform: 'google' }),
         getHotAdgroupIds: (sid: StoreId) =>

@@ -27,6 +27,8 @@
 import { inngest } from '@/inngest/client';
 import { META_JOB_REQUESTED } from '@/lib/registries/eventNames';
 import { recordFreshness } from '@/lib/inngest/freshness';
+import { isAdsEnabled, type AdStateMap } from '@/lib/adState';
+import { fetchAdStateFromPostgres } from '@/lib/postgresReaders';
 import { fetchMetaStatusForStore } from '@/lib/fetchers/metaStatus';
 import type { MetaStatusFetchInput, MetaStatusResult } from '@/lib/fetchers/metaStatus';
 import { diffAgainstRegistry } from '@/lib/registries/diff';
@@ -145,6 +147,13 @@ export type RunMetaWorkerJobInput = {
   getHotAdIds?: (storeId: StoreId) => Promise<string[]>;
   upsertCampaignsDaily?: (rows: Array<Record<string, unknown>>) => Promise<void>;
   upsertAdsDaily?: (rows: Array<Record<string, unknown>>) => Promise<void>;
+  /**
+   * Phase 3 (ads-off) — optional map of `${storeId}:${platform}` → enabled.
+   * When omitted (or `{}`), all ads are considered ON (existing behaviour).
+   * When a (store, platform) pair is OFF, the fetch is skipped but freshness
+   * is still recorded as `success` so the operator panel stays green.
+   */
+  adStateMap?: AdStateMap;
 };
 
 async function defaultCredentials(storeId: StoreId): Promise<{
@@ -221,7 +230,26 @@ export async function runMetaWorkerJob(input: RunMetaWorkerJobInput): Promise<vo
     return;
   }
 
-  // 2. Resolve credentials + fetch — single batched Graph call returning all
+  // 2. Ads-off gate (Phase 3) — skip the API fetch when this (store, platform)
+  //    is toggled OFF. Record freshness success for all 3 status scopes so the
+  //    operator Health tab does NOT show a false-red. Gate sits after BUC
+  //    pre-flight (which already short-circuits at budget exhaustion) and
+  //    BEFORE the network call.
+  const adStateMap = input.adStateMap ?? {};
+  if (!isAdsEnabled(adStateMap, storeId, 'meta')) {
+    for (const s of ['campaign_status', 'adset_status', 'ad_status'] as const) {
+      await rec({
+        storeId,
+        platform: 'meta',
+        scope: s,
+        tableName: registryNameForScope(s),
+        status: 'success',
+      });
+    }
+    return;
+  }
+
+  // 3. Resolve credentials + fetch — single batched Graph call returning all
   //    3 entity types. safeCredentials swallows env-var errors so unit tests
   //    with stubbed fetchStatus run without UZOSHOP_META_ACCESS_TOKEN set.
   const creds = await safeCredentials(storeId, getCredentials);
@@ -418,15 +446,24 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
     return;
   }
 
+  // 2. Ads-off gate (Phase 3) — skip hot-metrics fetch when this
+  //    (store, platform) is toggled OFF. Record freshness success for both
+  //    campaign_metrics + ad_metrics so the operator panel stays green.
+  //    Gate sits after BUC pre-flight and BEFORE any API or hot-set calls.
+  if (!isAdsEnabled(input.adStateMap ?? {}, storeId, 'meta')) {
+    await recHotPair('success');
+    return;
+  }
+
   try {
-    // 2. Load hot ids in parallel — missing injections default to empty list.
+    // 3. Load hot ids in parallel — missing injections default to empty list.
     const [hotCampaign, hotAdset, hotAd] = await Promise.all([
       (getHotCampaignIds ?? (async () => []))(storeId),
       (getHotAdsetIds ?? (async () => []))(storeId),
       (getHotAdIds ?? (async () => []))(storeId),
     ]);
 
-    // 2.5 Resolve credentials early. Both the Phase E1.6 account-aggregate
+    // 3.5 Resolve credentials early. Both the Phase E1.6 account-aggregate
     // write (below) AND the hot-set fetch (further down) need them. Moved
     // above the empty-hot-set gate by the 2026-05-30 regression fix so
     // account-aggregate spend runs every tick regardless of hot-set state.
@@ -594,10 +631,13 @@ export const metaWorker = inngest.createFunction(
         };
       };
 
+      const adStateMap = await fetchAdStateFromPostgres();
+
       await runMetaWorkerJob({
         jobData: data,
         bucProbe,
         fetchStatus: fetchMetaStatusForStore,
+        adStateMap,
         loadPriorRegistry,
         upsertRegistry: async (inp) =>
           upsertRegistryBatch({
