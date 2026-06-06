@@ -135,23 +135,45 @@ export function preferName(
  * the un-paginated readers used to do).
  */
 type PaginatedQuery = {
+  order: (column: string, opts?: { ascending?: boolean }) => PaginatedQuery;
   range: (from: number, to: number) => PromiseLike<{
     data: unknown[] | null;
     error: { message: string } | null;
   }>;
 };
 
-async function paginate<T>(
+/**
+ * Chunked reader that bypasses Supabase Cloud's `db-max-rows=1000` cap.
+ *
+ * `orderBy` is REQUIRED and MUST be a column set that forms a UNIQUE, total
+ * order for the table/view (its primary key). Without a deterministic ORDER BY,
+ * Postgres does not guarantee a stable row order between the successive
+ * `.range(0..999)`, `.range(1000..1999)` … calls — so rows can be DUPLICATED on
+ * one page and SKIPPED on another, especially while the table is being written
+ * concurrently (the crons UPSERT every ~10 min). That silently corrupts every
+ * downstream aggregate (reconcile false-positives, wrong campaign/order sums).
+ * The PK is applied here, on every chunk, so callers can't forget it. Exported
+ * for unit testing.
+ */
+export async function paginate<T>(
   buildQuery: () => any,
+  orderBy: readonly string[],
   chunkSize = 1000,
 ): Promise<T[]> {
+  if (!orderBy || orderBy.length === 0) {
+    throw new Error(
+      'paginate(): orderBy is required — pass the table primary key so pagination is deterministic.',
+    );
+  }
   const all: T[] = [];
   let start = 0;
   // Hard ceiling — 50 chunks × 1k = 50k rows. Prevents runaway loops if a
   // server bug returns the same page forever.
   const MAX_CHUNKS = 50;
   for (let chunk = 0; chunk < MAX_CHUNKS; chunk++) {
-    const q = buildQuery() as PaginatedQuery;
+    let q = buildQuery() as PaginatedQuery;
+    // Apply the unique key as a stable ORDER BY so pages don't overlap/skip.
+    for (const col of orderBy) q = q.order(col, { ascending: true });
     const { data, error } = await q.range(start, start + chunkSize - 1);
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) break;
@@ -334,7 +356,7 @@ export async function fetchDailyDataFromPostgres(
         q = q.gte('date', opts.range.from).lte('date', opts.range.to);
       }
       return q;
-    });
+    }, ['date', 'store_id']);
   } catch (e) {
     throw new Error(`postgresReaders.fetchDailyData: ${(e as Error).message}`);
   }
@@ -598,7 +620,7 @@ export async function fetchProductsFromPostgres(
         q = q.gte('date', opts.range.from).lte('date', opts.range.to);
       }
       return q;
-    });
+    }, ['date', 'store_id', 'product_id']);
   } catch (e) {
     throw new Error(`postgresReaders.fetchProducts: ${(e as Error).message}`);
   }
@@ -704,7 +726,7 @@ export async function fetchCampaignsFromPostgres(
         q = q.gte('date', opts.range.from).lte('date', opts.range.to);
       }
       return q;
-    });
+    }, ['date', 'store_id', 'platform', 'campaign_id', 'ad_set_id']);
   } catch (e) {
     throw new Error(`postgresReaders.fetchCampaigns: ${(e as Error).message}`);
   }
@@ -933,7 +955,7 @@ export async function fetchCurrentCampaignStatuses(): Promise<
         .from('campaign_registry')
         .select('store_id, platform, campaign_id, effective_status, last_seen_at')
         .not('effective_status', 'is', null);
-    });
+    }, ['store_id', 'platform', 'campaign_id']);
   } catch (e) {
     console.warn(`postgresReaders.fetchCurrentCampaignStatuses (registry): ${(e as Error).message}`);
     return out;
@@ -966,7 +988,7 @@ export async function fetchCurrentCampaignStatuses(): Promise<
       return getSupabase()
         .from('campaigns_daily')
         .select('store_id, platform, campaign_id, ad_set_id');
-    });
+    }, ['date', 'store_id', 'platform', 'campaign_id', 'ad_set_id']);
   } catch (e) {
     console.warn(`postgresReaders.fetchCurrentCampaignStatuses (adsets): ${(e as Error).message}`);
     return out;
@@ -1028,7 +1050,7 @@ export async function fetchLastKnownBudgetTypes(): Promise<
         .select('store_id, platform, campaign_id, ad_set_id, budget_type, date')
         .eq('platform', 'meta')
         .in('budget_type', ['CBO', 'ABO']);
-    });
+    }, ['date', 'store_id', 'platform', 'campaign_id', 'ad_set_id']);
   } catch (e) {
     console.warn(`postgresReaders.fetchLastKnownBudgetTypes: ${(e as Error).message}`);
     return out;
@@ -1101,7 +1123,7 @@ export async function fetchAdsFromPostgres(
         q = q.gte('date', opts.range.from).lte('date', opts.range.to);
       }
       return q;
-    });
+    }, ['date', 'store_id', 'ad_id']);
   } catch (e) {
     throw new Error(`postgresReaders.fetchAds: ${(e as Error).message}`);
   }
@@ -1225,7 +1247,7 @@ export async function fetchOrdersAttributionFromPostgres(
         q = q.gte('date', opts.range.from).lte('date', opts.range.to);
       }
       return q;
-    });
+    }, ['store_id', 'order_id']);
   } catch (e) {
     throw new Error(`postgresReaders.fetchOrdersAttribution: ${(e as Error).message}`);
   }
@@ -1359,11 +1381,10 @@ export async function fetchCohortMonthlyFromPostgres(
       if (opts?.storeId) {
         q = q.eq('store_id', opts.storeId);
       }
-      // Stable cell order for the compute layer + cohort grid.
-      return q
-        .order('first_order_month', { ascending: true })
-        .order('month_since', { ascending: true });
-    });
+      return q;
+      // Stable cell order (full PK) for deterministic pagination + the compute
+      // layer / cohort grid — applied centrally in paginate().
+    }, ['store_id', 'first_order_month', 'month_since']);
   } catch (e) {
     throw new Error(`postgresReaders.fetchCohortMonthly: ${(e as Error).message}`);
   }
@@ -1455,8 +1476,9 @@ function emptyCategoryTotals(): PaymentCategoryTotals {
 export async function readPaymentMethodsByMonth(): Promise<PaymentMethodsByMonth> {
   let data: DbRow[];
   try {
-    data = await paginate<DbRow>(() =>
-      getSupabase().from('orders_attribution').select(PAYMENT_METHODS_SELECT),
+    data = await paginate<DbRow>(
+      () => getSupabase().from('orders_attribution').select(PAYMENT_METHODS_SELECT),
+      ['store_id', 'order_id'],
     );
   } catch (e) {
     throw new Error(`postgresReaders.readPaymentMethodsByMonth: ${(e as Error).message}`);
@@ -1517,10 +1539,12 @@ export async function readPaymentMethodsByMonth(): Promise<PaymentMethodsByMonth
 export async function fetchProductCatalogFromPostgres(): Promise<CatalogProduct[]> {
   let data: DbRow[];
   try {
-    data = await paginate<DbRow>(() =>
-      getSupabase()
-        .from('product_catalog')
-        .select('store_id, product_id, title, handle, status, price_cad, image_url, product_type, vendor'),
+    data = await paginate<DbRow>(
+      () =>
+        getSupabase()
+          .from('product_catalog')
+          .select('store_id, product_id, title, handle, status, price_cad, image_url, product_type, vendor'),
+      ['store_id', 'product_id'],
     );
   } catch (e) {
     throw new Error(`postgresReaders.fetchProductCatalog: ${(e as Error).message}`);
@@ -1647,6 +1671,7 @@ export async function fetchManualOverridesForRange(
         )
         .gte('date', range.from)
         .lte('date', range.to),
+      ['id'],
     );
   } catch (e) {
     console.warn(`postgresReaders.fetchManualOverridesForRange: ${(e as Error).message}`);
@@ -1764,12 +1789,14 @@ export async function fetchTikTokCoverageInputs(
   try {
     // 1. Account total = Σ tt_spend_cad across all stores in range. Project
     //    only the one column we sum (cheaper than the full daily SELECT).
-    const dailyRows = await paginate<DbRow>(() =>
-      getSupabase()
-        .from('data_daily')
-        .select('tt_spend_cad')
-        .gte('date', range.from)
-        .lte('date', range.to),
+    const dailyRows = await paginate<DbRow>(
+      () =>
+        getSupabase()
+          .from('data_daily')
+          .select('tt_spend_cad')
+          .gte('date', range.from)
+          .lte('date', range.to),
+      ['date', 'store_id'],
     );
     let accountTotalCad = 0;
     for (const r of dailyRows) {
@@ -1780,13 +1807,15 @@ export async function fetchTikTokCoverageInputs(
     //    (PK includes ad_set_id) — sum spend_cad per campaign_id so the
     //    coverage feed is one entry per campaign (matching the helper's
     //    campaign-keyed map). Rows with empty campaign_id are skipped.
-    const campRows = await paginate<DbRow>(() =>
-      getSupabase()
-        .from('campaigns_daily')
-        .select('campaign_id, spend_cad')
-        .eq('platform', 'tiktok')
-        .gte('date', range.from)
-        .lte('date', range.to),
+    const campRows = await paginate<DbRow>(
+      () =>
+        getSupabase()
+          .from('campaigns_daily')
+          .select('campaign_id, spend_cad')
+          .eq('platform', 'tiktok')
+          .gte('date', range.from)
+          .lte('date', range.to),
+      ['date', 'store_id', 'platform', 'campaign_id', 'ad_set_id'],
     );
     const spendByCampaign = new Map<string, number>();
     for (const r of campRows) {

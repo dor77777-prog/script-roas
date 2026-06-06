@@ -151,10 +151,12 @@ describe('fetchCohortMonthlyFromPostgres', () => {
     expect(rows.map((r) => r.storeId)).toEqual(['Zol Plus', '360usmile', 'uzoshop']);
   });
 
-  it('orders by first_order_month then month_since', async () => {
+  it('orders by the full PK (store_id, first_order_month, month_since) for deterministic pagination', async () => {
     setSupabaseRows(fakeRows);
     await fetchCohortMonthlyFromPostgres();
-    expect(orderCalls.map((c) => c.column)).toEqual(['first_order_month', 'month_since']);
+    // store_id is part of the order key now (full PK) so paginate() pages are
+    // a unique, stable total order — not just (first_order_month, month_since).
+    expect(orderCalls.map((c) => c.column)).toEqual(['store_id', 'first_order_month', 'month_since']);
   });
 
   it('does NOT filter by store when storeId is omitted', async () => {

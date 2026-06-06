@@ -22,6 +22,7 @@ vi.mock('@/lib/supabase', () => ({
         const q = {
           gte: () => q,
           lte: () => q,
+          order: () => q,
           range: () => Promise.resolve({ data: rowData.rows, error: null }),
           then: (res: (v: { data: unknown; error: null }) => void) =>
             res({ data: rowData.rows, error: null }),
