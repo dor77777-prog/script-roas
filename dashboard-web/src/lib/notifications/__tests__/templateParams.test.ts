@@ -110,13 +110,13 @@ describe('buildTemplateParameters — locks CR-02 audit fix (2026-05-23)', () =>
   });
 });
 
-describe('buildTemplateParametersV2 — multi-line layout (21 params)', () => {
-  // Index map: 0=title, 1..5=totals, 6..10=store1, 11..15=store2, 16..20=store3.
-  it('returns exactly 21 params (title + 4 blocks × 5)', () => {
-    expect(buildTemplateParametersV2(makeDaySummary({}), 't').length).toBe(21);
+describe('buildTemplateParametersV2 — multi-line layout (17 params)', () => {
+  // Index map: 0=title, 1..4=totals, 5..8=store1, 9..12=store2, 13..16=store3.
+  it('returns exactly 17 params (title + 4 blocks × 4)', () => {
+    expect(buildTemplateParametersV2(makeDaySummary({}), 't').length).toBe(17);
   });
 
-  it('store-with-sales block: 🟠 band + bold ROAS header, value-only money params, sources line', () => {
+  it('store-with-sales block: 🟠 band + bold ROAS header, revenue value, bundled spend+CPM, sources line', () => {
     const summary = makeDaySummary({
       s1: makeStore('uzoshop', {
         totalSpend: 1137, revenue: 2310, roas: 2.03, orders: 19,
@@ -124,46 +124,44 @@ describe('buildTemplateParametersV2 — multi-line layout (21 params)', () => {
       }),
     });
     const p = buildTemplateParametersV2(summary, 't');
-    expect(p[6]).toBe('🟠 *uzoshop · ROAS 2.03*');
-    expect(p[7]).toBe('C$2,310'); // revenue value only — label is static in the body
-    expect(p[8]).toBe('C$1,137'); // spend
-    expect(p[9]).toBe('C$15.26'); // cpm
-    expect(p[10]).toBe('19 הזמנות · Meta 15 · Google 2 · אחר 2');
+    expect(p[5]).toBe('🟠 *uzoshop · ROAS 2.03*');
+    expect(p[6]).toBe('C$2,310'); // revenue value only — label is static in the body
+    expect(p[7]).toBe('C$1,137 · CPM C$15.26'); // spend + CPM bundled into one param
+    expect(p[8]).toBe('19 הזמנות · Meta 15 · Google 2 · אחר 2');
   });
 
   it('band: 🟢 for ROAS≥3, 🔴 for ROAS<2', () => {
     const g = buildTemplateParametersV2(
       makeDaySummary({ s: makeStore('A', { revenue: 100, orders: 3, roas: 3.45 }) }), 't');
-    expect(g[6]).toContain('🟢');
+    expect(g[5]).toContain('🟢');
     const r = buildTemplateParametersV2(
       makeDaySummary({ s: makeStore('B', { revenue: 100, orders: 3, roas: 1.5 }) }), 't');
-    expect(r[6]).toContain('🔴');
+    expect(r[5]).toContain('🔴');
   });
 
-  it('no-sales store → ⚪ "ללא מכירות", C$0 revenue, 0 orders', () => {
+  it('no-sales store → ⚪ "ללא מכירות", C$0 revenue, bundled spend+CPM, 0 orders', () => {
     const p = buildTemplateParametersV2(
       makeDaySummary({ s: makeStore('360usmile', { totalSpend: 92, cpm: 24.83 }) }), 't');
-    expect(p[6]).toBe('⚪ *360usmile · ללא מכירות*');
-    expect(p[7]).toBe('C$0');
-    expect(p[8]).toBe('C$92');
-    expect(p[9]).toBe('C$24.83');
-    expect(p[10]).toBe('0 הזמנות');
+    expect(p[5]).toBe('⚪ *360usmile · ללא מכירות*');
+    expect(p[6]).toBe('C$0');
+    expect(p[7]).toBe('C$92 · CPM C$24.83');
+    expect(p[8]).toBe('0 הזמנות');
   });
 
   it('singular "הזמנה" for 1 order; TikTok has its own slot (not folded into אחר)', () => {
     const one = buildTemplateParametersV2(
       makeDaySummary({ s: makeStore('Zol Plus', { revenue: 62, orders: 1, roas: 2.46, facebook: 1, cpm: 38.97 }) }), 't');
-    expect(one[10]).toBe('1 הזמנה · Meta 1');
+    expect(one[8]).toBe('1 הזמנה · Meta 1');
     const tt = buildTemplateParametersV2(
       makeDaySummary({ s: makeStore('X', { revenue: 50, orders: 2, roas: 2, tiktok: 2, cpm: 5 }) }), 't');
-    expect(tt[10]).toContain('TikTok 2');
+    expect(tt[8]).toContain('TikTok 2');
   });
 
-  it('pads missing stores so all 21 params are non-empty (Meta rejects empty params)', () => {
+  it('pads missing stores so all 17 params are non-empty (Meta rejects empty params)', () => {
     const p = buildTemplateParametersV2(
       makeDaySummary({ s: makeStore('uzoshop', { revenue: 1, orders: 1, roas: 2 }) }), 't');
-    expect(p.length).toBe(21);
-    expect(p[11]).toBe('—'); // store2 header padded
+    expect(p.length).toBe(17);
+    expect(p[9]).toBe('—'); // store2 header padded
     expect(p.every((x) => typeof x === 'string' && x.length > 0)).toBe(true);
   });
 });

@@ -120,14 +120,16 @@ function totalsBlock(t: DaySummary['totals']): string {
 //
 // Meta forbids new-lines INSIDE a parameter value (error 132018), but the
 // approved template BODY may contain them. So v2's body holds the static
-// scaffold (header, the 💰/💸/🛒 labels, the separator, the footer, and all
-// the line breaks) while these 21 params fill ONLY the dynamic values — each a
-// single line. Body placeholder map (see the Meta-submission doc):
-//   {{1}}                = subtitle (date/time · descriptor)
-//   {{2..6}}             = totals block: header, revenue, spend, cpm, ordersLine
-//   {{7..11}} / {{12..16}} / {{17..21}} = the 3 stores, same 5-field shape.
+// scaffold (header, the 💰/💸/🛒 labels, the band legend, separators, all the
+// line breaks) while these 17 params fill ONLY the dynamic values — each a
+// single line. 17 (not 21): spend+CPM are bundled into one value so Meta's
+// variable-to-body-length ratio passes ("too many variables for its length").
+// Body placeholder map (see the Meta-submission doc):
+//   {{1}}              = subtitle (date/time · descriptor)
+//   {{2..5}}           = totals block: header, revenue, spend+cpm, ordersLine
+//   {{6..9}} / {{10..13}} / {{14..17}} = the 3 stores, same 4-field shape.
 // The body around the value params is e.g. `💰 הכנסות: {{3}}` and
-// `💸 הוצאה: {{4}} · CPM {{5}}`, so no two params are ever adjacent.
+// `💸 הוצאה: {{4}}`, so no two params are ever adjacent.
 // ────────────────────────────────────────────────────────────────────────
 
 export const V2_TEMPLATE_NAME = 'roas_daily_summary_v2';
@@ -158,8 +160,9 @@ function ordersLine(orders: number, sources: string): string {
   return sources ? `${orders} ${word} · ${sources}` : `${orders} ${word}`;
 }
 
-/** The 5 value-params for one block (totals or a store): header line,
- *  revenue, spend, cpm, orders-line. */
+/** The 4 value-params for one block (totals or a store): header line,
+ *  revenue, spend+CPM (bundled — same rendered line, one fewer variable so
+ *  Meta's variable-to-length ratio passes), orders-line. */
 function blockParamsV2(opts: {
   label: string;
   roas: number;
@@ -180,17 +183,16 @@ function blockParamsV2(opts: {
   return [
     header,
     formatCad(opts.revenue),
-    formatCad(opts.spend),
-    formatCpm(opts.cpm),
+    `${formatCad(opts.spend)} · CPM ${formatCpm(opts.cpm)}`,
     ordersLine(opts.orders, sourcesStr(opts.fb, opts.google, opts.tiktok, opts.other)),
   ];
 }
 
 /**
- * Build the 21-element parameter array for the `roas_daily_summary_v2`
+ * Build the 17-element parameter array for the `roas_daily_summary_v2`
  * template. Same store ordering + missing-store padding contract as v1
  * (sorted by storeName; missing slots padded so Meta always gets exactly
- * 21 non-empty params). Used for ALL three daily sends — only {{1}} (the
+ * 17 non-empty params). Used for ALL three daily sends — only {{1}} (the
  * title/descriptor) differs between noon / evening / EOD.
  */
 export function buildTemplateParametersV2(
@@ -216,7 +218,7 @@ export function buildTemplateParametersV2(
       }),
     );
   } else {
-    params.push('⚪ *סה״כ · אין נתונים*', 'C$0', 'C$0', '—', '0 הזמנות');
+    params.push('⚪ *סה״כ · אין נתונים*', 'C$0', 'C$0 · CPM —', '0 הזמנות');
   }
 
   const storeIds =
@@ -246,8 +248,8 @@ export function buildTemplateParametersV2(
         }),
       );
     } else {
-      // Always-3-stores in practice; pad so Meta gets 21 non-empty params.
-      params.push('—', '—', '—', '—', '—');
+      // Always-3-stores in practice; pad so Meta gets 17 non-empty params.
+      params.push('—', '—', '—', '—');
     }
   }
   return params;
