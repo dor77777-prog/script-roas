@@ -577,7 +577,9 @@ export const googleWorker = inngest.createFunction(
         };
       };
 
-      const adStateMap = await fetchAdStateFromPostgres();
+      // Degrade gracefully: an ad-state read failure must NOT fail the worker.
+      // Empty map ⇒ all-ON ⇒ fetch normally (never wrongly skip).
+      const adStateMap = await fetchAdStateFromPostgres().catch((): AdStateMap => ({}));
 
       await runGoogleWorkerJob({
         jobData: data,

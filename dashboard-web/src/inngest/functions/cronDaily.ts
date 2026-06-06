@@ -461,7 +461,9 @@ async function runDailyForStoreInner(
   // 5 (persist) and the agg RPCs are intentionally NOT gated — revenue/
   // product data must always land regardless of ad state.
   const adStateMap = (await step.run('fetch-ad-state', () =>
-    fetchAdStateFromPostgres(),
+    // Degrade gracefully: an ad-state read failure must NOT crash the whole
+    // daily run. Empty map ⇒ all-ON ⇒ fetch normally (never wrongly skip).
+    fetchAdStateFromPostgres().catch(() => ({})),
   )) as Awaited<ReturnType<typeof fetchAdStateFromPostgres>>;
 
   // ------------------------------------------------------------------
