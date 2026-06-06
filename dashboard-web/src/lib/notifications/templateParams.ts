@@ -31,6 +31,7 @@
 // reads as a sub-clause (matches the sample on the approved template).
 
 import type { DaySummary, StoreSummary } from './summary';
+import { adDisplayState } from '@/lib/adState';
 
 function formatRoas(roas: number): string {
   if (!Number.isFinite(roas) || roas === 0) return '—';
@@ -66,6 +67,33 @@ function combinedOther(other: number, tiktok: number): number {
 }
 
 function storeBlock(s: StoreSummary): string {
+  // ads-off Phase 4 — fully-off store: render "אורגני" (rev>0) or
+  // "ללא מכירות" (rev=0) instead of a broken zero-ROAS alarm.
+  if (s.isFullyOff) {
+    const state = adDisplayState({ revenue: s.revenue, spend: s.totalSpend, off: true });
+    if (state === 'organic') {
+      // Revenue line shown; no spend/ROAS/CPM (all zero and meaningless).
+      return (
+        '🏪 ' +
+        s.storeName +
+        ': • הכנסות: ' +
+        formatCad(s.revenue) +
+        ' • אורגני' +
+        ' • הזמנות: ' +
+        s.orders +
+        '  (פייסבוק: ' +
+        s.facebook +
+        ', גוגל: ' +
+        s.google +
+        ', אחרים: ' +
+        combinedOther(s.other, s.tiktok) +
+        ')'
+      );
+    }
+    // off-empty or off-negative → neutral placeholder.
+    return '🏪 ' + s.storeName + ': • ללא מכירות';
+  }
+
   // Phase 05.7.x — appended `• CPM: C$X.XX` after ROAS. Position chosen
   // to keep the cost-side metrics (Spend → ROAS → CPM) clustered before
   // the volume-side (orders + breakdown). No Meta template change
@@ -162,7 +190,10 @@ function ordersLine(orders: number, sources: string): string {
 
 /** The 4 value-params for one block (totals or a store): header line,
  *  revenue, spend+CPM (bundled — same rendered line, one fewer variable so
- *  Meta's variable-to-length ratio passes), orders-line. */
+ *  Meta's variable-to-length ratio passes), orders-line.
+ *
+ *  ads-off Phase 4: when `isFullyOff` is true the header uses ⚪ +
+ *  "אורגני" (rev>0) or "ללא מכירות" (rev=0) instead of a ROAS figure. */
 function blockParamsV2(opts: {
   label: string;
   roas: number;
@@ -174,7 +205,22 @@ function blockParamsV2(opts: {
   google: number;
   tiktok: number;
   other: number;
+  isFullyOff?: boolean;
 }): string[] {
+  // ads-off Phase 4: off-state header overrides normal band logic.
+  if (opts.isFullyOff) {
+    const state = adDisplayState({ revenue: opts.revenue, spend: opts.spend, off: true });
+    const header = state === 'organic'
+      ? `⚪ *${opts.label} · אורגני*`
+      : `⚪ *${opts.label} · ללא מכירות*`;
+    return [
+      header,
+      formatCad(opts.revenue),
+      `${formatCad(opts.spend)} · CPM ${formatCpm(opts.cpm)}`,
+      ordersLine(opts.orders, sourcesStr(opts.fb, opts.google, opts.tiktok, opts.other)),
+    ];
+  }
+
   const hasSales = opts.orders > 0 || opts.revenue > 0;
   const emoji = bandEmoji(opts.roas, hasSales);
   const header = hasSales
@@ -194,15 +240,21 @@ function blockParamsV2(opts: {
  * (sorted by storeName; missing slots padded so Meta always gets exactly
  * 17 non-empty params). Used for ALL three daily sends — only {{1}} (the
  * title/descriptor) differs between noon / evening / EOD.
+ *
+ * ads-off Phase 4 — `offStoreIds` is optional (default {}). Fully-off
+ * stores render as "אורגני"/"ללא מכירות" and their spend is excluded from
+ * the totals block. Empty map ⇒ identical to today's behaviour.
  */
 export function buildTemplateParametersV2(
   summary: DaySummary | null,
   title: string,
+  offStoreIds: Record<string, boolean> = {},
 ): string[] {
   const params: string[] = [title];
 
   if (summary && summary.totals) {
-    const t = summary.totals;
+    // ads-off Phase 4: recompute totals excluding off-store spend.
+    const t = recomputeTotalsExcludingOff(summary, offStoreIds);
     params.push(
       ...blockParamsV2({
         label: 'סה״כ',
@@ -245,6 +297,7 @@ export function buildTemplateParametersV2(
           google: s.google,
           tiktok: s.tiktok,
           other: s.other,
+          isFullyOff: !!offStoreIds[sid],
         }),
       );
     } else {
@@ -255,6 +308,50 @@ export function buildTemplateParametersV2(
   return params;
 }
 
+// ────────────────────────────────────────────────────────────────────────
+// ads-off Phase 4 — totals recomputation
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Recompute the totals block from the raw store entries, excluding spend
+ * (and impressions, used for CPM) from fully-off stores while KEEPING
+ * their revenue. Returns a shape compatible with DaySummary['totals'].
+ *
+ * When `offStoreIds` is empty this is a pure identity pass: the result
+ * equals `summary.totals` exactly, so the message is unchanged.
+ */
+function recomputeTotalsExcludingOff(
+  summary: DaySummary,
+  offStoreIds: Record<string, boolean>,
+): DaySummary['totals'] {
+  // Fast path: nothing is off — return the pre-computed totals as-is.
+  const offKeys = Object.keys(offStoreIds).filter((k) => offStoreIds[k]);
+  if (offKeys.length === 0) return summary.totals;
+
+  let fbSpend = 0, gaSpend = 0, ttSpend = 0, spend = 0;
+  let revenue = 0, orders = 0, facebook = 0, google = 0, tiktok = 0, other = 0;
+  let impressions = 0;
+  for (const [sid, store] of Object.entries(summary.stores)) {
+    const isOff = !!offStoreIds[sid];
+    revenue += store.revenue;
+    orders += store.orders;
+    facebook += store.facebook;
+    google += store.google;
+    tiktok += store.tiktok;
+    other += store.other;
+    if (!isOff) {
+      fbSpend += store.fbSpend;
+      gaSpend += store.gaSpend;
+      ttSpend += store.ttSpend;
+      spend += store.totalSpend;
+      impressions += store.impressions;
+    }
+  }
+  const roas = spend > 0 ? revenue / spend : 0;
+  const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
+  return { fbSpend, gaSpend, ttSpend, spend, revenue, orders, facebook, google, tiktok, other, roas, impressions, cpm };
+}
+
 /**
  * Build the 5-element parameter array for the approved Meta template.
  *
@@ -262,10 +359,16 @@ export function buildTemplateParametersV2(
  * 3 stores have rows for the requested date, the missing slots receive
  * "—" so the template always gets exactly 5 parameters (Meta rejects
  * partial parameter lists).
+ *
+ * ads-off Phase 4 — `offStoreIds` is an optional map of storeId → true for
+ * stores that are fully off. Off stores are rendered as "אורגני"/"ללא מכירות"
+ * and their spend is excluded from the totals block. Empty map (default) ⇒
+ * message identical to today's behaviour (fully backward-compatible).
  */
 export function buildTemplateParameters(
   summary: DaySummary | null,
   title: string,
+  offStoreIds: Record<string, boolean> = {},
 ): string[] {
   const params: string[] = [title];
   // Audit fix 2026-05-23 (CR-02 health-and-conclusions): the previous
@@ -288,13 +391,25 @@ export function buildTemplateParameters(
   for (let i = 0; i < 3; i++) {
     const sid = storeIds[i];
     if (sid && summary) {
-      params.push(storeBlock(summary.stores[sid]));
+      const store = summary.stores[sid];
+      // ads-off Phase 4: stamp isFullyOff onto the store entry so storeBlock
+      // can render the correct off-state framing without changing the shape
+      // that callers pass in.
+      const storeWithOff: StoreSummary = offStoreIds[sid]
+        ? { ...store, isFullyOff: true }
+        : store;
+      params.push(storeBlock(storeWithOff));
     } else {
       params.push('—');
     }
   }
   if (summary && summary.totals) {
-    params.push(totalsBlock(summary.totals));
+    // ads-off Phase 4: recompute totals excluding off-store spend so the
+    // blended ROAS/CPM in the totals block isn't polluted by phantom
+    // 0-spend from off stores. Off-store revenue is still included
+    // (organic revenue is real business revenue).
+    const adjTotals = recomputeTotalsExcludingOff(summary, offStoreIds);
+    params.push(totalsBlock(adjTotals));
   } else {
     params.push('אין נתונים זמינים');
   }

@@ -33,6 +33,12 @@ export type StoreSummary = {
    *  (totalSpend / impressions) × 1000. 0 when impressions = 0; the
    *  WhatsApp template renders '—' in that case (same convention as ROAS). */
   cpm: number;
+  /** ads-off Phase 4 — true when ALL applicable ad platforms for this store
+   *  are toggled off at the time of the send. Set by sendDailySummary after
+   *  querying adState; undefined/false ⇒ normal (on). When true, the
+   *  template builders render "אורגני" / "ללא מכירות" instead of a
+   *  broken zero-ROAS alarm, and the store's spend is excluded from totals. */
+  isFullyOff?: boolean;
 };
 
 export type DaySummary = {

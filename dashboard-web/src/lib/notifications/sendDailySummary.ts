@@ -22,6 +22,16 @@ import {
   loadActiveMetacloudConfig,
   sendWhatsAppTemplate,
 } from './whatsapp';
+import {
+  fetchAdStateFromPostgres,
+  fetchStoreMetaFromPostgres,
+} from '@/lib/postgresReaders';
+import {
+  applicablePlatforms,
+  isStoreFullyOff,
+  TIKTOK_SHARED_STORES,
+  type AdStateMap,
+} from '@/lib/adState';
 
 export type SendResult = {
   dateStr: string;
@@ -86,14 +96,21 @@ export async function sendDailySummary(
   }
 
   const summary = await buildStoreSummary(dateStr);
+
+  // ads-off Phase 4 — build a per-store isFullyOff map so the template
+  // builders can frame off stores as "אורגני"/"ללא מכירות" and exclude
+  // their spend from totals. Graceful: any fetch failure → empty map →
+  // message identical to before (all stores treated as ON).
+  const offStoreIds = await buildOffStoreIds(summary).catch(() => ({}));
+
   // Pick the param builder by the CONFIGURED template name so the rollout is
   // safe + reversible: v1 keeps running until the operator flips
   // notification_config.template_name to the (Meta-approved) v2 — then the
   // 21-param multi-line layout activates with zero code redeploy.
   const templateParams =
     cfg.templateName === V2_TEMPLATE_NAME
-      ? buildTemplateParametersV2(summary, title)
-      : buildTemplateParameters(summary, title);
+      ? buildTemplateParametersV2(summary, title, offStoreIds)
+      : buildTemplateParameters(summary, title, offStoreIds);
 
   for (const to of recipients) {
     result.recipientsAttempted.push(to);
@@ -154,6 +171,44 @@ export async function sendDailySummary(
   }
 
   return result;
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// ads-off Phase 4 — per-store isFullyOff map
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Fetches adState + storeMeta and returns a `{ [storeId]: true }` map for
+ * every store that is FULLY off (all applicable platforms disabled).
+ * Stores present in `summary` but not in the `stores` table are treated
+ * as ON (safe default). Returns an empty map when `summary` is null.
+ */
+async function buildOffStoreIds(
+  summary: Awaited<ReturnType<typeof buildStoreSummary>>,
+): Promise<Record<string, boolean>> {
+  if (!summary) return {};
+  const storeIds = Object.keys(summary.stores);
+  if (storeIds.length === 0) return {};
+
+  const [adMap, storeMeta]: [AdStateMap, Awaited<ReturnType<typeof fetchStoreMetaFromPostgres>>] =
+    await Promise.all([
+      fetchAdStateFromPostgres().catch((): AdStateMap => ({})),
+      fetchStoreMetaFromPostgres().catch(() => []),
+    ]);
+
+  const tiktokStores = new Set<string>(TIKTOK_SHARED_STORES);
+  const metaById = new Map(storeMeta.map((r) => [r.storeId, r]));
+
+  const offStoreIds: Record<string, boolean> = {};
+  for (const sid of storeIds) {
+    const meta = metaById.get(sid);
+    if (!meta) continue; // unknown store → treat as ON
+    const applicable = applicablePlatforms(meta, tiktokStores);
+    if (isStoreFullyOff(sid, adMap, applicable)) {
+      offStoreIds[sid] = true;
+    }
+  }
+  return offStoreIds;
 }
 
 // ────────────────────────────────────────────────────────────────────────

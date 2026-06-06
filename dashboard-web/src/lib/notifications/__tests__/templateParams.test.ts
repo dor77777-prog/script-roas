@@ -165,3 +165,148 @@ describe('buildTemplateParametersV2 — multi-line layout (17 params)', () => {
     expect(p.every((x) => typeof x === 'string' && x.length > 0)).toBe(true);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ads-off Phase 4 — off-store framing in WhatsApp daily report
+// ─────────────────────────────────────────────────────────────────────────────
+describe('ads-off: fully-off store framing (v1 + v2)', () => {
+  // Helper: build a DaySummary whose totals are the correct aggregation
+  // of the given stores (off stores excluded from spend).
+  function makeSummaryWithOff(
+    stores: Record<string, StoreSummary & { isFullyOff?: boolean }>,
+  ): DaySummary {
+    // Compute totals excluding off-store spend but including off-store revenue.
+    let spend = 0, revenue = 0, orders = 0, facebook = 0, google = 0, tiktok = 0, other = 0;
+    let fbSpend = 0, gaSpend = 0, ttSpend = 0, impressions = 0;
+    for (const s of Object.values(stores)) {
+      revenue += s.revenue;
+      orders += s.orders;
+      facebook += s.facebook;
+      google += s.google;
+      tiktok += s.tiktok;
+      other += s.other;
+      if (!s.isFullyOff) {
+        spend += s.totalSpend;
+        fbSpend += s.fbSpend;
+        gaSpend += s.gaSpend;
+        ttSpend += s.ttSpend;
+        impressions += s.impressions;
+      }
+    }
+    const roas = spend > 0 ? revenue / spend : 0;
+    const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
+    return {
+      dateStr: '2026-06-06',
+      stores,
+      totals: { fbSpend, gaSpend, ttSpend, spend, revenue, orders, facebook, google, tiktok, other, roas, impressions, cpm },
+    };
+  }
+
+  const offWithRevenue = makeStore('usmile360', {
+    totalSpend: 0, revenue: 500, roas: 0, orders: 8, facebook: 0, google: 0, tiktok: 0, other: 8,
+    isFullyOff: true,
+  } as Partial<StoreSummary> & { isFullyOff: boolean });
+
+  const offEmpty = makeStore('zolplus', {
+    totalSpend: 0, revenue: 0, roas: 0, orders: 0,
+    isFullyOff: true,
+  } as Partial<StoreSummary> & { isFullyOff: boolean });
+
+  const onStore = makeStore('uzoshop', {
+    totalSpend: 1000, revenue: 3200, roas: 3.2, orders: 25, facebook: 18, google: 5, other: 2, cpm: 12.5,
+  });
+
+  // ── v1 ──────────────────────────────────────────────────────────────────
+
+  describe('v1 storeBlock', () => {
+    it('off+revenue>0 → shows "אורגני", keeps revenue, no broken ROAS/CPM alarm', () => {
+      const summary = makeSummaryWithOff({ s1: offWithRevenue as StoreSummary & { isFullyOff?: boolean } });
+      const p = buildTemplateParameters(summary, 't', { s1: true });
+      // param[1] is the first store block
+      expect(p[1]).toContain('אורגני');
+      expect(p[1]).toContain('C$500'); // revenue included
+      expect(p[1]).not.toMatch(/ROAS: \d/); // no numeric ROAS
+      expect(p[1]).not.toMatch(/CPM: C\$\d/); // no numeric CPM alarm
+    });
+
+    it('off+revenue=0 → neutral "ללא מכירות"', () => {
+      const summary = makeSummaryWithOff({ s1: offEmpty as StoreSummary & { isFullyOff?: boolean } });
+      const p = buildTemplateParameters(summary, 't', { s1: true });
+      expect(p[1]).toContain('ללא מכירות');
+      expect(p[1]).not.toMatch(/ROAS: \d/);
+    });
+
+    it('on store → normal block (unchanged)', () => {
+      const summary = makeSummaryWithOff({ s1: onStore });
+      const p = buildTemplateParameters(summary, 't', {});
+      expect(p[1]).toContain('ROAS: 3.20');
+      expect(p[1]).not.toContain('אורגני');
+    });
+
+    it('totals: off-store spend excluded, off-store revenue included', () => {
+      const summary = makeSummaryWithOff({
+        s_on: onStore,
+        s_off: offWithRevenue as StoreSummary & { isFullyOff?: boolean },
+      });
+      const p = buildTemplateParameters(summary, 't', { s_off: true });
+      // totals block is params[4]
+      // spend = only onStore (1000), revenue = onStore(3200) + offStore(500) = 3700
+      expect(p[4]).toContain('C$1,000'); // spend
+      expect(p[4]).toContain('C$3,700'); // revenue
+    });
+
+    it('empty adStateMap → identical message (all stores treated as on)', () => {
+      const summary = makeSummaryWithOff({ s1: onStore });
+      const withMap = buildTemplateParameters(summary, 't', {});
+      const noMap = buildTemplateParameters(summary, 't');
+      expect(withMap).toEqual(noMap);
+    });
+  });
+
+  // ── v2 ──────────────────────────────────────────────────────────────────
+
+  describe('v2 blockParamsV2', () => {
+    it('off+revenue>0 → ⚪ + "אורגני" header, revenue shown, spend — neutral', () => {
+      const summary = makeSummaryWithOff({ s1: offWithRevenue as StoreSummary & { isFullyOff?: boolean } });
+      const p = buildTemplateParametersV2(summary, 't', { s1: true });
+      // store1 header is params[5]
+      expect(p[5]).toContain('⚪');
+      expect(p[5]).toContain('אורגני');
+      expect(p[5]).not.toMatch(/ROAS \d/);
+      expect(p[6]).toBe('C$500'); // revenue shown
+      expect(p[7]).toContain('C$0'); // no spend
+    });
+
+    it('off+revenue=0 → ⚪ + "ללא מכירות"', () => {
+      const summary = makeSummaryWithOff({ s1: offEmpty as StoreSummary & { isFullyOff?: boolean } });
+      const p = buildTemplateParametersV2(summary, 't', { s1: true });
+      expect(p[5]).toContain('⚪');
+      expect(p[5]).toContain('ללא מכירות');
+    });
+
+    it('on store → normal band block (unchanged)', () => {
+      const summary = makeSummaryWithOff({ s1: onStore });
+      const p = buildTemplateParametersV2(summary, 't', {});
+      expect(p[5]).toContain('🟢');
+      expect(p[5]).toContain('ROAS 3.20');
+    });
+
+    it('totals block: off-store spend excluded from blended ROAS', () => {
+      const summary = makeSummaryWithOff({
+        s_on: onStore,
+        s_off: offWithRevenue as StoreSummary & { isFullyOff?: boolean },
+      });
+      const p = buildTemplateParametersV2(summary, 't', { s_off: true });
+      // totals header at params[1]
+      expect(p[2]).toBe('C$3,700'); // revenue (3200+500)
+      expect(p[3]).toContain('C$1,000'); // spend (on store only)
+    });
+
+    it('empty adStateMap → identical message (backward compat)', () => {
+      const summary = makeSummaryWithOff({ s1: onStore });
+      const withMap = buildTemplateParametersV2(summary, 't', {});
+      const noMap = buildTemplateParametersV2(summary, 't');
+      expect(withMap).toEqual(noMap);
+    });
+  });
+});
