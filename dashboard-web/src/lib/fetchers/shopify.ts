@@ -69,7 +69,6 @@ import { primaryGateway } from '@/lib/payments';
 import { fetchWithBackoff } from './withBackoff';
 import {
   classifyOrderAttribution,
-  fbcIsFreshClick,
   type ShopifyOrderPayload,
 } from '@/lib/attribution/classifyOrderSource';
 
