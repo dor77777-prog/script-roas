@@ -150,6 +150,12 @@ describe('roasCell — off-state (Phase 2)', () => {
     expect(c.className).not.toBe('roas-cell-fail');
     expect(c.className).toContain('glass'); // bg-glass-2 neutral chip
   });
+  it('off + spend 0 + revenue<0 (old refunds) → neutral "0" (operator-locked: not red)', () => {
+    const c = roasCell(0, -100, 0, true);
+    expect(c.text).toBe('0');
+    expect(c.className).not.toBe('roas-cell-fail');
+    expect(c.className).toContain('glass');
+  });
   it('off + spend>0 (historical) → normal (never retroactively rewritten)', () => {
     expect(roasCell(3.5, 100, 28, true).text).toBe('3.50');
   });
