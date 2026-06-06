@@ -43,6 +43,11 @@ import {
 import { adsManagerLink } from './insights/adsManagerLink';
 import { detectCampaignDied } from './insights/campaignDied';
 import { detectAdFatigue, detectAdFatigueEarlyWarning } from './insights/adFatigue';
+import {
+  isInsightSuppressedByAdState,
+  type AdStateMap,
+  type AdPlatform,
+} from './adState';
 
 export type Severity = 'critical' | 'warning' | 'opportunity' | 'positive' | 'info';
 
@@ -129,6 +134,7 @@ function robustZScore(series: number[]): number {
 function detectMetricAnomalies(
   rows: DailyRow[],
   scope: string,
+  storeId: string,
 ): Insight[] {
   const insights: Insight[] = [];
   if (rows.length < 8) return insights;
@@ -149,6 +155,8 @@ function detectMetricAnomalies(
       severity: isUp ? 'positive' : 'critical',
       kind: 'anomaly',
       scope,
+      storeId,
+      storeName: scope,
       title: isUp
         ? `הכנסות חריגות גבוהות ב-${scope}`
         : `צניחה חריגה בהכנסות ב-${scope}`,
@@ -166,6 +174,8 @@ function detectMetricAnomalies(
       severity: 'warning',
       kind: 'anomaly',
       scope,
+      storeId,
+      storeName: scope,
       title: `הוצאת פרסום חריגה ב-${scope}`,
       detail: `הוצאה היום: ${fmtMoneyString(today.totalSpend)}`,
       why: `z-score ${zSpend.toFixed(1)} מול חציון 14 ימים. בדוק שאין budget runaway.`,
@@ -188,6 +198,8 @@ function detectMetricAnomalies(
           severity: 'critical',
           kind: 'anomaly',
           scope,
+          storeId,
+          storeName: scope,
           title: `ROAS נמוך 3 ימים ברצף ב-${scope}`,
           detail: `ממוצע 3 ימים אחרונים ${(last3.reduce((s, x) => s + x, 0) / 3).toFixed(2)}, ממוצע 14 ימים קודמים ${baselineAvg.toFixed(2)}.`,
           why: `שלושה ימים ברצף עם ROAS < 2.0, הירידה משמעותית מהבסיס.`,
@@ -212,6 +224,8 @@ function detectMetricAnomalies(
       severity: 'critical',
       kind: 'anomaly',
       scope,
+      storeId,
+      storeName: scope,
       title: `יום אבוד ב-${scope}`,
       detail: `הוצאת ${fmtMoneyString(today.totalSpend)} בלי מכירות.`,
       why: `הוצאה גבוהה (>CAD 50) ביום עם 0 הכנסות.`,
@@ -229,16 +243,19 @@ export function detectAnomalies(rows: DailyRow[]): Insight[] {
   const cutoff = addDays(today, -20);
   const recent = rows.filter(r => r.date >= cutoff);
 
-  const byStore = new Map<string, DailyRow[]>();
+  // Group by storeName (display), but also track the real storeId for each store.
+  const byStore = new Map<string, { storeId: string; rows: DailyRow[] }>();
   for (const r of recent) {
-    if (!byStore.has(r.storeName)) byStore.set(r.storeName, []);
-    byStore.get(r.storeName)!.push(r);
+    if (!byStore.has(r.storeName)) {
+      byStore.set(r.storeName, { storeId: r.storeId, rows: [] });
+    }
+    byStore.get(r.storeName)!.rows.push(r);
   }
 
   const insights: Insight[] = [];
-  for (const [storeName, list] of byStore) {
+  for (const [storeName, { storeId, rows: list }] of byStore) {
     list.sort((a, b) => a.date.localeCompare(b.date));
-    insights.push(...detectMetricAnomalies(list, storeName));
+    insights.push(...detectMetricAnomalies(list, storeName, storeId));
   }
   return insights.sort((a, b) => b.weight - a.weight);
 }
@@ -876,12 +893,25 @@ export function buildAllInsights(
      *  falls back to a neutral "check budget/rejection" hint without it. */
     currentEffectiveStatus?: Record<string, { status: string; updatedAt?: string }>;
   },
+  /** Ads-off state (Phase 4). Per-platform insights whose (storeId,platform) is
+   *  off are suppressed. Store-level insights are suppressed when ALL applicable
+   *  platforms for that store are off. Empty map (default) ⇒ nothing suppressed. */
+  adStateMap: AdStateMap = {},
+  /** Per-store applicable-platform list, keyed by storeId. Required for the
+   *  fully-off-store anomaly suppression path. Defaults to empty (no suppression). */
+  storeApplicablePlatforms: Record<string, AdPlatform[]> = {},
 ): Insight[] {
   const anomalies = detectAnomalies(rows);
   const recs = generateRecommendations(campaigns, products, rows);
   // WS3 — in-app intelligence: campaign-went-dark + creative-fatigue detectors.
-  const died = detectCampaignDied(campaigns, opts?.currentEffectiveStatus);
-  const fatigue = detectAdFatigue(ads);
-  const fatigueEarly = detectAdFatigueEarlyWarning(ads);
-  return [...anomalies, ...recs, ...died, ...fatigue, ...fatigueEarly].sort((a, b) => b.weight - a.weight);
+  // Belt-and-suspenders: pass adStateMap so per-detector suppression also fires
+  // even if the post-filter below is removed/bypassed.
+  const died = detectCampaignDied(campaigns, opts?.currentEffectiveStatus, undefined, adStateMap);
+  const fatigue = detectAdFatigue(ads, adStateMap);
+  const fatigueEarly = detectAdFatigueEarlyWarning(ads, adStateMap);
+  const all = [...anomalies, ...recs, ...died, ...fatigue, ...fatigueEarly].sort((a, b) => b.weight - a.weight);
+  // Phase 4 — final post-filter for any insight the per-detector guard may have
+  // missed (e.g. anomalies, store-level recommendations without platform).
+  if (Object.keys(adStateMap).length === 0) return all;
+  return all.filter((ins) => !isInsightSuppressedByAdState(ins, adStateMap, storeApplicablePlatforms));
 }

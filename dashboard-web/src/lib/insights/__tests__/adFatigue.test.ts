@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { detectAdFatigue } from '@/lib/insights/adFatigue';
 import type { AdRow } from '@/lib/ads';
 import type { Insight } from '@/lib/insights';
+import type { AdStateMap } from '@/lib/adState';
 
 function addDays(dateStr: string, n: number): string {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -209,5 +210,44 @@ describe('detectAdFatigue — base CTR+CPM conjunction', () => {
     const out = fatigueIds(detectAdFatigue(rows));
     expect(out).toHaveLength(1);
     expect(out[0].detail).toContain('התדירות עלתה');
+  });
+
+  // ---- ads-off suppression (Phase 4) ----------------------------------------
+
+  it('(ads-off-1) adStateMap with uzoshop:meta=false → no fatigue insight emitted', () => {
+    const rows = buildWindow({
+      priorPerDay: { impressions: 1000, clicks: 30, spend: 5 },
+      recentPerDay: { impressions: 1000, clicks: 18, spend: 7 },
+    });
+    const map: AdStateMap = { 'uzoshop:meta': false };
+    const out = fatigueIds(detectAdFatigue(rows, map));
+    expect(out).toHaveLength(0);
+  });
+
+  it('(ads-off-2) adStateMap empty ({}) → fatigue insight still emitted', () => {
+    const rows = buildWindow({
+      priorPerDay: { impressions: 1000, clicks: 30, spend: 5 },
+      recentPerDay: { impressions: 1000, clicks: 18, spend: 7 },
+    });
+    const out = fatigueIds(detectAdFatigue(rows, {}));
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe('fatigue-ad-1');
+  });
+
+  it('(ads-off-3) adStateMap suppresses only the off store/platform', () => {
+    const adA = buildWindow({
+      priorPerDay: { impressions: 1000, clicks: 30, spend: 5 },
+      recentPerDay: { impressions: 1000, clicks: 18, spend: 7 },
+      patch: { adId: 'ad-A', storeId: 'uzoshop', platform: 'Meta' },
+    });
+    const adB = buildWindow({
+      priorPerDay: { impressions: 1200, clicks: 36, spend: 6 },
+      recentPerDay: { impressions: 1200, clicks: 21, spend: 9 },
+      patch: { adId: 'ad-B', storeId: 'usmile360', storeName: 'usmile360', platform: 'TikTok' },
+    });
+    const map: AdStateMap = { 'uzoshop:meta': false }; // only uzoshop Meta off
+    const out = fatigueIds(detectAdFatigue([...adA, ...adB], map));
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe('fatigue-ad-B');
   });
 });

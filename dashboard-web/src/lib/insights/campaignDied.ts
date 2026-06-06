@@ -29,6 +29,7 @@ import { getTodayInIsraelTz } from '../dateRange';
 import type { CampaignRow } from '../campaigns';
 import type { Insight } from '../insights';
 import { adsManagerLink } from './adsManagerLink';
+import { isAdsEnabled, type AdStateMap, type AdPlatform } from '../adState';
 
 /** Local copy of the date-shift helper used across the insights rules. */
 function addDays(dateStr: string, n: number): string {
@@ -87,11 +88,14 @@ function resolveStatus(
  * @param currentEffectiveStatus  optional live status map (see resolveStatus).
  * @param today                   optional ISO yyyy-mm-dd seam for tests;
  *                                defaults to the real Israel-today helper.
+ * @param adStateMap              optional ads-off state (Phase 4); groups whose
+ *                                (storeId, platform) is off are skipped.
  */
 export function detectCampaignDied(
   campaigns: CampaignRow[],
   currentEffectiveStatus?: Record<string, CurrentEffectiveStatusEntry>,
   today?: string,
+  adStateMap: AdStateMap = {},
 ): Insight[] {
   const todayDate = today ?? getTodayInIsraelTz();
   const windowStart = addDays(todayDate, -13); // last 14 days, inclusive.
@@ -141,6 +145,11 @@ export function detectCampaignDied(
     const established = priorActiveDays >= 7 && meanDaily >= 50;
     const wentDark = recentSpend <= 1;
     if (!established || !wentDark) continue;
+
+    // Phase 4 — ads-off suppression: skip groups whose (storeId, platform) is off.
+    // CampaignRow.platform is title-case ('Meta','Google','TikTok'); AdPlatform is
+    // lowercase — normalise before the map lookup.
+    if (!isAdsEnabled(adStateMap, g.storeId, g.platform.toLowerCase() as AdPlatform)) continue;
 
     // 8. Cause / status hint — never asserted as fact.
     const status = resolveStatus(g, currentEffectiveStatus);

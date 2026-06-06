@@ -30,6 +30,7 @@ import type { Insight } from '../insights';
 import type { AdRow } from '../ads';
 import { fmtMoneyString } from '../format';
 import { adsManagerLink } from './adsManagerLink';
+import { isAdsEnabled, type AdStateMap, type AdPlatform } from '../adState';
 
 type AdGroup = {
   adId: string;
@@ -105,9 +106,14 @@ const EW_FREQ_FLOOR = 1.3; // recent half-frequency must clear this absolute flo
 const STRONG_FATIGUE_WEIGHT = 68;
 const EW_FATIGUE_WEIGHT = 52; // softer than the strong rule (68) so it ranks below it for the same ad
 
-export function detectAdFatigue(ads: AdRow[]): Insight[] {
+export function detectAdFatigue(ads: AdRow[], adStateMap: AdStateMap = {}): Insight[] {
   const insights: Insight[] = [];
   for (const g of groupAds(ads).values()) {
+    // Phase 4 — ads-off suppression: skip ads whose (storeId, platform) is off.
+    // AdRow.platform is title-case ('Meta','Google','TikTok'); AdPlatform is
+    // lowercase — normalise before the map lookup.
+    if (!isAdsEnabled(adStateMap, g.storeId, g.platform.toLowerCase() as AdPlatform)) continue;
+
     const halves = splitHalves(g.rows);
     if (!halves) continue;
     const { prior, recent } = halves;
@@ -167,9 +173,14 @@ export function detectAdFatigue(ads: AdRow[]): Insight[] {
  * Frequency here is a RELATIVE trend (reach is not additive across days; the
  * same bias applies to both halves so the recent/prior ratio stays valid).
  */
-export function detectAdFatigueEarlyWarning(ads: AdRow[]): Insight[] {
+export function detectAdFatigueEarlyWarning(ads: AdRow[], adStateMap: AdStateMap = {}): Insight[] {
   const insights: Insight[] = [];
   for (const g of groupAds(ads).values()) {
+    // Phase 4 — ads-off suppression: skip ads whose (storeId, platform) is off.
+    // AdRow.platform is title-case ('Meta','Google','TikTok'); AdPlatform is
+    // lowercase — normalise before the map lookup.
+    if (!isAdsEnabled(adStateMap, g.storeId, g.platform.toLowerCase() as AdPlatform)) continue;
+
     const halves = splitHalves(g.rows);
     if (!halves) continue;
     const { prior, recent } = halves;

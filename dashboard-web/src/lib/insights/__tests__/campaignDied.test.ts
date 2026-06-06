@@ -15,6 +15,7 @@ import { describe, it, expect } from 'vitest';
 import { detectCampaignDied } from '@/lib/insights/campaignDied';
 import { fmtMoneyString } from '@/lib/format';
 import type { CampaignRow } from '@/lib/campaigns';
+import type { AdStateMap } from '@/lib/adState';
 
 // Deterministic 'today' seam — never let wall-clock drift flake the suite.
 const TODAY = '2026-06-04';
@@ -203,5 +204,35 @@ describe('detectCampaignDied', () => {
     // if they leaked in, priorActiveDays would be 11 and the rule would fire.
     const out = detectCampaignDied([...ancient, ...fresh], undefined, TODAY);
     expect(out).toHaveLength(0);
+  });
+
+  // ---- ads-off suppression (Phase 4) ----------------------------------------
+
+  it('(ads-off-1) adStateMap with uzoshop:meta=false → no insight emitted', () => {
+    const rows = establishedCampaign({ activeDays: 10, daily: 200, recentSpend: 0 });
+    const map: AdStateMap = { 'uzoshop:meta': false };
+    const out = detectCampaignDied(rows, undefined, TODAY, map);
+    expect(out).toHaveLength(0);
+  });
+
+  it('(ads-off-2) adStateMap empty ({}) → insight still emitted (no suppression)', () => {
+    const rows = establishedCampaign({ activeDays: 10, daily: 200, recentSpend: 0 });
+    const out = detectCampaignDied(rows, undefined, TODAY, {});
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe('died-c1');
+  });
+
+  it('(ads-off-3) adStateMap suppresses only the off platform; other store/platform still fires', () => {
+    const uzoshop = establishedCampaign({ activeDays: 10, daily: 200, recentSpend: 0 });
+    // Second campaign: different store, different platform
+    const usmileRows = establishedCampaign({
+      activeDays: 10, daily: 150, recentSpend: 0,
+      patch: { storeId: 'usmile360', storeName: 'usmile360', platform: 'Google', campaignId: 'c2' },
+    });
+    const map: AdStateMap = { 'uzoshop:meta': false }; // only uzoshop Meta is off
+    const out = detectCampaignDied([...uzoshop, ...usmileRows], undefined, TODAY, map);
+    // uzoshop+Meta suppressed; usmile360+Google still fires
+    expect(out).toHaveLength(1);
+    expect(out[0].storeId).toBe('usmile360');
   });
 });

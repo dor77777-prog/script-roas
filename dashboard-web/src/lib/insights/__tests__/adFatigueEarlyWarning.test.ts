@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { detectAdFatigueEarlyWarning } from '@/lib/insights/adFatigue';
 import type { AdRow } from '@/lib/ads';
+import type { AdStateMap } from '@/lib/adState';
 
 // Build N day-rows for one ad. impr/clicks/spend/reach are PER DAY.
 function adDays(
@@ -62,5 +63,24 @@ describe('detectAdFatigueEarlyWarning', () => {
       (r, i) => ({ ...r, date: `2026-05-${String(i + 6).padStart(2, '0')}` }),
     );
     expect(ewIds(detectAdFatigueEarlyWarning([...prior, ...recent]))).toHaveLength(0);
+  });
+
+  // ---- ads-off suppression (Phase 4) ----------------------------------------
+
+  it('(ads-off-1) adStateMap with uzoshop:meta=false → no early-warning emitted', () => {
+    const prior = adDays({}, 6, { impr: 1000, clicks: 20, spend: 5, reach: 800 });
+    const recent = adDays({}, 6, { impr: 1300, clicks: 26, spend: 6.5, reach: 800 }).map(
+      (r, i) => ({ ...r, date: `2026-05-${String(i + 7).padStart(2, '0')}` }),
+    );
+    const map: AdStateMap = { 'uzoshop:meta': false };
+    expect(ewIds(detectAdFatigueEarlyWarning([...prior, ...recent], map))).toHaveLength(0);
+  });
+
+  it('(ads-off-2) adStateMap empty ({}) → early-warning still fires', () => {
+    const prior = adDays({}, 6, { impr: 1000, clicks: 20, spend: 5, reach: 800 });
+    const recent = adDays({}, 6, { impr: 1300, clicks: 26, spend: 6.5, reach: 800 }).map(
+      (r, i) => ({ ...r, date: `2026-05-${String(i + 7).padStart(2, '0')}` }),
+    );
+    expect(ewIds(detectAdFatigueEarlyWarning([...prior, ...recent], {}))).toContain('ew-fatigue-a1');
   });
 });

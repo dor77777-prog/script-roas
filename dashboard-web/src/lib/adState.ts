@@ -71,6 +71,25 @@ export function adDisplayState(opts: {
   return 'off-empty';
 }
 
+/** Returns true when an insight should be suppressed because its store/platform
+ *  is currently off. Per-platform insights: suppressed when that specific
+ *  (storeId, platform) is off. Store-level insights (no platform): suppressed
+ *  only when ALL applicable platforms for that store are off. If the insight
+ *  has no storeId, it is never suppressed (cross-platform / product insights). */
+export function isInsightSuppressedByAdState(
+  ins: { storeId?: string; platform?: AdPlatform | string },
+  map: AdStateMap,
+  applicable: Record<string, AdPlatform[]>,
+): boolean {
+  if (!ins.storeId) return false;
+  if (ins.platform) {
+    // Insight.platform is title-case ('Meta','Google','TikTok'); AdPlatform is
+    // lowercase — normalise before the map lookup.
+    return !isAdsEnabled(map, ins.storeId, ins.platform.toLowerCase() as AdPlatform);
+  }
+  return isStoreFullyOff(ins.storeId, map, applicable[ins.storeId] ?? []);
+}
+
 /** Off-state → band override (reusing existing AA-cleared bands). Returns null
  *  for 'normal' so callers keep their existing numeric-band logic. */
 export function adDisplayBand(state: AdDisplayState): RoasBand | null {
