@@ -163,6 +163,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       product_title: productTitle,
       quantity,
       customer_label: null,
+      source: null, // cart beacon has no ad-platform signal at ingest time
       occurred_at: safeIso(body.occurred_at),
       dedupe_key: `cart:${eventId}`,
       // raw carries NO PII — only the (already display-safe) fields we surface.

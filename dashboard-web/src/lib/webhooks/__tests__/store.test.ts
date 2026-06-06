@@ -231,6 +231,7 @@ describe('insertStoreEvent', () => {
     product_title: 'Blue Widget',
     quantity: 2,
     customer_label: 'A׳ C׳',
+    source: 'direct',
     occurred_at: '2026-06-01T10:00:00Z',
     dedupe_key: 'webhook:wh-1',
     raw: { id: 555 },

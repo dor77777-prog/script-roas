@@ -17,6 +17,7 @@
 
 import { makeCadConvert } from '@/lib/inngest/cadConvert';
 import { getFxRate } from '@/lib/fetchers/fx';
+import { classifyOrderSource } from '@/lib/attribution/classifyOrderSource';
 
 /**
  * FX rate fetcher signature — same shape as `getFxRate` (the production default).
@@ -43,6 +44,7 @@ export interface NormalizedStoreEvent {
   product_title: string | null;
   quantity: number | null;
   customer_label: string | null;
+  source: string | null;
   occurred_at: string;
   dedupe_key: string;
   raw: Record<string, unknown>;
@@ -104,6 +106,10 @@ interface OrderPayload {
   created_at?: string;
   customer?: { first_name?: string | null; last_name?: string | null } | null;
   line_items?: ShopifyLineItem[];
+  landing_site?: string;
+  referring_site?: string;
+  note_attributes?: Array<{ name?: string; value?: string }>;
+  source_name?: string;
 }
 
 interface RefundLineItem {
@@ -203,6 +209,12 @@ export async function normalizeOrderEvent(
       product_title: firstLine?.title ?? null,
       quantity: toFiniteNumber(firstLine?.quantity),
       customer_label: maskCustomerLabel(order.customer),
+      source: classifyOrderSource({
+        landing_site: order.landing_site,
+        referring_site: order.referring_site,
+        note_attributes: order.note_attributes,
+        source_name: order.source_name,
+      }),
       occurred_at,
       dedupe_key,
       raw: {
@@ -270,6 +282,7 @@ export async function normalizeOrderEvent(
     product_title: firstRefundLine?.line_item?.title ?? null,
     quantity: toFiniteNumber(firstRefundLine?.quantity),
     customer_label: null, // refunds carry no customer object we surface
+    source: null,
     occurred_at,
     dedupe_key,
     raw: {
