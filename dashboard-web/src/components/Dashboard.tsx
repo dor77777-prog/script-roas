@@ -111,6 +111,7 @@ import {
   type UnknownBucketBreakdown,
 } from '@/lib/home/unknownBucket';
 import type { OrderAttributionRow } from '@/lib/ordersAttribution';
+import type { AdStateMap, AdPlatform } from '@/lib/adState';
 
 // All client fetchers route through fetchJson → `cache: 'no-store'` so mobile
 // browsers never serve a stale cached response (the root cause of "data won't
@@ -789,7 +790,7 @@ export function Dashboard() {
                 <PaymentMethodsTab stores={data.stores} globalStore={filters.store} />
               )}
               {activeTab === 'detail' && (
-                <DetailTab filtered={filtered} filters={filters} setFilters={setFilters} stores={data.stores} />
+                <DetailTab filtered={filtered} filters={filters} setFilters={setFilters} stores={data.stores} adStateMap={data.adStateMap ?? {}} storeApplicablePlatforms={data.storeApplicablePlatforms ?? {}} />
               )}
 
               <Footer lastUpdated={data.lastUpdated} />
@@ -1821,11 +1822,15 @@ function DetailTab({
   filters,
   setFilters,
   stores,
+  adStateMap,
+  storeApplicablePlatforms,
 }: {
   filtered: { cur: DashboardData['rows'] };
   filters: F;
   setFilters: (next: F) => void;
   stores: string[];
+  adStateMap?: AdStateMap;
+  storeApplicablePlatforms?: Record<string, AdPlatform[]>;
 }) {
   const detailSynthesis = synthesizeDetail({ rows: filtered.cur });
   return (
@@ -1847,7 +1852,7 @@ function DetailTab({
       />
       <Filters filters={filters} stores={stores} onChange={setFilters} />
       <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
-        <DetailTable rows={filtered.cur} bare />
+        <DetailTable rows={filtered.cur} bare adStateMap={adStateMap} storeApplicablePlatforms={storeApplicablePlatforms} />
       </div>
     </div>
   );

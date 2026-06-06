@@ -13,6 +13,7 @@ import { buildDateRangeKey } from '@/lib/dateRange';
 import { roasCell } from '@/lib/format/roasCell';
 import { RoasBadge, roasCellTdClass } from '@/lib/format/RoasBadge';
 import { Heading } from '@/components/ui/Typography';
+import { isStoreFullyOff, type AdStateMap, type AdPlatform } from '@/lib/adState';
 
 const HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 
@@ -202,6 +203,8 @@ export function MonthlyTables({
   );
 
   const rows: DailyRow[] = data?.rows ?? [];
+  const adStateMap: AdStateMap = data?.adStateMap ?? {};
+  const storeApplicablePlatforms: Record<string, AdPlatform[]> = data?.storeApplicablePlatforms ?? {};
 
   const monthGroups = useMemo(() => {
     const grouped = new Map<string, DailyRow[]>();
@@ -310,9 +313,9 @@ export function MonthlyTables({
         if (effectiveMode === 'per-store') {
           const storeRows = monthRows.filter(r => r.storeName === effectiveStoreFilter);
           if (!storeRows.length) return null;
-          return <MonthBlockPerStore key={ym} ym={ym} storeName={effectiveStoreFilter} rows={storeRows} defaultOpen={defaultOpen} />;
+          return <MonthBlockPerStore key={ym} ym={ym} storeName={effectiveStoreFilter} rows={storeRows} defaultOpen={defaultOpen} adStateMap={adStateMap} storeApplicablePlatforms={storeApplicablePlatforms} />;
         }
-        return <MonthBlockSummary key={ym} ym={ym} rows={monthRows} stores={stores} defaultOpen={defaultOpen} />;
+        return <MonthBlockSummary key={ym} ym={ym} rows={monthRows} stores={stores} defaultOpen={defaultOpen} adStateMap={adStateMap} storeApplicablePlatforms={storeApplicablePlatforms} />;
       })}
     </div>
   );
@@ -379,12 +382,19 @@ export function MonthBlockPerStore({
   storeName,
   rows,
   defaultOpen = true,
+  adStateMap = {},
+  storeApplicablePlatforms = {},
 }: {
   ym: string;
   storeName: string;
   rows: DailyRow[];
   defaultOpen?: boolean;
+  adStateMap?: AdStateMap;
+  storeApplicablePlatforms?: Record<string, AdPlatform[]>;
 }) {
+  // Derive storeId from the first row (all rows in the block belong to the same store).
+  const storeId = rows[0]?.storeId ?? storeName;
+  const off = isStoreFullyOff(storeId, adStateMap, storeApplicablePlatforms[storeId] ?? []);
   const [open, setOpen] = useState(defaultOpen);
   // Per-platform column visibility — INDEPENDENT per platform: each column is
   // shown iff that platform spent > 0 this month (2026-06-01: previously
@@ -448,7 +458,7 @@ export function MonthBlockPerStore({
                 const r = byDate.get(d);
                 const isEmpty = !r;
                 const cell = r
-                  ? roasCell(r.roas, r.revenue, r.totalSpend)
+                  ? roasCell(r.roas, r.revenue, r.totalSpend, off)
                   : { className: '', text: '' };
                 return (
                   <tr key={d} className={cn('border-t border-glass-edge', isEmpty && 'text-ink-muted')}>
@@ -490,7 +500,7 @@ export function MonthBlockPerStore({
                   />
                 </td>
                 {(() => {
-                  const totalCell = roasCell(totalRoas, totalRev, totalSpend);
+                  const totalCell = roasCell(totalRoas, totalRev, totalSpend, off);
                   return (
                     <td className={cn('px-3 py-2 text-center tabular-nums', roasCellTdClass(totalCell.className))}>
                       <RoasBadge className={totalCell.className} text={totalCell.text} />
@@ -511,12 +521,24 @@ export function MonthBlockSummary({
   rows,
   stores,
   defaultOpen = true,
+  adStateMap = {},
+  storeApplicablePlatforms = {},
 }: {
   ym: string;
   rows: DailyRow[];
   stores: string[];
   defaultOpen?: boolean;
+  adStateMap?: AdStateMap;
+  storeApplicablePlatforms?: Record<string, AdPlatform[]>;
 }) {
+  // Business-level off flag: true ONLY when ALL stores that have applicable
+  // platforms are fully off. An empty storeApplicablePlatforms means no
+  // ad-state info → allOff stays false (backward-compatible).
+  const allOff =
+    Object.keys(storeApplicablePlatforms).length > 0 &&
+    Object.keys(storeApplicablePlatforms).every((sid) =>
+      isStoreFullyOff(sid, adStateMap, storeApplicablePlatforms[sid] ?? []),
+    );
   const [open, setOpen] = useState(defaultOpen);
   const allDays = daysOfMonth(ym);
 
@@ -559,7 +581,7 @@ export function MonthBlockSummary({
     }
   }
   const totalRoas = totalSpend > 0 ? totalRev / totalSpend : 0;
-  const totalCell = roasCell(totalRoas, totalRev, totalSpend);
+  const totalCell = roasCell(totalRoas, totalRev, totalSpend, allOff);
 
   return (
     <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
@@ -592,7 +614,7 @@ export function MonthBlockSummary({
                 const agg = byDate.get(d);
                 const roas = agg && agg.spend > 0 ? agg.revenue / agg.spend : 0;
                 const cell = agg
-                  ? roasCell(roas, agg.revenue, agg.spend)
+                  ? roasCell(roas, agg.revenue, agg.spend, allOff)
                   : { className: '', text: '' };
                 return (
                   <tr key={d} className={cn('border-t border-glass-edge', !agg && 'text-ink-muted')}>

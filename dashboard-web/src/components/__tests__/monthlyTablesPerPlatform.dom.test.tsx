@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, within } from '@testing-library/react';
 import type { DailyRow } from '@/lib/types';
+import type { AdStateMap, AdPlatform } from '@/lib/adState';
 import {
   MonthBlockSummary,
   MonthBlockPerStore,
@@ -84,6 +85,129 @@ describe('MonthBlockSummary — per-platform spend columns', () => {
       <MonthBlockSummary ym="2026-06" rows={rows} stores={['a']} defaultOpen />,
     );
     expect(headerTexts(container)).toContain('יצא סה"כ');
+  });
+});
+
+describe('MonthBlockPerStore — off-aware ROAS cells (ads-off Phase 2)', () => {
+  it('renders "אורגני" for a fully-off store day with spend=0 and revenue>0', () => {
+    const adStateMap: AdStateMap = { 'mystore:meta': false };
+    const storeApplicablePlatforms: Record<string, AdPlatform[]> = { mystore: ['meta'] };
+    const rows: DailyRow[] = [
+      makeRow({ date: '2026-06-01', storeId: 'mystore', storeName: 'mystore', fbSpend: 0, gaSpend: 0, ttSpend: 0, totalSpend: 0, revenue: 500, roas: 0 }),
+    ];
+    const { container } = render(
+      <MonthBlockPerStore
+        ym="2026-06"
+        storeName="mystore"
+        rows={rows}
+        defaultOpen
+        adStateMap={adStateMap}
+        storeApplicablePlatforms={storeApplicablePlatforms}
+      />,
+    );
+    expect(container.textContent).toContain('אורגני');
+  });
+
+  it('renders normal numeric ROAS for a historical day with spend>0 (no retroactive rewrite)', () => {
+    const adStateMap: AdStateMap = { 'mystore:meta': false };
+    const storeApplicablePlatforms: Record<string, AdPlatform[]> = { mystore: ['meta'] };
+    const rows: DailyRow[] = [
+      makeRow({ date: '2026-06-01', storeId: 'mystore', storeName: 'mystore', fbSpend: 100, gaSpend: 0, ttSpend: 0, totalSpend: 100, revenue: 300, roas: 3 }),
+    ];
+    const { container } = render(
+      <MonthBlockPerStore
+        ym="2026-06"
+        storeName="mystore"
+        rows={rows}
+        defaultOpen
+        adStateMap={adStateMap}
+        storeApplicablePlatforms={storeApplicablePlatforms}
+      />,
+    );
+    expect(container.textContent).not.toContain('אורגני');
+    // Normal numeric ROAS badge: 3.00
+    expect(container.textContent).toContain('3.00');
+  });
+
+  it('renders normal ROAS when adStateMap is empty (off=false, backward compat)', () => {
+    const rows: DailyRow[] = [
+      makeRow({ date: '2026-06-01', storeId: 'mystore', storeName: 'mystore', fbSpend: 0, gaSpend: 0, ttSpend: 0, totalSpend: 0, revenue: 400, roas: 0 }),
+    ];
+    const { container } = render(
+      <MonthBlockPerStore
+        ym="2026-06"
+        storeName="mystore"
+        rows={rows}
+        defaultOpen
+      />,
+    );
+    // No organic when off not set — blank cell (spend=0, revenue>0 but off=false → no organic)
+    expect(container.textContent).not.toContain('אורגני');
+  });
+});
+
+describe('MonthBlockSummary — off-aware ROAS cells (ads-off Phase 2)', () => {
+  it('renders "אורגני" in summary when ALL stores fully off + spend=0 + revenue>0', () => {
+    const adStateMap: AdStateMap = { 'store-a:meta': false, 'store-b:meta': false };
+    const storeApplicablePlatforms: Record<string, AdPlatform[]> = {
+      'store-a': ['meta'],
+      'store-b': ['meta'],
+    };
+    const rows: DailyRow[] = [
+      makeRow({ date: '2026-06-01', storeId: 'store-a', storeName: 'store-a', fbSpend: 0, totalSpend: 0, revenue: 200 }),
+      makeRow({ date: '2026-06-01', storeId: 'store-b', storeName: 'store-b', fbSpend: 0, totalSpend: 0, revenue: 300 }),
+    ];
+    const { container } = render(
+      <MonthBlockSummary
+        ym="2026-06"
+        rows={rows}
+        stores={['store-a', 'store-b']}
+        defaultOpen
+        adStateMap={adStateMap}
+        storeApplicablePlatforms={storeApplicablePlatforms}
+      />,
+    );
+    expect(container.textContent).toContain('אורגני');
+  });
+
+  it('does NOT render "אורגני" in summary when at least one store is on', () => {
+    const adStateMap: AdStateMap = { 'store-a:meta': false };
+    // store-b is on (no false entry)
+    const storeApplicablePlatforms: Record<string, AdPlatform[]> = {
+      'store-a': ['meta'],
+      'store-b': ['meta'],
+    };
+    const rows: DailyRow[] = [
+      makeRow({ date: '2026-06-01', storeId: 'store-a', storeName: 'store-a', fbSpend: 0, totalSpend: 0, revenue: 200 }),
+      makeRow({ date: '2026-06-01', storeId: 'store-b', storeName: 'store-b', fbSpend: 0, totalSpend: 0, revenue: 300 }),
+    ];
+    const { container } = render(
+      <MonthBlockSummary
+        ym="2026-06"
+        rows={rows}
+        stores={['store-a', 'store-b']}
+        defaultOpen
+        adStateMap={adStateMap}
+        storeApplicablePlatforms={storeApplicablePlatforms}
+      />,
+    );
+    expect(container.textContent).not.toContain('אורגני');
+  });
+
+  it('renders normal ROAS in summary when adStateMap is empty (backward compat)', () => {
+    const rows: DailyRow[] = [
+      makeRow({ date: '2026-06-01', storeId: 'store-a', storeName: 'store-a', fbSpend: 100, totalSpend: 100, revenue: 300, roas: 3 }),
+    ];
+    const { container } = render(
+      <MonthBlockSummary
+        ym="2026-06"
+        rows={rows}
+        stores={['store-a']}
+        defaultOpen
+      />,
+    );
+    expect(container.textContent).not.toContain('אורגני');
+    expect(container.textContent).toContain('3.00');
   });
 });
 

@@ -7,6 +7,7 @@ import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { RefundIndicator } from './RefundIndicator';
 import { roasCell } from '@/lib/format/roasCell';
 import { RoasBadge, roasCellTdClass } from '@/lib/format/RoasBadge';
+import { isStoreFullyOff, type AdStateMap, type AdPlatform } from '@/lib/adState';
 import { Sparkline } from './ui/Sparkline';
 import { TableBase } from './ui/TableBase';
 import { Heading } from './ui/Typography';
@@ -15,9 +16,11 @@ import { Heading } from './ui/Typography';
 type DetailProps = {
   rows: DailyRow[];
   bare?: boolean;
+  adStateMap?: AdStateMap;
+  storeApplicablePlatforms?: Record<string, AdPlatform[]>;
 };
 
-export function DetailTable({ rows, bare = false }: DetailProps) {
+export function DetailTable({ rows, bare = false, adStateMap = {}, storeApplicablePlatforms = {} }: DetailProps) {
   const sorted = [...rows].sort((a, b) => b.date.localeCompare(a.date));
   const display = sorted.slice(0, 100);
   const showCogs = display.some(r => r.hasCogs);
@@ -78,7 +81,8 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
           </thead>
           <tbody>
             {display.map((r, i) => {
-              const cell = roasCell(r.roas, r.revenue, r.totalSpend);
+              const off = isStoreFullyOff(r.storeId, adStateMap, storeApplicablePlatforms[r.storeId] ?? []);
+              const cell = roasCell(r.roas, r.revenue, r.totalSpend, off);
               return (
                 <tr key={i} className="border-t border-glass-edge hover:bg-glass-2/50">
                   <td className="px-3 py-2 tabular-nums">{formatDate(r.date)}</td>
