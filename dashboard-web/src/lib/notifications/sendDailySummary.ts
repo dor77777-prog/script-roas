@@ -13,7 +13,11 @@
 //     Inngest's per-step retry policy when called from a cron function).
 
 import { buildStoreSummary } from './summary';
-import { buildTemplateParameters } from './templateParams';
+import {
+  buildTemplateParameters,
+  buildTemplateParametersV2,
+  V2_TEMPLATE_NAME,
+} from './templateParams';
 import {
   loadActiveMetacloudConfig,
   sendWhatsAppTemplate,
@@ -82,7 +86,14 @@ export async function sendDailySummary(
   }
 
   const summary = await buildStoreSummary(dateStr);
-  const templateParams = buildTemplateParameters(summary, title);
+  // Pick the param builder by the CONFIGURED template name so the rollout is
+  // safe + reversible: v1 keeps running until the operator flips
+  // notification_config.template_name to the (Meta-approved) v2 — then the
+  // 21-param multi-line layout activates with zero code redeploy.
+  const templateParams =
+    cfg.templateName === V2_TEMPLATE_NAME
+      ? buildTemplateParametersV2(summary, title)
+      : buildTemplateParameters(summary, title);
 
   for (const to of recipients) {
     result.recipientsAttempted.push(to);
@@ -165,17 +176,17 @@ function fmtDateOnly(dateStr: string): string {
 
 /** Title for the 12:00 noon snapshot — TODAY so far. */
 export function titleNoon(dateStr: string): string {
-  return fmtTimeAndDate('12', dateStr);
+  return `${fmtTimeAndDate('12', dateStr)} · מתחילת היום`;
 }
 
 /** Title for the 18:00 evening snapshot — TODAY so far. */
 export function titleEvening(dateStr: string): string {
-  return fmtTimeAndDate('18', dateStr);
+  return `${fmtTimeAndDate('18', dateStr)} · מתחילת היום`;
 }
 
-/** Title for the 00:10 EOD summary — YESTERDAY full day (date only). */
+/** Title for the EOD summary — YESTERDAY full day (date only). */
 export function titleEod(dateStr: string): string {
-  return `סיכום יום מלא — ${fmtDateOnly(dateStr)}`;
+  return `${fmtDateOnly(dateStr)} · סיכום יום מלא`;
 }
 
 // ────────────────────────────────────────────────────────────────────────

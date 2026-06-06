@@ -384,6 +384,9 @@ The cohort adjustment (`applyCohortAdjustmentOnce`) is data-derived
 ### 8.4 Param constraints (Meta)
 **אסור** newlines / tabs / 5+ consecutive spaces בתוך פרמטר — Meta מדחה עם error 132018. Bullet separator הוא ` • ` (space-bullet-space) inline בלבד. ה-template עצמו (ב-Meta Manager) מחזיק את ה-blank lines בין הפרמטרים.
 
+### 8.5 V2 template — `roas_daily_summary_v2` (2026-06-06, multi-line)
+פורמט-הודעה חדש קריא יותר: כל מדד בשורה משלו, ROAS מודגש עם **סימון-מצב לפי band** (🟢≥3 / 🟠2–3 / 🔴<2 / ⚪ ללא מכירות), הכנסה והוצאה בשורות נפרדות עם תווית, ו-**TikTok כ-slot נפרד** (v1 הבליע ב"אחר"). השורות-החדשות חיות ב**גוף-התבנית** (מותר ב-Meta), והפרמטרים נושאים רק את הערכים — `buildTemplateParametersV2()` מחזיר **21 פרמטרים**: `{{1}}`=כותרת/תיאור, ואז 4 בלוקים × 5 (header, revenue, spend, cpm, ordersLine) לסה״כ + 3 חנויות. התוויות הקבועות (`💰 הכנסות:`, `💸 הוצאה:`, `· CPM`, `🛒`) בגוף → אף שני פרמטרים אינם צמודים (Meta-safe). אותו builder לכל 3 השליחות; רק `{{1}}` משתנה (`titleNoon`/`titleEvening` → "· מתחילת היום", `titleEod` → "· סיכום יום מלא"). **Rollout בטוח + הפיך:** `sendDailySummary` בוחר builder לפי `cfg.templateName` (`=== V2_TEMPLATE_NAME` → v2, אחרת v1). v1 ממשיך לרוץ עד שהמפעיל מגיש את v2 ל-Meta, ואז מעדכן `notification_config.template_name='roas_daily_summary_v2'` — v2 נכנס לתוקף בלי redeploy. גוף-התבנית המלא להגשה: `docs/superpowers/mockups/2026-06-06-whatsapp-report/`.
+
 ---
 
 ## 9. WhatsApp Cloud Pipeline (Phase 05.7.4)

@@ -38,6 +38,8 @@ vi.mock('../summary', () => ({
 
 vi.mock('../templateParams', () => ({
   buildTemplateParameters: () => ['p1', 'p2', 'p3', 'p4', 'p5'],
+  buildTemplateParametersV2: () => Array.from({ length: 21 }, (_, i) => `v2p${i + 1}`),
+  V2_TEMPLATE_NAME: 'roas_daily_summary_v2',
 }));
 
 beforeEach(() => {

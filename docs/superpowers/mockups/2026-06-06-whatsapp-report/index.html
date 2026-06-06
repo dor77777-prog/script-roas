@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>מוקאפ — הודעת WhatsApp ROAS יומי</title>
+<style>
+  :root { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background:#f0f2f5; color:#111; padding: 24px 16px 64px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 24px; color:#555; font-size: 13px; max-width: 760px; }
+  .grid { display:flex; flex-wrap:wrap; gap: 28px; align-items: flex-start; }
+  .col { flex: 1 1 360px; min-width: 320px; max-width: 440px; }
+  .col h2 { font-size: 13px; letter-spacing:.04em; text-transform:uppercase; color:#667; margin: 0 0 10px; }
+  /* WhatsApp chat surfaces */
+  .wa { border-radius: 14px; padding: 18px 12px; min-height: 80px;
+        background-repeat: repeat; }
+  .wa.light { background-color:#e4dcd4;
+    background-image: radial-gradient(rgba(0,0,0,.03) 1px, transparent 1px);
+    background-size: 18px 18px; }
+  .wa.dark  { background-color:#0b141a;
+    background-image: radial-gradient(rgba(255,255,255,.025) 1px, transparent 1px);
+    background-size: 18px 18px; }
+  /* incoming bubble */
+  .bubble { position: relative; max-width: 92%; margin: 0 0 10px auto;
+            border-radius: 10px 10px 10px 2px; padding: 8px 10px 22px;
+            font-size: 14.5px; line-height: 1.5; white-space: pre-wrap;
+            word-break: break-word; box-shadow: 0 1px .5px rgba(0,0,0,.13); }
+  .light .bubble { background:#fff; color:#111b21; }
+  .dark  .bubble { background:#202c33; color:#e9edef; }
+  .bubble b { font-weight: 700; }
+  .bubble i { opacity:.75; font-style: italic; }
+  .bubble code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+                 font-size: 12.5px; white-space: pre; display:block; }
+  .time { position:absolute; bottom:5px; left:10px; font-size:10.5px; opacity:.5; }
+  .dark .time { color:#8696a0; }
+  .tag { display:inline-block; font-size:11px; font-weight:700; padding:2px 8px;
+         border-radius:999px; margin-bottom:8px; }
+  .rec { background:#d8f5d0; color:#1a7f37; }
+  .old { background:#ffe0e0; color:#b42318; }
+  .note { font-size:12px; color:#667; margin:6px 2px 0; }
+  .legend { font-size:12px; color:#555; margin: 4px 0 20px; max-width:760px; }
+  .legend b{color:#111}
+</style>
+</head>
+<body>
+  <h1>מוקאפ — הודעת WhatsApp · דוח ROAS יומי</h1>
+  <p class="sub">נתונים אמיתיים מ-05/06/2026. כל גרסה מוצגת ב-light וב-dark (בדיוק כמו ב-WhatsApp), RTL, ברוחב נייד. ה-<b>*כוכביות*</b> מתרנדרות מודגש כמו ב-WhatsApp.</p>
+  <p class="legend">סימון מצב לפי ROAS (כמו בדשבורד): 🟢 ≥3 · 🟠 2–3 · 🔴 &lt;2 · ⚪ אין מכירות. בתבנית החדשה TikTok מקבל slot משלו (היום הוא מובלע ב"אחרים").</p>
+
+  <div id="root"></div>
+
+<script>
+const VARIANTS = [
+  {
+    id: 'current', tag: 'הפורמט הנוכחי (לשם השוואה)', cls: 'old',
+    note: 'שורה אחת ארוכה לכל חנות (אילוץ תבנית-Meta) → נשברת ומתבלגנת.',
+    text:
+`📊 דוח ROAS יומי
+
+תאריך ושעה: סיכום יום מלא — 05/06/2026
+
+🏪 360usmile: • הוצאה: C$92 • הכנסות: C$0 • ROAS: — • CPM: C$24.83 • הזמנות: 0  (פייסבוק: 0, גוגל: 0, אחרים: 0)
+
+🏪 uzoshop: • הוצאה: C$1,137 • הכנסות: C$2,310 • ROAS: 2.03 • CPM: C$15.26 • הזמנות: 19  (פייסבוק: 15, גוגל: 2, אחרים: 2)
+
+🏪 Zol Plus: • הוצאה: C$111 • הכנסות: C$253 • ROAS: 2.28 • CPM: C$45.03 • הזמנות: 3  (פייסבוק: 3, גוגל: 0, אחרים: 0)
+
+🎯 סה"כ: • הוצאה: C$1,341 • הכנסות: C$2,563 • ROAS: 1.91 • CPM: C$16.61 • הזמנות: 22  (פייסבוק: 18, גוגל: 2, אחרים: 2)
+
+לפרטים מלאים — פתח את הדשבורד.`
+  },
+  {
+    id: 'A-eod', tag: 'גרסה A סופית — הודעת סיכום-יום (00:30)', cls: 'rec',
+    note: 'הכנסה והוצאה כל אחת בשורה נפרדת עם תווית — ברור לגמרי. 4 שורות לבלוק, מבנה אחיד.',
+    text:
+`📊 *דוח ROAS יומי*
+05/06/2026 · סיכום יום מלא
+
+🔴 *סה״כ · ROAS 1.91*
+💰 הכנסות: C$2,563
+💸 הוצאה: C$1,341 · CPM C$16.61
+🛒 22 הזמנות · Meta 18 · Google 2 · אחר 2
+━━━━━━━━━━
+⚪ *360usmile · ללא מכירות*
+💰 הכנסות: C$0
+💸 הוצאה: C$92 · CPM C$24.83
+🛒 0 הזמנות
+
+🟠 *uzoshop · ROAS 2.03*
+💰 הכנסות: C$2,310
+💸 הוצאה: C$1,137 · CPM C$15.26
+🛒 19 הזמנות · Meta 15 · Google 2 · אחר 2
+
+🟠 *Zol Plus · ROAS 2.28*
+💰 הכנסות: C$253
+💸 הוצאה: C$111 · CPM C$45.03
+🛒 3 הזמנות · Meta 3
+
+_פתח דשבורד לפרטים מלאים_`
+  },
+  {
+    id: 'A-mid', tag: 'גרסה A סופית — הודעת אמצע-יום (12:00)', cls: 'rec',
+    note: 'אותו מבנה בדיוק; משתנה רק הכותרת ("מתחילת היום"). כאן עם נתוני 06/06 בצהריים — מדגים גם ירוק 🟢.',
+    text:
+`📊 *דוח ROAS יומי*
+12:00, 06/06/2026 · מתחילת היום
+
+🟢 *סה״כ · ROAS 3.15*
+💰 הכנסות: C$1,414
+💸 הוצאה: C$449 · CPM C$22.11
+🛒 14 הזמנות · Meta 9 · Google 1 · אחר 4
+━━━━━━━━━━
+⚪ *360usmile · ללא מכירות*
+💰 הכנסות: C$0
+💸 הוצאה: C$32 · CPM C$32.11
+🛒 0 הזמנות
+
+🟢 *uzoshop · ROAS 3.45*
+💰 הכנסות: C$1,352
+💸 הוצאה: C$392 · CPM C$21.00
+🛒 13 הזמנות · Meta 8 · Google 1 · אחר 4
+
+🟠 *Zol Plus · ROAS 2.46*
+💰 הכנסות: C$62
+💸 הוצאה: C$25 · CPM C$38.97
+🛒 הזמנה 1 · Meta 1
+
+_פתח דשבורד לפרטים מלאים_`
+  },
+];
+
+function esc(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function renderWA(text){
+  // escape, then apply WhatsApp markdown: ```block```, *bold*, _italic_
+  let parts = esc(text).split(/```/);
+  let out = '';
+  for(let i=0;i<parts.length;i++){
+    if(i%2===1){ out += '<code>'+parts[i].replace(/^\n|\n$/g,'')+'</code>'; }
+    else {
+      out += parts[i]
+        .replace(/\*([^*\n]+)\*/g,'<b>$1</b>')
+        .replace(/_([^_\n]+)_/g,'<i>$1</i>');
+    }
+  }
+  return out;
+}
+const root = document.getElementById('root');
+const grid = document.createElement('div'); grid.className='grid'; root.appendChild(grid);
+for(const v of VARIANTS){
+  const col = document.createElement('div'); col.className='col';
+  col.innerHTML =
+    '<span class="tag '+v.cls+'">'+v.tag+'</span>' +
+    ['light','dark'].map(mode =>
+      '<h2>'+(mode==='light'?'בהיר':'כהה')+'</h2>'+
+      '<div class="wa '+mode+'"><div class="bubble" dir="rtl">'+renderWA(v.text)+
+      '<span class="time">12:00</span></div></div>'
+    ).join('') +
+    '<div class="note">'+v.note+'</div>';
+  grid.appendChild(col);
+}
+</script>
+</body>
+</html>

@@ -115,6 +115,144 @@ function totalsBlock(t: DaySummary['totals']): string {
   );
 }
 
+// ────────────────────────────────────────────────────────────────────────
+// V2 template (`roas_daily_summary_v2`) — multi-line, scannable layout.
+//
+// Meta forbids new-lines INSIDE a parameter value (error 132018), but the
+// approved template BODY may contain them. So v2's body holds the static
+// scaffold (header, the 💰/💸/🛒 labels, the separator, the footer, and all
+// the line breaks) while these 21 params fill ONLY the dynamic values — each a
+// single line. Body placeholder map (see the Meta-submission doc):
+//   {{1}}                = subtitle (date/time · descriptor)
+//   {{2..6}}             = totals block: header, revenue, spend, cpm, ordersLine
+//   {{7..11}} / {{12..16}} / {{17..21}} = the 3 stores, same 5-field shape.
+// The body around the value params is e.g. `💰 הכנסות: {{3}}` and
+// `💸 הוצאה: {{4}} · CPM {{5}}`, so no two params are ever adjacent.
+// ────────────────────────────────────────────────────────────────────────
+
+export const V2_TEMPLATE_NAME = 'roas_daily_summary_v2';
+
+/** ROAS health band → status dot, mirroring the dashboard bands
+ *  (<2 red, 2–3 orange, 3+ green; ⚪ when the store had no sales). */
+function bandEmoji(roas: number, hasSales: boolean): string {
+  if (!hasSales || !Number.isFinite(roas) || roas <= 0) return '⚪';
+  if (roas >= 3) return '🟢';
+  if (roas >= 2) return '🟠';
+  return '🔴';
+}
+
+/** Per-source order breakdown, omitting zero buckets. TikTok gets its OWN
+ *  slot in v2 (v1 folded it into "אחר"). Empty string when no orders. */
+function sourcesStr(fb: number, google: number, tiktok: number, other: number): string {
+  const parts: string[] = [];
+  if (fb > 0) parts.push(`Meta ${fb}`);
+  if (google > 0) parts.push(`Google ${google}`);
+  if (tiktok > 0) parts.push(`TikTok ${tiktok}`);
+  if (other > 0) parts.push(`אחר ${other}`);
+  return parts.join(' · ');
+}
+
+/** "🛒"-line value: count (singular הזמנה / plural הזמנות) + source breakdown. */
+function ordersLine(orders: number, sources: string): string {
+  const word = orders === 1 ? 'הזמנה' : 'הזמנות';
+  return sources ? `${orders} ${word} · ${sources}` : `${orders} ${word}`;
+}
+
+/** The 5 value-params for one block (totals or a store): header line,
+ *  revenue, spend, cpm, orders-line. */
+function blockParamsV2(opts: {
+  label: string;
+  roas: number;
+  revenue: number;
+  spend: number;
+  cpm: number;
+  orders: number;
+  fb: number;
+  google: number;
+  tiktok: number;
+  other: number;
+}): string[] {
+  const hasSales = opts.orders > 0 || opts.revenue > 0;
+  const emoji = bandEmoji(opts.roas, hasSales);
+  const header = hasSales
+    ? `${emoji} *${opts.label} · ROAS ${formatRoas(opts.roas)}*`
+    : `⚪ *${opts.label} · ללא מכירות*`;
+  return [
+    header,
+    formatCad(opts.revenue),
+    formatCad(opts.spend),
+    formatCpm(opts.cpm),
+    ordersLine(opts.orders, sourcesStr(opts.fb, opts.google, opts.tiktok, opts.other)),
+  ];
+}
+
+/**
+ * Build the 21-element parameter array for the `roas_daily_summary_v2`
+ * template. Same store ordering + missing-store padding contract as v1
+ * (sorted by storeName; missing slots padded so Meta always gets exactly
+ * 21 non-empty params). Used for ALL three daily sends — only {{1}} (the
+ * title/descriptor) differs between noon / evening / EOD.
+ */
+export function buildTemplateParametersV2(
+  summary: DaySummary | null,
+  title: string,
+): string[] {
+  const params: string[] = [title];
+
+  if (summary && summary.totals) {
+    const t = summary.totals;
+    params.push(
+      ...blockParamsV2({
+        label: 'סה״כ',
+        roas: t.roas,
+        revenue: t.revenue,
+        spend: t.spend,
+        cpm: t.cpm,
+        orders: t.orders,
+        fb: t.facebook,
+        google: t.google,
+        tiktok: t.tiktok,
+        other: t.other,
+      }),
+    );
+  } else {
+    params.push('⚪ *סה״כ · אין נתונים*', 'C$0', 'C$0', '—', '0 הזמנות');
+  }
+
+  const storeIds =
+    summary && summary.stores
+      ? Object.keys(summary.stores).sort((a, b) =>
+          (summary.stores[a]?.storeName ?? a).localeCompare(
+            summary.stores[b]?.storeName ?? b,
+          ),
+        )
+      : [];
+  for (let i = 0; i < 3; i++) {
+    const sid = storeIds[i];
+    if (sid && summary) {
+      const s = summary.stores[sid];
+      params.push(
+        ...blockParamsV2({
+          label: s.storeName,
+          roas: s.roas,
+          revenue: s.revenue,
+          spend: s.totalSpend,
+          cpm: s.cpm,
+          orders: s.orders,
+          fb: s.facebook,
+          google: s.google,
+          tiktok: s.tiktok,
+          other: s.other,
+        }),
+      );
+    } else {
+      // Always-3-stores in practice; pad so Meta gets 21 non-empty params.
+      params.push('—', '—', '—', '—', '—');
+    }
+  }
+  return params;
+}
+
 /**
  * Build the 5-element parameter array for the approved Meta template.
  *
