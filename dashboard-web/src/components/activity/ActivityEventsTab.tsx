@@ -31,6 +31,7 @@ import { Heading } from '@/components/ui/Typography';
 import { Money } from '@/components/ui/Money';
 import { Button } from '@/components/ui/Button';
 import { NativeSelect } from '@/components/ui/NativeSelect';
+import { SourceBadge } from '@/components/ui/SourceBadge';
 import { cn } from '@/lib/utils';
 import { STORE_ID_TO_NAME, type StoreId } from '@/lib/platformsByStore';
 import { storeColor } from '@/lib/storeColors';
@@ -203,6 +204,7 @@ function EventRow({ ev }: { ev: StoreEventRow }) {
         <span className="w-[7px] h-[7px] rounded-full" style={{ background: storeColor(display) }} aria-hidden />
         <bdi dir="ltr">{display}</bdi>
       </span>
+      {ev.type !== 'refund' && <SourceBadge source={ev.source} className="shrink-0" />}
 
       <span className="text-[11px] text-ink-subtle tabular-nums whitespace-nowrap shrink-0">
         <bdi dir="ltr">{ilTime(ev.received_at)}</bdi>

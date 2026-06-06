@@ -210,6 +210,32 @@ describe('<ActivityEventsTab> — pagination', () => {
   });
 });
 
+describe('<ActivityEventsTab> — source badge smoke tests', () => {
+  it('shows a source-badge for a sale row with source "meta-paid"', () => {
+    swrReturn = {
+      data: resp({
+        total: 1,
+        events: [ev({ id: 'sb1', type: 'sale', source: 'meta-paid', received_at: NOW })],
+      }),
+      error: undefined,
+    };
+    const { container } = render(<ActivityEventsTab data={DATA} globalStore="All" />);
+    expect(container.querySelector('[data-testid="source-badge"]')).toBeInTheDocument();
+  });
+
+  it('shows no source-badge for a refund row', () => {
+    swrReturn = {
+      data: resp({
+        total: 1,
+        events: [ev({ id: 'rb1', type: 'refund', source: 'meta-paid', received_at: NOW })],
+      }),
+      error: undefined,
+    };
+    const { container } = render(<ActivityEventsTab data={DATA} globalStore="All" />);
+    expect(container.querySelector('[data-testid="source-badge"]')).toBeNull();
+  });
+});
+
 describe('<ActivityEventsTab> — empty + loading states', () => {
   it('shows the empty state when no events match', () => {
     swrReturn = { data: resp({ total: 0, events: [] }), error: undefined };

@@ -39,6 +39,7 @@ import { Card } from '@/components/ui/Card';
 import { Heading } from '@/components/ui/Typography';
 import { Money } from '@/components/ui/Money';
 import { Button } from '@/components/ui/Button';
+import { SourceBadge } from '@/components/ui/SourceBadge';
 import { cn } from '@/lib/utils';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 import { STORE_ID_TO_NAME, type StoreId } from '@/lib/platformsByStore';
@@ -297,6 +298,7 @@ function EventRow({
             />
             <bdi dir="ltr">{display}</bdi>
           </span>
+          {ev.type !== 'refund' && <SourceBadge source={ev.source} />}
         </div>
       </div>
 
