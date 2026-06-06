@@ -3156,6 +3156,10 @@ data-pipeline change.
   z-30 app header). Year/month selectors in `AnalysisArchiveTab.tsx` narrowed to w-28/w-40 on one row.
 - No data-pipeline change; `store_events` is the single source for both the live feed and the tab.
 
+### Phase 4 — per-event ad-platform source badge (2026-06-06)
+- **store_events.source** (TEXT, nullable; migration `20260606140000`): per-event ad-platform source (meta-paid/google-paid/tiktok-paid/direct/…), null for refunds. Sales classify server-side in `normalizeShopifyEvent` via the shared `classifyOrderSource` (`src/lib/attribution/classifyOrderSource.ts`, extracted from `shopify.ts` so the orders pipeline + the webhook + the cart beacon all use ONE classifier → the feed badge matches the canonical attribution). Add-to-cart classifies from a first-touch `landing_site` the storefront snippet sends to `/api/events/cart`. Read directly into `StoreEventRow` (no view).
+- **SourceBadge** (`src/components/ui/SourceBadge.tsx`): maps a `source` to the canonical `PlatformBadge` (Meta/Google/TikTok) or a neutral "ישיר" chip; shown on non-refund rows in both feed surfaces. Storefront snippets (operator-deployed): `docs/storefront-snippets/first-touch-attribution.md`.
+
 
 ## 31. Tooltip system (2026-06-03)
 
