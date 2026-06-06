@@ -44,6 +44,7 @@ import type { CatalogProduct } from './productCatalog';
 import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
 import { categorizePaymentGateway, type PaymentCategory } from './payments';
 import type { OverrideRowAsRead } from '@/lib/home/overridesActive';
+import type { AdStateMap } from '@/lib/adState';
 
 /**
  * Generic row type. Without a generated `Database` schema, supabase-js's
@@ -540,6 +541,28 @@ export async function fetchStoreMetaFromPostgres(): Promise<StoreMetaRow[]> {
     });
   }
   return rows;
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// fetchAdStateFromPostgres — store_ad_state → AdStateMap (ads-off Phase 1)
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Loads `store_ad_state` into an AdStateMap (`${storeId}:${platform}` → enabled).
+ * Missing rows are simply absent ⇒ the consumer treats them as ON (see
+ * isAdsEnabled). Paginated with a deterministic ORDER BY the PK (per the
+ * deterministic-pagination rule).
+ */
+export async function fetchAdStateFromPostgres(): Promise<AdStateMap> {
+  const data = await paginate<DbRow>(
+    () => getSupabase().from('store_ad_state').select('store_id, platform, enabled'),
+    ['store_id', 'platform'],
+  );
+  const map: AdStateMap = {};
+  for (const r of data) {
+    map[`${String(r.store_id)}:${String(r.platform)}`] = r.enabled !== false;
+  }
+  return map;
 }
 
 // ────────────────────────────────────────────────────────────────────────
