@@ -380,7 +380,8 @@ export function Dashboard() {
     return () => window.removeEventListener('roas-salary-changed', bump);
   }, []);
 
-  // Silent COORDINATED auto-refresh (2026-06-03): every 60s AND on focus,
+  // Silent COORDINATED auto-refresh (2026-06-03; cadence widened to 120s on
+  // 2026-06-06 to cut Vercel function/observability cost): every 120s AND on focus,
   // revalidate EVERY SWR key in the app IN ONE BATCH. This is the single
   // driver of periodic refresh — the per-hook `refreshInterval`s on the
   // current-period Home sources (/api/data, /api/orders-attribution) are set
@@ -407,7 +408,7 @@ export function Dashboard() {
   // (Coverage: autoRefreshKeepsView.dom.test.tsx.)
   useAutoRefresh(
     () => { void swrMutate(() => true); },
-    { intervalMs: 60_000 },
+    { intervalMs: 120_000 },
   );
 
   // Mirror state into the URL so refresh / bookmark / share survive. Uses
