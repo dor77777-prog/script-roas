@@ -38,8 +38,11 @@ export async function getStores(opts?: { includeArchived?: boolean }): Promise<S
         status: (r.status === 'archived' ? 'archived' : 'active') as StoreStatus,
         displayOrder: Number(r.display_order ?? 999),
       })).sort((a, b) => a.displayOrder - b.displayOrder || a.storeId.localeCompare(b.storeId));
-      const filtered = opts?.includeArchived ? rows : rows.filter((s) => s.status === 'active');
-      if (filtered.length) return filtered;
+      // The DB returned rows → it is authoritative. Return the filtered set even
+      // if it is empty (e.g. an all-archived business) — do NOT resurrect the
+      // hardcoded fallback, which would wrongly show removed stores. The fallback
+      // below fires ONLY when the DB read failed (catch) or returned no rows.
+      return opts?.includeArchived ? rows : rows.filter((s) => s.status === 'active');
     }
   } catch (e) {
     console.warn('getStores: DB read failed, using hardcoded fallback:', e instanceof Error ? e.message : e);

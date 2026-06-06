@@ -22,6 +22,13 @@ describe('getStores — DB then hardcoded fallback', () => {
     expect((await getStores()).map(x => x.storeId)).toEqual(['a', 'b']);
     expect((await getStores({ includeArchived: true })).map(x => x.storeId)).toEqual(['a', 'b', 'z']);
   });
+  it('DB with only archived rows → returns [] (authoritative, NOT the hardcoded fallback)', async () => {
+    db.data = [
+      { id: 'a', name: 'A', brand_color: null, is_headless: false, has_tiktok: false, status: 'archived', display_order: 1 },
+    ];
+    expect(await getStores()).toEqual([]); // must NOT resurrect the hardcoded 3
+    expect((await getStores({ includeArchived: true })).map(x => x.storeId)).toEqual(['a']);
+  });
   it('loadActiveStoreIds returns just the ids (fallback path)', async () => {
     db.error = { message: 'down' };
     expect(await loadActiveStoreIds()).toEqual(['uzoshop', 'zolplus', 'usmile360']);
