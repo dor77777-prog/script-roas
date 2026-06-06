@@ -8,23 +8,35 @@ import { operatorFetch } from '@/lib/operatorClient';
 import type { StoreMetaRow } from '@/lib/postgresReaders';
 import { TIKTOK_SHARED_STORES, type AdPlatform, type AdStateMap } from '@/lib/adState';
 
+// Hoisted: the shared-TikTok-account membership never changes at runtime, so
+// build the Set once rather than per render.
+const TIKTOK_STORES = new Set<string>(TIKTOK_SHARED_STORES);
+
 export function AdStateTab() {
   const [map, setMap] = useState<AdStateMap>({});
   const [meta, setMeta] = useState<StoreMetaRow[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const tiktokStores = new Set<string>(TIKTOK_SHARED_STORES);
 
-  const load = useCallback(async () => {
+  // Reconcile against the server. Returns true on success. Surfaces a read
+  // error but never throws (callers may ignore the result).
+  const load = useCallback(async (): Promise<boolean> => {
     try {
-      const [a, m] = await Promise.all([
-        operatorFetch('/api/operator/ad-state').then((r) => r.json()),
-        fetch('/api/store-meta').then((r) => r.json()),
+      const [aRes, mRes] = await Promise.all([
+        operatorFetch('/api/operator/ad-state'),
+        fetch('/api/store-meta'),
       ]);
+      // The operator GET is gated — a 401/404/500 must surface, not silently
+      // collapse to an empty (all-ON) grid.
+      if (!aRes.ok) throw new Error(`ad-state HTTP ${aRes.status}`);
+      const a = await aRes.json();
+      const m = await mRes.json();
       setMap((a?.map ?? {}) as AdStateMap);
       setMeta((m?.rows ?? []) as StoreMetaRow[]);
       setError(null);
+      return true;
     } catch {
       setError('טעינת מצב הפרסום נכשלה. ודא שה-Operator secret מוגדר.');
+      return false;
     }
   }, []);
 
@@ -33,6 +45,7 @@ export function AdStateTab() {
   const onToggle = useCallback(
     async (storeId: string, platform: AdPlatform, enabled: boolean) => {
       setMap((prev) => ({ ...prev, [`${storeId}:${platform}`]: enabled })); // optimistic
+      let saveFailed = false;
       try {
         const res = await operatorFetch('/api/operator/ad-state', {
           method: 'POST',
@@ -41,9 +54,13 @@ export function AdStateTab() {
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
       } catch {
-        setError('שמירת השינוי נכשלה.');
+        saveFailed = true;
       }
-      void load(); // reconcile against the server (reverts optimistic on failure)
+      // Reconcile FIRST (reverts the optimistic value if the write didn't
+      // persist), THEN show the save error — so the reconcile's setError(null)
+      // on success can't wipe the failure message.
+      await load();
+      if (saveFailed) setError('שמירת השינוי נכשלה.');
     },
     [load],
   );
@@ -51,7 +68,7 @@ export function AdStateTab() {
   return (
     <div className="space-y-3">
       {error && <p className="text-status-redFg text-sm">{error}</p>}
-      <AdStatePanel storeMeta={meta} map={map} tiktokStores={tiktokStores} onToggle={onToggle} />
+      <AdStatePanel storeMeta={meta} map={map} tiktokStores={TIKTOK_STORES} onToggle={onToggle} />
     </div>
   );
 }
