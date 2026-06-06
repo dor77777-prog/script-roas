@@ -311,3 +311,62 @@ off-state display) · ARCHITECTURE note (store_ad_state + adState helpers + fetc
 **Default (empty `store_ad_state` table) ⇒ all-ON ⇒ pipeline unchanged.** `isAdsEnabled` and `tiktokAccountFetchEnabled` both default to `true` for any missing key — an empty table is byte-identical to today's behavior.
 
 **Deferred: `off_gated` freshness status.** A distinct `off_gated` freshness status (separate from `success`) would allow the Health tab to show a differentiated "gated/off" indicator. This was deferred because it requires a DB enum extension + UI rendering branch; the current `success`-on-skip approach is correct and operationally safe. Can be added in a future phase if operator monitoring needs the distinction.
+
+---
+
+## Phase 4 — locked alert/insight/WhatsApp semantics (2026-06-06)
+
+### Suppression rule
+
+Two guard functions determine whether an (insight / alert / report section) is suppressed:
+
+- **`isAdsEnabled(map, storeId, platform)`** — per-(store, platform). Returns `true` (on, emit normally) when the `AdStateMap` key is absent or `enabled=TRUE`. Returns `false` (off, suppress) for a specific platform of a specific store.
+- **`isStoreFullyOff(storeId, map, applicablePlatforms)`** — per-store. Returns `true` only when **every applicable platform** for that store is toggled off. A partially-off store (e.g. Meta on, Google off) is NOT fully off and is not wholesale-suppressed.
+- **`isInsightSuppressedByAdState(insight, adStateMap, storeApplicablePlatforms)`** — post-filter applied in `buildAllInsights` after all detectors run. Uses `isAdsEnabled` per-platform and `isStoreFullyOff` per-store to drop any insight whose (store, platform) pair is off.
+
+### In-app insights + action list
+
+`buildAllInsights` applies `isInsightSuppressedByAdState` as a final post-filter over the full insight list. Individual detectors also carry inline guards:
+
+- **`campaignDied`** — skips campaigns whose (store, platform) is off.
+- **`adFatigue` (creative-fatigue CTR + CPM legs, early-warning)** — skips (store, platform) that is off.
+- **Anomaly / scale / pause / zero / rebalance / underperformance recommendations** — excluded by the post-filter.
+
+`InsightsBoard` is threaded `data.adStateMap` and `data.storeApplicablePlatforms` (from `/api/data`; degrade to empty = all-ON). The "פעולות דחופות כרגע" action list above the board inherits the same filtered list — no separate gate needed.
+
+### Health score
+
+In `buildHealthByKey`: a campaign whose (store, platform) is off AND whose `spend === 0` renders the existing **"insufficient/unknown" (⏳) state** instead of a misleading letter grade. The `spend===0` guard is critical: a row that recorded real spend before the flag was toggled keeps its real grade (historical data is never retroactively rewritten).
+
+### AI report
+
+All ad-performance sections of the AI report filter out off (store, platform) pairs:
+
+- Top campaigns table, CPM table, momentum analysis, health score summary, drainers, ad drill-down, TikTok deep-dive, pixel↔Shopify coverage — each section checks `isAdsEnabled` and skips the (store, platform).
+- For a fully-off store (`isStoreFullyOff` = true) the entire ad commentary block is skipped.
+- Revenue / product / cohort sections are **not filtered** — organic revenue always flows through.
+- **Off + spend > 0 (historical):** if a store had real spend in the query window while the flag was already set off, those rows are rendered normally in the AI report (the `spend===0` guard in the health-score + display layer ensures no retroactive rewrite; the AI report respects the same invariant).
+
+### WhatsApp daily report (v1 live + v2 pending)
+
+`buildStoreSummary` and the v2 parameter builder apply off-state framing:
+
+- **Fully-off store + revenue > 0** → store line reads "⏻ *{store} · אורגני*" (green dot, revenue shown, spend line "פרסום כבוי"). No ROAS fraction shown (spend = 0 = meaningless denominator).
+- **Fully-off store + revenue = 0** → existing "ללא מכירות" path (neutral, no ROAS).
+- **Off store + spend > 0 in window (historical)** → rendered with its real ROAS normally. The toggle records current intent; it does not rewrite past spend that was legitimately incurred before the flag was set.
+- **Totals / summary line:** off-store ad spend is **excluded** from the business-wide spend total (it is 0 by the off-state invariant); off-store organic revenue IS included (it is real revenue). MER = total revenue ÷ on-stores spend only.
+
+### Deliberate NON-changes
+
+- **Token-failure alerts** (`meta-token-failure`, etc.): these are infrastructure alerts, not ad-performance alerts. A dead token must surface even when the platform is off (the operator still needs to know the credential is broken, e.g. to re-enable the platform later). The reactive dead-token alerts are already moot while the platform is off (Phase-3 fetch-gate prevents the failing call), but the cron-daily credential check is left intact.
+- **`cronLiveHeavy`**: this function is decommissioned (empty array, not registered in `serve()`). No suppression logic needed; it is a dead code path.
+- **Freshness/status-pill/activity-feed**: these are system-health surfaces, not ad-performance surfaces. They remain off-aware only to the extent Phase 3 already made them (freshness records `success` on skip); no additional suppression is applied in Phase 4.
+
+### Feature status: COMPLETE
+
+The ads-off feature is **complete** across all four phases:
+
+1. **Phase 1 — Control:** `store_ad_state` table + `adState.ts` helpers + `/operator` matrix UI + `POST /api/operator/ad-state`.
+2. **Phase 2 — Display:** `adDisplayState` classifier + ROAS band wiring (comparative table, monthly tables, hero band, Campaigns/Ads tables).
+3. **Phase 3 — Fetch-gate:** per-store Meta/Google worker gate + TikTok account-level gate + `runDailyForStoreInner` daily-fetch gate.
+4. **Phase 4 — Alerts/insights/WhatsApp suppression:** `isInsightSuppressedByAdState` post-filter + per-detector guards + AI-report section filtering + WhatsApp "אורגני"/neutral framing.
