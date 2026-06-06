@@ -392,3 +392,129 @@ describe('aiReport — adStateMap: default (no params) keeps all campaigns', () 
     expect(withEmptyMap).toMatch(/Campaign ZZZ/);
   });
 });
+
+// ── Test 4: Fully-off store WITH historical spend + impressions ───────────────
+// Pins the two defects found in Phase 4 review:
+//   DEFECT 1 (P1): TikTok deep-dive section leaks when ttSpend>0 but TikTok is OFF.
+//   DEFECT 2 (P2): Per-platform CPM section renders header+column-headers (zero
+//                  data rows) when historical impressions>0 but all platforms are OFF.
+
+describe('aiReport — adStateMap: fully-off store WITH historical spend+impressions', () => {
+  // All 3 platforms are OFF for uzoshop
+  const adStateMap: AdStateMap = {
+    'uzoshop:meta': false,
+    'uzoshop:google': false,
+    'uzoshop:tiktok': false,
+  };
+  const storeApplicablePlatforms: Record<string, AdPlatform[]> = {
+    uzoshop: ['meta', 'google', 'tiktok'],
+  };
+
+  // daily rows carry real historical spend + impressions
+  const historicalDaily = makeDaily({
+    fbSpend: 500,
+    gaSpend: 300,
+    ttSpend: 400,
+    totalSpend: 1200,
+    revenue: 5000,
+    roas: 4.17,
+    fbImpressions: 50000,
+    gaImpressions: 30000,
+    ttImpressions: 20000,
+  });
+
+  // campaign rows carry real impressions (so totalImpressions > 0 from raw loop)
+  const historicalCampaigns = [
+    makeCampaign({
+      platform: 'Meta',
+      campaignId: 'camp-fb-hist',
+      campaignName: 'Meta Historical',
+      spend: 500,
+      impressions: 50000,
+      clicks: 1500,
+      conversions: 40,
+      conversionValue: 2000,
+    }),
+    makeCampaign({
+      platform: 'Google',
+      campaignId: 'camp-ga-hist',
+      campaignName: 'Google Historical',
+      spend: 300,
+      impressions: 30000,
+      clicks: 900,
+      conversions: 25,
+      conversionValue: 1200,
+    }),
+    makeCampaign({
+      platform: 'TikTok',
+      campaignId: 'camp-tt-hist',
+      campaignName: 'TikTok Historical',
+      spend: 400,
+      impressions: 20000,
+      clicks: 600,
+      conversions: 15,
+      conversionValue: 800,
+    }),
+  ];
+
+  it('DEFECT 1 (P1): TikTok deep-dive header is ABSENT when TikTok is off (even with historical ttSpend)', () => {
+    const md = generateAiReport({
+      storeName: 'uzoshop',
+      storeId: 'uzoshop',
+      range: RANGE,
+      dailyRows: [historicalDaily],
+      productRows: [makeProduct()],
+      campaignRows: historicalCampaigns,
+      ordersRows: [],
+      adsRows: [],
+      adStateMap,
+      storeApplicablePlatforms,
+    });
+
+    // The TikTok deep-dive section header must NOT appear.
+    // Use anchored markdown-header form to avoid matching prose in the AI prompt.
+    expect(md).not.toMatch(/^## TikTok — צלילה/m);
+    // Also ensure the section content markers are absent
+    expect(md).not.toMatch(/^## TikTok\b/m);
+  });
+
+  it('DEFECT 2 (P2): per-platform CPM section header is ABSENT when all platforms are off (even with historical impressions)', () => {
+    const md = generateAiReport({
+      storeName: 'uzoshop',
+      storeId: 'uzoshop',
+      range: RANGE,
+      dailyRows: [historicalDaily],
+      productRows: [makeProduct()],
+      campaignRows: historicalCampaigns,
+      ordersRows: [],
+      adsRows: [],
+      adStateMap,
+      storeApplicablePlatforms,
+    });
+
+    // The per-platform CPM section header must NOT appear
+    expect(md).not.toMatch(/CPM ו-CTR לפי ערוץ/);
+    // Neither should the column-header row for that table
+    expect(md).not.toMatch(/CPM.*CTR.*הוצאה/);
+  });
+
+  it('SANITY: revenue and product sections still present even when all platforms are off', () => {
+    const md = generateAiReport({
+      storeName: 'uzoshop',
+      storeId: 'uzoshop',
+      range: RANGE,
+      dailyRows: [historicalDaily],
+      productRows: [makeProduct({ productTitle: 'Sanity Widget', revenue: 5000 })],
+      campaignRows: historicalCampaigns,
+      ordersRows: [],
+      adsRows: [],
+      adStateMap,
+      storeApplicablePlatforms,
+    });
+
+    // Revenue summary section must still appear
+    expect(md).toMatch(/תקציר ביצועים/);
+    // Product name must still appear
+    expect(md).toMatch(/Sanity Widget/);
+  });
+});

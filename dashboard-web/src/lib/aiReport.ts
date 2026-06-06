@@ -337,7 +337,10 @@ export function generateAiReport({
   // ===== Per-platform CPM/efficiency breakdown =====
   // Ads-off Phase 4: exclude off (store, platform) campaigns from aggregation.
   const campaignsOnForCpm = campaigns.filter(c => !isCampaignOff(c));
-  if (totalImpressions > 0) {
+  // Gate on FILTERED impressions so a fully-off store with historical impressions
+  // doesn't render a header + column-headers with zero data rows (review defect 2).
+  const filteredTotalImpressions = campaignsOnForCpm.reduce((s, c) => s + c.impressions, 0);
+  if (filteredTotalImpressions > 0) {
     let fbImps = 0, fbClicks = 0;
     let gImps = 0, gClicks = 0;
     let ttImps = 0, ttClicks = 0;
@@ -1529,7 +1532,11 @@ export function generateAiReport({
   // conversions; complete_payment is the canonical purchase event).
   // Worth its own section so the operator + AI can reason about it on
   // its own terms rather than blending with Meta/Google.
-  if (ttSpend > 0) {
+  // Gate on both raw spend AND filtered TikTok presence so a fully-off store
+  // with historical TikTok spend doesn't render the deep-dive (review defect 1).
+  // campaignsList is already derived from campaignsOn (filtered set).
+  const tiktokOn = campaignsList.some(c => c.platform === 'TikTok');
+  if (ttSpend > 0 && tiktokOn) {
     const ttCampaigns = campaignsList.filter(c => c.platform === 'TikTok');
     const ttOrders = orders.filter(o => o.source === 'tiktok-paid');
     const ttOrderRevenue = ttOrders.reduce((s, o) => s + o.totalCad, 0);
