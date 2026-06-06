@@ -10,15 +10,33 @@ These snippets are **operator-deployed to storefronts only** — they do not liv
 
 > ⚠️ **Shopify Custom Pixels run in a sandboxed iframe** — the native `localStorage`, `window`, and `document` are NOT accessible there. Touching `localStorage` **throws and silently kills the whole handler** (no beacon fires → no events). So do NOT use `localStorage` here. Instead we read the entry UTM/click-id straight from the **pixel event's own context URL** (`event.context.document.location`) at add-to-cart time — no storage needed. `fetch` IS available in the sandbox; `keepalive: true` + `.catch(()=>{})` keep it fire-and-forget so it **never blocks add-to-cart**.
 
-This captures the UTM when the shopper adds to cart on the same URL they landed on (the dominant *ad → product page → add* flow). True cross-page first-touch (land on page A with a UTM, then add to cart on page B) would require Shopify's **async `browser.localStorage`** Standard API; it's intentionally omitted here to keep the pixel robust and synchronous.
+We capture **first-touch**: on `page_viewed` we persist the entry UTM/click-id via Shopify's **async `browser.localStorage`** Standard API (the only storage that works in the sandbox; it survives navigation). On `product_added_to_cart` we prefer the current URL's UTM and fall back to the persisted first-touch — this is required because some themes redirect to `/cart` on add (non-AJAX), so the add-to-cart event's URL no longer carries the UTM (observed: uzoshop = AJAX, keeps the UTM in-URL → works on current-URL alone; Zol Plus = redirect → needs the first-touch fallback).
 
-Replace `<STORE_CART_TOKEN>` with each store's `cart_public_token` (uzoshop and Zol Plus each have their own).
+Set `CART_TOKEN` at the top to each store's `cart_public_token` (uzoshop and Zol Plus each have their own) — and **use the `CART_TOKEN` const in the body** (a common mistake is leaving the literal `"<STORE_CART_TOKEN>"` placeholder in `store_token`, which makes every event drop).
 
 ```js
-analytics.subscribe("product_added_to_cart", (event) => {
+const CART_TOKEN = "<STORE_CART_TOKEN>";
+
+// First-touch capture — persist the entry UTM/click-id (survives navigation to /cart).
+analytics.subscribe("page_viewed", async (event) => {
   try {
     var loc = (event.context && event.context.document && event.context.document.location) || {};
-    var landing = loc.search || loc.href || "/";   // entry UTM/click-id from the current URL
+    var search = loc.search || "";
+    if (/(utm_|fbclid|gclid|ttclid)/i.test(search)) {
+      var existing = await browser.localStorage.getItem("_ft_attr");
+      if (!existing) await browser.localStorage.setItem("_ft_attr", search);
+    }
+  } catch (e) {}
+});
+
+analytics.subscribe("product_added_to_cart", async (event) => {
+  try {
+    var loc = (event.context && event.context.document && event.context.document.location) || {};
+    var landing = loc.search || "";
+    if (!/(utm_|fbclid|gclid|ttclid)/i.test(landing)) {
+      try { var ft = await browser.localStorage.getItem("_ft_attr"); if (ft) landing = ft; } catch (_) {}
+    }
+    if (!landing) landing = "/";
     var d = event.data || {};
     var line = d.cartLine || {};
     var title =
@@ -31,7 +49,7 @@ analytics.subscribe("product_added_to_cart", (event) => {
       keepalive: true,
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        store_token: "<STORE_CART_TOKEN>",
+        store_token: CART_TOKEN,
         event_id: event.id || String(event.timestamp || Date.now()),
         product_title: title,
         quantity: qty,

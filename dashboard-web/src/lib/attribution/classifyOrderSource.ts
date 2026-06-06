@@ -69,6 +69,51 @@ export function fbcIsFreshClick(
   return age >= 0 && age <= FBC_CLICK_WINDOW_MS;
 }
 
+/**
+ * Detect the ad platform from a (messy, real-world) `utm_source` value.
+ *
+ * Real ad utm_source values are far messier than clean platform names:
+ * `Facebook_Mobile_Feed`, `Instagram_Stories`, `meta`, `ig`, `an` (Meta
+ * Audience Network), `goog`, Hebrew `פייסבוק`, etc. The original strict
+ * exact-match (`^(facebook|fb|meta|instagram|ig)$`) demoted ALL of these to
+ * `other-paid` — which the activity feed renders as a neutral "ישיר" chip and
+ * which under-attributed real paid traffic everywhere the canonical source is
+ * consumed (NC-ROAS, cohorts, reconciliation, product-channel, unknown bucket).
+ *
+ * "Balanced" ruleset (calibrated from production `orders_attribution`, 2026-06):
+ * a substring of a full brand name (incl. Hebrew) OR a known platform
+ * token/abbreviation. Separable tokens (fb/ig/meta/goog/...) allow a
+ * `_`/`-`/`.`/space suffix (e.g. `fb_retargeting`, `ig-story`); fuzzy/short
+ * abbreviations (fa/face/faceb/an/msg/messenger) match ONLY standalone so they
+ * can't false-positive ("fashion" ↛ meta, "an-influencer" ↛ Audience Network).
+ *
+ * Returns 'meta' | 'google' | 'tiktok', or null when the source is not a
+ * recognizable ad platform (caller keeps email / other-paid / referral / direct).
+ */
+export function detectAdPlatform(
+  rawUtmSource: string | null | undefined,
+): 'meta' | 'google' | 'tiktok' | null {
+  const s = String(rawUtmSource ?? '').trim().toLowerCase();
+  if (!s) return null;
+
+  // Meta — full brand names as substrings (Facebook_Mobile_Feed, Instagram_Stories, Hebrew).
+  if (/facebook|instagram|פייסבוק|אינסטגרם/.test(s)) return 'meta';
+  // Meta — separable tokens (fb, ig, meta + optional _/-/./space suffix).
+  if (/^(fb|ig|meta)([_\-. ].*)?$/.test(s)) return 'meta';
+  // Meta — standalone-only abbreviations & networks (typo-abbrevs, audience network, messenger).
+  if (/^(fa|face|faceb|an|msg|messenger)$/.test(s)) return 'meta';
+
+  // Google — full names as substrings, then separable tokens.
+  if (/google|youtube|גוגל|יוטיוב/.test(s)) return 'google';
+  if (/^(goog|gads|gdn)([_\-. ].*)?$/.test(s)) return 'google';
+
+  // TikTok — full names as substrings, then separable tokens.
+  if (/tiktok|bytedance|טיקטוק/.test(s)) return 'tiktok';
+  if (/^(tt)([_\-. ].*)?$/.test(s)) return 'tiktok';
+
+  return null;
+}
+
 export function classifyOrderAttribution(order: ShopifyOrderPayload): {
   source: string;
   utmSource: string;
@@ -150,20 +195,22 @@ export function classifyOrderAttribution(order: ShopifyOrderPayload): {
     !!firstUtmIdRaw || !!firstUtmTermRaw || !!firstSeenAtRaw;
 
   // TRIMMED chain over ONLY ft_* keys — NO source_name, NO referring_site.
+  // Uses the SAME broadened platform detection as the last-touch chain so a
+  // messy first-click utm_source (Instagram_Feed, meta, ...) is recognized too.
+  const firstUtmPlatform = detectAdPlatform(firstUtmSourceRaw);
   let firstTouchSource: string | null = null;
   if (hasFirstSignal) {
     if (firstFbclid) firstTouchSource = 'meta-paid';
     else if (firstGclid) firstTouchSource = 'google-paid';
     else if (firstTtclid) firstTouchSource = 'tiktok-paid';
-    else if (/cpc|paid|paidsocial|social/i.test(firstUtmMediumRaw)) {
-      if (/^(facebook|fb|meta|instagram|ig)$/i.test(firstUtmSourceRaw)) firstTouchSource = 'meta-paid';
-      else if (/^(google|youtube)$/i.test(firstUtmSourceRaw)) firstTouchSource = 'google-paid';
-      else if (/^tiktok$/i.test(firstUtmSourceRaw)) firstTouchSource = 'tiktok-paid';
-      else firstTouchSource = 'other-paid';
-    } else if (/^(email|newsletter|klaviyo|mailchimp)$/i.test(firstUtmSourceRaw)) {
+    else if (firstUtmPlatform === 'meta') firstTouchSource = 'meta-paid';
+    else if (firstUtmPlatform === 'google') firstTouchSource = 'google-paid';
+    else if (firstUtmPlatform === 'tiktok') firstTouchSource = 'tiktok-paid';
+    else if (/^(email|newsletter|klaviyo|mailchimp)$/i.test(firstUtmSourceRaw)) {
       firstTouchSource = 'email';
-    } else if (/^tiktok$/i.test(firstUtmSourceRaw)) {
-      firstTouchSource = 'tiktok-paid';
+    } else if (/cpc|paid|paidsocial|social/i.test(firstUtmMediumRaw)) {
+      // Paid medium but utm_source isn't a recognizable platform → paid, unknown.
+      firstTouchSource = 'other-paid';
     } else if (firstUtmSourceRaw) {
       firstTouchSource = 'other-paid';
     } else {
@@ -202,6 +249,13 @@ export function classifyOrderAttribution(order: ShopifyOrderPayload): {
   //      JavaScript SDK tags the landing URL. Trumps UTM tags because the
   //      click-ID is canonical (platform-signed) whereas UTMs can be hand-
   //      typed / spoofed.
+  // Broadened platform detection from a (messy) utm_source — see detectAdPlatform.
+  // This subsumes the old strict `^(facebook|fb|meta|instagram|ig)$` checks AND
+  // the dedicated `utm_source=tiktok` fallback: a platform-named source maps to
+  // that platform regardless of utm_medium (matches historical behavior where
+  // `facebook` with no/odd medium was still meta-paid).
+  const utmPlatform = detectAdPlatform(utmSource);
+
   let source: string;
   if (sourceName === 'fb' || sourceName === 'facebook') {
     source = 'meta-paid';
@@ -215,22 +269,20 @@ export function classifyOrderAttribution(order: ShopifyOrderPayload): {
     source = 'google-paid';
   } else if (ttclid) {
     source = 'tiktok-paid';
-  } else if (/cpc|paid|paidsocial|social/i.test(utmMedium)) {
-    if (/^(facebook|fb|meta|instagram|ig)$/i.test(utmSource)) source = 'meta-paid';
-    else if (/^(google|youtube)$/i.test(utmSource)) source = 'google-paid';
-    else if (/^tiktok$/i.test(utmSource)) source = 'tiktok-paid';
-    else source = 'other-paid';
+  } else if (utmPlatform === 'meta') {
+    source = 'meta-paid';
+  } else if (utmPlatform === 'google') {
+    source = 'google-paid';
+  } else if (utmPlatform === 'tiktok') {
+    source = 'tiktok-paid';
   } else if (/^(email|newsletter|klaviyo|mailchimp)$/i.test(utmSource)) {
     source = 'email';
-  } else if (/^tiktok$/i.test(utmSource)) {
-    // Tagged as TikTok but utm_medium isn't cpc/paid (e.g. organic share
-    // from a TikTok creator). Still a TikTok-paid attribution under our
-    // model because the click came from a paid placement — TikTok organic
-    // doesn't generate utm_source=tiktok tagging in practice; only paid
-    // creative does.
-    source = 'tiktok-paid';
+  } else if (/cpc|paid|paidsocial|social/i.test(utmMedium)) {
+    // Paid medium but utm_source is not a recognizable platform (influencer /
+    // partner / etc.) — still paid, unknown platform.
+    source = 'other-paid';
   } else if (utmSource) {
-    // Tagged but unrecognised (influencer / partner / etc.)
+    // Tagged but unrecognised (influencer / partner / share link / etc.)
     source = 'other-paid';
   } else if (/(facebook|fb|instagram|ig)\.com/.test(ref)) {
     source = 'meta-organic';
