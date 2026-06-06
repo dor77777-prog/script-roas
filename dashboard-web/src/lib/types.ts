@@ -1,4 +1,5 @@
 import type { CompareBaseline } from './presets';
+import type { AdStateMap, AdPlatform } from '@/lib/adState';
 
 export type DailyRow = {
   date: string;        // YYYY-MM-DD
@@ -76,6 +77,13 @@ export type DashboardData = {
    */
   dataLastWriteAt: string | null;
   fxIlsToCad: number | null; // current FX rate (ECB via Frankfurter). null on failure.
+  /** ads-off Phase 2 — per (store,platform) toggle map (missing key = ON) +
+   *  the applicable platforms per store (derived from store meta + the TikTok
+   *  shared-account set), so display surfaces can compute "store fully off".
+   *  Optional + default-empty so all existing consumers are unaffected (empty
+   *  ⇒ everything ON ⇒ today's behavior). */
+  adStateMap?: AdStateMap;
+  storeApplicablePlatforms?: Record<string, AdPlatform[]>;
   /** Present only on the degraded-error path (rows: []). Consumers should
    *  surface this through the standard error banner. /api/data uses the
    *  200-with-empty-rows pattern uniformly with /api/ads etc. (WR-06) */

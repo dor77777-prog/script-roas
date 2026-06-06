@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server';
 import {
   fetchDailyDataFromPostgres,
   fetchDataDailyLastWriteAt,
+  fetchAdStateFromPostgres,
+  fetchStoreMetaFromPostgres,
 } from '@/lib/postgresReaders';
 import type { DashboardData } from '@/lib/types';
+import { applicablePlatforms, TIKTOK_SHARED_STORES } from '@/lib/adState';
+import type { AdPlatform } from '@/lib/adState';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
@@ -50,7 +54,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const [rows, fxIlsToCad, dataLastWriteAt] = await Promise.all([
+    const [rows, fxIlsToCad, dataLastWriteAt, adStateMap, storeMeta] = await Promise.all([
       fetchDailyDataFromPostgres({ range }),
       fetchTodayFx(),
       // A7-F1 (2026-05-27): the freshness chip ("synced N min ago") must
@@ -60,7 +64,12 @@ export async function GET(req: Request) {
       // cron was writing today's rows every ~10 min. The data fetch above
       // stays range-scoped; only the freshness signal goes global.
       fetchDataDailyLastWriteAt(),
+      fetchAdStateFromPostgres().catch(() => ({})),
+      fetchStoreMetaFromPostgres().catch(() => []),
     ]);
+    const tiktokStores = new Set<string>(TIKTOK_SHARED_STORES);
+    const storeApplicablePlatforms: Record<string, AdPlatform[]> = {};
+    for (const s of storeMeta) storeApplicablePlatforms[s.storeId] = applicablePlatforms(s, tiktokStores);
     if (rows.length > 50000) {
       console.warn(`/api/data: large response (${rows.length} rows) — consider pagination`);
     }
@@ -71,6 +80,8 @@ export async function GET(req: Request) {
       lastUpdated: new Date().toISOString(),
       dataLastWriteAt,
       fxIlsToCad,
+      adStateMap,
+      storeApplicablePlatforms,
     };
     return NextResponse.json(data, {
       headers: {
@@ -102,6 +113,8 @@ export async function GET(req: Request) {
         lastUpdated: new Date().toISOString(),
         dataLastWriteAt: null,
         fxIlsToCad: null,
+        adStateMap: {},
+        storeApplicablePlatforms: {},
         error: userFacingError(message),
       } satisfies DashboardData,
       { status: 200, headers: { 'Cache-Control': 'no-store' } },
