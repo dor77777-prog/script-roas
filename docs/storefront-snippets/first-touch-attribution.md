@@ -8,41 +8,42 @@ These snippets are **operator-deployed to storefronts only** — they do not liv
 
 **Where to paste:** Shopify Admin → Settings → Customer events → Add custom pixel.
 
-This pixel runs in a sandboxed worker (off-main-thread). The `fetch` call uses `keepalive: true` + `.catch(()=>{})` so it is fire-and-forget and **never blocks add-to-cart**.
+> ⚠️ **Shopify Custom Pixels run in a sandboxed iframe** — the native `localStorage`, `window`, and `document` are NOT accessible there. Touching `localStorage` **throws and silently kills the whole handler** (no beacon fires → no events). So do NOT use `localStorage` here. Instead we read the entry UTM/click-id straight from the **pixel event's own context URL** (`event.context.document.location`) at add-to-cart time — no storage needed. `fetch` IS available in the sandbox; `keepalive: true` + `.catch(()=>{})` keep it fire-and-forget so it **never blocks add-to-cart**.
 
-Replace `<STORE_CART_TOKEN>` with each store's `cart_public_token` value from the `store_webhooks` table row for that store (uzoshop and Zol Plus each have their own token).
+This captures the UTM when the shopper adds to cart on the same URL they landed on (the dominant *ad → product page → add* flow). True cross-page first-touch (land on page A with a UTM, then add to cart on page B) would require Shopify's **async `browser.localStorage`** Standard API; it's intentionally omitted here to keep the pixel robust and synchronous.
+
+Replace `<STORE_CART_TOKEN>` with each store's `cart_public_token` (uzoshop and Zol Plus each have their own).
 
 ```js
-analytics.subscribe("page_viewed", (e) => {
+analytics.subscribe("product_added_to_cart", (event) => {
   try {
-    const url = new URL(e.context.document.location.href);
-    const keep = ["utm_source","utm_medium","utm_campaign","utm_content","utm_id","utm_term","fbclid","gclid","ttclid"];
-    const got = keep.filter(k => url.searchParams.get(k));
-    if (got.length && !localStorage.getItem("_ft_attr")) {
-      const qs = got.map(k => k + "=" + encodeURIComponent(url.searchParams.get(k))).join("&");
-      localStorage.setItem("_ft_attr", "?" + qs); // FIRST-touch only (guard above)
-    }
-  } catch (_) {}
-});
-
-analytics.subscribe("product_added_to_cart", (e) => {
-  try {
-    const title = e.data?.cartLine?.merchandise?.product?.title
-      || e.data?.productVariant?.product?.title || null;
-    const qty = e.data?.cartLine?.quantity || 1;
+    var loc = (event.context && event.context.document && event.context.document.location) || {};
+    var landing = loc.search || loc.href || "/";   // entry UTM/click-id from the current URL
+    var d = event.data || {};
+    var line = d.cartLine || {};
+    var title =
+      (line.merchandise && line.merchandise.product && line.merchandise.product.title) ||
+      (d.productVariant && d.productVariant.product && d.productVariant.product.title) ||
+      null;
+    var qty = line.quantity || 1;
     fetch("https://roas-dashboard-smoky.vercel.app/api/events/cart", {
-      method: "POST", keepalive: true, headers: { "content-type": "application/json" },
+      method: "POST",
+      keepalive: true,
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         store_token: "<STORE_CART_TOKEN>",
-        event_id: (e.id || (Date.now() + "-" + Math.random())),
-        product_title: title, quantity: qty,
-        occurred_at: new Date().toISOString(),
-        landing_site: localStorage.getItem("_ft_attr") || "/",
-      }),
-    }).catch(() => {});
-  } catch (_) {}
+        event_id: event.id || String(event.timestamp || Date.now()),
+        product_title: title,
+        quantity: qty,
+        occurred_at: event.timestamp || new Date().toISOString(),
+        landing_site: landing
+      })
+    }).catch(function () {});
+  } catch (e) {}
 });
 ```
+
+> **If you already pasted the earlier `localStorage` version into uzoshop / Zol Plus, REPLACE it with the snippet above** — the old one throws in the sandbox and stops all cart events from those stores.
 
 ---
 
@@ -112,4 +113,4 @@ Adapt the surrounding code to your edge function's actual runtime and SDK (the e
 - **Organic / direct landings** (no UTM or click-id in the URL) produce `landing_site: "/"` → the event is classified as **ישיר** (direct). This is expected and correct.
 - **Google first-click** attribution is weaker than Meta and TikTok because `gclid` is only present on paid clicks that land directly; Google-organic and cross-domain flows will fall through to "direct".
 - The capture is **best-effort and display-only** — it shows which ad platform likely drove the session; it is not a precise attribution model and should not be used for billing or budget decisions.
-- The `_ft_attr` key in `localStorage` is written once (first touch only, guarded by the `!localStorage.getItem` check) and is never overwritten by later page views in the same browser session.
+- **usmile360 only:** the `_ft_attr` `localStorage` key (Section 2, real browser context — not the Shopify sandbox) is written once (first-touch, guarded) and never overwritten in the session. The Shopify Custom Pixel (Section 1) does NOT use `localStorage` — it reads the UTM from the add-to-cart event's context URL instead.
