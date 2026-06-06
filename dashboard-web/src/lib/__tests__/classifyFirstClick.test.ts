@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyOrderAttribution } from '@/lib/fetchers/shopify';
+import { classifyOrderAttribution } from '@/lib/attribution/classifyOrderSource';
 
 /**
  * First-click (Phase 4) extension of classifyOrderAttribution. The classifier

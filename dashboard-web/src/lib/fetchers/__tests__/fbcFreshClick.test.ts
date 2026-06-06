@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fbcIsFreshClick, classifyOrderAttribution } from '@/lib/fetchers/shopify';
+import { fbcIsFreshClick, classifyOrderAttribution } from '@/lib/attribution/classifyOrderSource';
 
 // Meta `_fbc` cookie = `fb.<subdomainIndex>.<creationTimeMs>.<fbclid>` (official
 // spec). creationTime is the click time; Meta's DEFAULT attribution is 7-day
