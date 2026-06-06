@@ -108,7 +108,7 @@ describe('POST /api/events/cart', () => {
     expect(arg.occurred_at).toBe('2026-06-01T10:00:00Z');
   });
 
-  it('raw contains no PII — only product_title, quantity, event_id', async () => {
+  it('raw contains no PII — display-safe fields + PII-free diag probe', async () => {
     await POST(
       makeReq({
         body: { store_token: TOKEN, product_title: 'Blue Widget', quantity: 2, event_id: 'evt-pii' },
@@ -116,7 +116,14 @@ describe('POST /api/events/cart', () => {
       }),
     );
     const arg = insertSpy.mock.calls[0][0];
-    expect(arg.raw).toEqual({ product_title: 'Blue Widget', quantity: 2, event_id: 'evt-pii' });
+    // No landing_site sent → diag is all-empty (PII-free: marketing labels +
+    // length only; TEMP diagnostic, see route.ts). No raw landing/referrer/PII.
+    expect(arg.raw).toEqual({
+      product_title: 'Blue Widget',
+      quantity: 2,
+      event_id: 'evt-pii',
+      diag: { utmSource: null, utmMedium: null, fbclid: false, gclid: false, landingLen: 0 },
+    });
   });
 
   it('missing event_id → 204 ack+drop, no insert, CORS present', async () => {

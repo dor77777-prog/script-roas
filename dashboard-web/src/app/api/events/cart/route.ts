@@ -43,7 +43,7 @@
 
 import { NextResponse } from 'next/server';
 import { lookupStoreByCartToken, insertStoreEvent } from '@/lib/webhooks/store';
-import { classifyOrderSource } from '@/lib/attribution/classifyOrderSource';
+import { classifyOrderAttribution } from '@/lib/attribution/classifyOrderSource';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -160,12 +160,28 @@ export async function POST(req: Request): Promise<NextResponse> {
   // sends. landing_site is NOT stored in raw (keep raw PII-free as-is).
   // Defensive wrapper: a future change to the classifier must never 500 the
   // storefront — any throw falls back to 'direct'.
+  const landingStr = typeof body.landing_site === 'string' ? body.landing_site : '';
+  const referrerStr = typeof body.referring_site === 'string' ? body.referring_site : '';
   let source = 'direct';
+  // TEMP DIAGNOSTIC (2026-06-06 — REMOVE after the "why are ATC 'direct'"
+  // investigation). PII-FREE: utm_source/utm_medium are marketing labels
+  // (length-capped), fbclid/gclid are presence booleans, landingLen is a
+  // number. Lets us see, for 'direct' ATC, whether the beacon carried NO tag
+  // (genuinely direct) vs an unmapped utm_source (extend the classifier).
+  let diag: Record<string, unknown> = { landingLen: landingStr.length };
   try {
-    source = classifyOrderSource({
-      landing_site: typeof body.landing_site === 'string' ? body.landing_site : null,
-      referring_site: typeof body.referring_site === 'string' ? body.referring_site : null,
+    const attr = classifyOrderAttribution({
+      landing_site: landingStr || undefined,
+      referring_site: referrerStr || undefined,
     });
+    source = attr.source;
+    diag = {
+      utmSource: (attr.utmSource || '').slice(0, 64) || null,
+      utmMedium: (attr.utmMedium || '').slice(0, 64) || null,
+      fbclid: attr.fbclidPresent,
+      gclid: attr.gclidPresent,
+      landingLen: landingStr.length,
+    };
   } catch {
     // never let attribution classification block the storefront's add-to-cart
     source = 'direct';
@@ -183,8 +199,8 @@ export async function POST(req: Request): Promise<NextResponse> {
       source,
       occurred_at: safeIso(body.occurred_at),
       dedupe_key: `cart:${eventId}`,
-      // raw carries NO PII — only the (already display-safe) fields we surface.
-      raw: { product_title: productTitle, quantity, event_id: eventId },
+      // raw carries NO PII — display-safe fields + the PII-free `diag` probe above.
+      raw: { product_title: productTitle, quantity, event_id: eventId, diag },
     });
   } catch (err) {
     console.error('[events/cart] ingest failed (acking 204 to not block storefront):', err);
