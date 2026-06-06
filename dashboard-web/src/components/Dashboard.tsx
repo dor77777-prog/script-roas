@@ -1313,6 +1313,9 @@ function HomeTab({
       // Phase 3 — per-store NC-ROAS / nCAC. toStoreDetail filters these by
       // storeName internally; MER spend = the store's mapping-aware cur.spend.
       firstOrderRows,
+      // Ads-off Phase 2 — thread adOff from the per-store row so the modal
+      // header band + ROAS hero mirrors the card it opened from.
+      adOff: fromRow?.adOff,
     });
   }, [
     modalStoreId,

@@ -50,6 +50,7 @@ import { PlatformBadge } from '@/components/ui/PlatformBadge';
 import { RoasChart } from '@/components/RoasChart';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import { useRoasBandGradient, type RoasBand } from '@/lib/format/useRoasBandGradient';
+import { adDisplayState, adDisplayBand } from '@/lib/adState';
 import { roasLabel } from '@/lib/analytics';
 import { ROAS_TONE_BG, ROAS_BADGE_SHAPE } from '@/lib/format/roasCell';
 import { cn, formatNumber } from '@/lib/utils';
@@ -131,13 +132,24 @@ export function StoreDetailModal({
   // Esc closes the modal (topmost-drawer aware). Registered while `open`.
   useDrawerEsc(open && data != null, onClose);
 
-  // Band for the header slab. Mirrors PerStoreRow's derivation: the alarm-red
-  // "spent money, zero sales" flag wins over a null ROAS.
-  const band = useRoasBandGradient(
+  // Ads-off Phase 2 — off-display classifier. Mirrors PerStoreRow's logic so
+  // the modal header band + ROAS hero matches the card it opened from.
+  const offState = adDisplayState({
+    revenue: data?.kpis.revenue ?? null,
+    spend: data?.kpis.spend ?? null,
+    off: data?.adOff ?? false,
+  });
+  const offBandId = adDisplayBand(offState); // null when 'normal'
+
+  // Band for the header slab. Always call unconditionally (rules-of-hooks).
+  // Off-band override wins when set; otherwise mirrors PerStoreRow's derivation:
+  // the alarm-red "spent money, zero sales" flag wins over a null ROAS.
+  const roasBand = useRoasBandGradient(
     data?.roas ?? null,
     false,
     data?.zeroSalesWithSpend ?? false,
   ).band;
+  const band = offBandId ?? roasBand;
 
   // Phase 3 — band for the per-store NC-ROAS tile (its OWN "different question"
   // band; never the header ROAS gradient). Hoisted above the early return so
@@ -221,7 +233,13 @@ export function StoreDetailModal({
             </Heading>
             <div className="flex items-center gap-2 shrink-0">
               <FreshnessBadge updatedAt={data.updatedAt} />
-              <span className="band-tag">{BAND_TAG_LABEL[band]}</span>
+              <span className="band-tag">
+                {offState === 'organic'
+                  ? 'אורגני'
+                  : offState !== 'normal'
+                  ? 'כבוי'
+                  : BAND_TAG_LABEL[band]}
+              </span>
               {/* Close ✕ — Button primitive carrying the band's dark-scrim
                   white recipe (`.store-delta-chip`) so it stays AA-legible on
                   the vivid band in both themes. */}
@@ -245,11 +263,13 @@ export function StoreDetailModal({
                 dir="ltr"
                 className="v banded block text-[44px] md:text-[54px] font-light tabular-nums tracking-tight leading-none whitespace-nowrap"
               >
-                {data.zeroSalesWithSpend ? (
-                  '0.00x'
-                ) : (
-                  <CountUp value={data.roas} format={(n) => `${n.toFixed(2)}x`} />
-                )}
+                {offState === 'organic'
+                  ? 'אורגני'
+                  : offState !== 'normal'
+                  ? '0'
+                  : data.zeroSalesWithSpend
+                  ? '0.00x'
+                  : <CountUp value={data.roas} format={(n) => `${n.toFixed(2)}x`} />}
               </bdi>
               <span className="roas-cap mt-1 block font-mono text-[11px] uppercase tracking-[0.08em]">
                 ROAS · {rangeLabel}

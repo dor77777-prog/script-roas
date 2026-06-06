@@ -68,6 +68,10 @@ export interface StoreDetailData {
   roas: number | null;
   /** spend > 0 && revenue === 0 — drives the header's alarm-red band. */
   zeroSalesWithSpend: boolean;
+  /** Ads-off Phase 2 — true when ALL of this store's applicable platforms are
+   *  toggled off. Mirrors PerStoreData.adOff so the modal header band + ROAS
+   *  hero matches the per-store card it opened from. Undefined/false ⇒ normal. */
+  adOff?: boolean;
   /** ISO timestamp of the dataset's freshest write (page-global). */
   updatedAt: string | null;
   kpis: {
@@ -126,6 +130,10 @@ export interface ToStoreDetailArgs {
    *  → OrderAttributionRow). Scoped per-store inside toStoreDetail. Optional for
    *  back-compat; defaults to [] (zeroed newCustomer block) when omitted. */
   firstOrderRows?: FirstOrderInput[];
+  /** Ads-off Phase 2 — true when ALL of this store's applicable platforms are
+   *  toggled off. Passed through verbatim to StoreDetailData so the modal header
+   *  band + ROAS hero mirrors the per-store card. Optional for back-compat. */
+  adOff?: boolean;
 }
 
 /** operatingProfit = revenue − ad spend − COGS (mirrors toHeroPeriod). */
@@ -159,7 +167,7 @@ interface CampaignAccum {
 }
 
 export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
-  const { storeId, storeName, cur, prev, series, campaignRows, range, orders, prevOrders, updatedAt, firstOrderRows = [] } = args;
+  const { storeId, storeName, cur, prev, series, campaignRows, range, orders, prevOrders, updatedAt, firstOrderRows = [], adOff } = args;
 
   const zeroSalesWithSpend = (cur.spend ?? 0) > 0 && cur.revenue === 0;
   const roas = cur.roas > 0 ? cur.roas : null;
@@ -285,6 +293,7 @@ export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
     storeName,
     roas,
     zeroSalesWithSpend,
+    adOff,
     updatedAt,
     kpis,
     deltas,

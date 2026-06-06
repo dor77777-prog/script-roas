@@ -271,4 +271,105 @@ describe('PerStoreRow', () => {
     expect(badges[1].getAttribute('data-stage')).toBe('aging');
     expect(badges[2].getAttribute('data-stage')).toBe('stale');
   });
+
+  // ── Ads-off Phase 2 display tests ──────────────────────────────────────────
+
+  // Case A: adOff=true, spend=0, revenue>0 → blue band + "אורגני" hero.
+  it('adOff + revenue>0 + spend=0 → blue band + "אורגני" hero (organic)', () => {
+    const organicStore: PerStoreData = {
+      storeId: 'organic-store',
+      storeName: 'organic-store',
+      spend: 0,
+      revenue: 250,
+      orders: 5,
+      aov: 50,
+      roas: null,
+      updatedAt: null,
+      perPlatformCpm: {},
+      adOff: true,
+    };
+    const { container } = render(<PerStoreRow stores={[organicStore]} />);
+    const card = container.querySelector('[data-testid="per-store-card"]');
+    expect(card?.getAttribute('data-band')).toBe('blue');
+    const hero = card?.querySelector('.v.banded');
+    expect(hero?.textContent).toContain('אורגני');
+    expect(hero?.textContent).not.toMatch(/\d+\.\d+x/);
+  });
+
+  // Case B: adOff=true, spend=0, revenue=0 → gray band + "0" hero.
+  it('adOff + revenue=0 + spend=0 → gray band + "0" hero (off-empty)', () => {
+    const offEmptyStore: PerStoreData = {
+      storeId: 'off-empty-store',
+      storeName: 'off-empty-store',
+      spend: 0,
+      revenue: 0,
+      orders: 0,
+      aov: null,
+      roas: null,
+      updatedAt: null,
+      perPlatformCpm: {},
+      adOff: true,
+    };
+    const { container } = render(<PerStoreRow stores={[offEmptyStore]} />);
+    const card = container.querySelector('[data-testid="per-store-card"]');
+    expect(card?.getAttribute('data-band')).toBe('gray');
+    const hero = card?.querySelector('.v.banded');
+    expect(hero?.textContent).toContain('0');
+    expect(hero?.textContent).not.toContain('אורגני');
+  });
+
+  // Case C: adOff=true, spend>0 → historical (normal), NOT off-display.
+  // spend=30, revenue=90, roas=3 → green band (2.7-3.0 boundary); hero shows "3.00x".
+  it('adOff=true but spend>0 (historical) → normal band from roas, numeric hero', () => {
+    const historicalStore: PerStoreData = {
+      storeId: 'historical-store',
+      storeName: 'historical-store',
+      spend: 30,
+      revenue: 90,
+      orders: 3,
+      aov: 30,
+      roas: 3.0,
+      updatedAt: null,
+      perPlatformCpm: {},
+      adOff: true,
+    };
+    const { container } = render(<PerStoreRow stores={[historicalStore]} />);
+    const card = container.querySelector('[data-testid="per-store-card"]');
+    // roas=3.0 → green band per useRoasBandGradient (≥3.0 → blue at the boundary;
+    // check the band is NOT overridden to organic/gray — it must be green or blue,
+    // definitely not "gray" from off-display).
+    const band = card?.getAttribute('data-band');
+    expect(band).not.toBe(null);
+    // The band is determined by the ROAS (3.0 → blue at boundary ≥3 per project rules),
+    // but either way it must not be overridden to "gray" (off-empty).
+    expect(band).not.toBe('gray');
+    // Hero shows the numeric ROAS, not "אורגני".
+    const hero = card?.querySelector('.v.banded');
+    expect(hero?.textContent).not.toContain('אורגני');
+    expect(hero?.textContent).toMatch(/\d+\.\d+x/);
+  });
+
+  // Case D: adOff=false, normal store → regression anchor (unchanged).
+  it('adOff=false + normal spend/revenue → unchanged render (regression anchor)', () => {
+    const normalStore: PerStoreData = {
+      storeId: 'normal-store',
+      storeName: 'normal-store',
+      spend: 100,
+      revenue: 300,
+      orders: 6,
+      aov: 50,
+      roas: 3,
+      updatedAt: null,
+      perPlatformCpm: {},
+      adOff: false,
+    };
+    const { container } = render(<PerStoreRow stores={[normalStore]} />);
+    const card = container.querySelector('[data-testid="per-store-card"]');
+    // roas=3 → blue band (≥3.0)
+    expect(card?.getAttribute('data-band')).toBe('blue');
+    const hero = card?.querySelector('.v.banded');
+    // Numeric ROAS rendered, not "אורגני"
+    expect(hero?.textContent).not.toContain('אורגני');
+    expect(hero?.textContent).toMatch(/\d+\.\d+x/);
+  });
 });

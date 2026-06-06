@@ -54,6 +54,7 @@ import {
 } from '@/lib/format/useRoasBandGradient';
 import { aovEmphasis } from '@/lib/format/aovEmphasis';
 import { useStaleness } from '@/lib/freshness/useStaleness';
+import { adDisplayState, adDisplayBand } from '@/lib/adState';
 
 /* --------------------------------------------------------------------------
  * Props
@@ -279,13 +280,32 @@ function StoreCard({
   const zeroSalesWithSpend =
     (store.spend ?? 0) > 0 && store.revenue === 0;
 
+  // Ads-off Phase 2 — off-display override. When ALL of the store's applicable
+  // platforms are toggled off AND spend is 0 (no historical-window spend), we
+  // show a band/text override rather than a meaningless ROAS ratio:
+  //   organic (off + rev>0)     → blue band + "אורגני"
+  //   off-empty (off + rev=0)   → gray band + "0"
+  //   normal (not off OR spend>0 historical) → unchanged numeric ROAS.
+  const offState = adDisplayState({
+    revenue: store.revenue,
+    spend: store.spend,
+    off: store.adOff ?? false,
+  });
+  const offBandId = adDisplayBand(offState); // null when 'normal'
+
   // useRoasBandGradient is a pure function (the `use` prefix is a naming
   // convention locked in lib/format/useRoasBandGradient.ts — it does NOT
   // call into React hook machinery, so it's safe to invoke per-store
-  // without triggering rules-of-hooks lint). The 2nd arg (isStale) keeps its
-  // default false here (per-card desaturation is driven by data-freshness,
-  // not this flag); the 3rd arg flips the card to the alarm-red band.
-  const band = useRoasBandGradient(store.roas, false, zeroSalesWithSpend);
+  // without triggering rules-of-hooks lint). Always called unconditionally
+  // so rules-of-hooks is not tripped; the off-band override is applied after.
+  // The 2nd arg (isStale) keeps its default false here (per-card desaturation
+  // is driven by data-freshness, not this flag); the 3rd arg flips the card
+  // to the alarm-red band.
+  const roasBand = useRoasBandGradient(store.roas, false, zeroSalesWithSpend);
+  // Off-band override wins when set (organic→blue, off-empty→gray).
+  const band = offBandId
+    ? { band: offBandId, desaturate: false }
+    : roasBand;
   const aovClass = aovEmphasis(store.aov);
   // Task 3.6 — freshness signal. The hook re-renders every 60s so the chip
   // label clock stays current; the same `stage` drives the Card's
@@ -369,7 +389,13 @@ function StoreCard({
               white-on-white-alpha pill via the `.per-store-card .band-tag`
               rule in globals.css — NOT a value-coloured chip, since the band
               colour already IS the whole card. */}
-          <span className="band-tag">{BAND_TAG_LABEL[band.band]}</span>
+          <span className="band-tag">
+            {offState === 'organic'
+              ? 'אורגני'
+              : offState !== 'normal'
+              ? 'כבוי'
+              : BAND_TAG_LABEL[band.band]}
+          </span>
         </div>
       </header>
 
@@ -382,16 +408,21 @@ function StoreCard({
           dir="ltr"
           className="v banded block text-[50px] md:text-[60px] font-light tabular-nums tracking-tight leading-none whitespace-nowrap"
         >
-          {/* Alarm-red state shows an explicit "0.00x" (spent money, zero
+          {/* Ads-off Phase 2 — off-display takes priority over numeric ROAS:
+              organic (off + rev>0) → Hebrew "אורגני" static label.
+              off-empty/off-negative (off + rev≤0) → plain "0".
+              Alarm-red state shows an explicit "0.00x" (spent money, zero
               return) — kept STATIC (it's literally zero, nothing to climb to).
               Genuine ROAS values climb in via <CountUp> ("numbers come alive"),
               reduced-motion-aware; a null ROAS renders the "—" placeholder
               (CountUp's own empty-state), matching the prior behaviour. */}
-          {zeroSalesWithSpend ? (
-            '0.00x'
-          ) : (
-            <CountUp value={store.roas} format={(n) => `${n.toFixed(2)}x`} />
-          )}
+          {offState === 'organic'
+            ? 'אורגני'
+            : offState !== 'normal'
+            ? '0'
+            : zeroSalesWithSpend
+            ? '0.00x'
+            : <CountUp value={store.roas} format={(n) => `${n.toFixed(2)}x`} />}
         </bdi>
         <span className="roas-cap mt-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-ink-muted">
           ROAS · {rangeLabel ?? 'היום'}
@@ -402,7 +433,7 @@ function StoreCard({
             in band-agnostic white ink (legible on ANY band, both themes); the
             chip carries the ▲/▼ + % direction signal on a dark scrim. Hidden in
             the alarm-red 0-sales state (no meaningful ROAS trend to show). */}
-        {!zeroSalesWithSpend &&
+        {offState === 'normal' && !zeroSalesWithSpend &&
           (store.roasSpark?.length ?? 0) >= 2 &&
           (() => {
             const deltaText = fmtRoasDeltaChip(store.roasDeltaPct);
