@@ -90,6 +90,7 @@ export interface StoreEventRow {
   product_title: string | null;
   quantity: number | null;
   customer_label: string | null;
+  source: string | null;
   occurred_at: string;
   received_at: string;
 }
@@ -100,7 +101,7 @@ export interface StoreEventRow {
  * can't silently drift.
  */
 const STORE_EVENT_FEED_COLUMNS =
-  'id, store_id, type, amount_cad, currency, amount_original, product_title, quantity, customer_label, occurred_at, received_at';
+  'id, store_id, type, amount_cad, currency, amount_original, product_title, quantity, customer_label, source, occurred_at, received_at';
 
 /**
  * Read the most-recent store events, newest-first (received_at DESC), capped at
