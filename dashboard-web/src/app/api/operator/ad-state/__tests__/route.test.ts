@@ -9,6 +9,7 @@ vi.mock('@/lib/supabaseAdmin', () => ({
     }),
   }),
 }));
+vi.mock('@/lib/sentry/capture', () => ({ captureRouteError: () => {} }));
 
 import { GET, POST } from '@/app/api/operator/ad-state/route';
 
@@ -32,5 +33,12 @@ describe('POST /api/operator/ad-state', () => {
   it('400 on a bad platform', async () => {
     const req = new Request('http://x', { method: 'POST', body: JSON.stringify({ storeId: 'zolplus', platform: 'snapchat', enabled: false }) });
     expect((await POST(req)).status).toBe(400);
+  });
+  it('400 when enabled is missing or non-boolean (never silently writes OFF)', async () => {
+    const missing = new Request('http://x', { method: 'POST', body: JSON.stringify({ storeId: 'zolplus', platform: 'meta' }) });
+    expect((await POST(missing)).status).toBe(400);
+    const garbage = new Request('http://x', { method: 'POST', body: JSON.stringify({ storeId: 'zolplus', platform: 'meta', enabled: 'false' }) });
+    expect((await POST(garbage)).status).toBe(400);
+    expect(store.upserts.length).toBe(0); // no write attempted
   });
 });
