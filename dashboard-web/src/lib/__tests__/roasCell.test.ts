@@ -132,3 +132,25 @@ describe('ROAS_TONE_BG map', () => {
     }
   });
 });
+
+describe('roasCell — off-state (Phase 2)', () => {
+  it('default off=false keeps existing behavior (backward compatible)', () => {
+    expect(roasCell(3.5, 100, 28).text).toBe('3.50');
+    expect(roasCell(0, 0, 50)).toMatchObject({ className: 'roas-cell-fail', text: '0' });
+    expect(roasCell(0, 0, 0)).toMatchObject({ className: '', text: '' });
+  });
+  it('off + spend 0 + revenue>0 → organic blue "אורגני"', () => {
+    const c = roasCell(0, 250, 0, true);
+    expect(c.text).toBe('אורגני');
+    expect(c.className).toContain('blue');
+  });
+  it('off + spend 0 + revenue 0 → neutral "0" (not the black fail cell)', () => {
+    const c = roasCell(0, 0, 0, true);
+    expect(c.text).toBe('0');
+    expect(c.className).not.toBe('roas-cell-fail');
+    expect(c.className).toContain('glass'); // bg-glass-2 neutral chip
+  });
+  it('off + spend>0 (historical) → normal (never retroactively rewritten)', () => {
+    expect(roasCell(3.5, 100, 28, true).text).toBe('3.50');
+  });
+});

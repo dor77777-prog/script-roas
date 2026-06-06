@@ -19,6 +19,7 @@
  * canonical `*Fg` pattern is applied consistently across all ROAS cells.
  */
 
+import { adDisplayState } from '@/lib/adState';
 import { roasLabel } from '@/lib/analytics';
 import { formatNumber } from '@/lib/utils';
 
@@ -45,18 +46,35 @@ const ROAS_BG: Record<string, string> = {
   gray:   '',
 };
 
+/** Off-state neutral chip ("0" when ads are off + no/negative revenue). Reuses
+ *  the existing gray tone chip (theme-aware, AA-cleared) — deliberately NOT the
+ *  black `roas-cell-fail` and NOT blank. */
+const ROAS_CELL_NEUTRAL = 'bg-glass-2 text-ink';
+
 /**
  * Unified ROAS cell classifier.
  *
- *   failure  — spend > 0, revenue = 0  → `roas-cell-fail` + "0"
- *   no-data  — spend = 0, revenue = 0  → blank
- *   normal   — revenue > 0             → band-tone bg + formatted number
+ *   off+spend=0+rev>0  — ads off, organic revenue              → blue "אורגני"
+ *   off+spend=0+rev≤0  — ads off, no/negative revenue          → neutral "0"
+ *   failure  — spend > 0, revenue = 0                          → `roas-cell-fail` + "0"
+ *   no-data  — spend = 0, revenue = 0                          → blank
+ *   normal   — revenue > 0                                     → band-tone bg + formatted number
+ *
+ * The `off` param defaults to false so all existing callers (CampaignsTableRow,
+ * AdSetTable, etc.) remain unchanged — backward compatible.
  */
 export function roasCell(
   roas: number,
   revenue: number,
   totalSpend: number,
+  off = false,
 ): { className: string; text: string } {
+  const state = adDisplayState({ revenue, spend: totalSpend, off });
+  if (state === 'organic') return { className: ROAS_BG.blue, text: 'אורגני' };
+  if (state === 'off-empty' || state === 'off-negative') {
+    return { className: ROAS_CELL_NEUTRAL, text: '0' };
+  }
+  // 'normal' (incl. off-but-has-spend): existing behavior, byte-for-byte.
   if (revenue === 0 && totalSpend > 0) return { className: 'roas-cell-fail', text: '0' };
   if (revenue === 0 && totalSpend === 0) return { className: '', text: '' };
   return { className: ROAS_BG[roasLabel(roas).tone], text: formatNumber(roas) };
