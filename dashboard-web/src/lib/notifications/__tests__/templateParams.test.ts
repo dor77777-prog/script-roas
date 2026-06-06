@@ -216,6 +216,14 @@ describe('ads-off: fully-off store framing (v1 + v2)', () => {
     totalSpend: 1000, revenue: 3200, roas: 3.2, orders: 25, facebook: 18, google: 5, other: 2, cpm: 12.5,
   });
 
+  // Fully off NOW but had real spend in the report window (toggled off
+  // mid-day; the evening/EOD send still covers the morning's spend). Must
+  // render the REAL ROAS — never "ללא מכירות" — and count in totals normally.
+  const offWithSpend = makeStore('uzoshop', {
+    totalSpend: 800, revenue: 2400, roas: 3.0, orders: 20, facebook: 15, google: 3, other: 2, cpm: 11,
+    isFullyOff: true,
+  } as Partial<StoreSummary> & { isFullyOff: boolean });
+
   // ── v1 ──────────────────────────────────────────────────────────────────
 
   describe('v1 storeBlock', () => {
@@ -240,6 +248,14 @@ describe('ads-off: fully-off store framing (v1 + v2)', () => {
       const summary = makeSummaryWithOff({ s1: onStore });
       const p = buildTemplateParameters(summary, 't', {});
       expect(p[1]).toContain('ROAS: 3.20');
+      expect(p[1]).not.toContain('אורגני');
+    });
+
+    it('off BUT spend>0 (historical) → normal block with real ROAS, not "ללא מכירות"', () => {
+      const summary = makeSummaryWithOff({ s1: offWithSpend as StoreSummary & { isFullyOff?: boolean } });
+      const p = buildTemplateParameters(summary, 't', { s1: true });
+      expect(p[1]).toContain('ROAS: 3.00'); // real ROAS preserved
+      expect(p[1]).not.toContain('ללא מכירות');
       expect(p[1]).not.toContain('אורגני');
     });
 
@@ -289,6 +305,20 @@ describe('ads-off: fully-off store framing (v1 + v2)', () => {
       const p = buildTemplateParametersV2(summary, 't', {});
       expect(p[5]).toContain('🟢');
       expect(p[5]).toContain('ROAS 3.20');
+    });
+
+    it('off BUT spend>0 (historical) → normal band header with real ROAS, not ⚪/"ללא מכירות"', () => {
+      const summary = makeSummaryWithOff({ s1: offWithSpend as StoreSummary & { isFullyOff?: boolean } });
+      const p = buildTemplateParametersV2(summary, 't', { s1: true });
+      expect(p[5]).toContain('ROAS 3.00'); // real ROAS preserved
+      expect(p[5]).not.toContain('ללא מכירות');
+      expect(p[5]).not.toContain('אורגני');
+    });
+
+    it('totals: off+spend>0 store counts its spend normally (display-state, not raw isOff)', () => {
+      const summary = makeSummaryWithOff({ s1: offWithSpend as StoreSummary & { isFullyOff?: boolean } });
+      const p = buildTemplateParametersV2(summary, 't', { s1: true });
+      expect(p[3]).toContain('C$800'); // its real spend IS in the totals
     });
 
     it('totals block: off-store spend excluded from blended ROAS', () => {

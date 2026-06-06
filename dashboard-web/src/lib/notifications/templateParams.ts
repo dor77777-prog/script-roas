@@ -91,7 +91,12 @@ function storeBlock(s: StoreSummary): string {
       );
     }
     // off-empty or off-negative → neutral placeholder.
-    return '🏪 ' + s.storeName + ': • ללא מכירות';
+    if (state === 'off-empty' || state === 'off-negative') {
+      return '🏪 ' + s.storeName + ': • ללא מכירות';
+    }
+    // state === 'normal' (off but spend>0 — historical spend in the report
+    // window before the toggle) → fall through to the normal block so the real
+    // ROAS is preserved and never retroactively rewritten.
   }
 
   // Phase 05.7.x — appended `• CPM: C$X.XX` after ROAS. Position chosen
@@ -207,18 +212,24 @@ function blockParamsV2(opts: {
   other: number;
   isFullyOff?: boolean;
 }): string[] {
-  // ads-off Phase 4: off-state header overrides normal band logic.
+  // ads-off Phase 4: off-state header overrides normal band logic — but ONLY
+  // when there's no spend (state !== 'normal'). A fully-off store that still
+  // had spend in the report window (historical, pre-toggle) returns 'normal'
+  // and falls through to the real-ROAS header below (never retroactively
+  // rewritten — matches the card/AI-report behavior).
   if (opts.isFullyOff) {
     const state = adDisplayState({ revenue: opts.revenue, spend: opts.spend, off: true });
-    const header = state === 'organic'
-      ? `⚪ *${opts.label} · אורגני*`
-      : `⚪ *${opts.label} · ללא מכירות*`;
-    return [
-      header,
-      formatCad(opts.revenue),
-      `${formatCad(opts.spend)} · CPM ${formatCpm(opts.cpm)}`,
-      ordersLine(opts.orders, sourcesStr(opts.fb, opts.google, opts.tiktok, opts.other)),
-    ];
+    if (state !== 'normal') {
+      const header = state === 'organic'
+        ? `⚪ *${opts.label} · אורגני*`
+        : `⚪ *${opts.label} · ללא מכירות*`;
+      return [
+        header,
+        formatCad(opts.revenue),
+        `${formatCad(opts.spend)} · CPM ${formatCpm(opts.cpm)}`,
+        ordersLine(opts.orders, sourcesStr(opts.fb, opts.google, opts.tiktok, opts.other)),
+      ];
+    }
   }
 
   const hasSales = opts.orders > 0 || opts.revenue > 0;
@@ -332,7 +343,13 @@ function recomputeTotalsExcludingOff(
   let revenue = 0, orders = 0, facebook = 0, google = 0, tiktok = 0, other = 0;
   let impressions = 0;
   for (const [sid, store] of Object.entries(summary.stores)) {
-    const isOff = !!offStoreIds[sid];
+    // Exclude spend only when the store is in an OFF display-state (off AND
+    // spend===0). A fully-off store that still had spend in the window
+    // (historical, pre-toggle) is 'normal' → its real spend counts normally,
+    // consistent with its per-store block showing the real ROAS.
+    const isOff =
+      !!offStoreIds[sid] &&
+      adDisplayState({ revenue: store.revenue, spend: store.totalSpend, off: true }) !== 'normal';
     revenue += store.revenue;
     orders += store.orders;
     facebook += store.facebook;
