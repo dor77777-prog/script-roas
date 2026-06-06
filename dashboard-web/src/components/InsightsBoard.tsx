@@ -208,15 +208,24 @@ export function InsightsBoard({ data }: Props) {
   }
 
   // Build the full list, then split into "visible now" and "hidden by user".
+  // Phase 4: pass adStateMap + storeApplicablePlatforms so off (store,platform)
+  // insights are suppressed. Prefer the insights-window dataResp (trailing-30-day
+  // fetch) which carries the latest toggle state; fall back to the prop's values
+  // (already in scope from the parent's /api/data fetch) so the guard fires even
+  // while the trailing-window fetch is still loading. Empty maps ⇒ nothing suppressed.
   const allInsights = useMemo(() => {
+    const adStateMap = dataResp?.adStateMap ?? data.adStateMap ?? {};
+    const storeApplicablePlatforms = dataResp?.storeApplicablePlatforms ?? data.storeApplicablePlatforms ?? {};
     return buildAllInsights(
       dataResp?.rows ?? data.rows,
       campaigns?.rows ?? [],
       products?.rows ?? [],
       ads?.rows ?? [],
       { currentEffectiveStatus: campaigns?.currentEffectiveStatus },
+      adStateMap,
+      storeApplicablePlatforms,
     );
-  }, [dataResp, data.rows, campaigns, products, ads]);
+  }, [dataResp, data.rows, data.adStateMap, data.storeApplicablePlatforms, campaigns, products, ads]);
 
   const { visible, hidden } = useMemo(() => {
     if (!hydrated) return { visible: allInsights, hidden: [] as Insight[] };
