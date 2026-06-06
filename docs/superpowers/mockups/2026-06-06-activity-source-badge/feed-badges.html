@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>פיד פעילות — תג מקור/פלטפורמה (mockup)</title>
+<style>
+  :root{
+    --canvas:#0d0f1e; --card:#171a2e; --edge:rgba(255,255,255,.08);
+    --ink:#eef1ff; --ink2:#aab3c5; --muted:#8c96ba;
+    --green:#0fb37a; --red:#ef4d5b; --amber:#ef9331;
+    /* brand-mirrored platform colors */
+    --meta:#1877f2; --google:#f4a200; --tiktok:#ff2e7e; --direct:#5b647d;
+  }
+  [data-theme="light"]{
+    --canvas:#eef1f8; --card:#ffffff; --edge:rgba(22,26,48,.10);
+    --ink:#171a2b; --ink2:#565d78; --muted:#697089; --direct:#9aa3bb;
+  }
+  *{box-sizing:border-box} body{margin:0;background:var(--canvas);color:var(--ink);
+    font-family:'Rubik','Heebo',system-ui,sans-serif;padding:24px}
+  h1{font-size:16px;margin:0 0 4px} .sub{color:var(--muted);font-size:12px;margin:0 0 18px}
+  .toggle{position:fixed;top:16px;left:16px;border:1px solid var(--edge);background:var(--card);
+    color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:12px;cursor:pointer}
+  .feed{max-width:560px;margin:0 auto;background:var(--card);border:1px solid var(--edge);
+    border-radius:14px;overflow:hidden}
+  .head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--edge)}
+  .head .live{font-size:10px;font-weight:800;color:#fff;background:var(--red);border-radius:999px;padding:2px 7px}
+  .head h3{font-size:13px;font-weight:800;margin:0}
+  .row{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--edge)}
+  .row:last-child{border-bottom:0}
+  .ic{width:30px;height:30px;border-radius:9px;flex:none;display:grid;place-items:center;font-size:15px;
+    background:rgba(127,127,127,.12)}
+  .mid{flex:1;min-width:0}
+  .t1{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .t2{font-size:11px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .amt{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .amt.pos{color:var(--green)} .amt.neg{color:var(--red)}
+  /* platform badge — colored chip, WHITE text (clears AA on the vivid fill) */
+  .badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800;
+    color:#fff;border-radius:999px;padding:2px 7px;line-height:1.4;letter-spacing:.02em}
+  .b-meta{background:var(--meta)} .b-google{background:var(--google)}
+  .b-tiktok{background:var(--tiktok)}
+  .b-direct{background:transparent;color:var(--muted);border:1px solid var(--edge);font-weight:700}
+  .dot{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.7}
+</style></head>
+<body>
+<button class="toggle" onclick="document.documentElement.setAttribute('data-theme',document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')">החלף מצב בהיר/כהה</button>
+
+<h1>פיד "פעילות בזמן אמת" — עם תג מקור/פלטפורמה</h1>
+<p class="sub">כל אירוע מכירה / הוספה-לעגלה מקבל תג של הפלטפורמה שממנה הגיע. "ישיר" = מקור לא נקלט (אותו דלי כנה כמו בשאר הדשבורד).</p>
+
+<div class="feed">
+  <div class="head"><span class="live">LIVE</span><h3>פעילות בזמן אמת</h3></div>
+
+  <!-- SALE · Meta -->
+  <div class="row">
+    <div class="ic">🛒</div>
+    <div class="mid">
+      <div class="t1">קרם קולגן מועשר בPDRN מדג סלמון</div>
+      <div class="t2"><span class="badge b-meta">Meta</span><span>uzoshop</span><span class="dot"></span><span>לפני 1 דק׳</span></div>
+    </div>
+    <div class="amt pos">$211.06</div>
+  </div>
+
+  <!-- ADD TO CART · TikTok -->
+  <div class="row">
+    <div class="ic">➕</div>
+    <div class="mid">
+      <div class="t1">מגנטו-זן — כדורי סיליקון תחושתיים</div>
+      <div class="t2"><span class="badge b-tiktok">TikTok</span><span>uzoshop</span><span class="dot"></span><span>הוספה לעגלה · לפני 3 דק׳</span></div>
+    </div>
+    <div class="amt" style="color:var(--ink2)">×2</div>
+  </div>
+
+  <!-- SALE · Google -->
+  <div class="row">
+    <div class="ic">🛒</div>
+    <div class="mid">
+      <div class="t1">מארז הטריו הקוריאני המושלם</div>
+      <div class="t2"><span class="badge b-google">Google</span><span>Zol Plus</span><span class="dot"></span><span>לפני 12 דק׳</span></div>
+    </div>
+    <div class="amt pos">$109.44</div>
+  </div>
+
+  <!-- ADD TO CART · Direct/unknown -->
+  <div class="row">
+    <div class="ic">➕</div>
+    <div class="mid">
+      <div class="t1">סרום פפטידים לצמיחת שיער</div>
+      <div class="t2"><span class="badge b-direct">ישיר</span><span>360usmile</span><span class="dot"></span><span>הוספה לעגלה · לפני 20 דק׳</span></div>
+    </div>
+    <div class="amt" style="color:var(--ink2)">×1</div>
+  </div>
+
+  <!-- REFUND (no platform badge needed) -->
+  <div class="row">
+    <div class="ic">↩︎</div>
+    <div class="mid">
+      <div class="t1">החזר — כרית ארגונומית לתינוק</div>
+      <div class="t2"><span>uzoshop</span><span class="dot"></span><span>לפני 41 דק׳</span></div>
+    </div>
+    <div class="amt neg">−$61.76</div>
+  </div>
+</div>
+
+<p class="sub" style="max-width:560px;margin:14px auto 0">
+  צבעים: Meta כחול · Google ענבר · TikTok ורוד (מותאם-מותג) · "ישיר" שבב-נייטרלי. טקסט לבן על השבב-הצבעוני (עובר AA), RTL, אור+חושך.
+</p>
+</body></html>
