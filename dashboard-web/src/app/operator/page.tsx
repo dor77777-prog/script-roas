@@ -23,6 +23,7 @@ import { SyncTab } from './SyncTab';
 import { HealthTab } from './HealthTab';
 import { ActivityTab } from './ActivityTab';
 import { DangerTab } from './DangerTab';
+import { AdStateTab } from './AdStateTab';
 
 // Phase A (Task 15): MetaBucPanel + FreshnessPanel are async server components
 // that fetch at request time. force-dynamic ensures operator's hard-refresh
@@ -42,6 +43,7 @@ const TABS = [
   ['sync', 'סנכרון'],
   ['activity', 'פעילות'],
   ['danger', 'מסוכן'],
+  ['ads', 'מצב פרסום'],
 ] as const;
 
 export default function OperatorPage() {
@@ -94,6 +96,9 @@ export default function OperatorPage() {
         </TabsContent>
         <TabsContent value="danger">
           <DangerTab />
+        </TabsContent>
+        <TabsContent value="ads">
+          <AdStateTab />
         </TabsContent>
       </Tabs>
     </main>
