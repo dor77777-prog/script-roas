@@ -483,6 +483,94 @@ describe('runTikTokWorkerJob() — fetch throws (transient API failure, etc.)', 
   });
 });
 
+describe('runTikTokWorkerJob() — ads-off fetch-gate (Phase 3, account-level)', () => {
+  // TikTok is account-level: ONE ad account (uzoshop) serves uzoshop +
+  // usmile360 via campaign-store-map. The gate uses tiktokAccountFetchEnabled
+  // which skips ONLY when TikTok is OFF for BOTH shared stores. Turning off
+  // only uzoshop while usmile360 is still on must NOT block the fetch.
+
+  it('status + BOTH shared stores off → fetchStatus NOT called; freshness success for all 3 status scopes', async () => {
+    const fetchStatus = vi.fn();
+    const recordFreshness = vi.fn();
+    await runTikTokWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 600, budget_pct_estimate: 0 },
+      loadStoreMap: async () => ({}),
+      fetchStatus, fetchHotMetrics: vi.fn(),
+      getHotCampaignIds: async () => [], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness,
+      nowIso: NOW_ISO,
+      isTikTokConfigured: () => true,
+      adStateMap: { 'uzoshop:tiktok': false, 'usmile360:tiktok': false },
+    });
+    expect(fetchStatus).not.toHaveBeenCalled();
+    const successCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'success');
+    expect(successCalls.map(c => c[0].scope).sort()).toEqual(['ad_status', 'adset_status', 'campaign_status']);
+  });
+
+  it('hot_metrics + BOTH shared stores off → fetchHotMetrics NOT called; freshness success for campaign_metrics + ad_metrics', async () => {
+    const fetchHotMetrics = vi.fn();
+    const recordFreshness = vi.fn();
+    await runTikTokWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      loadStoreMap: async () => ({}),
+      fetchStatus: vi.fn(), fetchHotMetrics,
+      getHotCampaignIds: async () => ['TC1'], getHotAdgroupIds: async () => ['TG1'], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness,
+      nowIso: NOW_ISO,
+      isTikTokConfigured: () => true,
+      adStateMap: { 'uzoshop:tiktok': false, 'usmile360:tiktok': false },
+    });
+    expect(fetchHotMetrics).not.toHaveBeenCalled();
+    const successCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'success');
+    expect(successCalls.map(c => c[0].scope).sort()).toEqual(['ad_metrics', 'campaign_metrics']);
+  });
+
+  it('CRITICAL: status + only uzoshop off (usmile360 still on) → fetchStatus IS STILL called (account-level gate stays open)', async () => {
+    // Account is shared: turning off uzoshop while usmile360 is still ON must
+    // NOT drop usmile360's data. tiktokAccountFetchEnabled returns true if ANY
+    // shared store is enabled.
+    const fetchStatus = vi.fn().mockResolvedValue({ campaigns: [], adsets: [], ads: [] });
+    await runTikTokWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 600, budget_pct_estimate: 0 },
+      loadStoreMap: async () => ({}),
+      fetchStatus, fetchHotMetrics: vi.fn(),
+      getHotCampaignIds: async () => [], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness: vi.fn(),
+      nowIso: NOW_ISO,
+      isTikTokConfigured: () => true,
+      adStateMap: { 'uzoshop:tiktok': false },
+    });
+    expect(fetchStatus).toHaveBeenCalled();
+  });
+
+  it('status + adStateMap={} (default/all-on) → fetchStatus IS called (unchanged behavior)', async () => {
+    const fetchStatus = vi.fn().mockResolvedValue({ campaigns: [], adsets: [], ads: [] });
+    await runTikTokWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 600, budget_pct_estimate: 0 },
+      loadStoreMap: async () => ({}),
+      fetchStatus, fetchHotMetrics: vi.fn(),
+      getHotCampaignIds: async () => [], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness: vi.fn(),
+      nowIso: NOW_ISO,
+      isTikTokConfigured: () => true,
+      adStateMap: {},
+    });
+    expect(fetchStatus).toHaveBeenCalled();
+  });
+});
+
 describe('runTikTokWorkerJob() — unknown scope', () => {
   it('no-ops', async () => {
     const fetchStatus = vi.fn();

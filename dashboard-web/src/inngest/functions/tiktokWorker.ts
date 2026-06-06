@@ -48,6 +48,8 @@
 import { inngest } from '@/inngest/client';
 import { TIKTOK_JOB_REQUESTED } from '@/lib/registries/eventNames';
 import { recordFreshness } from '@/lib/inngest/freshness';
+import { tiktokAccountFetchEnabled, type AdStateMap } from '@/lib/adState';
+import { fetchAdStateFromPostgres } from '@/lib/postgresReaders';
 import { fetchTikTokStatusForStore } from '@/lib/fetchers/tiktokStatus';
 import type { TikTokStatusInput, TikTokStatusResult } from '@/lib/fetchers/tiktokStatus';
 import { fetchTikTokHotMetricsForStore } from '@/lib/fetchers/tiktokHotMetrics';
@@ -113,6 +115,17 @@ type PriorMaps = {
 
 export type RunTikTokWorkerJobInput = {
   jobData: JobRequestedEvent;
+  /**
+   * Ads-off Phase 3 — account-level gate for TikTok. Skip the shared
+   * advertiser-account fetch only when TikTok is OFF for ALL stores on the
+   * shared account (uzoshop + usmile360). Defaults to {} (all ON) so existing
+   * callers require no changes today; the Inngest binding loads and passes it.
+   *
+   * NOTE: NEVER gate per-store here — one TikTok account serves both stores.
+   * Use `tiktokAccountFetchEnabled(adStateMap)` which returns true unless
+   * EVERY member of TIKTOK_SHARED_STORES is false in the map.
+   */
+  adStateMap?: AdStateMap;
   /**
    * Loads the campaign-store-map (Phase A.5) from dashboard_state. Pure
    * core receives this as a dependency so vitest can pass `async () => ({})`
@@ -375,6 +388,16 @@ async function runTikTokStatusBranch(input: RunTikTokWorkerJobInput): Promise<vo
     return;
   }
 
+  // Ads-off Phase 3 — account-level gate. TikTok uses ONE shared advertiser
+  // account (uzoshop) for all TIKTOK_SHARED_STORES. Skip only when TikTok is
+  // OFF for every store on the account; turning off one store while another is
+  // ON must NOT block the fetch (it would drop the still-on store's data).
+  const adStateMap = input.adStateMap ?? {};
+  if (!tiktokAccountFetchEnabled(adStateMap)) {
+    await recAllStatusScopes('success');
+    return;
+  }
+
   try {
     const {
       loadStoreMap,
@@ -543,6 +566,13 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
   // safeAccount would throw on missing env vars and no freshness row
   // would be recorded.
   if (!checkTikTokConfigured(storeId, input.isTikTokConfigured)) {
+    await recHotPair('success');
+    return;
+  }
+
+  // Ads-off Phase 3 — account-level gate (mirrors status branch above).
+  // Both branches share the same account — skip if all shared stores are off.
+  if (!tiktokAccountFetchEnabled(input.adStateMap ?? {})) {
     await recHotPair('success');
     return;
   }
@@ -769,8 +799,11 @@ export const tiktokWorker = inngest.createFunction(
         };
       };
 
+      const adStateMap = await fetchAdStateFromPostgres();
+
       await runTikTokWorkerJob({
         jobData: data,
+        adStateMap,
         loadStoreMap: loadCampaignStoreMapFromSupabase,
         fetchStatus: fetchTikTokStatusForStore,
         fetchHotMetrics: fetchTikTokHotMetricsForStore,
