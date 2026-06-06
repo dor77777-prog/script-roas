@@ -13,6 +13,7 @@ vi.mock('@/lib/sentry/capture', () => ({ captureRouteError: () => {} }));
 vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, json: async () => ({}) })) as unknown as typeof fetch);
 
 import { GET } from '@/app/api/data/route';
+import { fetchDailyDataFromPostgres } from '@/lib/postgresReaders';
 
 describe('/api/data attaches ad-state', () => {
   it('returns adStateMap + storeApplicablePlatforms', async () => {
@@ -21,5 +22,16 @@ describe('/api/data attaches ad-state', () => {
     expect(body.adStateMap).toEqual({ 'zolplus:meta': false });
     expect([...body.storeApplicablePlatforms.uzoshop].sort()).toEqual(['google', 'meta', 'tiktok']);
     expect(body.storeApplicablePlatforms.zolplus).toEqual(['meta']);
+  });
+
+  it('degraded-error path still returns the two fields as empty (never undefined)', async () => {
+    vi.mocked(fetchDailyDataFromPostgres).mockRejectedValueOnce(new Error('boom'));
+    const res = await GET(new Request('http://x/api/data?from=2026-06-01&to=2026-06-06'));
+    expect(res.status).toBe(200); // graceful 200-with-empty-rows
+    const body = await res.json();
+    expect(body.rows).toEqual([]);
+    expect(body.error).toBeTruthy();
+    expect(body.adStateMap).toEqual({});
+    expect(body.storeApplicablePlatforms).toEqual({});
   });
 });
