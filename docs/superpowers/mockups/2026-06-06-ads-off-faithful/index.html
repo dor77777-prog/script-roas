@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>מצב "פרסום כבוי" — על המבנה האמיתי של הדשבורד</title>
+<style>
+  :root{ font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
+  *{ box-sizing:border-box; }
+  [data-theme=dark]{ --bg:#0a0f1a; --surf:#0f1626; --row:#0c1322; --row2:#0e1525; --tx:#e7ecf5; --mut:#8a96ac; --bd:#1e2942; --head:#aab4c8; }
+  [data-theme=light]{ --bg:#eef1f6; --surf:#fff; --row:#fff; --row2:#f7f9fc; --tx:#0f1722; --mut:#5f6b7e; --bd:#e3e8f0; --head:#647184; }
+  /* ROAS badge colors (EXACTLY your legend) */
+  .r-red{ background:#e23a4b; color:#fff; } .r-org{ background:#f0922e; color:#241200; }
+  .r-grn{ background:#26b562; color:#04210f; } .r-blue{ background:#2f7df0; color:#fff; }
+  .r-black{ background:#11151c; color:#aeb6c2; border:1px solid #2a3142; } /* spend, no sale */
+  .r-neu{ background:transparent; color:var(--mut); border:1px dashed var(--bd); } /* OFF + 0 (NOT black) */
+  body{ margin:0; background:var(--bg); color:var(--tx); padding:0 0 70px; }
+  header{ position:sticky; top:0; z-index:5; background:var(--surf); border-bottom:1px solid var(--bd); padding:12px 20px; display:flex; gap:14px; align-items:center; }
+  header h1{ font-size:16px; margin:0; flex:1; }
+  .tbtn{ border:1px solid var(--bd); background:transparent; color:var(--tx); border-radius:999px; padding:6px 14px; font-size:13px; cursor:pointer; font-weight:600; }
+  main{ max-width:1080px; margin:0 auto; padding:20px 16px; }
+  h2.sec{ font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--mut); margin:26px 0 10px; }
+  .card{ background:var(--surf); border:1px solid var(--bd); border-radius:14px; padding:14px; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th,td{ padding:9px 12px; border-bottom:1px solid var(--bd); text-align:center; white-space:nowrap; }
+  th{ color:var(--head); font-weight:600; font-size:11px; }
+  td:last-child, th:last-child{ text-align:right; } /* date / store col on the right (RTL) */
+  .pill{ display:inline-block; min-width:46px; padding:3px 10px; border-radius:8px; font-weight:800; font-size:12.5px; }
+  .badge{ display:inline-flex; gap:4px; font-size:9.5px; font-weight:800; padding:2px 7px; border-radius:999px; background:#1b2740; color:#7fa8e6; vertical-align:middle; margin-inline-start:6px; }
+  [data-theme=light] .badge{ background:#e6effb; color:#1666c9; }
+  .legend{ font-size:11.5px; color:var(--mut); margin-bottom:10px; line-height:1.6; }
+  .note{ font-size:12px; color:var(--mut); margin-top:10px; line-height:1.55; }
+  .hl{ outline:2px solid #2f7df0; outline-offset:-2px; border-radius:8px; }
+  .key b{ color:var(--tx); }
+  /* toggle */
+  .tog{ display:inline-block; width:38px; height:21px; border-radius:999px; position:relative; }
+  .tog.on{ background:#26b562; } .tog.off{ background:#5b6678; }
+  .tog::after{ content:""; position:absolute; top:2px; width:17px; height:17px; border-radius:50%; background:#fff; }
+  [dir=rtl] .tog.on::after{ left:2px; } [dir=rtl] .tog.off::after{ right:2px; }
+  .na{ color:var(--mut); opacity:.55; font-size:11px; }
+  /* whatsapp */
+  .wa{ background:#0b141a; border-radius:14px; padding:14px; max-width:400px; }
+  [data-theme=light] .wa{ background:#e4dcd4; }
+  .bub{ background:#202c33; color:#e9edef; border-radius:10px 10px 10px 2px; padding:10px 12px 8px; font-size:13.5px; line-height:1.5; white-space:pre-wrap; }
+  [data-theme=light] .bub{ background:#fff; color:#111b21; }
+  .bub b{ font-weight:700; } .bub i{ opacity:.7; }
+  .wabtn{ margin-top:5px; background:#202c33; color:#53bdeb; text-align:center; border-radius:8px; padding:8px; font-size:13.5px; font-weight:600; }
+  [data-theme=light] .wabtn{ background:#fff; color:#1da1f2; }
+</style>
+</head>
+<body>
+<header>
+  <h1>מצב "פרסום כבוי" — על המבנה האמיתי של הדשבורד שלך</h1>
+  <button class="tbtn" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">🌓 בהיר/כהה</button>
+</header>
+<main>
+  <p class="note key">תרחיש: <b>uzoshop דלוק</b> · <b>Zol Plus כבוי</b> (יש הכנסות אורגניות) · <b>360usmile כבוי</b> (0 הכנסות). מסגרת כחולה = מה שמשתנה. כל השאר זהה לדשבורד שלך.</p>
+
+  <!-- 1. comparative table (Home → "ניתוח השוואתי") -->
+  <h2 class="sec">בית · "ניתוח השוואתי" (הטבלה הפר-חנותית שלך)</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>הזמנות</th><th>AOV</th><th>CPM</th><th>ROAS</th><th>הכנסה</th><th>הוצאה</th><th>חנות</th></tr></thead>
+      <tbody>
+        <tr><td>16</td><td>$109</td><td>$19</td><td><span class="pill r-grn">2.63x</span></td><td>$1.7K</td><td>$660</td><td>uzoshop</td></tr>
+        <tr><td>1</td><td>$62</td><td class="na">—</td><td class="hl"><span class="pill r-blue">אורגני</span></td><td>$62</td><td>$0</td><td>Zol Plus <span class="badge">⏻ כבוי</span></td></tr>
+        <tr><td>0</td><td class="na">—</td><td class="na">—</td><td class="hl"><span class="pill r-neu">0</span></td><td>$0</td><td>$0</td><td>360usmile <span class="badge">⏻ כבוי</span></td></tr>
+      </tbody>
+    </table>
+    <div class="note">היום: ROAS של 360usmile מוצג "—" (הוצאה $50, 0 הכנסות). <b>בכבוי:</b> ההוצאה הופכת ל-$0, וה-ROAS: הכנסה&gt;0 → <b style="color:#2f7df0">כחול "אורגני"</b> · הכנסה=0 → <b style="color:#8a96ac">0 ניטרלי</b>. + תג "⏻ כבוי". שום עמודה/שורה לא זזה.</div>
+  </div>
+
+  <!-- 2. monthly table (טבלאות אופטימיזציה) -->
+  <h2 class="sec">טבלאות אופטימיזציה · טבלה חודשית (Zol Plus, יוני 2026 — כבוי)</h2>
+  <div class="card">
+    <div class="legend">המקרא הקיים שלך: <span class="pill r-red" style="min-width:0;padding:1px 7px">אדום &lt;2</span> <span class="pill r-org" style="min-width:0;padding:1px 7px">כתום 2-2.7</span> <span class="pill r-grn" style="min-width:0;padding:1px 7px">ירוק 2.7-3</span> <span class="pill r-blue" style="min-width:0;padding:1px 7px">כחול &gt;3</span> <span class="pill r-black" style="min-width:0;padding:1px 7px">שחור = הוצאה בלי מכירה</span> &nbsp;+ חדש: <span class="pill r-neu" style="min-width:0;padding:1px 7px">ניטרלי = כבוי+0</span></div>
+    <table>
+      <thead><tr><th>ROAS</th><th>נכנס</th><th>יצא סה"כ</th><th>טיקטוק</th><th>פייסבוק</th><th>תאריך</th></tr></thead>
+      <tbody>
+        <tr><td class="hl"><span class="pill r-blue">אורגני</span></td><td>144.83</td><td>0.00</td><td>—</td><td>0.00</td><td>02/06/2026</td></tr>
+        <tr><td class="hl"><span class="pill r-blue">אורגני</span></td><td>124.92</td><td>0.00</td><td>—</td><td>0.00</td><td>04/06/2026</td></tr>
+        <tr><td class="hl"><span class="pill r-neu">0</span></td><td>0.00</td><td>0.00</td><td>—</td><td>0.00</td><td>05/06/2026</td></tr>
+        <tr><td class="hl"><span class="pill r-black">−0.4</span></td><td style="color:#e23a4b">−85.00</td><td>0.00</td><td>—</td><td>0.00</td><td>03/06/2026 <span class="na">(החזרים ישנים)</span></td></tr>
+        <tr style="font-weight:800"><td class="hl"><span class="pill r-blue">אורגני</span></td><td>184.75</td><td>0.00</td><td>—</td><td>0.00</td><td>סך הכל</td></tr>
+      </tbody>
+    </table>
+    <div class="note">חנות כבויה: פייסבוק/טיקטוק/יצא תמיד <b>0</b>, נכנס (הכנסות) נספר רגיל וזורם לסיכום-החודש ולסיכום-העסק. ROAS: נכנס&gt;0 → <b style="color:#2f7df0">כחול אורגני</b> · נכנס=0 → <b style="color:#8a96ac">ניטרלי</b> (לא שחור — לא בזבזת) · נכנס&lt;0 (החזרים) → <b>שלילי בשחור</b> כמו יום-אפס היום. הסכימה זהה לחלוטין.</div>
+  </div>
+
+  <!-- 3. operator matrix -->
+  <h2 class="sec">/operator · פאנל חדש "מצב פרסום" (חנות × פלטפורמה)</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>TikTok</th><th>Google</th><th>Meta</th><th>חנות</th></tr></thead>
+      <tbody>
+        <tr><td><span class="tog on"></span></td><td><span class="tog on"></span></td><td><span class="tog on"></span></td><td>uzoshop</td></tr>
+        <tr><td><span class="na">לא רלוונטי</span></td><td><span class="na">לא רלוונטי</span></td><td><span class="tog off"></span></td><td>Zol Plus</td></tr>
+        <tr><td><span class="tog off"></span></td><td><span class="na">לא רלוונטי</span></td><td><span class="tog off"></span></td><td>360usmile</td></tr>
+      </tbody>
+    </table>
+    <div class="note">פאנל חדש בעמוד הניהול הקיים. תאים "לא רלוונטי" אפורים (נגזר מהקונפיג שלך). זה המקום היחיד שמוסיפים — לא נוגעים בשום עמוד אחר.</div>
+  </div>
+
+  <!-- 4. whatsapp -->
+  <h2 class="sec">דוח WhatsApp</h2>
+  <div class="wa">
+    <div class="bub" dir="rtl">📊 <b>דוח ROAS יומי</b>
+05/06/2026 · סיכום יום מלא
+
+🟠 <b>uzoshop · ROAS 2.63</b>
+💰 הכנסות: C$1,739
+💸 הוצאה: C$660 · CPM C$19
+🛒 16 הזמנות · Meta · Google · TikTok
+
+🔵 <b>Zol Plus · אורגני</b>
+💰 הכנסות: C$62
+⏻ פרסום כבוי
+🛒 הזמנה 1
+
+⚪ <b>360usmile · ללא מכירות</b>
+💰 הכנסות: C$0
+⏻ פרסום כבוי
+🛒 0 הזמנות</div>
+    <div class="wabtn">פתח דשבורד</div>
+  </div>
+  <div class="note">חנות כבויה+הכנסות → 🔵 "אורגני" + שורת "⏻ פרסום כבוי". הכנסות עדיין מוצגות.</div>
+
+  <p class="note" style="margin-top:26px; border-top:1px solid var(--bd); padding-top:16px">
+    <b>שורה תחתונה:</b> אין שינוי-עיצוב. אותן טבלאות, אותן עמודות, אותו מקרא-צבעים (כולל הכחול והשחור שכבר קיימים אצלך). לחנות כבויה משתנים רק: עמודות-הוצאה→0, צבע/ערך תא-ROAS (כחול/ניטרלי/שלילי), ותג "⏻ כבוי". + פאנל-מתג ב-/operator.
+  </p>
+</main>
+</body>
+</html>
