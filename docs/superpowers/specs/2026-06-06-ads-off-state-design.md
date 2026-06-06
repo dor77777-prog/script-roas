@@ -284,3 +284,30 @@ off-state display) · ARCHITECTURE note (store_ad_state + adState helpers + fetc
 **Deferred to later phases:** Campaigns/Ads tables (`"⏻ כבוי"` chip) and fetch-gate (Phase 3), alert/WhatsApp suppression (Phase 4).
 
 **Off-state visual (Playwright) snapshots deferred:** no store is actually off in production yet, so end-to-end visual snapshots cannot be taken against real data. The rendering contract is fully locked by the DOM-level unit tests (`adDisplayState` + `roasCell` + component render tests); the Playwright gap is documented and not silent.
+
+---
+
+## Phase 3 — locked fetch-gate semantics (2026-06-06)
+
+**Gate placement — worker + cron-daily (NOT orchestrator):** the fetch-gate is implemented at two levels — each platform worker, and `runDailyForStoreInner` inside cron-daily — but intentionally NOT at the Inngest orchestrator (`buildEvents` / tick fan-out). Rationale: gating at the orchestrator would suppress the `data_freshness` write entirely, causing the Health tab to show false-red (stale/missing) for an intentionally-off platform. By gating at the worker level, the worker still runs, records `data_freshness` as `success` (the row is written first, before any API call), and then returns early without touching the platform API. No false-red; no wasted quota.
+
+**Meta / Google (per-store gate):** each platform's worker checks `isAdsEnabled(adStateMap, storeId, platform)`. When the result is `false`, the worker records `data_freshness` success for that (store, platform, scope) combination and returns before making any API call. Both scopes (status + hot_metrics) are gated independently — each worker call is a separate Inngest function; neither fires the API when the store's platform is off.
+
+**TikTok (account-level gate — never per-store):** TikTok uses a single shared ad account (uzoshop's), split per-store via `campaignStoreMap`. Gating at the per-store level would be wrong — turning off usmile360's TikTok would kill uzoshop's data too. Instead, `tiktokAccountFetchEnabled(adStateMap)` is the gate: it returns `false` only when TikTok is off for **all** stores on the shared account (uzoshop AND usmile360). If either store is on, the account fetch proceeds and the campaign-store split handles per-store attribution normally.
+
+**cron-daily gate (`runDailyForStoreInner`):** loads `adStateMap` as its first step and gates its three ad-fetch steps:
+- Meta fetch: `isAdsEnabled(adStateMap, storeId, 'meta')`.
+- Google fetch: `isAdsEnabled(adStateMap, storeId, 'google')`.
+- TikTok fetch: `!STORES_WITH_TIKTOK.has(storeId) || !tiktokAccountFetchEnabled(adStateMap)` — i.e. the store must be a TikTok store AND account-level enabled.
+
+**Inheritance via `runDailyForStore`:** cron-yesterday-refresh, the "Refresh All" (`eventSyncNow`), and backfill all invoke `runDailyForStore`, which delegates to `runDailyForStoreInner` — so the gate applies uniformly to all daily-fetch paths without duplication.
+
+**cron-live: no gate.** cron-live is Shopify-only (revenue polling); it has no ad-platform fetch calls and therefore needs no gate.
+
+**Freshness recorded `success` on skip:** skipping the API call is NOT an error or a stale state. The worker records `data_freshness` as `success` before returning, so no Health-tab false-red, no alert, no monitoring noise.
+
+**What is NOT gated:** Shopify/revenue fetches are never gated (organic revenue still flows); persist and aggregation RPCs (`upsert_data_daily`, `agg_data_daily_for_date`, etc.) are not gated; registry enrollment (campaign/adset/ad registries) is not gated; the reconcile harness is not gated.
+
+**Default (empty `store_ad_state` table) ⇒ all-ON ⇒ pipeline unchanged.** `isAdsEnabled` and `tiktokAccountFetchEnabled` both default to `true` for any missing key — an empty table is byte-identical to today's behavior.
+
+**Deferred: `off_gated` freshness status.** A distinct `off_gated` freshness status (separate from `success`) would allow the Health tab to show a differentiated "gated/off" indicator. This was deferred because it requires a DB enum extension + UI rendering branch; the current `success`-on-skip approach is correct and operationally safe. Can be added in a future phase if operator monitoring needs the distinction.
