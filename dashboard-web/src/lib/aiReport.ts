@@ -14,6 +14,7 @@ import { getCogsRateForStore } from './analytics';
 import type { Aggregated } from './campaignsAggregator';
 import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
 import { netAdjustFactor } from './home/revenueBasis';
+import { isAdsEnabled, isStoreFullyOff, type AdStateMap, type AdPlatform } from './adState';
 
 /**
  * Generates an AI-friendly markdown report for a store × date range.
@@ -85,6 +86,20 @@ type Params = {
    * multi-mapped section is skipped.
    */
   productMap?: ProductMap;
+  /**
+   * Ads-off Phase 4 (2026-06-06) — per-(store, platform) ad-state map.
+   * Keys are `${storeId}:${platform}` (lowercase platform), values are
+   * `false` when that (store, platform) is intentionally turned off.
+   * Missing key ⇒ ON (true). When omitted or empty the report is
+   * identical to pre-Phase-4 behaviour (no filtering).
+   */
+  adStateMap?: AdStateMap;
+  /**
+   * Ads-off Phase 4 — storeId → list of platforms the store advertises on.
+   * Used to determine if a store is "fully off" (all applicable platforms
+   * turned off). Optional; when absent, per-store reframing is skipped.
+   */
+  storeApplicablePlatforms?: Record<string, AdPlatform[]>;
 };
 
 const fmtNum = (n: number, d = 0) =>
@@ -117,6 +132,8 @@ export function generateAiReport({
   ordersRows,
   adsRows,
   productMap,
+  adStateMap = {},
+  storeApplicablePlatforms = {},
 }: Params): string {
   const out: string[] = [];
 
@@ -143,6 +160,14 @@ export function generateAiReport({
   // we don't filter by platform here — let the downstream section
   // handle "no ads" gracefully.
   const ads = (adsRows ?? []).filter(r => inRange(r.date, range) && matchesStore(r));
+
+  // ===== Ads-off Phase 4: predicates for ad-performance filtering =====
+  // campaign/ad rows carry title-case platform ('Meta'/'Google'/'TikTok');
+  // AdStateMap keys use lowercase → always .toLowerCase() before lookup.
+  const isCampaignOff = (c: { storeId: string; platform: string }): boolean =>
+    !isAdsEnabled(adStateMap, c.storeId, String(c.platform).toLowerCase() as AdPlatform);
+  const isAdOff = (a: { storeId: string; platform: string }): boolean =>
+    !isAdsEnabled(adStateMap, a.storeId, String(a.platform).toLowerCase() as AdPlatform);
 
   // ===== Header =====
   out.push(`# דוח ביצועים — ${storeName === 'All' ? 'כל החנויות' : storeName}`);
@@ -310,11 +335,13 @@ export function generateAiReport({
   }
 
   // ===== Per-platform CPM/efficiency breakdown =====
+  // Ads-off Phase 4: exclude off (store, platform) campaigns from aggregation.
+  const campaignsOnForCpm = campaigns.filter(c => !isCampaignOff(c));
   if (totalImpressions > 0) {
     let fbImps = 0, fbClicks = 0;
     let gImps = 0, gClicks = 0;
     let ttImps = 0, ttClicks = 0;
-    for (const c of campaigns) {
+    for (const c of campaignsOnForCpm) {
       if (c.platform === 'Meta') {
         fbImps += c.impressions;
         fbClicks += c.clicks;
@@ -365,7 +392,7 @@ export function generateAiReport({
       Google: {},
       TikTok: {},
     };
-    for (const c of campaigns) {
+    for (const c of campaignsOnForCpm) {
       const p = c.platform;
       if (p !== 'Meta' && p !== 'Google' && p !== 'TikTok') continue;
       if (!dailyAgg[p][c.date]) dailyAgg[p][c.date] = { spend: 0, imps: 0 };
@@ -591,10 +618,10 @@ export function generateAiReport({
 
   // ===== Per-store summary (if "All" stores) =====
   if (storeName === 'All') {
-    const perStore = new Map<string, { rev: number; spend: number; units: number; orders: number }>();
+    const perStore = new Map<string, { storeId: string; rev: number; spend: number; units: number; orders: number }>();
     for (const r of daily) {
       if (!perStore.has(r.storeName))
-        perStore.set(r.storeName, { rev: 0, spend: 0, units: 0, orders: 0 });
+        perStore.set(r.storeName, { storeId: r.storeId, rev: 0, spend: 0, units: 0, orders: 0 });
       const e = perStore.get(r.storeName)!;
       e.rev += r.revenue;
       e.spend += r.totalSpend;
@@ -607,12 +634,19 @@ export function generateAiReport({
     }
     out.push('## פירוט לפי חנות');
     out.push('');
-    out.push(`| חנות | הוצאה | הכנסה | ROAS | יחידות | הזמנות |`);
-    out.push(`|---|---|---|---|---|---|`);
+    out.push(`| חנות | הוצאה | הכנסה | ROAS | יחידות | הזמנות | מצב |`);
+    out.push(`|---|---|---|---|---|---|---|`);
     for (const [s, e] of perStore) {
       const r = e.spend > 0 ? e.rev / e.spend : 0;
+      // Ads-off Phase 4: note when a store is fully off (all platforms disabled).
+      const fullyOff = isStoreFullyOff(
+        e.storeId,
+        adStateMap,
+        storeApplicablePlatforms[e.storeId] ?? [],
+      );
+      const stateNote = fullyOff ? 'פרסום כבוי — הכנסה אורגנית בלבד' : '';
       out.push(
-        `| ${s} | ${fmtCad(e.spend)} | ${fmtCad(e.rev)} | ${r > 0 ? fmtNum(r, 2) : '—'} | ${fmtNum(e.units)} | ${fmtNum(e.orders)} |`,
+        `| ${s} | ${fmtCad(e.spend)} | ${fmtCad(e.rev)} | ${r > 0 ? fmtNum(r, 2) : '—'} | ${fmtNum(e.units)} | ${fmtNum(e.orders)} | ${stateNote} |`,
       );
     }
     out.push('');
@@ -828,7 +862,12 @@ export function generateAiReport({
       conversions: number;
     }
   >();
-  for (const c of campaigns) {
+  // Ads-off Phase 4: exclude off (store, platform) campaigns from all
+  // ad-performance sections. campaignsOn is the filtered set used for
+  // top-campaigns, momentum, health-score, drainers, and ad-set drill-down.
+  const campaignsOn = campaigns.filter(c => !isCampaignOff(c));
+
+  for (const c of campaignsOn) {
     const k = `${c.storeId}::${c.platform}::${c.campaignId}`;
     if (!campaignAgg.has(k)) {
       campaignAgg.set(k, {
@@ -890,7 +929,7 @@ export function generateAiReport({
   // which campaigns Meta/Google/TikTok are OVER-reporting (modeled +
   // view-through) vs UNDER-reporting (iOS 14 ATT) — the operator's
   // actual "should I trust this ROAS?" calibration per campaign.
-  if (orders.length > 0 && campaigns.length > 0) {
+  if (orders.length > 0 && campaignsOn.length > 0) {
     // AUDIT ALG-05 (2026-05-24, Phase 12.1.2): storeId-scoped composite key
     // (`${o.storeId}::${id}` / `${o.storeId}::${name.toLowerCase()}`) so two
     // stores sharing utm_id or utm_campaign='Brand' don't merge revenue in
@@ -1015,7 +1054,7 @@ export function generateAiReport({
   // ramped up in week 2 and deserves more budget. The first/second-half
   // ROAS pair surfaces the slope so the operator knows which direction
   // to bet on.
-  if (campaigns.length > 0 && days >= 6) {
+  if (campaignsOn.length > 0 && days >= 6) {
     const midPoint = new Date(range.from + 'T00:00:00Z');
     midPoint.setUTCDate(midPoint.getUTCDate() + Math.floor(days / 2));
     const mid = midPoint.toISOString().slice(0, 10);
@@ -1030,7 +1069,7 @@ export function generateAiReport({
       h2Value: number;
     };
     const halves = new Map<string, Halves>();
-    for (const c of campaigns) {
+    for (const c of campaignsOn) {
       const k = `${c.storeId}::${c.platform}::${c.campaignId}`;
       if (!halves.has(k)) {
         halves.set(k, {
@@ -1128,11 +1167,13 @@ export function generateAiReport({
   //     series within the range.
   if (campaignsList.length > 0) {
     // Build per-campaign daily CPM/ROAS series for trajectory analysis.
+    // Ads-off Phase 4: use campaignsOn (already filtered) — off campaigns
+    // must not pollute the health-score trajectory series.
     const dailyByKey = new Map<
       string,
       Map<string, { spend: number; impressions: number; value: number }>
     >();
-    for (const c of campaigns) {
+    for (const c of campaignsOn) {
       const key = `${c.storeId}::${c.platform}::${c.campaignId}`;
       if (!dailyByKey.has(key)) dailyByKey.set(key, new Map());
       const m = dailyByKey.get(key)!;
@@ -1572,7 +1613,8 @@ export function generateAiReport({
       >;
     }
   >();
-  for (const c of campaigns) {
+  // Ads-off Phase 4: only build adsets for on campaigns.
+  for (const c of campaignsOn) {
     if (!c.adSetId) continue;
     const cKey = `${c.storeId}::${c.platform}::${c.campaignId}`;
     if (!adsetsByCampaign.has(cKey))
@@ -1673,7 +1715,9 @@ export function generateAiReport({
   // overall can have ONE great creative carrying it (kill the rest), and a
   // campaign that looks great can have ONE bad creative dragging the average.
   // The campaign-level + ad-set-level views above can't show this.
-  if (ads.length > 0) {
+  // Ads-off Phase 4: filter out ads from off (store, platform) pairs.
+  const adsOn = ads.filter(a => !isAdOff(a));
+  if (adsOn.length > 0) {
     // Aggregate to (storeId, platform, campaignId, adSetId, adId).
     type AdAgg = {
       storeName: string;
@@ -1690,7 +1734,7 @@ export function generateAiReport({
       campaignKey: string;
     };
     const adAgg = new Map<string, AdAgg>();
-    for (const a of ads) {
+    for (const a of adsOn) {
       if (!a.adId) continue;
       const adKey = `${a.storeId}::${a.platform}::${a.campaignId}::${a.adSetId}::${a.adId}`;
       const existing = adAgg.get(adKey);

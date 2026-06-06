@@ -123,6 +123,8 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
         ordersRows: orders?.rows ?? [],
         adsRows: ads?.rows ?? [],
         productMap: readProductMap(),
+        adStateMap: data.adStateMap,
+        storeApplicablePlatforms: data.storeApplicablePlatforms,
       });
       setReport(md);
     } finally {
