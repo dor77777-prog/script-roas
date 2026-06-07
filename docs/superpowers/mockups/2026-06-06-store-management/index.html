@@ -141,7 +141,15 @@
         <span class="swatch" style="background:linear-gradient(150deg,#8b5cf6,#6d28d9)"></span>
         <span class="sub" style="margin-inline-start:8px">סגול · (ריד fallback אוטומטי אם לא נבחר)</span>
       </label>
-      <div style="display:flex; gap:10px; margin-top:6px">
+      <div style="font-size:12px;font-weight:800;margin:8px 0 4px">טוקנים (מודבקים כאן → מוצפנים ל-store_secrets):</div>
+      <label class="fld"><span class="lab">Shopify client_id / secret</span><input class="inp" value="••••••" placeholder="paste"></label>
+      <label class="fld"><span class="lab">Meta access_token</span><input class="inp" value="••••••"></label>
+      <label class="fld"><span class="lab">Google refresh_token</span><input class="inp" value="••••••" placeholder="dev/client = גלובלי משותף"></label>
+      <div style="display:flex; gap:10px; margin-top:6px; align-items:center">
+        <button class="btn ghost">בדוק טוקנים חי</button>
+        <span style="font-size:11px"><span style="color:#22c55e">✓ Shopify</span> · <span style="color:#22c55e">✓ Meta</span> · <span style="color:#22c55e">✓ Google</span></span>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:10px">
         <button class="btn">צור חנות →</button>
         <button class="btn ghost">בטל</button>
       </div>
@@ -150,11 +158,11 @@
     <!-- completion panel -->
     <div class="card done">
       <div style="font-size:13px; font-weight:800; display:flex; align-items:center; gap:8px">
-        ✅ נוצר ב-DB <span class="pill-ok">stores · store_webhooks · store_ad_state</span>
+        ✅ נוצר ב-DB <span class="pill-ok">stores · store_secrets (מוצפן) · store_webhooks · store_ad_state</span>
       </div>
-      <p class="sub" style="margin-top:8px">השלם 3 צעדים שה-UI לא יכול לבצע לבד (טוקנים=Vercel · קוד=deploy · Shopify):</p>
+      <p class="sub" style="margin-top:8px">הטוקנים אומתו חי ונשמרו <b>מוצפנים ב-store_secrets — בלי Vercel, בלי deploy.</b> נשאר רק מה שב-Shopify (ידני):</p>
 
-      <h3>1 · משתני-סביבה ב-Vercel</h3>
+      <h3>1 · מה נשמר מוצפן (store_secrets)</h3>
       <div class="code"><span class="k">GLOWLAB_SHOPIFY_DOMAIN</span> = glowlab.myshopify.com
 <span class="k">GLOWLAB_SHOPIFY_CLIENT_ID</span> = ••••••
 <span class="k">GLOWLAB_SHOPIFY_CLIENT_SECRET</span> = ••••••
@@ -172,13 +180,13 @@ analytics.subscribe("product_added_to_cart", e =&gt; {
 });</div>
       <p class="sub" style="margin:6px 0 0">(headless → במקום זה: beacon מ-Lovable + עדכון edge-fn <code>roas-cart-event</code> עם הטוקן)</p>
 
-      <h3>3 · Shopify + פריסה</h3>
+      <h3>3 · Shopify (ידני — אין deploy)</h3>
       <ul class="chk">
         <li>custom-app עם scopes: read_orders, read_products, read_customers</li>
         <li>רישום webhooks → /api/webhooks/shopify (orders.created, refunds.created…)</li>
-        <li>redeploy אחד ב-Vercel (טוען את ה-env + רושם את הקרונים)</li>
+        <li>הדבקת ה-snippet (Custom Pixel / beacon)</li>
       </ul>
-      <p class="note" style="margin-top:12px">אחרי 3 הצעדים — Glow Lab מופיעה <b>מלאה</b> בכל הטאבים (בית/אופטימיזציה/קמפיינים/מוצרים/לקוחות), בדיוק כמו כל חנות קיימת.</p>
+      <p class="note" style="margin-top:12px"><b>אין redeploy</b> — Glow Lab מופיעה <b>מיד ואוטומטית</b> בכל הטאבים (בית/אופטימיזציה/קמפיינים/מוצרים/לקוחות) ונכנסת לקרונים (שלב 4 דינמי), בדיוק כמו כל חנות קיימת.</p>
     </div>
   </div>
 
