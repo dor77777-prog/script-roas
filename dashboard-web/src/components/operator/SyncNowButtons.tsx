@@ -56,34 +56,26 @@
 
 import { useState } from 'react';
 import { RefreshCw, Loader2 } from 'lucide-react';
-import { STORE_ID_TO_NAME } from '@/lib/platformsByStore';
+import { useStores } from '@/lib/useStores';
 import { operatorFetch } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
 
-// Source of truth — mirrors the route's VALID_STORES allowlist
-// (api/operator/sync-now/route.ts:58). Keeping the literal here rather
-// than importing from the route keeps the client bundle free of any
-// server-only modules that route.ts pulls in (inngest client, apiErrors).
-const STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
-type StoreId = (typeof STORES)[number];
-
-// A8-F3 (2026-05-27): show human display names (zolplus → "Zol Plus",
-// usmile360 → "360usmile") on the buttons. DISPLAY ONLY — the POSTed
-// `storeId` payload stays the internal id. STORE_ID_TO_NAME is the
-// canonical id→name map (platformsByStore.ts).
-const storeLabel = (id: StoreId): string => STORE_ID_TO_NAME[id] ?? id;
-
 type SyncPayload =
   | { scope: 'all' }
-  | { scope: 'store'; storeId: StoreId };
+  | { scope: 'store'; storeId: string };
 
 // Mirror of the route's 202 success shape
 // (api/operator/sync-now/route.ts:94-97). Kept as a local type rather
 // than imported from the route module — same client-bundle hygiene
-// reason as the STORES constant above.
+// reason as the previous STORES constant above.
 type SyncResponse = { accepted: number; eventIds: string[] };
 
 export function SyncNowButtons() {
+  const { stores } = useStores();
+  // Derive the per-store list from the hook (DB-backed, falls back to the
+  // hardcoded 3). The local const keeps the rest of the JSX unchanged.
+  const STORES = stores;
+
   // `pendingKey` doubles as the spinner-selector and the global
   // disable gate. `null` = idle. 'all' | storeId = a POST is in flight
   // for that scope. See file-level T-05.6-16-T1 comment for why a
@@ -144,24 +136,24 @@ export function SyncNowButtons() {
           )}
           Sync now (כל החנויות)
         </Button>
-        {STORES.map((storeId) => (
+        {STORES.map((s) => (
           <Button
-            key={storeId}
+            key={s.storeId}
             type="button"
             variant="ghost"
             size="sm"
             onClick={() =>
-              sync({ scope: 'store', storeId }, `Sync ${storeLabel(storeId)}`)
+              sync({ scope: 'store', storeId: s.storeId }, `Sync ${s.storeName}`)
             }
             disabled={pendingKey !== null}
             className="gap-1 bg-accent hover:opacity-90 text-accent-fg"
           >
-            {pendingKey === storeId ? (
+            {pendingKey === s.storeId ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <RefreshCw className="w-4 h-4" />
             )}
-            {storeLabel(storeId)}
+            {s.storeName}
           </Button>
         ))}
       </div>

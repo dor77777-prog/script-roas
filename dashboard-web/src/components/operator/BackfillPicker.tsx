@@ -47,20 +47,10 @@
 
 import { useState } from 'react';
 import { CalendarDays, Loader2 } from 'lucide-react';
-import { STORE_ID_TO_NAME } from '@/lib/platformsByStore';
+import { useStores } from '@/lib/useStores';
 import { operatorFetch } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-
-// Source of truth — mirrors the route's VALID_STORES allowlist.
-const ALL_STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
-
-// A8-F3 (2026-05-27): show human display names on the checkboxes
-// (zolplus → "Zol Plus", usmile360 → "360usmile"). DISPLAY ONLY — the
-// POSTed `storeIds` payload keeps the internal ids. STORE_ID_TO_NAME is the
-// canonical id→name map (platformsByStore.ts).
-const storeLabel = (id: string): string =>
-  STORE_ID_TO_NAME[id as keyof typeof STORE_ID_TO_NAME] ?? id;
 
 // D-A3 history boundary. Same value as eventBackfill.ts:111 +
 // /api/operator/backfill/route.ts (HISTORY_BOUNDARY). UX hint only;
@@ -91,12 +81,17 @@ function todayInIsrael(): string {
 }
 
 export function BackfillPicker() {
+  const { stores } = useStores();
+  // Derive the active store list from the hook (DB-backed, falls back to the
+  // hardcoded 3). The local const keeps the rest of the component unchanged.
+  const ALL_STORES = stores;
+
   const todayIso = todayInIsrael();
 
   const [from, setFrom] = useState(HISTORY_BOUNDARY);
   const [to, setTo] = useState(todayIso);
   const [storeIds, setStoreIds] = useState<Set<string>>(
-    () => new Set(ALL_STORES),
+    () => new Set(stores.map((s) => s.storeId)),
   );
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -188,15 +183,15 @@ export function BackfillPicker() {
           <div className="flex gap-3">
             {ALL_STORES.map((s) => (
               <label
-                key={s}
+                key={s.storeId}
                 className="flex items-center gap-1 text-sm cursor-pointer"
               >
                 <Input
                   type="checkbox"
-                  checked={storeIds.has(s)}
-                  onChange={() => toggleStore(s)}
+                  checked={storeIds.has(s.storeId)}
+                  onChange={() => toggleStore(s.storeId)}
                 />
-                <span>{storeLabel(s)}</span>
+                <span>{s.storeName}</span>
               </label>
             ))}
           </div>

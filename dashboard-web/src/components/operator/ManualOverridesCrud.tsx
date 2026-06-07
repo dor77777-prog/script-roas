@@ -48,6 +48,7 @@
 import useSWR from 'swr';
 import { useState } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
+import { useStores } from '@/lib/useStores';
 import { operatorFetch } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -76,7 +77,7 @@ type ListResponse = {
 // (`manual_overrides_platform_check`). If these diverge, the server
 // rejects with a 400 / 400 — visible in the form's error line but not
 // surfaced as a runtime crash.
-const ALL_STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
+// NOTE: ALL_STORES is now derived from useStores() inside the component.
 // TikTok unblock (2026-06-02): the DB CHECK constraint (migration
 // 20260522102151) and the server validator (operatorManualOverrides.ts —
 // VALID_PLATFORMS) both accept 'tiktok'. The override is CONSUMED end-to-end:
@@ -118,12 +119,12 @@ function todayInIsrael(): string {
   }).format(new Date());
 }
 
-function initialForm(): FormState {
+function initialForm(defaultStoreId = 'uzoshop'): FormState {
   // Default to IL today (operator-friendly). The user picks any date via
   // the date input; this is just an opinionated starting point.
   return {
     date: todayInIsrael(),
-    store_id: 'uzoshop',
+    store_id: defaultStoreId,
     platform: 'meta',
     spend: '0',
     currency: 'ILS',
@@ -132,6 +133,11 @@ function initialForm(): FormState {
 }
 
 export function ManualOverridesCrud() {
+  const { stores } = useStores();
+  // Derive the active store list from the hook (DB-backed, falls back to the
+  // hardcoded 3). The local const keeps the rest of the component unchanged.
+  const ALL_STORES = stores;
+
   // Task 5.2 (UI/UX overhaul) — explicit 15 s refresh + revalidateOnFocus so
   // this panel matches the rest of /operator after the refresh-paradigm
   // unification. Previously this hook ran with SWR defaults (focus-only),
@@ -146,7 +152,9 @@ export function ManualOverridesCrud() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [formState, setFormState] = useState<FormState>(initialForm);
+  const [formState, setFormState] = useState<FormState>(() =>
+    initialForm(stores[0]?.storeId ?? 'uzoshop'),
+  );
   const [addError, setAddError] = useState<string | null>(null);
 
   const closeDeleteModal = () => {
@@ -251,8 +259,8 @@ export function ManualOverridesCrud() {
             onChange={(e) => setFormState((s) => ({ ...s, store_id: e.target.value }))}
           >
             {ALL_STORES.map((s) => (
-              <option key={s} value={s}>
-                {s}
+              <option key={s.storeId} value={s.storeId}>
+                {s.storeName}
               </option>
             ))}
           </NativeSelect>
