@@ -98,3 +98,66 @@ describe('<RoasChart> annotation pins', () => {
     expect(screen.queryByTestId('chart-pin-out')).not.toBeInTheDocument();
   });
 });
+
+/* --------------------------------------------------------------------------
+ * Self-serve stores Phase 6a — per-store line/legend color prefers
+ * stores.brand_color (passed via brandColorByName). The legend swatch is a
+ * <span> with an inline backgroundColor we can read; the chosen color flows
+ * through colorFor() → storeColor(name, idx, brandColor).
+ * -------------------------------------------------------------------------- */
+
+/** The legend row's color swatch for the first store (inline backgroundColor). */
+function firstLegendSwatchBg(container: HTMLElement): string {
+  const swatch = container.querySelector<HTMLSpanElement>('span.inline-block.w-3\\.5');
+  return swatch?.style.backgroundColor ?? '';
+}
+
+function selfServeSeries(): DailySeries[] {
+  return [
+    { date: '2026-05-01', byStore: { 'Acme Store': 3.1 }, totalRoas: 3.1, totalRevenue: 1000, totalSpend: 320 },
+    { date: '2026-05-02', byStore: { 'Acme Store': 2.8 }, totalRoas: 2.8, totalRevenue: 900, totalSpend: 320 },
+  ];
+}
+
+describe('<RoasChart> — brandColorByName preference (Phase 6a)', () => {
+  it('a self-serve store renders its chosen brand_color in the legend swatch', () => {
+    const { container } = render(
+      <RoasChart
+        data={selfServeSeries()}
+        stores={['Acme Store']}
+        rows={[] as DailyRow[]}
+        brandColorByName={{ 'Acme Store': 'var(--store-2)' }}
+        bare
+      />,
+    );
+    // jsdom keeps CSS-var values verbatim in inline styles.
+    expect(firstLegendSwatchBg(container)).toBe('var(--store-2)');
+  });
+
+  it('without brandColorByName a known store keeps its canonical token (byte-identical)', () => {
+    const { container } = render(
+      <RoasChart data={series()} stores={['uzoshop']} rows={[] as DailyRow[]} bare />,
+    );
+    expect(firstLegendSwatchBg(container)).toBe('var(--store-uzo)');
+  });
+
+  it('ZERO-REGRESSION: a known store passed its backfilled brand_color is byte-identical to the no-map render', () => {
+    const withMap = render(
+      <RoasChart
+        data={series()}
+        stores={['uzoshop']}
+        rows={[] as DailyRow[]}
+        brandColorByName={{ uzoshop: 'var(--store-uzo)' }}
+        bare
+      />,
+    );
+    const withMapBg = firstLegendSwatchBg(withMap.container);
+    withMap.unmount();
+
+    const noMap = render(
+      <RoasChart data={series()} stores={['uzoshop']} rows={[] as DailyRow[]} bare />,
+    );
+    expect(withMapBg).toBe(firstLegendSwatchBg(noMap.container));
+    expect(withMapBg).toBe('var(--store-uzo)');
+  });
+});

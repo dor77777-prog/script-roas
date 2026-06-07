@@ -40,13 +40,27 @@ const PLOT_INSET_RIGHT = MARGIN_RIGHT; // 12px
 // keeps this sentinel value in sync with the canonical palette.
 const PRIMARY_COLOR = STORE_COLORS.uzoshop; // 'var(--chart-store-uzoshop)' — cyan (light) / bright cyan (dark)
 
-function colorFor(name: string, idx: number) {
-  return storeColor(name, idx);
+function colorFor(name: string, idx: number, brandColorByName?: Record<string, string>) {
+  // Self-serve stores Phase 6a — prefer the operator-chosen brand_color token
+  // (keyed by display name) over the name-keyed palette. The known 3 backfill
+  // to their canonical token, so their lines stay byte-identical; a self-serve
+  // store's line draws in its chosen color. Falls back to FALLBACK_PALETTE when
+  // the map is empty / has no entry (existing callers pass no map).
+  return storeColor(name, idx, brandColorByName?.[name]);
 }
 
 type Props = {
   data: DailySeries[];
   stores: string[];
+  /**
+   * Self-serve stores Phase 6a — optional display-name → `stores.brand_color`
+   * token map. When a store has a brand_color, its line/legend swatch render in
+   * that color (a self-serve 4th+ store shows its chosen color instead of an
+   * arbitrary fallback). Omitted/empty → name-keyed canonical palette (the
+   * existing behaviour; the known 3 are unaffected because their backfilled
+   * brand_color equals their canonical token).
+   */
+  brandColorByName?: Record<string, string>;
   /** Raw DailyRow array (same slice that produced `data`). Used to surface
    *  heavy-refund days with an amber dot ring and tooltip refund line. */
   rows: DailyRow[];
@@ -62,7 +76,7 @@ type Props = {
   store?: string;
 };
 
-export function RoasChart({ data, stores, rows, bare = false, range, store = 'All' }: Props) {
+export function RoasChart({ data, stores, rows, bare = false, range, store = 'All', brandColorByName }: Props) {
   // Build an O(1) lookup Set for heavy-refund (date|store) keys so the
   // dot renderer and tooltip body can check cheaply without filtering.
   const refundDayKeys = useMemo(() => {
@@ -147,7 +161,7 @@ export function RoasChart({ data, stores, rows, bare = false, range, store = 'Al
           to the primary line. */}
       <div className="flex items-center justify-end gap-3 sm:gap-4 flex-wrap text-[11px] sm:text-xs">
         {stores.map((s, i) => {
-          const color = colorFor(s, i);
+          const color = colorFor(s, i, brandColorByName);
           const isPrimary = color === PRIMARY_COLOR;
           return (
             <span key={s} className="inline-flex items-center gap-1.5">
@@ -253,7 +267,7 @@ export function RoasChart({ data, stores, rows, bare = false, range, store = 'Al
               }}
             />
             {stores.map((s, i) => {
-              const color = colorFor(s, i);
+              const color = colorFor(s, i, brandColorByName);
               const isPrimary = color === PRIMARY_COLOR;
               return (
                 <Line

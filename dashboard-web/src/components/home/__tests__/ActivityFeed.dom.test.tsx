@@ -23,6 +23,12 @@ let lastSwrKey: string | undefined;
 
 vi.mock('swr', () => ({
   default: (key: string) => {
+    // useStores() (Self-serve stores Phase 6a) also calls useSWR, keyed on
+    // '/api/stores'. Only capture the store-events key here and let the
+    // useStores hook fall back to its hardcoded 3 (returning `undefined` data
+    // makes the hook use its own fallbackData) so the brand-color resolution
+    // path is exercised without disturbing the store-events assertion.
+    if (key === '/api/stores') return { data: undefined, error: undefined };
     lastSwrKey = key;
     return swrReturn;
   },

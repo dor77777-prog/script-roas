@@ -43,7 +43,8 @@ import { SourceBadge } from '@/components/ui/SourceBadge';
 import { cn } from '@/lib/utils';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 import { STORE_ID_TO_NAME, type StoreId } from '@/lib/platformsByStore';
-import { storeColor } from '@/lib/storeColors';
+import { storeColor, buildStoreBrandColorMap } from '@/lib/storeColors';
+import { useStores } from '@/lib/useStores';
 import type { StoreEventRow } from '@/lib/webhooks/store';
 import type { StoreEventsResponse } from '@/app/api/store-events/route';
 
@@ -241,15 +242,22 @@ function EventRow({
   serverNowMs,
   fresh,
   allowMotion,
+  brandColorByKey,
 }: {
   ev: StoreEventRow;
   serverNowMs: number;
   fresh: boolean;
   allowMotion: boolean;
+  /** storeId/storeName → brand_color token (Self-serve stores Phase 6a). */
+  brandColorByKey: Record<string, string>;
 }) {
   const pres = TYPE_PRESENTATION[ev.type] ?? TYPE_PRESENTATION.sale;
   const { Icon } = pres;
   const display = storeDisplayName(ev.store_id);
+  // Prefer the operator-chosen brand_color (keyed by raw store_id) so a
+  // self-serve store's dot renders in its color; the known 3 backfill to their
+  // canonical token → byte-identical.
+  const brandColor = brandColorByKey[ev.store_id] ?? brandColorByKey[display];
   const showMoney = ev.type !== 'add_to_cart' && ev.amount_cad !== null;
 
   return (
@@ -293,7 +301,7 @@ function EventRow({
           >
             <span
               className="w-[7px] h-[7px] rounded-full"
-              style={{ background: storeColor(display) }}
+              style={{ background: storeColor(display, 0, brandColor) }}
               aria-hidden
             />
             <bdi dir="ltr">{display}</bdi>
@@ -331,6 +339,16 @@ export function ActivityFeed({ store, limit = 20, className, onSeeAll }: Activit
 
   const reducedMotion = useReducedMotion();
   const allowMotion = !reducedMotion;
+
+  // Self-serve stores Phase 6a — resolve each event's store dot through its
+  // operator-chosen brand_color. useStores() falls back to the hardcoded 3
+  // (whose backfilled brand_color === the canonical token), so the 3 known
+  // stores' dots stay byte-identical; a 4th store's dot uses its chosen color.
+  const { stores: storeList } = useStores();
+  const brandColorByKey = useMemo(
+    () => buildStoreBrandColorMap(storeList),
+    [storeList],
+  );
 
   const liveState = deriveLiveState(data, error);
   const serverNow = data?.serverNow ?? new Date().toISOString();
@@ -389,6 +407,7 @@ export function ActivityFeed({ store, limit = 20, className, onSeeAll }: Activit
               // when the list shifts). The freshness is purely presentational.
               fresh={i === 0}
               allowMotion={allowMotion}
+              brandColorByKey={brandColorByKey}
             />
           ))
         )}

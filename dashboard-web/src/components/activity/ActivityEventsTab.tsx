@@ -34,7 +34,8 @@ import { NativeSelect } from '@/components/ui/NativeSelect';
 import { SourceBadge } from '@/components/ui/SourceBadge';
 import { cn } from '@/lib/utils';
 import { STORE_ID_TO_NAME, type StoreId } from '@/lib/platformsByStore';
-import { storeColor } from '@/lib/storeColors';
+import { storeColor, buildStoreBrandColorMap } from '@/lib/storeColors';
+import { useStores } from '@/lib/useStores';
 import { getTodayInIsraelTz } from '@/lib/dateRange';
 import type { StoreEventRow } from '@/lib/webhooks/store';
 import type { StoreEventsPagedResponse } from '@/app/api/store-events/route';
@@ -167,10 +168,20 @@ function ilTime(iso: string): string {
  * Event row
  * -------------------------------------------------------------------------- */
 
-function EventRow({ ev }: { ev: StoreEventRow }) {
+function EventRow({
+  ev,
+  brandColorByKey,
+}: {
+  ev: StoreEventRow;
+  /** storeId/storeName → brand_color token (Self-serve stores Phase 6a). */
+  brandColorByKey: Record<string, string>;
+}) {
   const pres = TYPE_PRESENTATION[ev.type] ?? TYPE_PRESENTATION.sale;
   const { Icon } = pres;
   const display = storeDisplayName(ev.store_id);
+  // Prefer the operator-chosen brand_color (keyed by raw store_id); known 3
+  // backfill to their canonical token → byte-identical.
+  const brandColor = brandColorByKey[ev.store_id] ?? brandColorByKey[display];
   const showMoney = ev.type !== 'add_to_cart' && ev.amount_cad !== null;
 
   return (
@@ -201,7 +212,7 @@ function EventRow({ ev }: { ev: StoreEventRow }) {
         className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-bold text-[10.5px] bg-glass-2 text-ink-secondary shrink-0"
         data-testid="activity-store-chip"
       >
-        <span className="w-[7px] h-[7px] rounded-full" style={{ background: storeColor(display) }} aria-hidden />
+        <span className="w-[7px] h-[7px] rounded-full" style={{ background: storeColor(display, 0, brandColor) }} aria-hidden />
         <bdi dir="ltr">{display}</bdi>
       </span>
       {ev.type !== 'refund' && <SourceBadge source={ev.source} className="shrink-0" />}
@@ -219,6 +230,16 @@ function EventRow({ ev }: { ev: StoreEventRow }) {
 
 export function ActivityEventsTab({ data, globalStore }: ActivityEventsTabProps) {
   const today = useMemo(() => getTodayInIsraelTz(), []);
+
+  // Self-serve stores Phase 6a — resolve each store chip's dot through its
+  // operator-chosen brand_color. useStores() falls back to the hardcoded 3
+  // (whose backfilled brand_color === the canonical token), so the 3 known
+  // stores' chips stay byte-identical; a 4th store uses its chosen color.
+  const { stores: storeList } = useStores();
+  const brandColorByKey = useMemo(
+    () => buildStoreBrandColorMap(storeList),
+    [storeList],
+  );
 
   // Store filter — seeded from the global store filter (display NAME or 'All').
   const [storeFilter, setStoreFilter] = useState<string>(globalStore ?? 'All');
@@ -413,7 +434,7 @@ export function ActivityEventsTab({ data, globalStore }: ActivityEventsTabProps)
                 {dayHeaderLabel(day, today)}
               </div>
               {rows.map((ev) => (
-                <EventRow key={ev.id} ev={ev} />
+                <EventRow key={ev.id} ev={ev} brandColorByKey={brandColorByKey} />
               ))}
             </div>
           ))

@@ -63,6 +63,72 @@ describe('storeColors — canonical single-source palette (A1-F5 / A6-S2)', () =
   });
 });
 
+describe('storeColor() — brandColor preference (self-serve Phase 6a)', () => {
+  it('PREFERS a non-empty brandColor over the name-keyed lookup', () => {
+    // A self-serve 4th store with its own chosen token.
+    expect(storeColor('Acme Store', 3, 'var(--store-2)')).toBe('var(--store-2)');
+  });
+
+  it('PREFERS brandColor even for an UNKNOWN store (no name-key, no fallback)', () => {
+    // Without brandColor this store would get FALLBACK_PALETTE[3 % n]; with it,
+    // the operator's chosen color wins.
+    const withBrand = storeColor('Acme Store', 3, 'var(--store-3)');
+    const withoutBrand = storeColor('Acme Store', 3);
+    expect(withBrand).toBe('var(--store-3)');
+    expect(withBrand).not.toBe(withoutBrand);
+  });
+
+  it('falls back to the name-keyed lookup when brandColor is null/undefined/empty', () => {
+    // null / undefined / '' / whitespace are all "absent" → name-keyed path.
+    expect(storeColor('uzoshop', 0, null)).toBe(STORE_COLORS.uzoshop);
+    expect(storeColor('uzoshop', 0, undefined)).toBe(STORE_COLORS.uzoshop);
+    expect(storeColor('uzoshop', 0, '')).toBe(STORE_COLORS.uzoshop);
+    expect(storeColor('uzoshop', 0, '   ')).toBe(STORE_COLORS.uzoshop);
+  });
+
+  it('falls back to FALLBACK_PALETTE for an unknown store when brandColor is absent', () => {
+    const color = storeColor('future-store', 3);
+    expect(color).toMatch(/^#[0-9a-fA-F]{6}$/);
+  });
+
+  it('ZERO-REGRESSION: each of the 3 known stores, when passed THEIR backfilled brandColor, resolves to the EXACT same value as the name-keyed lookup', () => {
+    // These brand_color values are the Phase-1 DB backfill
+    // (migration 20260606170000) AND the getStores/useStores hardcoded
+    // fallback. Preferring brandColor for the 3 must be byte-identical to the
+    // name-keyed path — that is the hard zero-regression line.
+    const BACKFILL: Record<string, string> = {
+      uzoshop: 'var(--store-uzo)',
+      'Zol Plus': 'var(--store-3)',
+      '360usmile': 'var(--store-usm)',
+    };
+    for (const store of KNOWN_STORES) {
+      expect(storeColor(store, 0, BACKFILL[store])).toBe(storeColor(store, 0));
+      expect(storeColor(store, 0, BACKFILL[store])).toBe(STORE_COLORS[store]);
+    }
+  });
+});
+
+describe('storeBadge() — brandColor preference (self-serve Phase 6a)', () => {
+  it('fg PREFERS a non-empty brandColor; bg color-mixes that same brandColor', () => {
+    const { bg, fg } = storeBadge('Acme Store', 3, 'var(--store-2)');
+    expect(fg).toBe('var(--store-2)');
+    expect(bg).toContain('color-mix');
+    expect(bg).toContain('var(--store-2)');
+    expect(bg).toMatch(/16%/);
+  });
+
+  it('falls back to the name-keyed badge when brandColor is absent', () => {
+    expect(storeBadge('uzoshop', 0, '').fg).toBe(STORE_COLORS.uzoshop);
+    expect(storeBadge('uzoshop', 0, null).fg).toBe(STORE_COLORS.uzoshop);
+  });
+
+  it('ZERO-REGRESSION: known store + its backfilled brandColor === name-keyed badge', () => {
+    expect(storeBadge('uzoshop', 0, 'var(--store-uzo)')).toEqual(
+      storeBadge('uzoshop', 0),
+    );
+  });
+});
+
 describe('storeBadge() — bg + fg derived from the same token', () => {
   it('returns an object with `bg` and `fg` keys for every known store', () => {
     for (const store of KNOWN_STORES) {

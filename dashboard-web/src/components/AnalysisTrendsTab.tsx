@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { TrendingUp, CalendarDays } from 'lucide-react';
 import { RoasChart } from '@/components/RoasChart';
 import { AnnotationsPanel } from '@/components/AnnotationsPanel';
@@ -11,6 +12,8 @@ import { rangeLabelHebrew } from '@/lib/presets';
 import { synthesizeTrends } from '@/lib/synthesis/trends';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import { dailySeries } from '@/lib/analytics';
+import { useStores } from '@/lib/useStores';
+import { buildStoreBrandColorMap } from '@/lib/storeColors';
 
 type Props = {
   data: DashboardData;
@@ -25,6 +28,15 @@ type Props = {
 
 export function AnalysisTrendsTab({ data, filtered, filters, setFilters }: Props) {
   const trendsSynthesis = synthesizeTrends({ rows: filtered.cur });
+  // Self-serve stores Phase 6a — per-store ROAS lines prefer each store's
+  // operator-chosen brand_color. useStores() falls back to the hardcoded 3
+  // (backfilled brand_color === canonical token) so the 3 lines stay
+  // byte-identical; a self-serve store's line draws in its chosen color.
+  const { stores: storeList } = useStores();
+  const brandColorByName = useMemo(
+    () => buildStoreBrandColorMap(storeList),
+    [storeList],
+  );
   return (
     // animate-fade-in-up restores the mount transition the Radix TabsContent
     // used to provide (now that this is a top-level tab) and matches the other
@@ -59,6 +71,7 @@ export function AnalysisTrendsTab({ data, filtered, filters, setFilters }: Props
           rows={filtered.cur}
           range={filters.range}
           store={filters.store}
+          brandColorByName={brandColorByName}
           bare
         />
       </div>

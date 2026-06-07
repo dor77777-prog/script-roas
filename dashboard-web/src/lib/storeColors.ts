@@ -42,15 +42,65 @@ const FALLBACK_PALETTE = [
 ];
 
 /**
- * Return the canonical color for a store name.
- * Falls back through FALLBACK_PALETTE by index for unknown stores so a
- * new store gets a deterministic color without crashing.
+ * Return the canonical color for a store.
  *
- * @param name  Store name as it appears in DailyRow.storeName
- * @param idx   Optional ordinal index of the store in the list (for fallback)
+ * Resolution order (Self-serve stores Phase 6a):
+ *   1. `brandColor` — the operator-chosen `stores.brand_color` token, when
+ *      present + non-empty. A self-serve (4th+) store renders in ITS chosen
+ *      color instead of an arbitrary FALLBACK_PALETTE slot.
+ *   2. `STORE_COLORS[name]` — the name-keyed canonical token for the known 3.
+ *   3. `FALLBACK_PALETTE[idx]` — deterministic per-index hex for an unknown
+ *      store that has no brandColor (never crashes).
+ *
+ * ZERO-REGRESSION: Phase 1 backfilled `stores.brand_color` for the 3 existing
+ * stores to EXACTLY their `STORE_COLORS[name]` token (uzoshop→var(--store-uzo),
+ * Zol Plus→var(--store-3), 360usmile→var(--store-usm); see migration
+ * 20260606170000 + getStores HARDCODED). So preferring brandColor for the 3 is
+ * byte-identical to the name-keyed path — their rendered colors do not change.
+ *
+ * brandColor is a CSS-var token (theme-aware, dark-mode-overridable), NOT a raw
+ * hex — so the dark-mode override cascade + chart-ink legibility handling all
+ * still apply. (The operator UI restricts the picker to the `--store-*` token
+ * palette; this resolver passes whatever token the row carries straight
+ * through.)
+ *
+ * @param name        Store name as it appears in DailyRow.storeName
+ * @param idx         Optional ordinal index of the store in the list (fallback)
+ * @param brandColor  Optional `stores.brand_color` token — wins when non-empty
  */
-export function storeColor(name: string, idx = 0): string {
+export function storeColor(
+  name: string,
+  idx = 0,
+  brandColor?: string | null,
+): string {
+  if (typeof brandColor === 'string' && brandColor.trim() !== '') {
+    return brandColor;
+  }
   return STORE_COLORS[name] ?? FALLBACK_PALETTE[idx % FALLBACK_PALETTE.length];
+}
+
+/**
+ * Build a `key → brandColor` lookup from the store list, keyed by BOTH the
+ * internal storeId AND the display storeName, so a render site holding either
+ * identifier can resolve the operator-chosen `stores.brand_color` token
+ * (Self-serve stores Phase 6a). Empty/whitespace brand colors are skipped so a
+ * lookup miss falls cleanly through to the name-keyed palette.
+ *
+ * Typed loosely (`{ storeId; storeName; brandColor }`) so callers can pass the
+ * full `StoreInfo[]` without this module importing the type (keeps storeColors
+ * dependency-free / unit-testable in isolation).
+ */
+export function buildStoreBrandColorMap(
+  stores: ReadonlyArray<{ storeId: string; storeName: string; brandColor: string | null }>,
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const s of stores) {
+    if (typeof s.brandColor === 'string' && s.brandColor.trim() !== '') {
+      map[s.storeId] = s.brandColor;
+      map[s.storeName] = s.brandColor;
+    }
+  }
+  return map;
 }
 
 /**
@@ -64,9 +114,19 @@ export function storeColor(name: string, idx = 0): string {
  * Returns ready-to-use inline-style values (not Tailwind classes) so
  * consumers can spread the result into `style={...}` without needing to
  * thread a className-driven token through.
+ *
+ * `brandColor` (optional) takes precedence over the name-keyed token — same
+ * resolution as `storeColor()` (Self-serve stores Phase 6a).
  */
-export function storeBadge(name: string, idx = 0): { bg: string; fg: string } {
-  const fg = storeColor(name, idx);
+export function storeBadge(
+  name: string,
+  idx = 0,
+  brandColor?: string | null,
+): { bg: string; fg: string } {
+  // Same brandColor → name-key → fallback resolution as storeColor(); the bg is
+  // always a color-mix of whichever fg won, so the badge tint stays in sync with
+  // the chosen color in both modes (Self-serve stores Phase 6a).
+  const fg = storeColor(name, idx, brandColor);
   // color-mix keeps the badge bg in sync with the same token in both modes.
   // For unknown-store hex fallbacks, color-mix still works (hex is a valid
   // input to color-mix in srgb space).

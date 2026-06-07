@@ -48,6 +48,8 @@ import { Heading } from '@/components/ui/Typography';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { PlatformBadge } from '@/components/ui/PlatformBadge';
 import { RoasChart } from '@/components/RoasChart';
+import { useStores } from '@/lib/useStores';
+import { buildStoreBrandColorMap } from '@/lib/storeColors';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import { useRoasBandGradient, type RoasBand } from '@/lib/format/useRoasBandGradient';
 import { adDisplayState, adDisplayBand } from '@/lib/adState';
@@ -169,6 +171,16 @@ export function StoreDetailModal({
       totalSpend: 0,
     }));
   }, [data]);
+
+  // Self-serve stores Phase 6a — the embedded single-store ROAS line prefers
+  // this store's operator-chosen brand_color. useStores() falls back to the
+  // hardcoded 3 (backfilled brand_color === canonical token), so a known store's
+  // line stays byte-identical; a self-serve store's line draws in its color.
+  const { stores: storeList } = useStores();
+  const brandColorByName = useMemo(
+    () => buildStoreBrandColorMap(storeList),
+    [storeList],
+  );
 
   // White band-ink sparkline values — only the finite (non-gap) days.
   const sparkValues = useMemo<number[]>(() => {
@@ -428,7 +440,7 @@ export function StoreDetailModal({
                 ROAS לאורך זמן
               </h3>
               <Card className="!p-3 sm:!p-4">
-                <RoasChart data={chartSeries} stores={[data.storeName]} rows={chartRows} bare />
+                <RoasChart data={chartSeries} stores={[data.storeName]} rows={chartRows} brandColorByName={brandColorByName} bare />
               </Card>
             </section>
           )}
