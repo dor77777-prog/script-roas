@@ -32,7 +32,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { encryptSecret, decryptSecret, maskSecret } from '@/lib/secretsEncryption';
 import { verifyShopify, verifyMeta, verifyGoogle } from '@/lib/credVerifiers';
 import { getStores } from '@/lib/getStores';
-import { RESERVED_STORE_IDS } from '@/lib/storeSecretsReader';
+import { RESERVED_STORE_IDS, SHOP_DOMAIN_RE } from '@/lib/storeSecretsReader';
 import { userFacingError } from '@/lib/apiErrors';
 import { captureRouteError } from '@/lib/sentry/capture';
 
@@ -40,11 +40,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const STORE_ID_RE = /^[a-z0-9_-]+$/;
-// Strict single-label *.myshopify.com host: one DNS label + the literal suffix.
-// Rejects malformed hosts like `evil.com/path.myshopify.com`, `.myshopify.com`,
-// `a b.myshopify.com`, `<script>.myshopify.com` before they reach the live
-// Shopify verify (a minor SSRF surface) or land in `allowed_origins`.
-const SHOP_DOMAIN_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
+// SHOP_DOMAIN_RE (strict single-label *.myshopify.com) is the SINGLE source of
+// truth shared with the PATCH + verify-creds routes (imported from
+// storeSecretsReader) so all three enforce ONE regex — no divergent copies.
 
 type Platform = 'shopify' | 'meta' | 'google' | 'tiktok';
 
@@ -59,6 +57,14 @@ interface AddStoreBody {
   shopify: { clientId: string; clientSecret: string };
   meta?: { token: string; adAccountId: string };
   google?: { customerId: string; refreshToken: string };
+  // OPERATOR-ENTERED Shopify webhook signing secret (Fix B1 / MF-2). Optional.
+  // Shopify's order/refund webhooks (registered via Settings→Notifications) are
+  // signed with a SHOP-LEVEL secret that is NOT the custom-app client_secret —
+  // so we must NEVER default signing_secret to clientSecret (that would 401 the
+  // real-time feed). Null is fine: the store still works for cron-pulled orders;
+  // the operator can paste the secret later to enable the real-time feed. It is a
+  // SECRET: masked/never echoed, kept ONLY in store_webhooks.signing_secret.
+  webhookSecret?: string;
 }
 
 // Encrypt + upsert one secret (mirrors backfill-secrets:upsertSecret). Roundtrip-
@@ -121,6 +127,13 @@ export async function POST(req: Request): Promise<NextResponse> {
   const shopify = body.shopify;
   const meta = body.meta;
   const google = body.google;
+  // Operator-entered webhook signing secret (Fix B1). Optional; null when absent
+  // (NEVER defaulted to the Shopify client_secret). A non-string is treated as
+  // absent (→ null) rather than a hard error — it's a convenience field.
+  const webhookSecret =
+    typeof body.webhookSecret === 'string' && body.webhookSecret.trim() !== ''
+      ? body.webhookSecret
+      : null;
 
   if (!STORE_ID_RE.test(storeId)) {
     return NextResponse.json({ error: 'storeId must match ^[a-z0-9_-]+$' }, { status: 400 });
@@ -251,16 +264,18 @@ export async function POST(req: Request): Promise<NextResponse> {
       }
 
       // ----- 5. INSERT store_webhooks -----
-      // signing_secret is set to the Shopify app's client_secret because Shopify
-      // signs CUSTOM-app webhooks with the app's API secret key (HMAC). This is an
-      // ASSUMPTION to verify against an existing store's row; if Shopify
-      // auto-assigns a distinct secret instead, signing_secret becomes an
-      // edit-creds field (Task 8).
+      // signing_secret is the OPERATOR-ENTERED webhookSecret (Fix B1 / MF-2), or
+      // NULL when not provided. We do NOT default it to the Shopify app's
+      // client_secret: Shopify's order/refund webhooks (registered via
+      // Settings→Notifications) are signed with a SHOP-LEVEL secret distinct from
+      // the custom-app client_secret, so that default would 401 the real-time feed
+      // (HMAC mismatch). Null is safe — the store still works for cron-pulled
+      // orders; the operator can set the secret later (PATCH webhookSecret).
       const cartPublicToken = randomBytes(24).toString('base64url');
       const { error: whErr } = await admin.from('store_webhooks').insert({
         store_id: storeId,
         shop_domain: shopDomain,
-        signing_secret: shopify.clientSecret,
+        signing_secret: webhookSecret,
         cart_public_token: cartPublicToken,
         allowed_origins: isHeadless ? [] : [`https://${shopDomain}`],
         enabled: true,
@@ -358,16 +373,24 @@ export async function GET(): Promise<NextResponse> {
       byStore.get(r.store_id)!.add(p);
     }
 
-    const rows = stores.map((s) => ({
-      storeId: s.storeId,
-      name: s.storeName,
-      brandColor: s.brandColor,
-      isHeadless: s.isHeadless,
-      hasTikTok: s.hasTikTok,
-      status: s.status,
-      displayOrder: s.displayOrder,
-      platforms: Array.from(byStore.get(s.storeId) ?? []).sort(),
-    }));
+    const rows = stores.map((s) => {
+      // `platforms` = the platforms this store PARTICIPATES in:
+      //   {shopify/meta/google from store_secrets presence} ∪ {tiktok from has_tiktok}.
+      // TikTok is a SHARED ad account with NO per-store secret, so it would never
+      // appear from secrets alone (Fix B4) — derive it from the has_tiktok column.
+      const set = new Set<Platform>(byStore.get(s.storeId) ?? []);
+      if (s.hasTikTok) set.add('tiktok');
+      return {
+        storeId: s.storeId,
+        name: s.storeName,
+        brandColor: s.brandColor,
+        isHeadless: s.isHeadless,
+        hasTikTok: s.hasTikTok,
+        status: s.status,
+        displayOrder: s.displayOrder,
+        platforms: Array.from(set).sort(),
+      };
+    });
 
     return NextResponse.json({ stores: rows }, { status: 200 });
   } catch (err) {

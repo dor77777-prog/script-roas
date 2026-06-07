@@ -25,6 +25,10 @@ const db = vi.hoisted(() => ({
   ownAllowedOrigins: ['https://mystore.myshopify.com'] as string[],
   // the store's authoritative is_headless flag (stores row read)
   isHeadless: false as boolean,
+  // the store's authoritative has_tiktok flag (stores row read; GET derives the
+  // 'tiktok' platform from it — Fix B4 — since TikTok is a shared account with no
+  // per-store secret).
+  hasTiktok: false as boolean,
   // store_secrets presence rows for the GET (no values)
   secretRows: [] as Array<{ store_id: string; secret_key: string }>,
   // make a write fail (write-error path → 500)
@@ -71,7 +75,7 @@ vi.mock('@/lib/supabaseAdmin', () => {
               if (table === 'stores' && col === 'id') {
                 return Promise.resolve({
                   data: db.existingStoreIds.includes(String(val))
-                    ? { id: val, is_headless: db.isHeadless }
+                    ? { id: val, name: String(val), brand_color: 'var(--store-uzo)', is_headless: db.isHeadless, has_tiktok: db.hasTiktok, display_order: 1 }
                     : null,
                   error: null,
                 });
@@ -180,6 +184,7 @@ beforeEach(() => {
   db.ownShopDomain = 'mystore.myshopify.com';
   db.ownAllowedOrigins = ['https://mystore.myshopify.com'];
   db.isHeadless = false;
+  db.hasTiktok = false;
   db.secretRows = [];
   db.throwOn = null;
   verify.shopify = { ok: true, message: 'ok', currency: 'CAD' };
@@ -220,6 +225,29 @@ describe('GET /api/operator/stores/[id]', () => {
   it('404 when the store does not exist', async () => {
     const res = await getReq('ghost');
     expect(res.status).toBe(404);
+  });
+
+  it('400 for the reserved __global__ id (Fix B3 — defensive short-circuit, no DB read)', async () => {
+    const res = await getReq('__global__');
+    expect(res.status).toBe(400);
+  });
+
+  it('includes tiktok in platforms when has_tiktok=true even with no TIKTOK_ secret (Fix B4)', async () => {
+    db.hasTiktok = true;
+    db.secretRows = [{ store_id: 'mystore', secret_key: 'SHOPIFY_DOMAIN' }];
+    const res = await getReq('mystore');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.platforms).toContain('tiktok');
+    expect(body.platforms.sort()).toEqual(['shopify', 'tiktok']);
+  });
+
+  it('does NOT include tiktok when has_tiktok=false (Fix B4)', async () => {
+    db.hasTiktok = false;
+    db.secretRows = [{ store_id: 'mystore', secret_key: 'SHOPIFY_DOMAIN' }];
+    const res = await getReq('mystore');
+    const body = await res.json();
+    expect(body.platforms).not.toContain('tiktok');
   });
 });
 
@@ -470,6 +498,69 @@ describe('PATCH /api/operator/stores/[id] — rotate creds (verify-first)', () =
     expect(res.status).toBe(400);
     // Meta verified ok but Google failed → write NOTHING (no Meta secret either).
     expect(noWrites()).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PATCH — webhookSecret (Fix B1 / MF-2): operator-entered signing secret.
+// signing_secret is NO LONGER derived from the Shopify client_secret on a creds
+// rotation; it is only ever set when the operator provides webhookSecret.
+// ---------------------------------------------------------------------------
+describe('PATCH /api/operator/stores/[id] — webhookSecret (Fix B1)', () => {
+  it('webhookSecret-only PATCH updates store_webhooks.signing_secret (no creds verify)', async () => {
+    const res = await patch('mystore', { webhookSecret: 'NEW-SIGNING-SECRET' });
+    expect([200, 201]).toContain(res.status);
+    expect(verify.shopifyCalls).toBe(0);
+    expect(db.webhooksUpdates).toHaveLength(1);
+    expect(db.webhooksUpdates[0]).toMatchObject({ signing_secret: 'NEW-SIGNING-SECRET' });
+  });
+
+  it('a Shopify creds rotation ALONE does NOT touch signing_secret (Fix B1: no client_secret default)', async () => {
+    db.ownShopDomain = 'mystore.myshopify.com';
+    const res = await patch('mystore', { shopify: { clientId: 'cid', clientSecret: 'ROTATED-SECRET' } });
+    expect([200, 201]).toContain(res.status);
+    // store_webhooks may or may not be updated, but if it IS, signing_secret must
+    // NOT be present (we no longer write client_secret into it).
+    for (const wh of db.webhooksUpdates) {
+      expect(wh).not.toHaveProperty('signing_secret');
+    }
+    // and the rotated client_secret must never appear as a signing_secret value.
+    const sawClientSecretAsSigning = db.webhooksUpdates.some((wh) => wh.signing_secret === 'ROTATED-SECRET');
+    expect(sawClientSecretAsSigning).toBe(false);
+  });
+
+  it('webhookSecret + Shopify rotation: signing_secret = webhookSecret (not client_secret)', async () => {
+    db.ownShopDomain = 'mystore.myshopify.com';
+    const res = await patch('mystore', {
+      shopify: { clientId: 'cid', clientSecret: 'ROTATED-SECRET' },
+      webhookSecret: 'EXPLICIT-WEBHOOK-SECRET',
+    });
+    expect([200, 201]).toContain(res.status);
+    const withSigning = db.webhooksUpdates.find((wh) => 'signing_secret' in wh);
+    expect(withSigning?.signing_secret).toBe('EXPLICIT-WEBHOOK-SECRET');
+  });
+
+  it('webhookSecret applies on a domain change too (store_webhooks update carries it)', async () => {
+    db.ownShopDomain = 'old.myshopify.com';
+    secret.shopifyClientId = 'cid';
+    secret.shopifyClientSecret = 'csec';
+    verify.shopify = { ok: true, message: 'ok' };
+    const res = await patch('mystore', {
+      shopDomain: 'newdomain.myshopify.com',
+      webhookSecret: 'WS-ON-DOMAIN-CHANGE',
+    });
+    expect([200, 201]).toContain(res.status);
+    expect(db.webhooksUpdates).toHaveLength(1);
+    expect(db.webhooksUpdates[0]).toMatchObject({
+      shop_domain: 'newdomain.myshopify.com',
+      signing_secret: 'WS-ON-DOMAIN-CHANGE',
+    });
+  });
+
+  it('NEVER echoes the webhookSecret in the response', async () => {
+    const res = await patch('mystore', { webhookSecret: 'SECRET-WS-XYZ-9999' });
+    const text = await res.text();
+    expect(text).not.toContain('SECRET-WS-XYZ-9999');
   });
 });
 

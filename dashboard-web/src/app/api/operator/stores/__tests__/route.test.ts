@@ -301,13 +301,14 @@ describe('POST /api/operator/stores — happy path (shopify+meta+google)', () =>
       meta_ad_account_id: 'act_999', google_ads_customer_id: '111-222-3333',
     });
 
-    // store_webhooks row — has a cart_public_token + signing_secret
+    // store_webhooks row — has a cart_public_token; signing_secret is NULL when
+    // no webhookSecret was provided (Fix B1: NEVER default to the client_secret).
     expect(db.webhooksInserts).toHaveLength(1);
     const wh = db.webhooksInserts[0];
     expect(wh.shop_domain).toBe('fullstore.myshopify.com');
     expect(typeof wh.cart_public_token).toBe('string');
     expect(String(wh.cart_public_token).length).toBeGreaterThan(0);
-    expect(wh.signing_secret).toBe('csecret');
+    expect(wh.signing_secret).toBeNull();
 
     // store_ad_state — meta + google + tiktok per flags
     const platforms = db.adStateUpserts.map((r) => r.platform).sort();
@@ -334,6 +335,37 @@ describe('POST /api/operator/stores — happy path (shopify+meta+google)', () =>
     db.existingDisplayOrders = [1, 2, 7];
     await post(validBody());
     expect(db.storesInserts[0].display_order).toBe(8);
+  });
+});
+
+describe('POST /api/operator/stores — webhookSecret (Fix B1 / MF-2)', () => {
+  it('writes the operator-entered webhookSecret to store_webhooks.signing_secret (NOT the client_secret)', async () => {
+    await post(validBody({
+      storeId: 'secretstore',
+      shopDomain: 'secretstore.myshopify.com',
+      webhookSecret: 'WEBHOOK-SIGNING-SECRET',
+    }));
+    expect(db.webhooksInserts).toHaveLength(1);
+    const wh = db.webhooksInserts[0];
+    expect(wh.signing_secret).toBe('WEBHOOK-SIGNING-SECRET');
+    // The client_secret must NOT have been used as the signing secret.
+    expect(wh.signing_secret).not.toBe('csecret');
+  });
+
+  it('sets signing_secret = null when webhookSecret is omitted (never defaults to client_secret)', async () => {
+    await post(validBody({ storeId: 'nowebhook', shopDomain: 'nowebhook.myshopify.com' }));
+    expect(db.webhooksInserts).toHaveLength(1);
+    expect(db.webhooksInserts[0].signing_secret).toBeNull();
+  });
+
+  it('never echoes the webhookSecret back in the response', async () => {
+    const res = await post(validBody({
+      storeId: 'maskstore',
+      shopDomain: 'maskstore.myshopify.com',
+      webhookSecret: 'SUPER-SECRET-WEBHOOK-12345',
+    }));
+    const text = await res.text();
+    expect(text).not.toContain('SUPER-SECRET-WEBHOOK-12345');
   });
 });
 
@@ -434,13 +466,28 @@ describe('GET /api/operator/stores', () => {
     const text = await res.text();
     const body = JSON.parse(text);
     const uzo = body.stores.find((s: { storeId: string }) => s.storeId === 'uzoshop');
-    expect(uzo.platforms.sort()).toEqual(['google', 'meta', 'shopify']);
+    // uzoshop has hasTikTok=true (shared account, NO per-store TIKTOK_ secret) →
+    // 'tiktok' is still present in platforms (Fix B4: derive from has_tiktok too).
+    expect(uzo.platforms.sort()).toEqual(['google', 'meta', 'shopify', 'tiktok']);
     const zol = body.stores.find((s: { storeId: string }) => s.storeId === 'zolplus');
+    // zolplus has hasTikTok=false → no tiktok in platforms.
     expect(zol.platforms).toEqual(['shopify']);
     expect(zol.status).toBe('archived'); // includeArchived
     // no ciphertext / iv / tag anywhere in the payload
     expect(text).not.toContain('ciphertext');
     expect(text).not.toContain('"iv"');
     expect(text).not.toContain('"tag"');
+  });
+
+  it('includes tiktok in platforms purely from has_tiktok even with NO secrets at all (Fix B4)', async () => {
+    db.secretRows = []; // no store_secrets rows for anyone
+    const res = await GET();
+    const body = await res.json();
+    const uzo = body.stores.find((s: { storeId: string }) => s.storeId === 'uzoshop');
+    // shopify is implied? No — shopify comes from secrets presence; with NO secret
+    // rows uzoshop still has tiktok from has_tiktok=true.
+    expect(uzo.platforms).toContain('tiktok');
+    const zol = body.stores.find((s: { storeId: string }) => s.storeId === 'zolplus');
+    expect(zol.platforms).not.toContain('tiktok');
   });
 });

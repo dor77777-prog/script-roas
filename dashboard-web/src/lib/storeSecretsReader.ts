@@ -11,6 +11,16 @@ import { decryptSecret } from '@/lib/secretsEncryption';
 export const GLOBAL_STORE_ID = '__global__';
 export const RESERVED_STORE_IDS = [GLOBAL_STORE_ID] as const;
 
+// THE single source of truth for a valid Shopify shop domain across the Phase-6
+// operator/stores routes (POST add, PATCH edit, verify-creds probe). A strict
+// single-label *.myshopify.com host: one DNS label + the literal suffix. Rejects
+// malformed hosts like `evil.com/path.myshopify.com`, `.myshopify.com`,
+// `a b.myshopify.com`, `<script>.myshopify.com`, `sub.domain.myshopify.com`,
+// `-leadinghyphen.myshopify.com` BEFORE they reach a live Shopify verify (a minor
+// SSRF surface) or land in `allowed_origins`. Defined here (shared, server-only
+// reader module) so all three routes import ONE regex — no divergent copies.
+export const SHOP_DOMAIN_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
+
 export async function getStoreSecret(storeId: string, key: string): Promise<string | null> {
   try {
     const { data, error } = await getSupabaseAdmin()

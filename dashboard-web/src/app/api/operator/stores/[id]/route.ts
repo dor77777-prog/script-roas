@@ -41,14 +41,15 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { encryptSecret, decryptSecret, maskSecret } from '@/lib/secretsEncryption';
 import { verifyShopify, verifyMeta, verifyGoogle } from '@/lib/credVerifiers';
-import { getStoreSecret, RESERVED_STORE_IDS } from '@/lib/storeSecretsReader';
+import { getStoreSecret, RESERVED_STORE_IDS, SHOP_DOMAIN_RE } from '@/lib/storeSecretsReader';
 import { captureRouteError } from '@/lib/sentry/capture';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Same strict single-label *.myshopify.com host the add route enforces.
-const SHOP_DOMAIN_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
+// SHOP_DOMAIN_RE (strict single-label *.myshopify.com) is imported from the
+// shared reader module — the SINGLE source of truth across the add (POST),
+// edit (PATCH) and verify-creds routes (no divergent copy).
 
 type Platform = 'shopify' | 'meta' | 'google' | 'tiktok';
 
@@ -62,6 +63,12 @@ interface PatchStoreBody {
   shopify?: { clientId: string; clientSecret: string };
   meta?: { token: string; adAccountId: string };
   google?: { customerId: string; refreshToken: string };
+  // OPERATOR-ENTERED Shopify webhook signing secret (Fix B1 / MF-2). When present
+  // → update store_webhooks.signing_secret to this value, INDEPENDENTLY of whether
+  // Shopify creds are rotated. A Shopify creds rotation alone NO LONGER touches
+  // signing_secret (the client_secret is NOT the webhook signing secret). Masked,
+  // never echoed; kept ONLY in store_webhooks.signing_secret.
+  webhookSecret?: string;
 }
 
 type RouteCtx = { params: Promise<{ id: string }> };
@@ -123,6 +130,11 @@ async function readShopDomain(storeId: string): Promise<string | null> {
 // =============================================================================
 export async function GET(_req: Request, ctx: RouteCtx): Promise<NextResponse> {
   const { id } = await ctx.params;
+  // Fix B3 — reject the reserved ids (incl. __global__) before any DB read.
+  // Harmless today (no `stores` row → 404) but consistent with PATCH + defensive.
+  if ((RESERVED_STORE_IDS as readonly string[]).includes(id)) {
+    return NextResponse.json({ error: 'storeId is reserved' }, { status: 400 });
+  }
   try {
     const admin = getSupabaseAdmin();
     const { data: store, error: storeErr } = await admin
@@ -135,7 +147,13 @@ export async function GET(_req: Request, ctx: RouteCtx): Promise<NextResponse> {
       return NextResponse.json({ error: 'store not found' }, { status: 404 });
     }
 
-    const platforms = await configuredPlatforms(id);
+    // `platforms` = {shopify/meta/google from store_secrets presence} ∪ {tiktok
+    // from has_tiktok}. TikTok is a SHARED account with NO per-store secret, so
+    // it would never appear from secrets alone (Fix B4) — derive it from the
+    // has_tiktok column so the Fix-D credential matrix is correct.
+    const platformSet = new Set<Platform>(await configuredPlatforms(id));
+    if (store.has_tiktok === true) platformSet.add('tiktok');
+    const platforms = Array.from(platformSet);
     const shopDomain = await readShopDomain(id);
 
     return NextResponse.json(
@@ -189,6 +207,13 @@ export async function PATCH(req: Request, ctx: RouteCtx): Promise<NextResponse> 
   const shopify = body.shopify;
   const meta = body.meta;
   const google = body.google;
+  // Operator-entered webhook signing secret (Fix B1). Present (non-empty string)
+  // → update store_webhooks.signing_secret to this value. Absent → leave it
+  // untouched (a Shopify creds rotation no longer changes it).
+  const webhookSecret =
+    typeof body.webhookSecret === 'string' && body.webhookSecret.trim() !== ''
+      ? body.webhookSecret
+      : undefined;
 
   // Field-shape validation for the cred objects (a present platform = full set).
   if (shopify && (typeof shopify.clientId !== 'string' || typeof shopify.clientSecret !== 'string' || !shopify.clientId || !shopify.clientSecret)) {
@@ -201,11 +226,12 @@ export async function PATCH(req: Request, ctx: RouteCtx): Promise<NextResponse> 
     return NextResponse.json({ error: 'google requires customerId and refreshToken' }, { status: 400 });
   }
 
-  // Reject an empty body (nothing to do).
+  // Reject an empty body (nothing to do). webhookSecret counts as an updatable
+  // field (Fix B1) — a webhookSecret-only PATCH must be accepted.
   const hasBasics = name !== undefined || shopDomain !== undefined || brandColor !== undefined
     || isHeadless !== undefined || hasTiktok !== undefined || displayOrder !== undefined;
   const hasCreds = !!shopify || !!meta || !!google;
-  if (!hasBasics && !hasCreds) {
+  if (!hasBasics && !hasCreds && webhookSecret === undefined) {
     return NextResponse.json({ error: 'empty body — nothing to update' }, { status: 400 });
   }
 
@@ -374,34 +400,36 @@ export async function PATCH(req: Request, ctx: RouteCtx): Promise<NextResponse> 
       }
     }
 
-    // --- store_webhooks (shop_domain / allowed_origins) ---
-    if (shopDomain !== undefined || isHeadless !== undefined) {
+    // --- store_webhooks (shop_domain / allowed_origins / signing_secret) ---
+    // signing_secret is ONLY ever set from the OPERATOR-ENTERED webhookSecret
+    // (Fix B1 / MF-2) — NEVER from shopify.clientSecret. A Shopify creds rotation
+    // alone therefore does NOT touch signing_secret. The webhook row is updated
+    // when ANY of: shopDomain / isHeadless changes, OR a webhookSecret is given.
+    if (shopDomain !== undefined || isHeadless !== undefined || webhookSecret !== undefined) {
       const webhooksPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      // The effective domain after this edit (for allowed_origins recompute).
-      const effectiveShopDomainForOrigins = shopDomain ?? (await readShopDomain(id)) ?? '';
       if (shopDomain !== undefined) webhooksPatch.shop_domain = shopDomain;
-      // Recompute allowed_origins from the AUTHORITATIVE headless state — the
-      // body value if provided, else the store's stores.is_headless flag. NEVER
-      // infer headless from whether allowed_origins is empty (a themed store can
-      // legitimately have empty origins).
-      const effectiveHeadless = isHeadless !== undefined ? isHeadless : existingStore.is_headless === true;
-      webhooksPatch.allowed_origins = effectiveHeadless
-        ? []
-        : effectiveShopDomainForOrigins
-          ? [`https://${effectiveShopDomainForOrigins}`]
-          : [];
-      if (shopify) webhooksPatch.signing_secret = shopify.clientSecret;
+      // Recompute allowed_origins only when the domain or headless state changed
+      // (a webhookSecret-only PATCH must not disturb the existing origins).
+      if (shopDomain !== undefined || isHeadless !== undefined) {
+        // The effective domain after this edit (for allowed_origins recompute).
+        const effectiveShopDomainForOrigins = shopDomain ?? (await readShopDomain(id)) ?? '';
+        // Recompute allowed_origins from the AUTHORITATIVE headless state — the
+        // body value if provided, else the store's stores.is_headless flag. NEVER
+        // infer headless from whether allowed_origins is empty (a themed store can
+        // legitimately have empty origins).
+        const effectiveHeadless = isHeadless !== undefined ? isHeadless : existingStore.is_headless === true;
+        webhooksPatch.allowed_origins = effectiveHeadless
+          ? []
+          : effectiveShopDomainForOrigins
+            ? [`https://${effectiveShopDomainForOrigins}`]
+            : [];
+      }
+      // Operator-entered webhook signing secret (independent of cred rotation).
+      if (webhookSecret !== undefined) webhooksPatch.signing_secret = webhookSecret;
       const { error: whErr } = await admin.from('store_webhooks').update(webhooksPatch).eq('store_id', id);
       if (whErr) throw new Error(`store_webhooks update failed: ${whErr.message}`);
       if (shopDomain !== undefined && !updated.includes('shopDomain')) updated.push('shopDomain');
-    } else if (shopify) {
-      // Shopify rotated without a domain/headless change → still refresh the
-      // webhook signing_secret to match the new app secret.
-      const { error: whErr } = await admin
-        .from('store_webhooks')
-        .update({ signing_secret: shopify.clientSecret, updated_at: new Date().toISOString() })
-        .eq('store_id', id);
-      if (whErr) throw new Error(`store_webhooks update failed: ${whErr.message}`);
+      if (webhookSecret !== undefined && !updated.includes('webhookSecret')) updated.push('webhookSecret');
     }
 
     // ----- 4. RETURN (secrets MASKED; never a raw value) -----

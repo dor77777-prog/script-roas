@@ -25,6 +25,7 @@
 import { NextResponse } from 'next/server';
 import { verifyShopify, verifyMeta, verifyGoogle } from '@/lib/credVerifiers';
 import type { CredVerifyResult } from '@/lib/credVerifiers';
+import { SHOP_DOMAIN_RE } from '@/lib/storeSecretsReader';
 import { captureRouteError } from '@/lib/sentry/capture';
 
 export const runtime = 'nodejs';
@@ -53,6 +54,21 @@ export async function POST(req: Request): Promise<NextResponse> {
       { error: "platform must be one of 'shopify' | 'meta' | 'google'" },
       { status: 400 },
     );
+  }
+
+  // Fix B2 — validate the Shopify domain against the SHARED strict regex BEFORE
+  // the live probe. This is the same SHOP_DOMAIN_RE the add (POST) + edit (PATCH)
+  // routes enforce; without it, this probe would live-fetch an arbitrary host
+  // (an operator-authenticated SSRF-shape inconsistency). A bad domain → 400, no
+  // fetch. (Normalised to lowercase to match POST/PATCH which lowercase first.)
+  if (platform === 'shopify') {
+    const domain = String(creds.domain ?? '').trim().toLowerCase();
+    if (!SHOP_DOMAIN_RE.test(domain)) {
+      return NextResponse.json(
+        { error: 'domain must be a single-label *.myshopify.com host' },
+        { status: 400 },
+      );
+    }
   }
 
   try {

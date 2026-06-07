@@ -53,10 +53,15 @@ const STORES: StoreRowData[] = [
     name: '360usmile',
     brandColor: 'var(--store-usm)',
     isHeadless: true,
-    hasTikTok: false,
+    // usmile360 participates in TikTok (shared account) → hasTikTok=true and
+    // 'tiktok' is present in platforms (coherent with the GET derivation: platforms
+    // = {shopify∪meta/google secrets}∪{tiktok from has_tiktok}). The earlier
+    // fixture fabricated hasTikTok=false with no tiktok platform, which the GET
+    // could never actually return for a TikTok-participating store.
+    hasTikTok: true,
     status: 'active',
     displayOrder: 3,
-    platforms: ['meta', 'shopify'],
+    platforms: ['meta', 'shopify', 'tiktok'],
   },
 ];
 

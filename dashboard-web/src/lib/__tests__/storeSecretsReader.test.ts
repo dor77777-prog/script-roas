@@ -10,7 +10,7 @@ vi.mock('@/lib/supabaseAdmin', () => ({
 }));
 vi.mock('@/lib/secretsEncryption', () => ({ decryptSecret: (c: string, i: string, t: string) => crypto.decrypt(c, i, t) }));
 
-import { getStoreSecret, getGlobalSecret, GLOBAL_STORE_ID } from '@/lib/storeSecretsReader';
+import { getStoreSecret, getGlobalSecret, GLOBAL_STORE_ID, SHOP_DOMAIN_RE } from '@/lib/storeSecretsReader';
 
 beforeEach(() => { db.row = null; db.error = null; crypto.decrypt = () => 'DECRYPTED'; vi.unstubAllEnvs(); });
 afterEach(() => { vi.unstubAllEnvs(); });
@@ -74,4 +74,24 @@ describe('getGlobalSecret — __global__ row with UNPREFIXED env fallback', () =
     expect(await getGlobalSecret('META_GLOBAL_TOKEN')).toBe('global-db');
   });
   it('GLOBAL_STORE_ID is the reserved literal', () => { expect(GLOBAL_STORE_ID).toBe('__global__'); });
+});
+
+// ── SHOP_DOMAIN_RE — single source of truth shared by POST/PATCH/verify-creds ─
+describe('SHOP_DOMAIN_RE — strict single-label *.myshopify.com', () => {
+  it('accepts a legit single-label host', () => {
+    expect(SHOP_DOMAIN_RE.test('ok-store123.myshopify.com')).toBe(true);
+    expect(SHOP_DOMAIN_RE.test('uzoshop.myshopify.com')).toBe(true);
+  });
+  it('rejects malformed / multi-label / non-myshopify hosts', () => {
+    const bad = [
+      'evil.com/path.myshopify.com',
+      '.myshopify.com',
+      'a b.myshopify.com',
+      '<script>.myshopify.com',
+      'sub.domain.myshopify.com',
+      '-leadinghyphen.myshopify.com',
+      'newstore.example.com',
+    ];
+    for (const d of bad) expect(SHOP_DOMAIN_RE.test(d), `should reject ${d}`).toBe(false);
+  });
 });

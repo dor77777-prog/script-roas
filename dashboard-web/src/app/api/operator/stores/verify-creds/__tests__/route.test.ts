@@ -83,6 +83,35 @@ describe('POST /api/operator/stores/verify-creds', () => {
     expect(verify.shopifyArgs).toEqual({ domain: 'a.myshopify.com', clientId: 'cid', clientSecret: 'SHOP-SECRET' });
   });
 
+  // Fix B2 — validate the Shopify domain against the SHARED SHOP_DOMAIN_RE BEFORE
+  // the live probe. A malformed/arbitrary host → 400 and NO live verify call (no
+  // SSRF-shape inconsistency vs. POST/PATCH which already enforce the same regex).
+  it('shopify + malformed domain → 400 and NO live verify (Fix B2)', async () => {
+    const bad = [
+      'evil.com/path.myshopify.com',
+      '.myshopify.com',
+      'a b.myshopify.com',
+      '<script>.myshopify.com',
+      'sub.domain.myshopify.com',
+      '-leadinghyphen.myshopify.com',
+      'a.example.com',
+    ];
+    for (const domain of bad) {
+      const res = await post({ platform: 'shopify', creds: { domain, clientId: 'cid', clientSecret: 'csec' } });
+      expect(res.status, `expected 400 for ${domain}`).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBeTruthy();
+    }
+    // No live Shopify probe ever ran for a rejected domain.
+    expect(verify.shopifyCalls).toBe(0);
+  });
+
+  it('shopify + valid single-label domain still reaches the live probe (regression)', async () => {
+    const res = await post({ platform: 'shopify', creds: { domain: 'ok-store123.myshopify.com', clientId: 'cid', clientSecret: 'csec' } });
+    expect(res.status).toBe(200);
+    expect(verify.shopifyCalls).toBe(1);
+  });
+
   it('google + verifier ok:true → 200 { platform:"google", ok:true, currency } with exact creds', async () => {
     const res = await post({ platform: 'google', creds: { customerId: '111-222-3333', refreshToken: 'G-REFRESH' } });
     expect(res.status).toBe(200);

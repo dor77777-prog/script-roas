@@ -207,6 +207,9 @@ const STORES_BODY_SECRET_SENTINELS = {
   SHOPIFY_CLIENT_SECRET: 'SENTINEL_BODY_SHOPIFY_CLIENT_SECRET',
   META_ACCESS_TOKEN: 'SENTINEL_BODY_META_ACCESS_TOKEN',
   GOOGLEADS_REFRESH_TOKEN: 'SENTINEL_BODY_GADS_REFRESH_TOKEN',
+  // Fix B1 / MF-2 — the operator-entered Shopify webhook signing secret. Fed via
+  // the POST + PATCH bodies; it is masked/omitted and must NEVER echo back.
+  WEBHOOK_SECRET: 'SENTINEL_BODY_WEBHOOK_SECRET',
 } as const;
 
 // Secret-shaped LEAK patterns. These target a secret-shaped key paired with an
@@ -288,6 +291,7 @@ const COVERED: Array<{ label: string; run: () => Promise<string> }> = [
           shopify: { clientId: 'cid', clientSecret: STORES_BODY_SECRET_SENTINELS.SHOPIFY_CLIENT_SECRET },
           meta: { token: STORES_BODY_SECRET_SENTINELS.META_ACCESS_TOKEN, adAccountId: 'act_999' },
           google: { customerId: '111-222-3333', refreshToken: STORES_BODY_SECRET_SENTINELS.GOOGLEADS_REFRESH_TOKEN },
+          webhookSecret: STORES_BODY_SECRET_SENTINELS.WEBHOOK_SECRET,
         }),
       });
       const res = await storesPOST(req);
@@ -346,6 +350,7 @@ const COVERED: Array<{ label: string; run: () => Promise<string> }> = [
           shopify: { clientId: 'cid', clientSecret: STORES_BODY_SECRET_SENTINELS.SHOPIFY_CLIENT_SECRET },
           meta: { token: STORES_BODY_SECRET_SENTINELS.META_ACCESS_TOKEN, adAccountId: 'act_999' },
           google: { customerId: '111-222-3333', refreshToken: STORES_BODY_SECRET_SENTINELS.GOOGLEADS_REFRESH_TOKEN },
+          webhookSecret: STORES_BODY_SECRET_SENTINELS.WEBHOOK_SECRET,
         }),
       });
       const res = await storeByIdPATCH(req, { params: Promise.resolve({ id: 'auditstore' }) });
