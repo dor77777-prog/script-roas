@@ -6,7 +6,8 @@
 
 import type { WorkerScope } from './eventNames';
 
-export type StoreId = 'uzoshop' | 'zolplus' | 'usmile360';
+// widened for self-serve stores (Phase 2); runtime identity comes from getStores()
+export type StoreId = string;
 export type Platform = 'meta' | 'google' | 'tiktok' | 'shopify';
 export type EntityType = 'campaign' | 'adset' | 'ad';
 export type ChangeKind =

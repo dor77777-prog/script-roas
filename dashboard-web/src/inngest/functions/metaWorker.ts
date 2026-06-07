@@ -651,7 +651,9 @@ export const metaWorker = inngest.createFunction(
           insertStatusEventsBatch({ admin: sb, events: inp.events }),
         recordFreshness: async (inp) =>
           recordFreshness({
-            storeId: inp.storeId,
+            // storeId widened to string (Phase 2); cast safe — workers only
+            // run for the 3 real stores. Mirrors notifyTokenFailure below.
+            storeId: inp.storeId as 'uzoshop' | 'zolplus' | 'usmile360',
             platform: inp.platform,
             scope: inp.scope,
             tableName: inp.tableName,
