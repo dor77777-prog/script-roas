@@ -44,7 +44,7 @@ import { fetchGoogleHotMetricsForStore } from '@/lib/fetchers/googleHotMetrics';
 import type { GoogleHotMetricsInput, GoogleHotMetricsResult } from '@/lib/fetchers/googleHotMetrics';
 import {
   getGoogleCustomerForStore,
-  isGoogleConfiguredForStore,
+  isGoogleConfiguredForStoreAsync,
 } from '@/lib/fetchers/googleAccountConfig';
 import { diffAgainstRegistry } from '@/lib/registries/diff';
 import {
@@ -126,10 +126,16 @@ export type RunGoogleWorkerJobInput = {
   }>;
   /**
    * Phase C soak fix (2026-05-30): optional override of the per-store
-   * "is Google configured?" check. Defaults to `isGoogleConfiguredForStore`
-   * (env-var presence of `${UPPER}_GOOGLEADS_CUSTOMER_ID`). When false the
-   * worker no-ops and records `success` freshness for every scope, then
-   * returns without touching the customer resolver or the fetcher.
+   * "is Google configured?" check. Defaults (Phase 4b, 2026-06-07) to
+   * `isGoogleConfiguredForStoreAsync` — a DB-aware dual-read of
+   * GOOGLEADS_CUSTOMER_ID via getStoreSecret (DB→env→null), falling back to
+   * the sync env check. When false the worker no-ops and records `success`
+   * freshness for every scope, then returns without touching the customer
+   * resolver or the fetcher. May be sync or async (the worker awaits either).
+   *
+   * INERT today: env creds present → the async default returns the SAME
+   * boolean as the old sync env check, so the 3 stores behave identically.
+   * The DB-aware path only matters once Phase 6 can add a DB-only-cred store.
    *
    * Why this exists: only `uzoshop` has its own Google Ads account today
    * (see `docs/PROPS-MAP.md` §3/§4 + `ARCHITECTURE.md` §5.3); the
@@ -139,7 +145,7 @@ export type RunGoogleWorkerJobInput = {
    * usmile360 + zolplus and the worker never reached `recordFreshness` —
    * the operator panel stayed permanently empty for those rows.
    */
-  isGoogleConfigured?: (storeId: StoreId) => boolean;
+  isGoogleConfigured?: (storeId: StoreId) => boolean | Promise<boolean>;
   /**
    * Phase E1 (2026-05-30) — operator WhatsApp alert hook for the
    * hot_metrics branch. Invoked with operation 'google_hot_metrics_*'
@@ -170,12 +176,16 @@ export type RunGoogleWorkerJobInput = {
   adStateMap?: AdStateMap;
 };
 
-function checkGoogleConfigured(
+async function checkGoogleConfigured(
   storeId: StoreId,
-  override?: (storeId: StoreId) => boolean,
-): boolean {
-  if (override) return override(storeId);
-  return isGoogleConfiguredForStore(storeId);
+  override?: (storeId: StoreId) => boolean | Promise<boolean>,
+): Promise<boolean> {
+  // `await` on a sync override (e.g. tests passing `() => false`) resolves to
+  // its boolean; on the async default it awaits the DB-aware dual-read. MUST
+  // be awaited at every call site — a Promise is truthy, so a missing await
+  // would wrongly mark EVERY store "configured".
+  if (override) return await override(storeId);
+  return isGoogleConfiguredForStoreAsync(storeId);
 }
 
 async function safeCustomer(
@@ -241,7 +251,7 @@ async function runGoogleStatusBranch(input: RunGoogleWorkerJobInput): Promise<vo
   // env var (`${UPPER}_GOOGLEADS_CUSTOMER_ID`) made `safeCustomer` throw —
   // resulting in zero status freshness rows and a permanently empty
   // operator panel for Google status.
-  if (!checkGoogleConfigured(storeId, input.isGoogleConfigured)) {
+  if (!(await checkGoogleConfigured(storeId, input.isGoogleConfigured))) {
     await recAllStatusScopes('success');
     return;
   }
@@ -406,7 +416,7 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
   // — for stores with hot ids and no creds the worker threw before
   // touching `recordFreshness`. This gate moves the no-creds case to
   // the top so it's not creds-vs-hot-ids order-dependent.
-  if (!checkGoogleConfigured(storeId, input.isGoogleConfigured)) {
+  if (!(await checkGoogleConfigured(storeId, input.isGoogleConfigured))) {
     await recHotPair('success');
     return;
   }

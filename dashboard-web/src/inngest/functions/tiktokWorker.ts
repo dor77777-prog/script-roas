@@ -57,7 +57,7 @@ import type { TikTokHotMetricsInput, TikTokHotMetricsResult } from '@/lib/fetche
 import {
   getTikTokAccountForStore,
   getTikTokFxCadAdapterForStore,
-  isTikTokConfiguredForStore,
+  isTikTokConfiguredForStoreAsync,
   type TikTokAccountConfig,
 } from '@/lib/fetchers/tiktokAccountConfig';
 import { loadCampaignStoreMapFromSupabase } from '@/lib/inngest/campaignStoreMap';
@@ -225,10 +225,16 @@ export type RunTikTokWorkerJobInput = {
   getFxCadFor?: (storeId: StoreId) => Promise<TikTokHotMetricsInput['getFxCadFor']>;
   /**
    * Phase C soak fix (2026-05-30): optional override of the per-store
-   * "is TikTok configured?" check. Defaults to `isTikTokConfiguredForStore`
-   * (env-var presence of `${UPPER}_TIKTOK_ADVERTISER_ID` +
-   * `${UPPER}_TIKTOK_ACCESS_TOKEN`). When false the worker no-ops and
-   * records `success` freshness for every scope.
+   * "is TikTok configured?" check. Defaults (Phase 4b, 2026-06-07) to
+   * `isTikTokConfiguredForStoreAsync` — a DB-aware dual-read of the
+   * TIKTOK_ADVERTISER_ID + TIKTOK_ACCESS_TOKEN pair via getStoreSecret
+   * (DB→env→null), falling back to the sync env check. When false the worker
+   * no-ops and records `success` freshness for every scope. May be sync or
+   * async (the worker awaits the result either way).
+   *
+   * INERT today: env creds present → the async default returns the SAME
+   * boolean as the old sync env check, so the 3 stores behave identically.
+   * The DB-aware path only matters once Phase 6 can add a DB-only-cred store.
    *
    * Per ARCHITECTURE.md §5.4 + the operator confirmation 2026-05-30:
    * there is ONE TikTok ad account (uzoshop's). It serves multiple stores
@@ -240,7 +246,7 @@ export type RunTikTokWorkerJobInput = {
    * via the map. Without this gate, every tick threw on missing env vars
    * and the operator panel stayed permanently empty for those rows.
    */
-  isTikTokConfigured?: (storeId: StoreId) => boolean;
+  isTikTokConfigured?: (storeId: StoreId) => boolean | Promise<boolean>;
   /**
    * Phase E1 (2026-05-30) — operator WhatsApp alert hook for the
    * hot_metrics branch. Invoked with operation 'tiktok_hot_metrics_*'
@@ -295,12 +301,16 @@ export type RunTikTokWorkerJobInput = {
   aggregateDataDaily?: (date: string) => Promise<void>;
 };
 
-function checkTikTokConfigured(
+async function checkTikTokConfigured(
   storeId: StoreId,
-  override?: (storeId: StoreId) => boolean,
-): boolean {
-  if (override) return override(storeId);
-  return isTikTokConfiguredForStore(storeId);
+  override?: (storeId: StoreId) => boolean | Promise<boolean>,
+): Promise<boolean> {
+  // `await` on a sync override (e.g. tests passing `() => false`) resolves to
+  // its boolean; on the async default it awaits the DB-aware dual-read. MUST
+  // be awaited at every call site — a Promise is truthy, so a missing await
+  // would wrongly mark EVERY store "configured".
+  if (override) return await override(storeId);
+  return isTikTokConfiguredForStoreAsync(storeId);
 }
 
 async function safeAccount(
@@ -383,7 +393,7 @@ async function runTikTokStatusBranch(input: RunTikTokWorkerJobInput): Promise<vo
   // zolplus per the shared-account architecture, ARCHITECTURE.md §5.4)
   // record freshness success and return. uzoshop's worker writes any
   // tenant rows via the Phase A.5 v2 campaign-store-map.
-  if (!checkTikTokConfigured(storeId, input.isTikTokConfigured)) {
+  if (!(await checkTikTokConfigured(storeId, input.isTikTokConfigured))) {
     await recAllStatusScopes('success');
     return;
   }
@@ -565,7 +575,7 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
   // worker → getHotCampaignIds returns non-empty → without this check,
   // safeAccount would throw on missing env vars and no freshness row
   // would be recorded.
-  if (!checkTikTokConfigured(storeId, input.isTikTokConfigured)) {
+  if (!(await checkTikTokConfigured(storeId, input.isTikTokConfigured))) {
     await recHotPair('success');
     return;
   }

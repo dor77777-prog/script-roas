@@ -380,6 +380,31 @@ describe('runGoogleWorkerJob() — not configured (no per-store Google creds)', 
     expect(scopes).toEqual(['ad_metrics', 'campaign_metrics']);
     expect(recordFreshness.mock.calls.every(c => c[0].status === 'success')).toBe(true);
   });
+
+  // Phase 4b (Task 6) regression: a DB-only-cred store (the configured-gate
+  // resolves true via an ASYNC dual-read, env absent) must NOT be skipped —
+  // the worker proceeds to fetch instead of recording a false success. This
+  // also proves the worker AWAITS an async injected gate (a missing await
+  // would leave a truthy Promise → every store wrongly "configured").
+  it('status: ASYNC gate returning true (DB-only store) → worker proceeds, does NOT skip', async () => {
+    const fetchStatus = vi.fn().mockResolvedValue({ campaigns: [], adsets: [], ads: [] });
+    const recordFreshness = vi.fn();
+    await runGoogleWorkerJob({
+      jobData: { store_id: 'newstore', scope: 'status', tick_id: 'T', staleness_seconds: 600, budget_pct_estimate: 0 },
+      fetchStatus, fetchHotMetrics: vi.fn(),
+      getHotCampaignIds: async () => [], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness,
+      nowIso: NOW_ISO,
+      // Stubbed customer so safeCustomer doesn't need env creds.
+      getCustomer: async () => ({ searchStream: async () => [] }),
+      // DB-aware gate resolved TRUE (DB-only creds) — async on purpose.
+      isGoogleConfigured: async () => true,
+    });
+    expect(fetchStatus).toHaveBeenCalled();
+  });
 });
 
 describe('runGoogleWorkerJob() — fetch throws (CHANGE_DATE_RANGE_INFINITE, transient API failure, etc.)', () => {

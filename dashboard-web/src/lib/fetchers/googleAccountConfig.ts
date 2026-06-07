@@ -36,6 +36,7 @@ import {
   getCustomerIdOrThrow,
   runGaqlQuery,
 } from './googleAds';
+import { getStoreSecret } from '@/lib/storeSecretsReader';
 
 export type GoogleCustomer = {
   searchStream: (input: { query: string }) => Promise<Array<Record<string, unknown>>>;
@@ -83,4 +84,31 @@ export async function getGoogleCustomerForStore(storeId: string): Promise<Google
 export function isGoogleConfiguredForStore(storeId: string): boolean {
   const envVar = `${storeId.toUpperCase()}_GOOGLEADS_CUSTOMER_ID`;
   return Boolean(process.env[envVar]);
+}
+
+/**
+ * Self-serve stores Phase 4b (Task 6) — DB-aware variant of
+ * `isGoogleConfiguredForStore`. Returns true iff the per-store
+ * GOOGLEADS_CUSTOMER_ID resolves via `getStoreSecret` (DB→env→null dual-read),
+ * falling back to the sync env check when the DB read yields nothing. This
+ * mirrors how `getCustomerIdOrThrow` (googleAds.ts) resolves the same key.
+ *
+ * Why: a future Phase-6 store whose customer id lives ONLY in `store_secrets`
+ * (NOT env) would make the SYNC gate return false → the worker skips ALL work
+ * AND records data_freshness='success' → a silent green panel with zero data.
+ * The async gate closes that hole. INERT today: env creds present →
+ * getStoreSecret's env fallback returns the same value → SAME boolean as the
+ * sync gate (only uzoshop has the env var → unchanged for the 3 stores).
+ *
+ * Scope is intentionally narrow (per-store customer id only) to match the sync
+ * gate; OAuth client id/secret + refresh token are global concerns surfaced by
+ * the worker's real-fetch try/catch, not this configured-gate.
+ */
+export async function isGoogleConfiguredForStoreAsync(storeId: string): Promise<boolean> {
+  const customerId = await getStoreSecret(storeId, 'GOOGLEADS_CUSTOMER_ID');
+  if (customerId) return true;
+  // getStoreSecret already folds the env fallback in; reaching here means
+  // neither DB nor env had the key. Defer to the sync env check for a
+  // byte-identical answer on env-only stores.
+  return isGoogleConfiguredForStore(storeId);
 }

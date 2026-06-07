@@ -93,6 +93,42 @@ export function isTikTokConfiguredForStore(storeId: StoreId): boolean {
   );
 }
 
+/**
+ * Self-serve stores Phase 4b (Task 6) — DB-aware variant of
+ * `isTikTokConfiguredForStore`. Returns true iff the full TikTok cred pair
+ * (TIKTOK_ADVERTISER_ID + TIKTOK_ACCESS_TOKEN) resolves via `getStoreSecret`
+ * (DB→env→null dual-read), falling back to the sync env check when the DB read
+ * yields nothing. This mirrors how `getTikTokCreds` (tiktok.ts) +
+ * `readTikTokCredsFromEnv` (above) resolve the same two keys.
+ *
+ * Why: a future Phase-6 store whose creds live ONLY in `store_secrets` (NOT
+ * env) would make the SYNC gate return false → the worker skips ALL work AND
+ * records data_freshness='success' → a silent green panel with zero data. The
+ * async gate closes that hole. INERT today: env creds present → getStoreSecret's
+ * env fallback returns the same value → SAME boolean as the sync gate.
+ *
+ * Shared-account model (TIKTOK_SHARED_STORES = uzoshop + usmile360, ONE
+ * advertiser account): keyed PER-STORE via getStoreSecret, matching the
+ * existing per-store cred resolution. The shared-account architecture is
+ * unchanged — today only uzoshop has the env pair, so usmile360 + zolplus
+ * still resolve false here and the account-level `tiktokAccountFetchEnabled`
+ * gate + Phase A.5 v2 campaign-store-map keep serving tenant rows from
+ * uzoshop's worker. A DB-only tenant (Phase 6) whose pair resolves in
+ * store_secrets becomes configured without breaking that model.
+ */
+export async function isTikTokConfiguredForStoreAsync(
+  storeId: StoreId,
+): Promise<boolean> {
+  const advertiserId = await getStoreSecret(storeId, 'TIKTOK_ADVERTISER_ID');
+  const accessToken = await getStoreSecret(storeId, 'TIKTOK_ACCESS_TOKEN');
+  if (advertiserId && accessToken) return true;
+  // getStoreSecret already folds the env fallback in, so reaching here means
+  // neither DB nor env had BOTH keys. Defer to the sync env check for a
+  // byte-identical "is the env pair present?" answer (keeps the two gates in
+  // lock-step on env-only stores).
+  return isTikTokConfiguredForStore(storeId);
+}
+
 function normalizeCurrency(raw: string): 'USD' | 'CAD' | 'ILS' {
   const upper = raw.toUpperCase();
   if (upper === 'USD' || upper === 'CAD' || upper === 'ILS') return upper;
