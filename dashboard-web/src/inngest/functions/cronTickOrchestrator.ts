@@ -10,11 +10,10 @@
 import { inngest } from '@/inngest/client';
 import { getFreshness } from '@/lib/inngest/freshness';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { loadActiveStoreIds } from '@/lib/getStores';
 import { buildEvents } from '@/lib/registries/priorityBuilder';
 import { insertCronTickSnapshot, tickIdForNow } from '@/lib/registries/snapshots';
 import type { StoreId } from '@/lib/registries/types';
-
-const STORES: StoreId[] = ['uzoshop', 'zolplus', 'usmile360'];
 
 type SendEventFn = (events: Array<{ name: string; id: string; data: unknown }>) => Promise<{ ids: string[] }>;
 type UpsertSnapshotFn = (row: { tick_id: string; started_at: string; finished_at: string; fan_out_count: number }) => Promise<void>;
@@ -26,19 +25,25 @@ export async function runTickOnce(input: {
   upsertSnapshot: UpsertSnapshotFn;
   loadFreshness: typeof getFreshness;
   loadMetaBuc: () => Promise<Partial<Record<StoreId, MetaBucState>>>;
+  // Self-serve stores (Phase 4a) — the active store list is enumerated from
+  // the DB (loadActiveStoreIds) so a store added later flows into the fan-out
+  // with no deploy. Injectable for tests; defaults to the live DB→hardcoded-3
+  // loader so the unchanged callers keep their behavior.
+  loadStores?: () => Promise<string[]>;
 }): Promise<{ tickId: string; fanOutCount: number }> {
-  const { nowMs, sendEvent, upsertSnapshot, loadFreshness, loadMetaBuc } = input;
+  const { nowMs, sendEvent, upsertSnapshot, loadFreshness, loadMetaBuc, loadStores = loadActiveStoreIds } = input;
   const tickId = tickIdForNow(nowMs);
   const startedAt = new Date(nowMs).toISOString();
 
-  const [statusFreshness, metricsFreshness, metaBucStateByStore] = await Promise.all([
+  const [statusFreshness, metricsFreshness, metaBucStateByStore, stores] = await Promise.all([
     loadFreshness('campaign_status'),
     loadFreshness('campaign_metrics'),
     loadMetaBuc(),
+    loadStores(),
   ]);
   const freshness = [...statusFreshness, ...metricsFreshness];
   const events = buildEvents({
-    stores: STORES,
+    stores,
     freshness,
     metaBucStateByStore,
     googleBucStateByStore: {},   // Phase C MVP — workers self-throttle
@@ -72,14 +77,15 @@ export const cronTickOrchestrator = inngest.createFunction(
     // Compute fan-out events inside step.run — idempotent + retryable.
     const { tickId, events } = await step.run('compute-events', async () => {
       const tickIdInner = tickIdForNow(nowMs);
-      const [statusFreshness, metricsFreshness, metaBucStateByStore] = await Promise.all([
+      const [statusFreshness, metricsFreshness, metaBucStateByStore, stores] = await Promise.all([
         getFreshness('campaign_status'),
         getFreshness('campaign_metrics'),
         loadMetaBucStateByStore(),
+        loadActiveStoreIds(),
       ]);
       const freshness = [...statusFreshness, ...metricsFreshness];
       const eventsInner = buildEvents({
-        stores: STORES,
+        stores,
         freshness,
         metaBucStateByStore,
         googleBucStateByStore: {},   // Phase C MVP — workers self-throttle

@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { runTickOnce } from '@/inngest/functions/cronTickOrchestrator';
 
+// Phase 4a — the active store list is now injected via `loadStores`
+// (defaults to loadActiveStoreIds in prod). Tests pin the 3-store list
+// explicitly so they don't depend on the DB→hardcoded fallback.
+const loadStores3 = async () => ['uzoshop', 'zolplus', 'usmile360'];
+
 describe('runTickOnce()', () => {
   it('fans out meta + google + tiktok events for all stale stores (Phase C)', async () => {
     const sendEvent = vi.fn().mockResolvedValue({ ids: [] });
@@ -17,6 +22,7 @@ describe('runTickOnce()', () => {
       upsertSnapshot,
       loadFreshness,
       loadMetaBuc: loadMetaBucState,
+      loadStores: loadStores3,
     });
     expect(result.tickId).toBe('2026-05-29T14:30');
     // 3 stores × 3 platforms (meta + google + tiktok) × 2 scopes (status + hot_metrics) = 18.
@@ -47,6 +53,7 @@ describe('runTickOnce()', () => {
         zolplus: { pct: 95, etaMinutes: 0 },
         usmile360: { pct: 80, etaMinutes: 0 },
       }),
+      loadStores: loadStores3,
     });
     // Meta skipped for all 3 stores (pct >= 80 OR pct >= 95 hard gate).
     // Google + TikTok still fan out (BUC defaults to { pct: 0 }):
@@ -59,5 +66,52 @@ describe('runTickOnce()', () => {
     expect(upsertSnapshot).toHaveBeenCalledWith(expect.objectContaining({
       fan_out_count: 12,
     }));
+  });
+
+  it('Phase 4a — store list from loadStores: 3-store fan-out is UNCHANGED (18)', async () => {
+    // Equivalence guarantee: enumerating the same 3 ids via loadStores yields
+    // the identical maximal fan-out the hardcoded STORES const produced before.
+    const sendEvent = vi.fn().mockResolvedValue({ ids: [] });
+    const upsertSnapshot = vi.fn().mockResolvedValue(undefined);
+    const result = await runTickOnce({
+      nowMs: new Date('2026-05-29T14:30:42.000Z').getTime(),
+      sendEvent,
+      upsertSnapshot,
+      loadFreshness: async () => [],
+      loadMetaBuc: async () => ({
+        uzoshop: { pct: 5, etaMinutes: 0 },
+        zolplus: { pct: 5, etaMinutes: 0 },
+        usmile360: { pct: 0, etaMinutes: 0 },
+      }),
+      loadStores: async () => ['uzoshop', 'zolplus', 'usmile360'],
+    });
+    expect(result.fanOutCount).toBe(18);
+    const [events] = sendEvent.mock.calls[0];
+    expect(events).toHaveLength(18);
+  });
+
+  it('Phase 4a — a 4th store from loadStores fans out (+6 → 24) with no deploy', async () => {
+    const sendEvent = vi.fn().mockResolvedValue({ ids: [] });
+    const upsertSnapshot = vi.fn().mockResolvedValue(undefined);
+    const result = await runTickOnce({
+      nowMs: new Date('2026-05-29T14:30:42.000Z').getTime(),
+      sendEvent,
+      upsertSnapshot,
+      loadFreshness: async () => [],
+      loadMetaBuc: async () => ({
+        uzoshop: { pct: 5, etaMinutes: 0 },
+        zolplus: { pct: 5, etaMinutes: 0 },
+        usmile360: { pct: 0, etaMinutes: 0 },
+        newstore: { pct: 0, etaMinutes: 0 },
+      }),
+      loadStores: async () => ['uzoshop', 'zolplus', 'usmile360', 'newstore'],
+    });
+    // 4 stores × 3 platforms × 2 scopes = 24 (the 4th adds exactly +6).
+    expect(result.fanOutCount).toBe(24);
+    const [events] = sendEvent.mock.calls[0];
+    const newStoreEvents = events.filter(
+      (e: { data: { store_id: string } }) => e.data.store_id === 'newstore',
+    );
+    expect(newStoreEvents).toHaveLength(6);
   });
 });
