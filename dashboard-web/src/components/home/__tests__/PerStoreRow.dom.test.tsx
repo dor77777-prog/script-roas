@@ -372,4 +372,99 @@ describe('PerStoreRow', () => {
     expect(hero?.textContent).not.toContain('אורגני');
     expect(hero?.textContent).toMatch(/\d+\.\d+x/);
   });
+
+  // ── Task 6 — responsive desktop grid (Self-serve stores Phase 2) ───────────
+  //
+  // The HOME per-store row used to hardcode the desktop grid to 3 columns
+  // (`md:grid-cols-3`). With self-serve stores the count is dynamic (2, 3, 4,
+  // 5+). The desktop column treatment must track the store count:
+  //   • 1-4 stores → a FULL Tailwind literal `md:grid-cols-N` (JIT-extractable)
+  //   • 5+ stores  → NO `md:grid-cols-N` literal; an inline
+  //     `gridTemplateColumns: repeat(auto-fit, …)` fallback instead.
+  // The 3-store case is the zero-regression anchor: it must STILL be
+  // `md:grid-cols-3` with no inline grid-template style. The mobile carousel
+  // markup (flex + overflow-x-auto deck, per-card snap basis) stays byte-
+  // identical regardless of count.
+  //
+  // Build N valid stores by cloning the canonical STORES fixture shape.
+  const makeStores = (n: number): PerStoreData[] =>
+    Array.from({ length: n }, (_, i) => ({
+      ...STORES[0],
+      storeId: `grid-store-${i}`,
+      storeName: `grid-store-${i}`,
+    }));
+
+  // The desktop grid wrapper is the SAME element that carries the mobile
+  // carousel classes (it's a flex deck on mobile, a grid on md+). We locate it
+  // as the element that carries both `md:grid` and the `overflow-x-auto` deck
+  // class so the assertion is robust to class re-ordering.
+  const getGridWrapper = (container: HTMLElement): HTMLElement => {
+    const el = container.querySelector<HTMLElement>('.overflow-x-auto.md\\:grid');
+    expect(el).not.toBeNull();
+    return el!;
+  };
+
+  it('2 stores → desktop wrapper uses md:grid-cols-2 (no inline grid-template)', () => {
+    const { container } = render(<PerStoreRow stores={makeStores(2)} />);
+    const grid = getGridWrapper(container);
+    expect(grid.classList.contains('md:grid-cols-2')).toBe(true);
+    expect(grid.classList.contains('md:grid-cols-3')).toBe(false);
+    expect(grid.style.gridTemplateColumns).toBe('');
+  });
+
+  it('3 stores → desktop wrapper STILL uses md:grid-cols-3 (zero-regression)', () => {
+    const { container } = render(<PerStoreRow stores={makeStores(3)} />);
+    const grid = getGridWrapper(container);
+    expect(grid.classList.contains('md:grid-cols-3')).toBe(true);
+    expect(grid.classList.contains('md:grid-cols-2')).toBe(false);
+    expect(grid.classList.contains('md:grid-cols-4')).toBe(false);
+    // No inline auto-fit fallback for the 3-store anchor.
+    expect(grid.style.gridTemplateColumns).toBe('');
+  });
+
+  it('4 stores → desktop wrapper uses md:grid-cols-4 (no inline grid-template)', () => {
+    const { container } = render(<PerStoreRow stores={makeStores(4)} />);
+    const grid = getGridWrapper(container);
+    expect(grid.classList.contains('md:grid-cols-4')).toBe(true);
+    expect(grid.classList.contains('md:grid-cols-3')).toBe(false);
+    expect(grid.style.gridTemplateColumns).toBe('');
+  });
+
+  it('5+ stores → NO md:grid-cols-N literal; inline auto-fit gridTemplateColumns', () => {
+    const { container } = render(<PerStoreRow stores={makeStores(5)} />);
+    const grid = getGridWrapper(container);
+    // No fixed-column literal of any count.
+    for (const n of [1, 2, 3, 4, 5]) {
+      expect(grid.classList.contains(`md:grid-cols-${n}`)).toBe(false);
+    }
+    // Inline auto-fit fallback present.
+    expect(grid.style.gridTemplateColumns).toContain('auto-fit');
+    // Still a grid on md+.
+    expect(grid.classList.contains('md:grid')).toBe(true);
+  });
+
+  it('mobile carousel deck markup is unchanged across counts', () => {
+    for (const n of [2, 3, 4, 5]) {
+      const { container } = render(<PerStoreRow stores={makeStores(n)} />);
+      const grid = getGridWrapper(container);
+      // The mobile carousel classes stay on the same element, every count.
+      for (const cls of [
+        'flex',
+        'gap-3',
+        'overflow-x-auto',
+        'snap-x',
+        'snap-mandatory',
+        'scrollbar-hide',
+        'pb-1',
+      ]) {
+        expect(grid.classList.contains(cls)).toBe(true);
+      }
+      // Per-card snap-basis wrapper is unchanged.
+      const firstCardWrapper = grid.firstElementChild as HTMLElement;
+      expect(firstCardWrapper.classList.contains('snap-center')).toBe(true);
+      expect(firstCardWrapper.classList.contains('shrink-0')).toBe(true);
+      expect(firstCardWrapper.classList.contains('basis-[88%]')).toBe(true);
+      expect(firstCardWrapper.classList.contains('md:basis-auto')).toBe(true);
+    }
+  });
 });

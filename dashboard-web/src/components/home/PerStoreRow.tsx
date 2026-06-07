@@ -215,17 +215,42 @@ export function PerStoreRow({
 
   if (!stores.length) return null;
 
+  // Self-serve stores Phase 2 — the desktop grid column count tracks the
+  // number of stores instead of being hardcoded to 3. For 1-4 stores we emit a
+  // FULL Tailwind literal `md:grid-cols-N` so the JIT compiler can statically
+  // extract the class (never build it dynamically as `md:grid-cols-${n}` — that
+  // string is invisible to the scanner and would be purged). For 5+ stores
+  // Tailwind can't express an arbitrary `repeat(auto-fit, …)`, so we fall back
+  // to an inline `gridTemplateColumns` style and drop the literal class. The
+  // 3-store case stays byte-identical to today (`md:grid-cols-3`, no inline
+  // style) — the zero-regression anchor.
+  const fixedDesktopColsClass: Record<number, string> = {
+    1: 'md:grid-cols-1',
+    2: 'md:grid-cols-2',
+    3: 'md:grid-cols-3',
+    4: 'md:grid-cols-4',
+  };
+  const desktopColsClass = fixedDesktopColsClass[stores.length]; // undefined for 5+
+  const autoFitStyle =
+    desktopColsClass === undefined
+      ? { gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))' }
+      : undefined;
+
   return (
     <div className={className}>
       <div
         ref={deckRef}
         onScroll={isMobile ? handleScroll : undefined}
+        style={autoFitStyle}
         className={cn(
           // Mobile: a swipeable scroll-snap deck — each card ~88% wide so the
           // neighbours peek, turning a phone-height stack into one card per
-          // "page". Desktop (md+): the original 3-column grid, untouched.
+          // "page". Desktop (md+): a responsive grid whose column count tracks
+          // the store count (Self-serve stores Phase 2). 5+ stores use the
+          // inline auto-fit fallback above instead of a fixed-column literal.
           'flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-1',
-          'md:grid md:grid-cols-3 md:gap-4 md:overflow-visible',
+          'md:grid md:gap-4 md:overflow-visible',
+          desktopColsClass,
         )}
       >
         {stores.map((store) => (
