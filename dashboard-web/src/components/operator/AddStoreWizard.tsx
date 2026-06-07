@@ -139,6 +139,7 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
   const [s2, setS2] = useState<Step2State>(EMPTY_STEP2);
 
   const [slugError, setSlugError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [domainError, setDomainError] = useState<string | null>(null);
 
   const [verify, setVerify] = useState<Record<Platform, VerifyState>>({
@@ -181,7 +182,13 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
       setDomainError(null);
     }
 
-    if (!s1.name.trim()) ok = false;
+    if (!s1.name.trim()) {
+      setNameError('שם תצוגה נדרש');
+      ok = false;
+    } else {
+      setNameError(null);
+    }
+
     return ok;
   }
 
@@ -239,11 +246,47 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Stale-✓ reset — whenever a credential for a platform changes the prior
+  // verify result is for the OLD creds, so we clear it (re-disabling Create
+  // until a fresh ✓, unless "save anyway" is on). A change to step-1's
+  // shopDomain is also a Shopify-cred change (the domain is part of the probe).
+  // -------------------------------------------------------------------------
+  function clearVerify(platform: Platform) {
+    setVerify((v) => (v[platform] === null ? v : { ...v, [platform]: null }));
+  }
+
+  function setCred(platform: Platform, patch: Partial<Step2State>) {
+    setS2((s) => ({ ...s, ...patch }));
+    clearVerify(platform);
+  }
+
+  // Step-1 shopDomain change → mutate s1 AND invalidate the Shopify verify
+  // (the domain is part of the Shopify probe).
+  function setShopDomain(value: string) {
+    setS1((s) => ({ ...s, shopDomain: value }));
+    clearVerify('shopify');
+  }
+
+  // Toggling a platform off/on must drop any stale ✓ for it so re-checking
+  // requires a fresh verify (and an off platform's ✓ never lingers in state).
+  function setHasMeta(v: boolean) {
+    setS1((s) => ({ ...s, hasMeta: v }));
+    clearVerify('meta');
+  }
+  function setHasGoogle(v: boolean) {
+    setS1((s) => ({ ...s, hasGoogle: v }));
+    clearVerify('google');
+  }
+
   // Required platforms = Shopify always + Meta-if-checked + Google-if-checked.
   const requiredPlatforms: Platform[] = ['shopify'];
   if (s1.hasMeta) requiredPlatforms.push('meta');
   if (s1.hasGoogle) requiredPlatforms.push('google');
 
+  // Gate ONLY on currently-required platforms — a stale ✓ for a platform that
+  // is no longer checked must never count, and re-checking a platform requires
+  // a fresh ✓ (its verify entry was cleared on toggle-off).
   const allVerified = requiredPlatforms.every((p) => verify[p]?.ok === true);
   const canCreate = (allVerified || saveAnyway) && !submitting;
 
@@ -320,7 +363,11 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
         <Step1
           s1={s1}
           setS1={setS1}
+          setShopDomain={setShopDomain}
+          setHasMeta={setHasMeta}
+          setHasGoogle={setHasGoogle}
           slugError={slugError}
+          nameError={nameError}
           domainError={domainError}
           isEdit={isEdit}
           onNext={goToStep2}
@@ -332,7 +379,7 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
         <Step2
           s1={s1}
           s2={s2}
-          setS2={setS2}
+          setCred={setCred}
           verify={verify}
           verifying={verifying}
           runVerify={runVerify}
@@ -424,7 +471,11 @@ function Field({
 function Step1({
   s1,
   setS1,
+  setShopDomain,
+  setHasMeta,
+  setHasGoogle,
   slugError,
+  nameError,
   domainError,
   isEdit,
   onNext,
@@ -432,7 +483,11 @@ function Step1({
 }: {
   s1: Step1State;
   setS1: React.Dispatch<React.SetStateAction<Step1State>>;
+  setShopDomain: (value: string) => void;
+  setHasMeta: (v: boolean) => void;
+  setHasGoogle: (v: boolean) => void;
   slugError: string | null;
+  nameError: string | null;
   domainError: string | null;
   isEdit: boolean;
   onNext: () => void;
@@ -458,6 +513,7 @@ function Step1({
           value={s1.name}
           onChange={(e) => setS1((s) => ({ ...s, name: e.target.value }))}
           placeholder="Glow Lab"
+          error={nameError ?? undefined}
         />
       </Field>
 
@@ -466,7 +522,7 @@ function Step1({
           id="store-domain"
           dir="ltr"
           value={s1.shopDomain}
-          onChange={(e) => setS1((s) => ({ ...s, shopDomain: e.target.value }))}
+          onChange={(e) => setShopDomain(e.target.value)}
           placeholder="glowlab.myshopify.com"
           error={domainError ?? undefined}
         />
@@ -537,12 +593,12 @@ function Step1({
           <PlatformToggle
             label="Meta"
             checked={s1.hasMeta}
-            onChange={(v) => setS1((s) => ({ ...s, hasMeta: v }))}
+            onChange={setHasMeta}
           />
           <PlatformToggle
             label="Google"
             checked={s1.hasGoogle}
-            onChange={(v) => setS1((s) => ({ ...s, hasGoogle: v }))}
+            onChange={setHasGoogle}
           />
           <PlatformToggle
             label="TikTok"
@@ -595,7 +651,7 @@ function PlatformToggle({
 function Step2({
   s1,
   s2,
-  setS2,
+  setCred,
   verify,
   verifying,
   runVerify,
@@ -610,7 +666,7 @@ function Step2({
 }: {
   s1: Step1State;
   s2: Step2State;
-  setS2: React.Dispatch<React.SetStateAction<Step2State>>;
+  setCred: (platform: Platform, patch: Partial<Step2State>) => void;
   verify: Record<Platform, VerifyState>;
   verifying: Record<Platform, boolean>;
   runVerify: (p: Platform) => void;
@@ -647,7 +703,7 @@ function Step2({
             id="cred-shop-id"
             dir="ltr"
             value={s2.shopifyClientId}
-            onChange={(e) => setS2((s) => ({ ...s, shopifyClientId: e.target.value }))}
+            onChange={(e) => setCred('shopify', { shopifyClientId: e.target.value })}
             placeholder="paste"
           />
         </Field>
@@ -657,7 +713,7 @@ function Step2({
             dir="ltr"
             type="password"
             value={s2.shopifyClientSecret}
-            onChange={(e) => setS2((s) => ({ ...s, shopifyClientSecret: e.target.value }))}
+            onChange={(e) => setCred('shopify', { shopifyClientSecret: e.target.value })}
             placeholder="paste"
           />
         </Field>
@@ -677,7 +733,7 @@ function Step2({
               dir="ltr"
               type="password"
               value={s2.metaToken}
-              onChange={(e) => setS2((s) => ({ ...s, metaToken: e.target.value }))}
+              onChange={(e) => setCred('meta', { metaToken: e.target.value })}
               placeholder="paste"
             />
           </Field>
@@ -686,7 +742,7 @@ function Step2({
               id="cred-meta-act"
               dir="ltr"
               value={s2.metaAdAccountId}
-              onChange={(e) => setS2((s) => ({ ...s, metaAdAccountId: e.target.value }))}
+              onChange={(e) => setCred('meta', { metaAdAccountId: e.target.value })}
               placeholder="800776975668"
             />
           </Field>
@@ -706,7 +762,7 @@ function Step2({
               id="cred-google-cid"
               dir="ltr"
               value={s2.googleCustomerId}
-              onChange={(e) => setS2((s) => ({ ...s, googleCustomerId: e.target.value }))}
+              onChange={(e) => setCred('google', { googleCustomerId: e.target.value })}
               placeholder="4014537400"
             />
           </Field>
@@ -720,23 +776,28 @@ function Step2({
               dir="ltr"
               type="password"
               value={s2.googleRefreshToken}
-              onChange={(e) => setS2((s) => ({ ...s, googleRefreshToken: e.target.value }))}
+              onChange={(e) => setCred('google', { googleRefreshToken: e.target.value })}
               placeholder="paste"
             />
           </Field>
         </PlatformCredBlock>
       )}
 
-      {/* Save-anyway override */}
-      <label className="mb-3 flex items-center gap-2 text-xs text-ink-secondary">
+      {/* Save-anyway override — bypasses ONLY the local client gate. The server
+          ALWAYS re-verifies on create and writes nothing if the creds fail, so
+          this can't force-save bad credentials. The copy says exactly that. */}
+      <label className="mb-1 flex items-center gap-2 text-xs text-ink-secondary">
         <Input
           type="checkbox"
           className="h-4 w-4 accent-accent"
           checked={saveAnyway}
           onChange={(e) => setSaveAnyway(e.target.checked)}
         />
-        שמור בכל זאת (דלג על אימות-חי — באחריותך)
+        שמור בכל זאת (דילוג על הבדיקה המקומית — השרת עדיין יאמת את הפרטים)
       </label>
+      <Text as="p" tone="muted" className="mb-3 text-2xs">
+        השרת תמיד מאמת את הפרטים לפני השמירה — חיבור שגוי לא יישמר גם אם תדלג על הבדיקה המקומית.
+      </Text>
 
       {submitError && (
         <Text as="p" tone="default" role="alert" className="mb-3 text-sm text-status-redFg">
@@ -788,7 +849,9 @@ function PlatformCredBlock({
             'mt-1 flex items-center gap-1.5 text-xs font-medium ' +
             (verifyState.ok ? 'text-status-greenFg' : 'text-status-redFg')
           }
-          role="status"
+          // A failed probe is assertive so AT announces it promptly; a success
+          // stays polite (role="status").
+          role={verifyState.ok ? 'status' : 'alert'}
         >
           {verifyState.ok ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
           {verifyState.message || (verifyState.ok ? 'תקין' : 'נכשל')}

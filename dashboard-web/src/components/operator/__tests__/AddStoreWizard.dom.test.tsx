@@ -163,6 +163,62 @@ describe('AddStoreWizard — ADD mode (Phase 6a Task 5)', () => {
     expect(create.disabled).toBe(false);
   });
 
+  it('clears a stale Shopify ✓ when a credential changes (re-disables Create)', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    clickNext();
+    fill(/Shopify client_id/i, 'cid_123');
+    fill(/Shopify.*secret/i, 'shpss_secret');
+    fireEvent.click(screen.getByRole('button', { name: /בדוק/ }));
+    await screen.findByText(/תקין/);
+    const create = screen.getByRole('button', { name: /צור חנות/ }) as HTMLButtonElement;
+    // Verified → Create enabled.
+    expect(create.disabled).toBe(false);
+
+    // Editing a Shopify credential invalidates the prior ✓.
+    fill(/Shopify client_id/i, 'cid_CHANGED');
+    expect(screen.queryByText(/תקין/)).toBeNull();
+    expect(
+      (screen.getByRole('button', { name: /צור חנות/ }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it('clears a stale Shopify ✓ when shopDomain (step 1) changes', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    clickNext();
+    fill(/Shopify client_id/i, 'cid_123');
+    fill(/Shopify.*secret/i, 'shpss_secret');
+    fireEvent.click(screen.getByRole('button', { name: /בדוק/ }));
+    await screen.findByText(/תקין/);
+    expect(
+      (screen.getByRole('button', { name: /צור חנות/ }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+
+    // Go back to step 1 and change the domain — that is part of the Shopify
+    // probe, so the prior ✓ must be invalidated.
+    fireEvent.click(screen.getByRole('button', { name: /חזרה/ }));
+    fill(/דומיין/, 'glowlab2.myshopify.com');
+    clickNext();
+    // ✓ is gone and Create is disabled again.
+    expect(screen.queryByText(/תקין/)).toBeNull();
+    expect(
+      (screen.getByRole('button', { name: /צור חנות/ }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it('shows an inline error and blocks Next when the name is blank', () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fill(/מזהה/, 'glowlab');
+    fill(/דומיין/, 'glowlab.myshopify.com');
+    // Name left blank.
+    clickNext();
+    // Still on step 1 — credentials not shown.
+    expect(screen.queryByText(/Shopify client_id/i)).toBeNull();
+    // An inline name error is surfaced (role="alert" from the Input error slot).
+    expect(screen.getByText(/שם תצוגה נדרש/)).toBeDefined();
+  });
+
   it('the "save anyway" override enables Create without a verify', () => {
     render(<AddStoreWizard onDone={vi.fn()} />);
     fillValidStep1();
