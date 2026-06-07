@@ -69,6 +69,10 @@ export default defineConfig({
       'src/components/**/__tests__/*.dom.test.{ts,tsx}',
       'src/components/ui/**/__tests__/*.test.{ts,tsx}',
       'src/lib/**/__tests__/*.dom.test.{ts,tsx}',
+      // Container/page-level *.dom.test.tsx files under src/app/** are owned by
+      // the jsdom config too (e.g. operator sub-tab containers that render React
+      // + fetch). Exclude them here so they don't run under node env (no DOM).
+      'src/app/**/__tests__/*.dom.test.{ts,tsx}',
     ],
     globals: false, // explicit imports — not relying on describe/it globals
     // Provide a URL for jsdom so localStorage is fully functional when a

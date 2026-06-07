@@ -14,6 +14,10 @@ export default defineConfig({
       'src/components/**/__tests__/*.dom.test.{ts,tsx}',
       'src/components/ui/**/__tests__/*.test.{ts,tsx}',
       'src/lib/**/__tests__/*.dom.test.{ts,tsx}',
+      // Container/page-level client components (e.g. operator sub-tabs that
+      // fetch + own their own sub-flow state) live under src/app/**; their DOM
+      // tests are collected here too.
+      'src/app/**/__tests__/*.dom.test.{ts,tsx}',
     ],
     setupFiles: ['./src/test/setup-dom.ts'],
     globals: false,
