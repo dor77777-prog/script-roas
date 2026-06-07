@@ -103,17 +103,9 @@
 </header>
 <main>
 
-  <!-- ============ A. RESPONSIVE STORE GRID ============ -->
-  <h2 class="sec">① כרטיסי-הבית מתארגנים מחדש לפי מספר החנויות</h2>
-  <p class="sub">לחץ על מספר חנויות — הרשת מתאזנת לבד (auto-fit). היום הרשת קשיחה ל-3; אחרי הריפוטור היא רספונסיבית: 2→2-up, 3→3-up, 4→2×2/4-up, 5+→זורם נקי. הכרטיסים הם בדיוק כרטיסי-הבית שלך (gradient לפי באנד-ROAS + טקסט לבן).</p>
-  <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px; flex-wrap:wrap">
-    <span class="sub" style="margin:0">מספר חנויות:</span>
-    <div class="seg" id="seg">
-      <button data-n="2">2</button><button data-n="3" class="on">3</button><button data-n="4">4</button><button data-n="5">5</button>
-    </div>
-    <span class="sub" style="margin:0">· ונסה גם להגדיל/להקטין את החלון</span>
-  </div>
-  <div class="store-grid" id="grid"></div>
+  <!-- ============ A. (note) HOME CARDS — UNCHANGED ============ -->
+  <h2 class="sec">① כרטיסי-הבית — ללא שינוי עיצובי</h2>
+  <p class="sub"><b>שלב 6 לא נוגע בכרטיסי-הבית.</b> הם נשארים <b>בדיוק</b> בעיצוב הנוכחי שלך (mesh · gradient לפי באנד-ROAS · טקסט לבן · count-up) — חנות חדשה פשוט מופיעה ככרטיס אמיתי נוסף, באותה שפה בדיוק. ה-reflow לפי מספר חנויות (2→2-up · 3→3-up · 4→4 · 5+ זורם) <b>כבר מומש בשלב 2</b> עם הכרטיסים האמיתיים. הדמו-הסכמטי הישן הוסר כדי לא לבלבל — אין כאן שום redesign.</p>
 
   <!-- ============ B. ADD-STORE WIZARD ============ -->
   <h2 class="sec">② אשף הוספת חנות (ב-/operator)</h2>
@@ -224,32 +216,6 @@ analytics.subscribe("product_added_to_cart", e =&gt; {
   </p>
 </main>
 
-<script>
-  // store fixtures (band = ROAS health) — demonstrates the reflow + the new store
-  const STORES = [
-    { nm:'uzoshop',  band:'orange', roas:'2.03x', rev:'C$2,310', spend:'C$1,137', chip:'פעיל' },
-    { nm:'Zol Plus', band:'green',  roas:'2.84x', rev:'C$1,940', spend:'C$683',  chip:'פעיל' },
-    { nm:'360usmile',band:'blue',   roas:'3.41x', rev:'C$3,120', spend:'C$915',  chip:'פעיל' },
-    { nm:'Glow Lab', band:'red',    roas:'1.62x', rev:'C$880',   spend:'C$543',  chip:'חדש', isNew:true },
-    { nm:'Aura',     band:'gray',   roas:'—',     rev:'C$120',   spend:'C$0',    chip:'אורגני' },
-  ];
-  const grid = document.getElementById('grid');
-  function render(n){
-    grid.innerHTML = STORES.slice(0,n).map(s => `
-      <div class="scard ${s.band} ${s.isNew?'new pulse':''}">
-        <div class="nm">${s.nm} <span class="chip">${s.chip}</span></div>
-        <div class="cap">ROAS · היום</div>
-        <div class="roas">${s.roas}</div>
-        <div class="rev"><span>הכנסות ${s.rev}</span><span>הוצאה ${s.spend}</span></div>
-      </div>`).join('');
-  }
-  document.getElementById('seg').addEventListener('click', e => {
-    if(e.target.tagName!=='BUTTON') return;
-    [...e.currentTarget.children].forEach(b=>b.classList.remove('on'));
-    e.target.classList.add('on');
-    render(+e.target.dataset.n);
-  });
-  render(3);
-</script>
+<!-- (interactive home-grid demo removed — Phase 6 does not change the home cards; the responsive reflow shipped in Phase 2 with the real cards) -->
 </body>
 </html>
