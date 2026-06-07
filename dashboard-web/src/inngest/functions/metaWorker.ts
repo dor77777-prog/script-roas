@@ -51,6 +51,7 @@ import {
   getAdAccountIdForStore,
   getMetaAccessTokenForStore,
   getFxCadAdapterForStore,
+  isMetaConfiguredForStoreAsync,
 } from '@/lib/fetchers/metaAccountConfig';
 import { fetchMetaHotMetricsForStore } from '@/lib/fetchers/metaHotMetrics';
 import {
@@ -154,7 +155,37 @@ export type RunMetaWorkerJobInput = {
    * is still recorded as `success` so the operator panel stays green.
    */
   adStateMap?: AdStateMap;
+  /**
+   * Self-serve stores Phase 6a (MF-1): optional override of the per-store
+   * "is Meta configured?" check. Defaults to `isMetaConfiguredForStoreAsync` —
+   * a DB-aware dual-read of META_AD_ACCOUNT_ID via getStoreSecret (DB→env→null),
+   * falling back to env. When false the worker no-ops and records `success`
+   * freshness for every scope, then returns WITHOUT resolving creds or calling
+   * the fetcher. May be sync or async (the worker awaits either).
+   *
+   * ZERO REGRESSION: the 3 current stores (uzoshop/zolplus/usmile360) all have
+   * META_AD_ACCOUNT_ID in env → the async default returns true → the full fetch
+   * path runs byte-identically. The gate only diverges for a Meta-less store
+   * (a supported self-serve wizard option), which previously crash-looped
+   * because there was NO Meta configured-check (Google + TikTok had one).
+   *
+   * Mirrors googleWorker's `isGoogleConfigured` + tiktokWorker's
+   * `isTikTokConfigured` exactly (injectable shape + sync-or-async + awaited).
+   */
+  isMetaConfigured?: (storeId: StoreId) => boolean | Promise<boolean>;
 };
+
+async function checkMetaConfigured(
+  storeId: StoreId,
+  override?: (storeId: StoreId) => boolean | Promise<boolean>,
+): Promise<boolean> {
+  // `await` on a sync override (e.g. tests passing `() => false`) resolves to
+  // its boolean; on the async default it awaits the DB-aware dual-read. MUST
+  // be awaited at every call site — a Promise is truthy, so a missing await
+  // would wrongly mark EVERY store "configured".
+  if (override) return await override(storeId);
+  return isMetaConfiguredForStoreAsync(storeId);
+}
 
 async function defaultCredentials(storeId: StoreId): Promise<{
   adAccountId: string;
@@ -206,6 +237,30 @@ export async function runMetaWorkerJob(input: RunMetaWorkerJobInput): Promise<vo
     return await runMetaHotMetricsBranch(input);
   }
   if (scope !== 'status') return;
+
+  // 0. Configured gate (MF-1, Phase 6a) — stores added WITHOUT Meta (a
+  //    supported self-serve wizard option) have no META_AD_ACCOUNT_ID. The
+  //    orchestrator still naively fans out a meta status job for them; without
+  //    this gate the worker resolved empty creds and drove an unguarded Graph
+  //    batch with an empty access_token → metaStatus.ts threw → Inngest
+  //    crash-looped every 10-min tick and Meta freshness was never green. The
+  //    gate records `success` for all 3 status scopes + returns, mirroring
+  //    googleWorker + tiktokWorker. Placed FIRST (before the BUC pre-flight
+  //    DB read), matching how Google/TikTok order their configured-gate.
+  //    ZERO REGRESSION: the 3 live stores have Meta creds → gate true → flow
+  //    falls through to the identical BUC + fetch path below.
+  if (!(await checkMetaConfigured(storeId, input.isMetaConfigured))) {
+    for (const s of ['campaign_status', 'adset_status', 'ad_status'] as const) {
+      await rec({
+        storeId,
+        platform: 'meta',
+        scope: s,
+        tableName: registryNameForScope(s),
+        status: 'success',
+      });
+    }
+    return;
+  }
 
   // 1. BUC pre-flight — Layer 1 hard gate (ETA > 0 or pct >= 95).
   //    The orchestrator already filters at pct >= 80 (Layer-2 soft gate),
@@ -420,6 +475,18 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
       errorMessage,
     });
   };
+
+  // 0. Configured gate (MF-1, Phase 6a) — same rationale as the status
+  //    branch: a Meta-less self-serve store must no-op + record freshness
+  //    success instead of crash-looping on an empty-token Graph batch.
+  //    Records campaign_metrics + ad_metrics success + returns, mirroring
+  //    googleWorker + tiktokWorker. Placed FIRST (before the BUC pre-flight
+  //    DB read), before any fetch. ZERO REGRESSION: the 3 live stores have
+  //    Meta creds → gate true → flow falls through to the identical path.
+  if (!(await checkMetaConfigured(storeId, input.isMetaConfigured))) {
+    await recHotPair('success');
+    return;
+  }
 
   // 1. BUC pre-flight — same hard gate as status branch.
   const buc = await bucProbe(storeId);

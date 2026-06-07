@@ -31,6 +31,7 @@ describe('runMetaWorkerJob()', () => {
       insertStatusEvents: vi.fn(),
       recordFreshness,
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       nowIso: NOW_ISO,
     });
     expect(fetcher).not.toHaveBeenCalled();
@@ -52,6 +53,7 @@ describe('runMetaWorkerJob()', () => {
       insertStatusEvents: vi.fn(),
       recordFreshness,
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       nowIso: NOW_ISO,
     });
     expect(fetcher).not.toHaveBeenCalled();
@@ -81,6 +83,7 @@ describe('runMetaWorkerJob()', () => {
       insertStatusEvents: insertEvents,
       recordFreshness,
       upsertBuc,
+      isMetaConfigured: () => true,
       nowIso: NOW_ISO,
     });
     expect(fetcher).toHaveBeenCalled();
@@ -136,6 +139,7 @@ describe('runMetaWorkerJob()', () => {
       upsertAdsDaily: vi.fn(),
       recordFreshness: vi.fn(),
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       nowIso: NOW_ISO,
     });
     expect(upsertCampaignsDaily).toHaveBeenCalledOnce();
@@ -166,9 +170,164 @@ describe('runMetaWorkerJob()', () => {
       insertStatusEvents: vi.fn(),
       recordFreshness: vi.fn(),
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       nowIso: NOW_ISO,
     });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe('runMetaWorkerJob() — not configured (no Meta creds, MF-1 Phase 6a)', () => {
+  // A self-serve store added WITHOUT Meta (a supported wizard option — the
+  // POST writes Meta secrets only `if (meta)` and never creates a meta
+  // `store_ad_state` row) has no META_AD_ACCOUNT_ID. The orchestrator still
+  // naively fans out a meta/job.requested for every (store, platform, scope)
+  // combo. Before MF-1 there was NO "is Meta configured?" gate — the status
+  // branch resolved empty creds and drove an unguarded Graph batch with an
+  // empty access_token → metaStatus.ts threw → Inngest retried/failed EVERY
+  // 10-min tick and Meta freshness was never green. The gate makes the
+  // not-configured store a no-op + freshness success, mirroring Google/TikTok.
+
+  it('status: not configured → skips fetch, records 3 success freshness rows, never calls fetchStatus', async () => {
+    const fetchStatus = vi.fn();
+    const upsertRegistry = vi.fn();
+    const recordFreshness = vi.fn();
+    await runMetaWorkerJob({
+      jobData: { store_id: 'newstore', scope: 'status', tick_id: 'T', staleness_seconds: 600, budget_pct_estimate: 0 },
+      bucProbe: async () => ({ pct: 0, etaMinutes: 0 }),
+      fetchStatus,
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry,
+      insertStatusEvents: vi.fn(),
+      recordFreshness,
+      upsertBuc: vi.fn(),
+      nowIso: NOW_ISO,
+      isMetaConfigured: () => false,
+    });
+    expect(fetchStatus).not.toHaveBeenCalled();
+    expect(upsertRegistry).not.toHaveBeenCalled();
+    const scopes = recordFreshness.mock.calls.map(c => c[0].scope).sort();
+    expect(scopes).toEqual(['ad_status', 'adset_status', 'campaign_status']);
+    expect(recordFreshness.mock.calls.every(c => c[0].status === 'success')).toBe(true);
+  });
+
+  it('hot_metrics: not configured → skips fetch, records 2 success freshness rows, never calls fetchHotMetrics', async () => {
+    const fetchHotMetrics = vi.fn();
+    const upsertCampaignsDaily = vi.fn();
+    const recordFreshness = vi.fn();
+    await runMetaWorkerJob({
+      jobData: { store_id: 'newstore', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      bucProbe: async () => ({ pct: 0, etaMinutes: 0 }),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics,
+      getHotCampaignIds: async () => ['C1'],
+      getHotAdsetIds: async () => ['AS1'],
+      getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily,
+      upsertAdsDaily: vi.fn(),
+      recordFreshness,
+      upsertBuc: vi.fn(),
+      nowIso: NOW_ISO,
+      isMetaConfigured: () => false,
+    });
+    expect(fetchHotMetrics).not.toHaveBeenCalled();
+    expect(upsertCampaignsDaily).not.toHaveBeenCalled();
+    const scopes = recordFreshness.mock.calls.map(c => c[0].scope).sort();
+    expect(scopes).toEqual(['ad_metrics', 'campaign_metrics']);
+    expect(recordFreshness.mock.calls.every(c => c[0].status === 'success')).toBe(true);
+  });
+
+  // ZERO REGRESSION for the 3 live Meta stores: a configured store (gate true)
+  // must still run the full fetch path, byte-identically. This is the guard
+  // that proves uzoshop/zolplus/usmile360 are unaffected.
+  it('status: configured (isMetaConfigured=true) → still runs full fetch path (zero-regression)', async () => {
+    const fetchStatus = vi.fn().mockResolvedValue({
+      campaigns: [freshCampaign('C1', 'ACTIVE')],
+      adsets: [],
+      ads: [],
+      bucUsage: {
+        ads_insights_call_pct: 12, ads_insights_cputime_pct: 5, ads_insights_time_pct: 5, ads_insights_eta_minutes: 0,
+        ads_management_call_pct: 7, ads_management_cputime_pct: 2, ads_management_time_pct: 2, ads_management_eta_minutes: 0,
+      },
+    });
+    const upsertRegistry = vi.fn();
+    const recordFreshness = vi.fn();
+    await runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 900, budget_pct_estimate: 12 },
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
+      fetchStatus,
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry,
+      insertStatusEvents: vi.fn(),
+      recordFreshness,
+      upsertBuc: vi.fn(),
+      nowIso: NOW_ISO,
+      isMetaConfigured: () => true,
+    });
+    expect(fetchStatus).toHaveBeenCalled();
+    expect(upsertRegistry).toHaveBeenCalledWith(expect.objectContaining({ table: 'campaign_registry' }));
+    const successCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'success');
+    expect(successCalls.map(c => c[0].scope).sort()).toEqual(['ad_status', 'adset_status', 'campaign_status']);
+  });
+
+  it('hot_metrics: configured (isMetaConfigured=true) → still runs full fetch path (zero-regression)', async () => {
+    const fetchHotMetrics = vi.fn().mockResolvedValue({
+      adsets: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', campaign_name: 'C', ad_set_id: 'AS1', ad_set_name: 'AS', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 0, conversion_value_cad: 0 }],
+      ads: [],
+    });
+    const upsertCampaignsDaily = vi.fn();
+    const recordFreshness = vi.fn();
+    await runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 12 },
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics,
+      getHotCampaignIds: async () => ['C1'],
+      getHotAdsetIds: async () => ['AS1'],
+      getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily,
+      upsertAdsDaily: vi.fn(),
+      getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 1 } as never),
+      recordFreshness,
+      upsertBuc: vi.fn(),
+      nowIso: NOW_ISO,
+      isMetaConfigured: () => true,
+    });
+    expect(fetchHotMetrics).toHaveBeenCalled();
+    expect(upsertCampaignsDaily).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ ad_set_id: 'AS1' })]));
+    expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
+  });
+
+  // Phase 6a regression: a DB-only-cred store (the configured-gate resolves
+  // true via an ASYNC dual-read, env absent) must NOT be skipped. Also proves
+  // the worker AWAITS an async injected gate (a missing await would leave a
+  // truthy Promise → every store wrongly "configured" → no skip ever).
+  it('status: ASYNC gate returning false (DB-aware, no creds anywhere) → worker skips, does NOT fetch', async () => {
+    const fetchStatus = vi.fn();
+    const recordFreshness = vi.fn();
+    await runMetaWorkerJob({
+      jobData: { store_id: 'newstore', scope: 'status', tick_id: 'T', staleness_seconds: 600, budget_pct_estimate: 0 },
+      bucProbe: async () => ({ pct: 0, etaMinutes: 0 }),
+      fetchStatus,
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      recordFreshness,
+      upsertBuc: vi.fn(),
+      nowIso: NOW_ISO,
+      // DB-aware gate resolved FALSE (no creds in DB or env) — async on purpose.
+      isMetaConfigured: async () => false,
+    });
+    expect(fetchStatus).not.toHaveBeenCalled();
+    const scopes = recordFreshness.mock.calls.map(c => c[0].scope).sort();
+    expect(scopes).toEqual(['ad_status', 'adset_status', 'campaign_status']);
+    expect(recordFreshness.mock.calls.every(c => c[0].status === 'success')).toBe(true);
   });
 });
 
@@ -185,6 +344,7 @@ describe('runMetaWorkerJob() — ads-off fetch-gate (Phase 3)', () => {
       insertStatusEvents: vi.fn(),
       recordFreshness,
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       nowIso: NOW_ISO,
       adStateMap: { 'uzoshop:meta': false },
     });
@@ -211,6 +371,7 @@ describe('runMetaWorkerJob() — ads-off fetch-gate (Phase 3)', () => {
       upsertAdsDaily: vi.fn(),
       recordFreshness,
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       nowIso: NOW_ISO,
       adStateMap: { 'uzoshop:meta': false },
     });
@@ -236,6 +397,7 @@ describe('runMetaWorkerJob() — ads-off fetch-gate (Phase 3)', () => {
       insertStatusEvents: vi.fn(),
       recordFreshness: vi.fn(),
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       nowIso: NOW_ISO,
       adStateMap: {},
     });
@@ -272,6 +434,7 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
       upsertAdsDaily,
       recordFreshness,
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       nowIso: NOW_ISO,
     });
     expect(getHotCampaign).toHaveBeenCalled();
@@ -299,6 +462,7 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
       upsertAdsDaily: vi.fn(),
       recordFreshness,
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       nowIso: NOW_ISO,
     });
     expect(fetcher).not.toHaveBeenCalled();
@@ -333,6 +497,7 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
       getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 0.5 } as never),
       recordFreshness: vi.fn(),
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       aggregateDataDaily,
       nowIso: '2026-05-29T16:00:00.000Z',
     });
@@ -364,6 +529,7 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
       getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 1 } as never),
       recordFreshness,
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       notifyTokenFailure,
       nowIso: NOW_ISO,
     })).rejects.toThrow('rate limit');
@@ -393,6 +559,7 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
       getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 1 } as never),
       recordFreshness: vi.fn(),
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       notifyTokenFailure,
       nowIso: NOW_ISO,
     })).rejects.toThrow('invalid access token');
@@ -418,6 +585,7 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
       getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 0.5 } as never),
       recordFreshness: vi.fn(),
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       aggregateDataDaily,
       nowIso: '2026-05-29T16:00:00.000Z',
     });
@@ -449,6 +617,7 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
       getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 0.5 } as never),
       recordFreshness,
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       aggregateDataDaily,
       nowIso: '2026-05-29T16:00:00.000Z',
     });
@@ -479,6 +648,7 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
       upsertAdsDaily: vi.fn(),
       recordFreshness,
       upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
       notifyTokenFailure,
       nowIso: NOW_ISO,
     });

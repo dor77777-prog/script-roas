@@ -33,6 +33,42 @@ export async function getAdAccountIdForStore(storeId: StoreId): Promise<string> 
   return stripped;
 }
 
+/**
+ * Self-serve stores Phase 6a (MF-1) — DB-aware "is Meta configured for this
+ * store?" gate. Returns true iff the per-store META_AD_ACCOUNT_ID resolves via
+ * `getStoreSecret` (DB→env→null dual-read), falling back to the env check when
+ * the DB read yields nothing. Mirrors `isGoogleConfiguredForStoreAsync`
+ * (googleAccountConfig.ts) + `isTikTokConfiguredForStoreAsync`
+ * (tiktokAccountConfig.ts) exactly: NEVER throws, fails OPEN to env so a DB
+ * blip can't wrongly skip a configured store.
+ *
+ * Why this exists: a self-serve store added WITHOUT Meta (a supported wizard
+ * option — the create-store POST writes Meta secrets only `if (meta)` and never
+ * inserts a meta `store_ad_state` row) has no META_AD_ACCOUNT_ID. The
+ * cron-tick-orchestrator naively fans out a `meta/job.requested` for every
+ * (store, platform, scope) combo, so `metaWorker`'s status branch would resolve
+ * empty creds and drive an unguarded Graph batch with an empty access_token →
+ * `metaStatus.ts` throws → Inngest retries/fails EVERY 10-min tick and Meta
+ * freshness is never green. With this gate the worker no-ops + records a
+ * `success` freshness row instead of crash-looping.
+ *
+ * Scope is intentionally narrow (per-store ad-account id only) to match the
+ * Google/TikTok gates. The global META_GLOBAL_TOKEN is a shared concern
+ * surfaced by the worker's real-fetch path, not this configured-gate.
+ *
+ * INERT for the 3 current stores: each has its META_AD_ACCOUNT_ID in env →
+ * getStoreSecret's env fallback returns it → gate true → full fetch path
+ * unchanged (byte-identical behaviour). The DB-aware path only matters once
+ * Phase 6 can add a Meta-less or DB-only-cred store.
+ */
+export async function isMetaConfiguredForStoreAsync(storeId: StoreId): Promise<boolean> {
+  const raw = (await getStoreSecret(storeId, 'META_AD_ACCOUNT_ID')) ?? '';
+  // Mirror getAdAccountIdForStore's emptiness check: strip the optional act_
+  // prefix + trim so a stray "act_" or whitespace-only value reads as missing.
+  const stripped = raw.replace(/^act_/, '').trim();
+  return Boolean(stripped);
+}
+
 export async function getMetaAccessTokenForStore(storeId: StoreId): Promise<string> {
   const upper = storeId.toUpperCase();
   const perStore = await getStoreSecret(storeId, 'META_ACCESS_TOKEN');
