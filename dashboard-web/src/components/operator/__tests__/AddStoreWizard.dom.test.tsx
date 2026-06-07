@@ -1,0 +1,288 @@
+// dashboard-web/src/components/operator/__tests__/AddStoreWizard.dom.test.tsx
+//
+// Self-serve stores Phase 6a — Task 5: AddStoreWizard DOM tests (ADD mode).
+//
+// Covers the 3-step flow + live-verify gating + snippet/checklist success
+// screen. The PATCH (edit) DOM test is added in T8 (which delivers the edit
+// route); here we focus on ADD mode per the task spec.
+//
+// Pattern mirrors ManualOverridesCrud.dom.test.tsx / BackfillPicker.dom.test.tsx:
+// mock @/lib/operatorClient (operatorFetch) and assert on roles / text / the
+// recorded fetch calls.
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
+
+// ---------------------------------------------------------------------------
+// Mocks — must precede the import of the module under test.
+// ---------------------------------------------------------------------------
+
+// A scriptable operatorFetch: each test pushes Response-like objects onto the
+// queue; calls are recorded for assertion. Falls back to a generic 200 ok.
+type FakeRes = { status: number; json: () => Promise<unknown> };
+const calls: Array<{ url: string; init?: RequestInit }> = [];
+let responder: (url: string, init?: RequestInit) => FakeRes;
+
+vi.mock('@/lib/operatorClient', () => ({
+  operatorFetch: vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push({ url, init });
+    return responder(url, init);
+  }),
+}));
+
+import { AddStoreWizard } from '../AddStoreWizard';
+
+function jsonOf(init?: RequestInit): Record<string, unknown> {
+  if (!init?.body) return {};
+  return JSON.parse(String(init.body)) as Record<string, unknown>;
+}
+
+beforeEach(() => {
+  calls.length = 0;
+  // Default: every verify returns ok:true; create returns a success body.
+  responder = (url) => {
+    if (url.includes('verify-creds')) {
+      return { status: 200, json: async () => ({ platform: 'shopify', ok: true, message: 'תקין' }) };
+    }
+    if (url.endsWith('/api/operator/stores')) {
+      return {
+        status: 201,
+        json: async () => ({
+          ok: true,
+          store: { storeId: 'glowlab', name: 'Glow Lab' },
+          secretsSet: ['SHOPIFY_CLIENT_ID'],
+          secretsMasked: { SHOPIFY_CLIENT_SECRET: '••••1234' },
+          cartPublicToken: 'ct_TESTTOKEN_123',
+        }),
+      };
+    }
+    return { status: 200, json: async () => ({}) };
+  };
+});
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+// Helpers -------------------------------------------------------------------
+
+function fill(label: RegExp | string, value: string): void {
+  const el = screen.getByLabelText(label) as HTMLInputElement;
+  fireEvent.change(el, { target: { value } });
+}
+
+function fillValidStep1(slug = 'glowlab'): void {
+  fill(/מזהה/, slug);
+  fill(/שם תצוגה/, 'Glow Lab');
+  fill(/דומיין/, 'glowlab.myshopify.com');
+}
+
+function clickNext(): void {
+  fireEvent.click(screen.getByRole('button', { name: /הבא|Next/ }));
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe('AddStoreWizard — ADD mode (Phase 6a Task 5)', () => {
+  it('renders step 1 with the basics fields', () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    expect(screen.getByLabelText(/מזהה/)).toBeDefined();
+    expect(screen.getByLabelText(/שם תצוגה/)).toBeDefined();
+    expect(screen.getByLabelText(/דומיין/)).toBeDefined();
+  });
+
+  it('rejects the reserved slug __global__ with an inline error and blocks Next', () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fill(/מזהה/, '__global__');
+    fill(/שם תצוגה/, 'Glow Lab');
+    fill(/דומיין/, 'glowlab.myshopify.com');
+    clickNext();
+    // Still on step 1 — credentials heading should not be present.
+    expect(screen.queryByText(/Shopify client_id/i)).toBeNull();
+    expect(screen.getByRole('alert')).toBeDefined();
+  });
+
+  it('rejects an invalid slug "Bad Id" and blocks Next', () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fill(/מזהה/, 'Bad Id');
+    fill(/שם תצוגה/, 'Glow Lab');
+    fill(/דומיין/, 'glowlab.myshopify.com');
+    clickNext();
+    expect(screen.queryByText(/Shopify client_id/i)).toBeNull();
+    expect(screen.getByRole('alert')).toBeDefined();
+  });
+
+  it('advances to step 2 with a valid slug, showing Shopify creds always', () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    clickNext();
+    expect(screen.getByLabelText(/Shopify client_id/i)).toBeDefined();
+    expect(screen.getByLabelText(/Shopify.*secret/i)).toBeDefined();
+  });
+
+  it('does NOT show Meta creds in step 2 when Meta is unchecked', () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    clickNext();
+    expect(screen.queryByLabelText(/Meta access[_ ]?token/i)).toBeNull();
+  });
+
+  it('shows Meta creds in step 2 after checking Meta in step 1', () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    // Toggle Meta on (the platform switch is labelled "Meta").
+    fireEvent.click(screen.getByRole('switch', { name: /Meta/i }));
+    clickNext();
+    expect(screen.getByLabelText(/Meta access[_ ]?token/i)).toBeDefined();
+    expect(screen.getByLabelText(/Meta.*account/i)).toBeDefined();
+  });
+
+  it('disables Create until Shopify verify returns ✓', () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    clickNext();
+    fill(/Shopify client_id/i, 'cid_123');
+    fill(/Shopify.*secret/i, 'shpss_secret');
+    const create = screen.getByRole('button', { name: /צור חנות/ }) as HTMLButtonElement;
+    expect(create.disabled).toBe(true);
+  });
+
+  it('enables Create after a successful Shopify verify (✓)', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    clickNext();
+    fill(/Shopify client_id/i, 'cid_123');
+    fill(/Shopify.*secret/i, 'shpss_secret');
+    fireEvent.click(screen.getByRole('button', { name: /בדוק/ }));
+    // The ✓ indicator appears asynchronously after the fetch resolves.
+    await screen.findByText(/תקין/);
+    const create = screen.getByRole('button', { name: /צור חנות/ }) as HTMLButtonElement;
+    expect(create.disabled).toBe(false);
+  });
+
+  it('the "save anyway" override enables Create without a verify', () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    clickNext();
+    fill(/Shopify client_id/i, 'cid_123');
+    fill(/Shopify.*secret/i, 'shpss_secret');
+    fireEvent.click(screen.getByLabelText(/שמור בכל זאת/));
+    const create = screen.getByRole('button', { name: /צור חנות/ }) as HTMLButtonElement;
+    expect(create.disabled).toBe(false);
+  });
+
+  it('Create POSTs to /api/operator/stores with the correct body shape', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    // Enable Meta so the body carries a meta block too.
+    fireEvent.click(screen.getByRole('switch', { name: /Meta/i }));
+    clickNext();
+    fill(/Shopify client_id/i, 'cid_123');
+    fill(/Shopify.*secret/i, 'shpss_secret');
+    fill(/Meta access[_ ]?token/i, 'meta_tok');
+    fill(/Meta.*account/i, 'act_999');
+    // Skip verify via override so the test is deterministic.
+    fireEvent.click(screen.getByLabelText(/שמור בכל זאת/));
+    fireEvent.click(screen.getByRole('button', { name: /צור חנות/ }));
+
+    await screen.findByText(/ct_TESTTOKEN_123/);
+
+    const createCall = calls.find((c) => c.url.endsWith('/api/operator/stores'));
+    expect(createCall).toBeDefined();
+    expect(createCall!.init?.method).toBe('POST');
+    const body = jsonOf(createCall!.init);
+    expect(body.storeId).toBe('glowlab');
+    expect(body.name).toBe('Glow Lab');
+    expect(body.shopDomain).toBe('glowlab.myshopify.com');
+    expect(body.isHeadless).toBe(false);
+    expect(typeof body.brandColor).toBe('string');
+    expect(body.hasTiktok).toBe(false);
+    expect(body.shopify).toEqual({ clientId: 'cid_123', clientSecret: 'shpss_secret' });
+    expect(body.meta).toEqual({ token: 'meta_tok', adAccountId: 'act_999' });
+    expect(body.google).toBeUndefined();
+  });
+
+  it('on success renders step 3 with the themed snippet token + checklist; Done calls onDone', async () => {
+    const onDone = vi.fn();
+    render(<AddStoreWizard onDone={onDone} />);
+    fillValidStep1();
+    clickNext();
+    fill(/Shopify client_id/i, 'cid_123');
+    fill(/Shopify.*secret/i, 'shpss_secret');
+    fireEvent.click(screen.getByLabelText(/שמור בכל זאת/));
+    fireEvent.click(screen.getByRole('button', { name: /צור חנות/ }));
+
+    // Step 3: the themed pixel embeds the cartPublicToken from the response.
+    await screen.findByText(/ct_TESTTOKEN_123/);
+    // Checklist mentions the Shopify scopes.
+    expect(screen.getByText(/read_customers/)).toBeDefined();
+    // TikTok manual-mapping note is present.
+    expect(screen.getByText(/TikTok/)).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: /סיום/ }));
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces the server 409 error on Create (duplicate store id)', async () => {
+    responder = (url) => {
+      if (url.includes('verify-creds')) {
+        return { status: 200, json: async () => ({ platform: 'shopify', ok: true, message: 'תקין' }) };
+      }
+      return { status: 409, json: async () => ({ error: 'a store with this id already exists' }) };
+    };
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    clickNext();
+    fill(/Shopify client_id/i, 'cid_123');
+    fill(/Shopify.*secret/i, 'shpss_secret');
+    fireEvent.click(screen.getByLabelText(/שמור בכל זאת/));
+    fireEvent.click(screen.getByRole('button', { name: /צור חנות/ }));
+
+    await screen.findByText(/already exists/);
+    // Still on step 2 — no snippet rendered.
+    expect(screen.queryByText(/ct_TESTTOKEN_123/)).toBeNull();
+  });
+
+  it('Create is disabled while the request is in flight (no double submit)', async () => {
+    // Make the create call hang so we can observe the in-flight disabled state.
+    let resolveCreate!: (v: FakeRes) => void;
+    const pending = new Promise<FakeRes>((res) => {
+      resolveCreate = res;
+    });
+    responder = (url) => {
+      if (url.includes('verify-creds')) {
+        return { status: 200, json: async () => ({ platform: 'shopify', ok: true, message: 'תקין' }) };
+      }
+      // Return the pending promise (operatorFetch awaits it).
+      return pending as unknown as FakeRes;
+    };
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    clickNext();
+    fill(/Shopify client_id/i, 'cid_123');
+    fill(/Shopify.*secret/i, 'shpss_secret');
+    fireEvent.click(screen.getByLabelText(/שמור בכל זאת/));
+    const create = screen.getByRole('button', { name: /צור חנות/ }) as HTMLButtonElement;
+    fireEvent.click(create);
+    // In-flight: button is disabled.
+    expect(create.disabled).toBe(true);
+
+    // Resolve so the test ends cleanly.
+    resolveCreate({
+      status: 201,
+      json: async () => ({ ok: true, store: { storeId: 'glowlab' }, cartPublicToken: 'ct_TESTTOKEN_123' }),
+    });
+    await screen.findByText(/ct_TESTTOKEN_123/);
+  });
+
+  it('renders the verify control inside step 2 (smoke for the per-platform UI)', () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    clickNext();
+    const section = screen.getByText(/Shopify client_id/i).closest('form') ?? document.body;
+    expect(within(section as HTMLElement).getByRole('button', { name: /בדוק/ })).toBeDefined();
+  });
+});
