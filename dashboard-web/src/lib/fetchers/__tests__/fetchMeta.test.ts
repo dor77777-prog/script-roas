@@ -335,14 +335,14 @@ describe('fetchMeta', () => {
   // -----------------------------------------------------------------------
   // Test 14 — lookupStoreByAdAccount
   // -----------------------------------------------------------------------
-  it('14. lookupStoreByAdAccount: when env matches → store id, when no match → null', () => {
+  it('14. lookupStoreByAdAccount: when env matches → store id, when no match → null', async () => {
     process.env.UZOSHOP_META_AD_ACCOUNT_ID = 'act_999';
     process.env.ZOLPLUS_META_AD_ACCOUNT_ID = '888';
 
-    expect(lookupStoreByAdAccount('999')).toBe('uzoshop');     // strips act_ from env var
-    expect(lookupStoreByAdAccount('888')).toBe('zolplus');     // env without act_ prefix
-    expect(lookupStoreByAdAccount('000')).toBeNull();          // no match
-    expect(lookupStoreByAdAccount(null)).toBeNull();           // null input
+    expect(await lookupStoreByAdAccount('999')).toBe('uzoshop');     // strips act_ from env var
+    expect(await lookupStoreByAdAccount('888')).toBe('zolplus');     // env without act_ prefix
+    expect(await lookupStoreByAdAccount('000')).toBeNull();          // no match
+    expect(await lookupStoreByAdAccount(null)).toBeNull();           // null input
 
     delete process.env.ZOLPLUS_META_AD_ACCOUNT_ID;
   });

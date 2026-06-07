@@ -39,6 +39,7 @@
  */
 
 import { fetchMeta } from './fetchMeta';
+import { getStoreSecret, getGlobalSecret } from '@/lib/storeSecretsReader';
 
 /**
  * Meta Graph API version. Bumped 2026-05-22 from v23.0 → v25.0 ahead of the
@@ -241,13 +242,13 @@ type MetaInsightsAdBody = {
 // The original ordering (META_${STORE}_*) was a fetcher-side bug that caused
 // live cron-live runs to fail with "Missing Meta access token" against
 // properly-seeded Vercel env vars.
-function getMetaToken(storeId: string): string {
+async function getMetaToken(storeId: string): Promise<string> {
   const upper = storeId.toUpperCase();
-  // PROPS-MAP rows 26/33/39
-  const perStore = process.env[`${upper}_META_ACCESS_TOKEN`];
-  // Optional global fallback (not in PROPS-MAP, but kept for dev convenience)
-  const global = process.env.META_GLOBAL_TOKEN;
-  const token = perStore || global;
+  // PROPS-MAP rows 26/33/39 (dual-read: store_secrets → ${STORE}_META_ACCESS_TOKEN)
+  const perStore = await getStoreSecret(storeId, 'META_ACCESS_TOKEN');
+  // Optional global fallback (not in PROPS-MAP, but kept for dev convenience):
+  // store_secrets[__global__] → UNPREFIXED process.env.META_GLOBAL_TOKEN.
+  const token = perStore || (await getGlobalSecret('META_GLOBAL_TOKEN'));
   if (!token) {
     throw new Error(
       `Missing Meta access token for ${storeId}. ` +
@@ -258,10 +259,10 @@ function getMetaToken(storeId: string): string {
   return token;
 }
 
-function getMetaAdAccountId(storeId: string): string {
+async function getMetaAdAccountId(storeId: string): Promise<string> {
   const upper = storeId.toUpperCase();
-  // PROPS-MAP rows 27/34/40
-  const raw = process.env[`${upper}_META_AD_ACCOUNT_ID`] || '';
+  // PROPS-MAP rows 27/34/40 (dual-read: store_secrets → ${STORE}_META_AD_ACCOUNT_ID)
+  const raw = (await getStoreSecret(storeId, 'META_AD_ACCOUNT_ID')) || '';
   // Strip a leading `act_` so the URL builder can always re-prepend it. This
   // mirrors MetaAds.gs:26 — operators sometimes paste the `act_` prefix from
   // the Meta UI and we want both forms to work.
@@ -320,8 +321,8 @@ export async function fetchMetaAdSetInsights(
   storeId: string,
   dateStr: string,
 ): Promise<MetaAdSetRow[]> {
-  const token = getMetaToken(storeId);
-  const adAccountId = getMetaAdAccountId(storeId);
+  const token = await getMetaToken(storeId);
+  const adAccountId = await getMetaAdAccountId(storeId);
 
   const fields = [
     'campaign_id',
@@ -446,8 +447,8 @@ export async function fetchMetaSpendForDayLight(
   storeId: string,
   dateStr: string,
 ): Promise<MetaDailyStoreSpend> {
-  const token = getMetaToken(storeId);
-  const adAccountId = getMetaAdAccountId(storeId);
+  const token = await getMetaToken(storeId);
+  const adAccountId = await getMetaAdAccountId(storeId);
 
   // level=account returns a single row aggregating the entire ad-account.
   // No pagination needed (1 row max). Phase 13.8 (2026-05-26) — added
@@ -510,8 +511,8 @@ export async function fetchMetaAdInsights(
   storeId: string,
   dateStr: string,
 ): Promise<MetaAdRow[]> {
-  const token = getMetaToken(storeId);
-  const adAccountId = getMetaAdAccountId(storeId);
+  const token = await getMetaToken(storeId);
+  const adAccountId = await getMetaAdAccountId(storeId);
 
   const fields = [
     'campaign_id',
@@ -666,8 +667,8 @@ type MetaAdSetsBudgetsBody = {
  * campaigns still get their budgets populated.
  */
 export async function fetchMetaBudgets(storeId: string): Promise<MetaBudgets> {
-  const token = getMetaToken(storeId);
-  const adAccountId = getMetaAdAccountId(storeId);
+  const token = await getMetaToken(storeId);
+  const adAccountId = await getMetaAdAccountId(storeId);
 
   // ---- toMajor: minor → major unit conversion --------------------------
   // Meta returns budget values as STRINGS in MINOR units (agorot/cents)

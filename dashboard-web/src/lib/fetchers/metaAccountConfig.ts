@@ -17,11 +17,12 @@
 
 import { getFxRate } from '@/lib/fetchers/fx';
 import { notifyFxFailure } from '@/lib/notifications/fxFailure';
+import { getStoreSecret, getGlobalSecret } from '@/lib/storeSecretsReader';
 import type { StoreId } from '@/lib/registries/types';
 
 export async function getAdAccountIdForStore(storeId: StoreId): Promise<string> {
   const upper = storeId.toUpperCase();
-  const raw = process.env[`${upper}_META_AD_ACCOUNT_ID`] ?? '';
+  const raw = (await getStoreSecret(storeId, 'META_AD_ACCOUNT_ID')) ?? '';
   const stripped = raw.replace(/^act_/, '').trim();
   if (!stripped) {
     throw new Error(
@@ -34,9 +35,8 @@ export async function getAdAccountIdForStore(storeId: StoreId): Promise<string> 
 
 export async function getMetaAccessTokenForStore(storeId: StoreId): Promise<string> {
   const upper = storeId.toUpperCase();
-  const perStore = process.env[`${upper}_META_ACCESS_TOKEN`];
-  const global = process.env.META_GLOBAL_TOKEN;
-  const token = perStore || global;
+  const perStore = await getStoreSecret(storeId, 'META_ACCESS_TOKEN');
+  const token = perStore || (await getGlobalSecret('META_GLOBAL_TOKEN'));
   if (!token) {
     throw new Error(
       `Missing Meta access token for ${storeId}. ` +

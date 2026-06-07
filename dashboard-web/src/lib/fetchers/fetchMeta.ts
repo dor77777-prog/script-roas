@@ -15,6 +15,7 @@
 import * as Sentry from '@sentry/nextjs';
 import { fetchWithBackoff } from './withBackoff';
 import { recordMetaBucUsage } from '@/lib/notifications/metaBucUsage';
+import { getStoreSecret } from '@/lib/storeSecretsReader';
 
 // ---------------------------------------------------------------------------
 // Constants + public error class
@@ -68,11 +69,14 @@ export function extractAdAccountIdFromUrl(url: string): string | null {
  *
  * Known stores: uzoshop, zolplus, usmile360 (matches cronDaily/cronLive/cronLiveHeavy).
  */
-export function lookupStoreByAdAccount(accountId: string | null): string | null {
+export async function lookupStoreByAdAccount(
+  accountId: string | null,
+): Promise<string | null> {
   if (!accountId) return null;
   const normalized = accountId.replace(/^act_/, '');
   for (const storeId of ['uzoshop', 'zolplus', 'usmile360']) {
-    const envVal = process.env[`${storeId.toUpperCase()}_META_AD_ACCOUNT_ID`];
+    // Dual-read: store_secrets → ${STORE}_META_AD_ACCOUNT_ID env fallback.
+    const envVal = await getStoreSecret(storeId, 'META_AD_ACCOUNT_ID');
     if (envVal && envVal.replace(/^act_/, '').trim() === normalized) {
       return storeId;
     }
@@ -223,7 +227,7 @@ export async function fetchMeta(url: string, init?: RequestInit): Promise<Respon
 
   if (snapshot) {
     const accountId = extractAdAccountIdFromUrl(url);
-    const storeId = lookupStoreByAdAccount(accountId);
+    const storeId = await lookupStoreByAdAccount(accountId);
     if (storeId && accountId) {
       void recordMetaBucUsage({
         store_id: storeId,
