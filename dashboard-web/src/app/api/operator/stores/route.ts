@@ -8,10 +8,12 @@
 //   leave NO half-store. So the sequence is fail-safe with rollback-by-store_id:
 //     1. validate (write nothing on failure)
 //     2. LIVE re-verify every provided platform's creds (never trust the client)
-//     3. encrypt → store_secrets
-//     4. insert stores  5. insert store_webhooks  6. upsert store_ad_state
-//     7. on ANY error after the first write → DELETE everything for this
-//        store_id from all 4 tables, then 500.
+//     3. INSERT stores FIRST (plain insert) = the concurrency gate: a double-submit
+//        loser hits the PK conflict HERE (→ 409, no rollback — it owns nothing).
+//     4. encrypt → store_secrets  5. insert store_webhooks  6. upsert store_ad_state
+//     7. on ANY error AFTER the stores insert → DELETE everything for this
+//        store_id from all 4 tables, then 500. (Rollback now only ever deletes
+//        THIS request's rows, because it owns the stores row it created.)
 //
 // GET /api/operator/stores — the store list (incl. archived), each annotated
 //   with which platforms are configured (derived from store_secrets PRESENCE,
@@ -38,6 +40,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const STORE_ID_RE = /^[a-z0-9_-]+$/;
+// Strict single-label *.myshopify.com host: one DNS label + the literal suffix.
+// Rejects malformed hosts like `evil.com/path.myshopify.com`, `.myshopify.com`,
+// `a b.myshopify.com`, `<script>.myshopify.com` before they reach the live
+// Shopify verify (a minor SSRF surface) or land in `allowed_origins`.
+const SHOP_DOMAIN_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
 
 type Platform = 'shopify' | 'meta' | 'google' | 'tiktok';
 
@@ -130,8 +137,8 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (!shopify || typeof shopify.clientId !== 'string' || typeof shopify.clientSecret !== 'string' || !shopify.clientId || !shopify.clientSecret) {
     return NextResponse.json({ error: 'shopify.clientId and shopify.clientSecret are required' }, { status: 400 });
   }
-  if (!shopDomain.endsWith('.myshopify.com')) {
-    return NextResponse.json({ error: 'shopDomain must end with .myshopify.com' }, { status: 400 });
+  if (!SHOP_DOMAIN_RE.test(shopDomain)) {
+    return NextResponse.json({ error: 'shopDomain must be a single-label *.myshopify.com host' }, { status: 400 });
   }
   if (meta && (typeof meta.token !== 'string' || typeof meta.adAccountId !== 'string' || !meta.token || !meta.adAccountId)) {
     return NextResponse.json({ error: 'meta requires token and adAccountId' }, { status: 400 });
@@ -194,10 +201,43 @@ export async function POST(req: Request): Promise<NextResponse> {
       displayOrder = max + 1;
     }
 
-    // ===== From here on writes happen → ANY failure must roll back by store_id. =====
+    // ----- 3. INSERT stores FIRST = the concurrency gate (data-integrity). -----
+    // The `stores` PK is the single source of truth for "who owns this store_id".
+    // It MUST be the first write and use a plain `.insert` (NOT upsert) so a
+    // concurrent/double-submit loser hits a PK conflict (Postgres 23505) here —
+    // BEFORE arming rollback. The loser created nothing, so it must NOT call
+    // rollbackStore (that would wipe the winner's rows). The FK only requires
+    // `stores` to exist before `store_webhooks`; `store_secrets`/`store_ad_state`
+    // have no FK, so writing `stores` first is valid. On conflict → 409 (the race
+    // backstop behind the pre-checks); any other error → 500 (no rollback).
+    const { error: storesErr } = await admin.from('stores').insert({
+      id: storeId,
+      name,
+      status: 'active',
+      brand_color: brandColor,
+      is_headless: isHeadless,
+      has_tiktok: hasTiktok,
+      has_google_ads: !!google,
+      display_order: displayOrder,
+      meta_ad_account_id: meta?.adAccountId ?? null,
+      google_ads_customer_id: google?.customerId ?? null,
+    });
+    if (storesErr) {
+      // PK / unique conflict → another request already created this store_id.
+      // We own NOTHING → do NOT roll back (would delete the winner's rows).
+      const code = (storesErr as { code?: string }).code;
+      if (code === '23505' || /duplicate|unique|already exists/i.test(storesErr.message)) {
+        return NextResponse.json({ error: 'a store with this id already exists' }, { status: 409 });
+      }
+      throw new Error(`stores insert failed: ${storesErr.message}`);
+    }
+
+    // ===== `stores` is ours now → arm rollback for the remaining writes. A failure
+    // in any of these deletes by store_id, which only touches THIS request's rows
+    // (we own the `stores` row we just inserted, so the loser can never wipe us). =====
     const writtenKeys: string[] = [];
     try {
-      // ----- 3. ENCRYPT → store_secrets (registry key names exactly; NO TikTok) -----
+      // ----- 4. ENCRYPT → store_secrets (registry key names exactly; NO TikTok) -----
       await upsertSecret(storeId, 'SHOPIFY_DOMAIN', shopDomain);       writtenKeys.push('SHOPIFY_DOMAIN');
       await upsertSecret(storeId, 'SHOPIFY_CLIENT_ID', shopify.clientId);     writtenKeys.push('SHOPIFY_CLIENT_ID');
       await upsertSecret(storeId, 'SHOPIFY_CLIENT_SECRET', shopify.clientSecret); writtenKeys.push('SHOPIFY_CLIENT_SECRET');
@@ -209,21 +249,6 @@ export async function POST(req: Request): Promise<NextResponse> {
         await upsertSecret(storeId, 'GOOGLEADS_CUSTOMER_ID', google.customerId);     writtenKeys.push('GOOGLEADS_CUSTOMER_ID');
         await upsertSecret(storeId, 'GOOGLEADS_REFRESH_TOKEN', google.refreshToken); writtenKeys.push('GOOGLEADS_REFRESH_TOKEN');
       }
-
-      // ----- 4. INSERT stores (only columns that exist; store_secrets is authoritative) -----
-      const { error: storesErr } = await admin.from('stores').insert({
-        id: storeId,
-        name,
-        status: 'active',
-        brand_color: brandColor,
-        is_headless: isHeadless,
-        has_tiktok: hasTiktok,
-        has_google_ads: !!google,
-        display_order: displayOrder,
-        meta_ad_account_id: meta?.adAccountId ?? null,
-        google_ads_customer_id: google?.customerId ?? null,
-      });
-      if (storesErr) throw new Error(`stores insert failed: ${storesErr.message}`);
 
       // ----- 5. INSERT store_webhooks -----
       // signing_secret is set to the Shopify app's client_secret because Shopify
@@ -297,7 +322,13 @@ export async function POST(req: Request): Promise<NextResponse> {
     captureRouteError('operator/stores', err);
     const message = err instanceof Error ? err.message : String(err);
     console.error('/api/operator/stores POST failed:', message);
-    return NextResponse.json({ error: userFacingError(message) }, { status: 500 });
+    // Store-creation-specific message (NOT the Google-Sheets "loading failed"
+    // copy). Still NO secret/detail in the body; raw cause is logged above +
+    // captured by Sentry. `code` is a stable machine handle for the wizard.
+    return NextResponse.json(
+      { error: 'יצירת החנות נכשלה', code: 'store_create_failed' },
+      { status: 500 },
+    );
   }
 }
 

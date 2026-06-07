@@ -20,8 +20,14 @@ const db = vi.hoisted(() => ({
   existingDisplayOrders: [] as number[],
   // store_secrets rows returned by the grouped GET select
   secretRows: [] as Array<{ store_id: string; secret_key: string }>,
-  // toggle: make a specific table's insert throw (to exercise rollback)
+  // toggle: make a specific table's insert/upsert return an error (rollback path)
   throwOn: null as null | 'stores' | 'store_webhooks' | 'store_ad_state' | 'store_secrets',
+  // optional Postgres-style error code attached to the throwOn error (e.g. '23505'
+  // PK conflict on the `stores` insert → concurrency backstop returns 409).
+  throwOnCode: null as null | string,
+  // toggle: when decryptSecret would return this plaintext, return a WRONG value
+  // instead → upsertSecret's roundtrip-verify fails (mismatch → rollback, no leak).
+  decryptMismatchPlaintext: null as null | string,
 }));
 
 vi.mock('@/lib/supabaseAdmin', () => {
@@ -41,7 +47,9 @@ vi.mock('@/lib/supabaseAdmin', () => {
       // ---- stores / store_webhooks .insert ----
       insert: (rowOrRows: Row | Row[]) => {
         if (table === 'stores') {
-          if (db.throwOn === 'stores') return Promise.resolve({ error: { message: 'boom stores' } });
+          if (db.throwOn === 'stores') {
+            return Promise.resolve({ error: { message: 'boom stores', ...(db.throwOnCode ? { code: db.throwOnCode } : {}) } });
+          }
           db.storesInserts.push(...(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows]));
         } else if (table === 'store_webhooks') {
           if (db.throwOn === 'store_webhooks') return Promise.resolve({ error: { message: 'boom webhooks' } });
@@ -96,7 +104,15 @@ vi.mock('@/lib/supabaseAdmin', () => {
 // Encryption: deterministic, no real master key needed.
 vi.mock('@/lib/secretsEncryption', () => ({
   encryptSecret: (p: string) => ({ ciphertext: 'C:' + p, iv: 'IV', tag: 'TAG' }),
-  decryptSecret: (c: string) => String(c).replace(/^C:/, ''),
+  decryptSecret: (c: string) => {
+    const plaintext = String(c).replace(/^C:/, '');
+    // Simulate a corrupt-at-rest secret: decrypt returns a value ≠ the plaintext
+    // for the targeted secret so upsertSecret's roundtrip-verify throws.
+    if (db.decryptMismatchPlaintext !== null && plaintext === db.decryptMismatchPlaintext) {
+      return 'WRONG:' + plaintext;
+    }
+    return plaintext;
+  },
   maskSecret: (v: string) => (v.length > 4 ? '••••' + v.slice(-4) : '••••'),
 }));
 
@@ -137,6 +153,8 @@ beforeEach(() => {
   db.existingDisplayOrders = [1, 2, 3];
   db.secretRows = [];
   db.throwOn = null;
+  db.throwOnCode = null;
+  db.decryptMismatchPlaintext = null;
   verify.shopify = { ok: true, message: 'ok', currency: 'CAD' };
   verify.meta = { ok: true, message: 'ok', currency: 'ILS' };
   verify.google = { ok: true, message: 'ok', currency: 'CAD' };
@@ -188,6 +206,30 @@ describe('POST /api/operator/stores — validation (writes NOTHING on failure)',
     const res = await post(validBody({ shopDomain: 'newstore.example.com' }));
     expect(res.status).toBe(400);
     expect(noWrites()).toBe(true);
+  });
+
+  it('rejects malformed *.myshopify.com hosts (strict single-label) with 400 and no write', async () => {
+    const bad = [
+      'evil.com/path.myshopify.com',
+      '.myshopify.com',
+      'a b.myshopify.com',
+      '<script>.myshopify.com',
+      'sub.domain.myshopify.com', // multi-label: extra dot before the suffix
+      '-leadinghyphen.myshopify.com',
+    ];
+    for (const shopDomain of bad) {
+      const res = await post(validBody({ shopDomain }));
+      expect(res.status, `expected 400 for ${shopDomain}`).toBe(400);
+      // verify never runs on a rejected domain (no SSRF surface reached)
+      expect(verify.shopifyCalls).toBe(0);
+      expect(noWrites()).toBe(true);
+    }
+  });
+
+  it('accepts a valid single-label *.myshopify.com host (regression: legit domains still pass)', async () => {
+    const res = await post(validBody({ storeId: 'okstore', shopDomain: 'ok-store123.myshopify.com' }));
+    expect([200, 201]).toContain(res.status);
+    expect(verify.shopifyCalls).toBe(1);
   });
 
   it('rejects missing required fields with 400 and no write', async () => {
@@ -308,6 +350,74 @@ describe('POST /api/operator/stores — rollback on partial failure', () => {
     expect(deletedTables).toEqual(['store_ad_state', 'store_secrets', 'store_webhooks', 'stores']);
     const text = await res.text();
     expect(text).not.toContain('csecret');
+  });
+
+  it('a store_secrets failure DURING the secrets loop rolls back all 4 tables and returns 500', async () => {
+    db.throwOn = 'store_secrets';
+    const res = await post(validBody({
+      storeId: 'secretsfail',
+      shopDomain: 'secretsfail.myshopify.com',
+      meta: { token: 'META-PLAINTEXT-TOKEN', adAccountId: 'act_1' },
+    }));
+    expect(res.status).toBe(500);
+    const deletedTables = db.deletes.filter((d) => d.storeId === 'secretsfail').map((d) => d.table).sort();
+    expect(deletedTables).toEqual(['store_ad_state', 'store_secrets', 'store_webhooks', 'stores']);
+    const text = await res.text();
+    expect(text).not.toContain('csecret');
+    expect(text).not.toContain('META-PLAINTEXT-TOKEN');
+  });
+
+  it('a store_ad_state failure (the LAST write) rolls back all 4 tables and returns 500', async () => {
+    db.throwOn = 'store_ad_state';
+    const res = await post(validBody({
+      storeId: 'adstatefail',
+      shopDomain: 'adstatefail.myshopify.com',
+      meta: { token: 't', adAccountId: 'act_1' }, // ensures an ad platform → store_ad_state write
+    }));
+    expect(res.status).toBe(500);
+    const deletedTables = db.deletes.filter((d) => d.storeId === 'adstatefail').map((d) => d.table).sort();
+    expect(deletedTables).toEqual(['store_ad_state', 'store_secrets', 'store_webhooks', 'stores']);
+  });
+
+  it('a decrypt-roundtrip MISMATCH throws in upsertSecret → rollback + 500, no plaintext leaked', async () => {
+    // Make decryptSecret return a value ≠ the Shopify client secret plaintext.
+    db.decryptMismatchPlaintext = 'csecret';
+    const res = await post(validBody({
+      storeId: 'mismatchstore',
+      shopDomain: 'mismatchstore.myshopify.com',
+    }));
+    expect(res.status).toBe(500);
+    const deletedTables = db.deletes.filter((d) => d.storeId === 'mismatchstore').map((d) => d.table).sort();
+    expect(deletedTables).toEqual(['store_ad_state', 'store_secrets', 'store_webhooks', 'stores']);
+    const text = await res.text();
+    expect(text).not.toContain('csecret');
+  });
+
+  it('concurrency backstop: a stores PK-conflict (23505) returns 409 and does NOT roll back (loser never wipes the winner)', async () => {
+    db.throwOn = 'stores';
+    db.throwOnCode = '23505';
+    const res = await post(validBody({
+      storeId: 'racestore',
+      shopDomain: 'racestore.myshopify.com',
+      meta: { token: 't', adAccountId: 'act_1' },
+    }));
+    expect(res.status).toBe(409);
+    // The loser created nothing → rollbackStore must NOT have run for ANY table.
+    expect(db.deletes).toHaveLength(0);
+    // And the loser must not have written secrets either (stores is the first write).
+    expect(db.secretsUpserts).toHaveLength(0);
+  });
+
+  it('a non-conflict stores insert error returns 500 and does NOT roll back (request owns nothing yet)', async () => {
+    db.throwOn = 'stores';
+    db.throwOnCode = null; // generic failure, no 23505
+    const res = await post(validBody({
+      storeId: 'storesfail',
+      shopDomain: 'storesfail.myshopify.com',
+    }));
+    expect(res.status).toBe(500);
+    expect(db.deletes).toHaveLength(0);
+    expect(db.secretsUpserts).toHaveLength(0);
   });
 });
 
