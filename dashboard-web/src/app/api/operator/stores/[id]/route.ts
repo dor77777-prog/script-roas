@@ -16,11 +16,16 @@
 //     1. validate (404 unknown / 400 reserved / 400 bad domain / 409 dup domain
 //        / 400 empty body) — write NOTHING on any failure.
 //     2. LIVE-verify EVERY provided cred object FIRST (shopify against the new
-//        domain if changed, else the existing one). If ANY fails → 400 with
-//        { verification } and WRITE NOTHING.
+//        domain if changed, else the existing one). A shopDomain CHANGE alone
+//        (no rotated creds) is ALSO verified — using the EXISTING SHOPIFY_CLIENT_*
+//        secrets — because the live fetchers resolve the domain from the
+//        SHOPIFY_DOMAIN secret, so an unverified domain would silently break them.
+//        If ANY fails → 400 with { verification } and WRITE NOTHING.
 //     3. ONLY after all verifications pass → re-encrypt + UPSERT the rotated
-//        platforms' secrets, upsert store_ad_state + set the stores flag when a
-//        platform is newly ADDED, update `stores` basics, update store_webhooks.
+//        platforms' secrets (and the SHOPIFY_DOMAIN secret on ANY domain change,
+//        kept in LOCKSTEP with store_webhooks.shop_domain), upsert store_ad_state
+//        + set the stores flag when a platform is newly ADDED, update `stores`
+//        basics, update store_webhooks.
 //     4. return a MASKED confirmation. NEVER echo a raw secret.
 //
 //   Unlike the add route, the store ALREADY exists and works, so a half-applied
@@ -215,7 +220,7 @@ export async function PATCH(req: Request, ctx: RouteCtx): Promise<NextResponse> 
     // ----- store must exist (404) -----
     const { data: existingStore, error: storeCheckErr } = await admin
       .from('stores')
-      .select('id')
+      .select('id, is_headless')
       .eq('id', id)
       .maybeSingle();
     if (storeCheckErr) throw new Error(storeCheckErr.message);
@@ -237,19 +242,47 @@ export async function PATCH(req: Request, ctx: RouteCtx): Promise<NextResponse> 
     }
 
     // ----- 2. LIVE-verify EVERY provided cred FIRST (write nothing on failure) -----
-    // Shopify is verified against the NEW domain if provided, else the existing
-    // one (read from store_webhooks; getStoreSecret SHOPIFY_DOMAIN as fallback).
+    // Did the shop domain ACTUALLY change? A domain change (even without rotated
+    // creds) must be live-verified, because the live Shopify fetchers resolve the
+    // domain from the SHOPIFY_DOMAIN secret — persisting an unverified domain
+    // would silently break them. Compare against the store's current domain so an
+    // idempotent same-domain PATCH is NOT treated as a change.
+    const currentShopDomain = shopDomain !== undefined ? await readShopDomain(id) : null;
+    const domainChanged = shopDomain !== undefined && shopDomain !== currentShopDomain;
+
+    // The domain to (re)verify Shopify against: the NEW one if provided, else the
+    // existing one (store_webhooks; getStoreSecret SHOPIFY_DOMAIN as fallback).
     let effectiveShopDomain: string | null = shopDomain ?? null;
-    if (shopify && effectiveShopDomain === null) {
+    if ((shopify || domainChanged) && effectiveShopDomain === null) {
       effectiveShopDomain = (await readShopDomain(id)) ?? (await getStoreSecret(id, 'SHOPIFY_DOMAIN'));
     }
 
+    // Resolve the Shopify creds to verify the (new) domain with:
+    //   - body-provided creds (a rotation) → those (also persisted in phase 3);
+    //   - else, on a domain-only change → the EXISTING SHOPIFY_CLIENT_ID/SECRET.
+    // The existing creds are used ONLY to verify the new domain and are NEVER
+    // returned/logged.
+    let verifyShopifyClientId: string | null = shopify ? shopify.clientId : null;
+    let verifyShopifyClientSecret: string | null = shopify ? shopify.clientSecret : null;
+    if (!shopify && domainChanged) {
+      verifyShopifyClientId = await getStoreSecret(id, 'SHOPIFY_CLIENT_ID');
+      verifyShopifyClientSecret = await getStoreSecret(id, 'SHOPIFY_CLIENT_SECRET');
+      if (!verifyShopifyClientId || !verifyShopifyClientSecret) {
+        // No existing Shopify creds to validate the new domain with — refuse
+        // rather than persist an unverified domain.
+        return NextResponse.json(
+          { error: 'cannot change shopDomain: store has no Shopify credentials to verify the new domain' },
+          { status: 400 },
+        );
+      }
+    }
+
     const verification: { shopify?: string; meta?: string; google?: string } = {};
-    if (shopify) {
+    if (shopify || domainChanged) {
       const s = await verifyShopify({
         domain: effectiveShopDomain ?? '',
-        clientId: shopify.clientId,
-        clientSecret: shopify.clientSecret,
+        clientId: verifyShopifyClientId ?? '',
+        clientSecret: verifyShopifyClientSecret ?? '',
       });
       if (!s.ok) verification.shopify = s.message;
     }
@@ -273,8 +306,14 @@ export async function PATCH(req: Request, ctx: RouteCtx): Promise<NextResponse> 
     const newlyAddedAdPlatforms: Platform[] = [];
 
     // --- store_secrets (rotated platforms) ---
+    // SHOPIFY_DOMAIN secret is kept in LOCKSTEP with store_webhooks.shop_domain:
+    // re-encrypt it on ANY domain change (verified above), not only on a cred
+    // rotation — the live Shopify fetchers read the domain from this secret, so
+    // the two sources must never diverge.
+    if (domainChanged && shopDomain !== undefined) {
+      await upsertSecret(id, 'SHOPIFY_DOMAIN', shopDomain);
+    }
     if (shopify) {
-      if (shopDomain !== undefined) await upsertSecret(id, 'SHOPIFY_DOMAIN', shopDomain);
       await upsertSecret(id, 'SHOPIFY_CLIENT_ID', shopify.clientId);
       await upsertSecret(id, 'SHOPIFY_CLIENT_SECRET', shopify.clientSecret);
       secretsMasked.SHOPIFY_CLIENT_SECRET = maskSecret(shopify.clientSecret);
@@ -339,28 +378,18 @@ export async function PATCH(req: Request, ctx: RouteCtx): Promise<NextResponse> 
     if (shopDomain !== undefined || isHeadless !== undefined) {
       const webhooksPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
       // The effective domain after this edit (for allowed_origins recompute).
-      const domainForOrigins = shopDomain ?? (await readShopDomain(id)) ?? '';
+      const effectiveShopDomainForOrigins = shopDomain ?? (await readShopDomain(id)) ?? '';
       if (shopDomain !== undefined) webhooksPatch.shop_domain = shopDomain;
-      if (shopDomain !== undefined || isHeadless !== undefined) {
-        const headlessNow = isHeadless ?? false;
-        // When isHeadless was not provided we still recompute origins only if the
-        // domain changed; otherwise we must preserve the prior headless state. To
-        // avoid clobbering, only set allowed_origins when we know the headless
-        // intent OR the domain changed.
-        if (isHeadless !== undefined) {
-          webhooksPatch.allowed_origins = headlessNow ? [] : domainForOrigins ? [`https://${domainForOrigins}`] : [];
-        } else if (shopDomain !== undefined) {
-          // Domain changed but headless unchanged — recompute origins from the
-          // store's current headless state.
-          const { data: whRow } = await admin
-            .from('store_webhooks')
-            .select('allowed_origins')
-            .eq('store_id', id)
-            .maybeSingle();
-          const wasHeadless = Array.isArray(whRow?.allowed_origins) && whRow!.allowed_origins.length === 0;
-          webhooksPatch.allowed_origins = wasHeadless ? [] : domainForOrigins ? [`https://${domainForOrigins}`] : [];
-        }
-      }
+      // Recompute allowed_origins from the AUTHORITATIVE headless state — the
+      // body value if provided, else the store's stores.is_headless flag. NEVER
+      // infer headless from whether allowed_origins is empty (a themed store can
+      // legitimately have empty origins).
+      const effectiveHeadless = isHeadless !== undefined ? isHeadless : existingStore.is_headless === true;
+      webhooksPatch.allowed_origins = effectiveHeadless
+        ? []
+        : effectiveShopDomainForOrigins
+          ? [`https://${effectiveShopDomainForOrigins}`]
+          : [];
       if (shopify) webhooksPatch.signing_secret = shopify.clientSecret;
       const { error: whErr } = await admin.from('store_webhooks').update(webhooksPatch).eq('store_id', id);
       if (whErr) throw new Error(`store_webhooks update failed: ${whErr.message}`);
