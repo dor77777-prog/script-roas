@@ -357,7 +357,7 @@ export async function runCohortRefreshStepped(input: {
       // swallows its own errors, so this never breaks the per-store success.
       // `store` is one of STORES ('uzoshop' | 'zolplus' | 'usmile360').
       await recordFreshness({
-        storeId: store as 'uzoshop' | 'zolplus' | 'usmile360',
+        storeId: store,
         platform: 'shopify',
         scope: 'cohort_monthly',
         tableName: 'customer_cohort_monthly',
@@ -370,7 +370,7 @@ export async function runCohortRefreshStepped(input: {
       // in data_freshness (preserves the prior last_success_at; only the
       // status/lag flip). recordFreshness swallows its own errors.
       await recordFreshness({
-        storeId: store as 'uzoshop' | 'zolplus' | 'usmile360',
+        storeId: store,
         platform: 'shopify',
         scope: 'cohort_monthly',
         tableName: 'customer_cohort_monthly',

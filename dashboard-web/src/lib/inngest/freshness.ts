@@ -54,7 +54,8 @@ export type FreshnessRow = {
 const ERROR_MSG_MAX_LEN = 500;
 
 export async function recordFreshness(opts: {
-  storeId: 'uzoshop' | 'zolplus' | 'usmile360';
+  // string (not the 3-literal): freshness only persists store_id to a text column; self-serve stores flow here in Phase 4
+  storeId: string;
   platform: 'meta' | 'google' | 'tiktok' | 'shopify';
   scope: string;       // e.g. 'kpi_daily', 'campaign_status', …
   tableName: string;   // e.g. 'data_daily', 'campaigns_daily', 'campaign_registry'
