@@ -27,6 +27,7 @@
  * network helpers to a Supabase admin client per store.
  */
 import { getShopifyAccessToken } from '@/lib/fetchers/shopifyAuth';
+import { getStoreSecret } from '@/lib/storeSecretsReader';
 import { fetchWithBackoff } from './withBackoff';
 
 const SHOPIFY_API_VERSION = '2026-04';
@@ -132,7 +133,7 @@ export function parseBulkCohortNdjson(ndjson: string): BulkCohortRow[] {
 
 /** Kick off the cohort Bulk export; returns the bulk operation gid. Throws on userErrors. */
 export async function startBulkCohortExport(storeId: string): Promise<string> {
-  const domain = requireDomain(storeId);
+  const domain = await requireDomain(storeId);
   const token = await getShopifyAccessToken(storeId);
   const res = await fetchWithBackoff(
     `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
@@ -179,7 +180,7 @@ export type BulkCohortStatus =
  * share the exact same status semantics (DRY). Throws on FAILED.
  */
 export async function checkBulkCohortStatus(storeId: string): Promise<BulkCohortStatus> {
-  const domain = requireDomain(storeId);
+  const domain = await requireDomain(storeId);
   const token = await getShopifyAccessToken(storeId);
   const POLL = `query { currentBulkOperation { id status errorCode url } }`;
   const res = await fetchWithBackoff(
@@ -249,9 +250,9 @@ export async function runBulkCohortExport(
   return downloadBulkCohortRows(storeId, url);
 }
 
-function requireDomain(storeId: string): string {
+async function requireDomain(storeId: string): Promise<string> {
   const key = `${storeId.toUpperCase()}_SHOPIFY_DOMAIN`;
-  const domain = process.env[key];
+  const domain = await getStoreSecret(storeId, 'SHOPIFY_DOMAIN');
   if (!domain) throw new Error(`shopifyBulkCohort: missing env ${key}`);
   return domain;
 }

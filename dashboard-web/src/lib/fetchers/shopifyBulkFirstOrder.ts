@@ -14,6 +14,7 @@
  * Supabase admin client per store (see manual-verification checklist).
  */
 import { getShopifyAccessToken } from '@/lib/fetchers/shopifyAuth';
+import { getStoreSecret } from '@/lib/storeSecretsReader';
 import { fetchWithBackoff } from './withBackoff';
 
 const SHOPIFY_API_VERSION = '2026-04';
@@ -158,7 +159,7 @@ export function resolveCustomerFirstOrders(
 
 /** Kick off the Bulk export; returns the bulk operation gid. Throws on userErrors. */
 export async function startBulkFirstOrderExport(storeId: string): Promise<string> {
-  const domain = requireDomain(storeId);
+  const domain = await requireDomain(storeId);
   const token = await getShopifyAccessToken(storeId);
   const res = await fetchWithBackoff(
     `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
@@ -193,7 +194,7 @@ export async function pollBulkFirstOrderUrl(
   storeId: string,
   opts: { intervalMs?: number; maxAttempts?: number } = {},
 ): Promise<string> {
-  const domain = requireDomain(storeId);
+  const domain = await requireDomain(storeId);
   const token = await getShopifyAccessToken(storeId);
   const intervalMs = opts.intervalMs ?? 5000;
   const maxAttempts = opts.maxAttempts ?? 120;
@@ -243,9 +244,9 @@ export async function runBulkFirstOrderBackfill(
   return resolveFirstOrdersFromBulkLines(parseBulkNdjson(ndjson));
 }
 
-function requireDomain(storeId: string): string {
+async function requireDomain(storeId: string): Promise<string> {
   const key = `${storeId.toUpperCase()}_SHOPIFY_DOMAIN`;
-  const domain = process.env[key];
+  const domain = await getStoreSecret(storeId, 'SHOPIFY_DOMAIN');
   if (!domain) throw new Error(`shopifyBulkFirstOrder: missing env ${key}`);
   return domain;
 }
