@@ -1,10 +1,15 @@
 // dashboard-web/src/lib/storeSecretsReader.ts
 // Per-store secret resolution: encrypted DB (store_secrets) FIRST, then the
-// existing Vercel env var ${STORE_UPPER}_${KEY} as fallback, then null. The
-// fallback keeps every store working during the env→DB migration. Server-only.
-// store_secrets has NO anon grant → read via the service-role admin client.
+// existing Vercel env var as fallback, then null. The fallback keeps every store
+// working during the env→DB migration. Server-only. store_secrets has NO anon
+// grant → read via the service-role admin client.
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { decryptSecret } from '@/lib/secretsEncryption';
+
+// Synthetic store_id for shared/global secrets (GOOGLEADS_*, META_GLOBAL_TOKEN).
+// Reserved: must never be a real store id (guard in the Phase-6 create route).
+export const GLOBAL_STORE_ID = '__global__';
+export const RESERVED_STORE_IDS = [GLOBAL_STORE_ID] as const;
 
 export async function getStoreSecret(storeId: string, key: string): Promise<string | null> {
   try {
@@ -16,7 +21,8 @@ export async function getStoreSecret(storeId: string, key: string): Promise<stri
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (data) {
-      return decryptSecret(data.ciphertext as string, data.iv as string, data.tag as string);
+      const val = decryptSecret(data.ciphertext as string, data.iv as string, data.tag as string);
+      if (val) return val; // non-empty DB value wins; empty/'' falls through to env
     }
   } catch (e) {
     // DB read or decrypt failure → fall through to env (never throw; never log the value)
@@ -25,6 +31,14 @@ export async function getStoreSecret(storeId: string, key: string): Promise<stri
       e instanceof Error ? e.message : e,
     );
   }
-  const env = process.env[`${storeId.toUpperCase()}_${key}`];
+  // Global secrets fall back to the UNPREFIXED env var; per-store to ${STORE}_${KEY}.
+  const envName = storeId === GLOBAL_STORE_ID ? key : `${storeId.toUpperCase()}_${key}`;
+  const env = process.env[envName];
   return env ?? null;
+}
+
+// Shared/global secret: same DB-then-env resolution under the __global__ id, with
+// an unprefixed env fallback (process.env[key] verbatim).
+export function getGlobalSecret(key: string): Promise<string | null> {
+  return getStoreSecret(GLOBAL_STORE_ID, key);
 }
