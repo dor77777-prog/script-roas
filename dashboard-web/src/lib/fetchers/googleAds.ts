@@ -1,4 +1,5 @@
 import { fetchWithBackoff } from './withBackoff';
+import { getStoreSecret, getGlobalSecret } from '@/lib/storeSecretsReader';
 
 /**
  * dashboard-web/src/lib/fetchers/googleAds.ts — TS port of GoogleAds.gs.
@@ -173,9 +174,11 @@ export type GoogleAdsAdRow = {
  * (GOOGLE_ADS_${STORE}_*) was a fetcher-side bug that caused live cron-daily
  * runs to fail with "Missing GOOGLE_ADS_*" against properly-seeded Vercel env vars.
  */
-export function getCustomerIdOrThrow(storeId: string): string {
+export async function getCustomerIdOrThrow(storeId: string): Promise<string> {
+  // Per-store via getStoreSecret: DB (store_secrets) → ${STORE}_GOOGLEADS_CUSTOMER_ID
+  // env fallback → null. The throw names the per-store env var (unchanged).
   const envName = `${storeId.toUpperCase()}_GOOGLEADS_CUSTOMER_ID`;
-  const raw = process.env[envName];
+  const raw = await getStoreSecret(storeId, 'GOOGLEADS_CUSTOMER_ID');
   if (!raw) {
     throw new Error(
       `Missing ${envName} for ${storeId} (per docs/PROPS-MAP.md; set in Vercel env vars)`,
@@ -198,14 +201,17 @@ export async function getAccessToken(storeId: string): Promise<string> {
 
   // Global Google Ads OAuth creds — PROPS-MAP rows 17/18/21 (and 19 for dev token,
   // 20 for login customer ID) use `GOOGLEADS_*` (single word, no underscore between
-  // GOOGLE and ADS).
-  const clientId = process.env.GOOGLEADS_CLIENT_ID;
-  const clientSecret = process.env.GOOGLEADS_CLIENT_SECRET;
+  // GOOGLE and ADS). Resolved via getGlobalSecret: DB (__global__) → UNPREFIXED env.
+  const clientId = await getGlobalSecret('GOOGLEADS_CLIENT_ID');
+  const clientSecret = await getGlobalSecret('GOOGLEADS_CLIENT_SECRET');
   // Per-store refresh token wins over the global one — supports a future
-  // multi-store-Google-Ads world without changing this module.
+  // multi-store-Google-Ads world without changing this module. getStoreSecret
+  // (per-store DB → ${STORE}_GOOGLEADS_REFRESH_TOKEN env) wins; on null, fall
+  // back to getGlobalSecret (global DB → GOOGLEADS_REFRESH_TOKEN env).
   const perStoreRefreshEnv = `${storeId.toUpperCase()}_GOOGLEADS_REFRESH_TOKEN`;
   const refreshToken =
-    process.env[perStoreRefreshEnv] || process.env.GOOGLEADS_REFRESH_TOKEN;
+    (await getStoreSecret(storeId, 'GOOGLEADS_REFRESH_TOKEN')) ||
+    (await getGlobalSecret('GOOGLEADS_REFRESH_TOKEN'));
 
   if (!clientId) {
     throw new Error('Missing GOOGLEADS_CLIENT_ID (per docs/PROPS-MAP.md row 17; set in Vercel env vars)');
@@ -258,9 +264,10 @@ export async function getAccessToken(storeId: string): Promise<string> {
  * developer-token + optional login-customer-id). Throws if developer-token
  * is missing (the operator's most likely Vercel misconfig).
  */
-function buildGoogleAdsHeaders(accessToken: string): Record<string, string> {
-  // PROPS-MAP row 19 — `GOOGLEADS_DEVELOPER_TOKEN`
-  const developerToken = process.env.GOOGLEADS_DEVELOPER_TOKEN;
+async function buildGoogleAdsHeaders(accessToken: string): Promise<Record<string, string>> {
+  // PROPS-MAP row 19 — `GOOGLEADS_DEVELOPER_TOKEN` (global; REQUIRED).
+  // getGlobalSecret: DB (__global__) → UNPREFIXED env → null.
+  const developerToken = await getGlobalSecret('GOOGLEADS_DEVELOPER_TOKEN');
   if (!developerToken) {
     throw new Error(
       'Missing GOOGLEADS_DEVELOPER_TOKEN (per docs/PROPS-MAP.md row 19; set in Vercel env vars)',
@@ -273,8 +280,8 @@ function buildGoogleAdsHeaders(accessToken: string): Record<string, string> {
     'Content-Type': 'application/json',
   };
 
-  // PROPS-MAP row 20 — `GOOGLEADS_LOGIN_CUSTOMER_ID`
-  const loginCustomerId = process.env.GOOGLEADS_LOGIN_CUSTOMER_ID;
+  // PROPS-MAP row 20 — `GOOGLEADS_LOGIN_CUSTOMER_ID` (global; OPTIONAL — no throw).
+  const loginCustomerId = await getGlobalSecret('GOOGLEADS_LOGIN_CUSTOMER_ID');
   if (loginCustomerId) {
     // Strip dashes (defensive — Google IDs sometimes have dashes in admin UI).
     headers['login-customer-id'] = loginCustomerId.replace(/-/g, '');
@@ -310,7 +317,7 @@ export async function runGaqlQuery(
   const url =
     `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}` +
     `/customers/${customerId}/googleAds:search`;
-  const headers = buildGoogleAdsHeaders(accessToken);
+  const headers = await buildGoogleAdsHeaders(accessToken);
   const all: Array<Record<string, unknown>> = [];
   let pageToken: string | undefined;
   let pages = 0;
@@ -375,7 +382,7 @@ export async function fetchGoogleAdsSpendForDay(
     return { storeId, date: dateStr, spend: 0, currency: 'CAD', impressions: 0 };
   }
 
-  const customerId = getCustomerIdOrThrow(storeId);
+  const customerId = await getCustomerIdOrThrow(storeId);
   const accessToken = await getAccessToken(storeId);
   // Phase 13.8 (2026-05-26) — added `metrics.impressions` to the GAQL so
   // cron-live can populate data_daily.ga_impressions in the same call.
@@ -423,7 +430,7 @@ export async function fetchGoogleAdsAdGroupInsights(
     return [];
   }
 
-  const customerId = getCustomerIdOrThrow(storeId);
+  const customerId = await getCustomerIdOrThrow(storeId);
   const accessToken = await getAccessToken(storeId);
 
   // 1) Ad-group query (granular when available).
@@ -606,7 +613,7 @@ export async function fetchGoogleAdsAdInsights(
     return [];
   }
 
-  const customerId = getCustomerIdOrThrow(storeId);
+  const customerId = await getCustomerIdOrThrow(storeId);
   const accessToken = await getAccessToken(storeId);
 
   // GAQL — ad_group_ad resource. The `ad_group_ad.ad.id` + `ad_group_ad.ad.name`
@@ -728,7 +735,7 @@ export async function fetchGoogleAdsAdGroupStatuses(
     return [];
   }
 
-  const customerId = getCustomerIdOrThrow(storeId);
+  const customerId = await getCustomerIdOrThrow(storeId);
   const accessToken = await getAccessToken(storeId);
 
   const query =

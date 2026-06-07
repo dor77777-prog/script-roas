@@ -44,7 +44,7 @@ export type GoogleCustomer = {
 export async function getGoogleCustomerForStore(storeId: string): Promise<GoogleCustomer> {
   // Env-var check at construction time — fail fast on misconfig rather
   // than after the first searchStream call.
-  const customerId = getCustomerIdOrThrow(storeId);
+  const customerId = await getCustomerIdOrThrow(storeId);
   return {
     searchStream: async ({ query }: { query: string }) => {
       // Re-ask per call: cache-aware (see googleAds.ts:195-254). Avoids
