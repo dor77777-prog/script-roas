@@ -114,6 +114,61 @@ export function detectAdPlatform(
   return null;
 }
 
+/**
+ * Email-channel detection (diag 2026-06). The original strict
+ * `^(email|newsletter|klaviyo|mailchimp)$` missed real values like
+ * `shopify_email` (utm_source) sent with `utm_medium=email`. Treat as email
+ * when EITHER the medium is `email` OR the source contains an email-platform
+ * token at a word boundary (so `shopify_email`, `foo_email`, `klaviyo`,
+ * `newsletter` all match; `wholesalemail` would NOT — the `_`/start anchor
+ * guards against accidental substrings). The original exact values still match.
+ */
+export function isEmailSignal(
+  rawUtmSource: string | null | undefined,
+  rawUtmMedium: string | null | undefined,
+): boolean {
+  if (String(rawUtmMedium ?? '').trim().toLowerCase() === 'email') return true;
+  return /(^|_)(email|newsletter|klaviyo|mailchimp)/i.test(String(rawUtmSource ?? ''));
+}
+
+/**
+ * Extract a normalized host from a URL or a Shopify `landing_site`/`referring_site`
+ * string. Lower-cased, `www.` stripped. Returns '' for relative paths (no host)
+ * and for app-scheme referrers (`android-app://…`). Tolerant of a missing
+ * scheme (`example.com/x`) by probing the first path segment for a dotted host.
+ */
+function hostOf(raw: string | null | undefined): string {
+  const s = String(raw ?? '').trim();
+  if (!s) return '';
+  // App schemes (android-app://, ios-app://) are not web hosts.
+  if (/^[a-z][a-z0-9+.-]*-app:/i.test(s)) return '';
+  let host = '';
+  try {
+    host = new URL(s).hostname;
+  } catch {
+    // No scheme — try a protocol-relative / bare-host form.
+    const m = s.match(/^(?:\/\/)?([a-z0-9.-]+\.[a-z]{2,})(?:[/:?#]|$)/i);
+    if (m) host = m[1];
+  }
+  return host.toLowerCase().replace(/^www\./, '');
+}
+
+/**
+ * Self-referral: the referrer host equals the store's own landing host (diag
+ * 2026-06 — 360usmile.com → 360usmile.com, uzoshop.com → uzoshop.com). These
+ * are internal navigations, NOT external referrals. Requires BOTH hosts to be
+ * resolvable and equal; a relative `landing_site` (no host) → no match, so the
+ * referrer is treated as a normal external referral.
+ */
+function isSelfReferral(
+  rawReferrer: string | null | undefined,
+  rawLanding: string | null | undefined,
+): boolean {
+  const refHost = hostOf(rawReferrer);
+  const landHost = hostOf(rawLanding);
+  return refHost !== '' && landHost !== '' && refHost === landHost;
+}
+
 export function classifyOrderAttribution(order: ShopifyOrderPayload): {
   source: string;
   utmSource: string;
@@ -206,8 +261,12 @@ export function classifyOrderAttribution(order: ShopifyOrderPayload): {
     else if (firstUtmPlatform === 'meta') firstTouchSource = 'meta-paid';
     else if (firstUtmPlatform === 'google') firstTouchSource = 'google-paid';
     else if (firstUtmPlatform === 'tiktok') firstTouchSource = 'tiktok-paid';
-    else if (/^(email|newsletter|klaviyo|mailchimp)$/i.test(firstUtmSourceRaw)) {
+    else if (isEmailSignal(firstUtmSourceRaw, firstUtmMediumRaw)) {
+      // Symmetric with last-touch email broadening (shopify_email / medium=email).
       firstTouchSource = 'email';
+    } else if (firstUtmMediumRaw.toLowerCase() === 'product_sync') {
+      // Symmetric with last-touch Google Merchant product-feed sync.
+      firstTouchSource = 'google-paid';
     } else if (/cpc|paid|paidsocial|social/i.test(firstUtmMediumRaw)) {
       // Paid medium but utm_source isn't a recognizable platform → paid, unknown.
       firstTouchSource = 'other-paid';
@@ -275,8 +334,16 @@ export function classifyOrderAttribution(order: ShopifyOrderPayload): {
     source = 'google-paid';
   } else if (utmPlatform === 'tiktok') {
     source = 'tiktok-paid';
-  } else if (/^(email|newsletter|klaviyo|mailchimp)$/i.test(utmSource)) {
+  } else if (isEmailSignal(utmSource, utmMedium)) {
+    // Email broadening (diag 2026-06): `shopify_email` + `utm_medium=email`
+    // were misclassified as other-paid. Match utm_medium=email OR a source
+    // that contains an email-platform token (shopify_email, *_email, klaviyo…).
     source = 'email';
+  } else if (utmMedium.toLowerCase() === 'product_sync') {
+    // Google Merchant Center product-feed sync (diag: utm_source=g,
+    // utm_medium=product_sync). The medium is the reliable signal — a bare
+    // utm_source=g is too ambiguous to map on its own.
+    source = 'google-paid';
   } else if (/cpc|paid|paidsocial|social/i.test(utmMedium)) {
     // Paid medium but utm_source is not a recognizable platform (influencer /
     // partner / etc.) — still paid, unknown platform.
@@ -284,18 +351,30 @@ export function classifyOrderAttribution(order: ShopifyOrderPayload): {
   } else if (utmSource) {
     // Tagged but unrecognised (influencer / partner / share link / etc.)
     source = 'other-paid';
+  } else if (isSelfReferral(ref, landing)) {
+    // Self-referral: the referrer host equals the store's own landing host
+    // (diag: 360usmile.com → 360usmile.com, uzoshop.com → uzoshop.com). This
+    // is internal navigation, NOT an external referral — fall through to the
+    // no-signal `direct` bucket. Runs AFTER the paid/email checks so it never
+    // swallows a real paid click on a same-host landing page.
+    source = 'direct';
   } else if (/(facebook|fb|instagram|ig)\.com/.test(ref)) {
     source = 'meta-organic';
   } else if (/(google|youtube)\.com/.test(ref)) {
     source = 'google-organic';
   } else if (/tiktok\.com/.test(ref)) {
-    // Organic TikTok referrer (someone shared the product link on TikTok
-    // and a viewer clicked through). Treated as other-referral rather
-    // than tiktok-paid — we keep tiktok-paid for ad-attributed traffic
-    // only (ttclid / utm_source=tiktok). Future Phase D may split this
-    // into 'tiktok-organic' if useful; for now 'other-referral' keeps
-    // the source taxonomy clean.
-    source = 'other-referral';
+    // Organic TikTok referrer (someone shared the product link on TikTok and a
+    // viewer clicked through). Kept distinct from tiktok-paid (ad-attributed
+    // only: ttclid / utm_source=tiktok) — it is a not-paid organic channel.
+    source = 'tiktok-organic';
+  } else if (/(^|\.)(bing\.com|duckduckgo\.com|ecosia\.org|search\.yahoo\.com)/.test(ref)) {
+    // Non-Google search engines → organic search (google.com/youtube.com stay
+    // google-organic; facebook/instagram stay meta-organic, both above).
+    source = 'search-organic';
+  } else if (/^(android-app|ios-app):/.test(ref) || /^[a-z][a-z0-9+.-]*-app:/.test(ref)) {
+    // In-app browser referrers (Gmail app, etc.) surface as `android-app://…`
+    // / `ios-app://…` — an app entry point, not a web referral.
+    source = 'app-referral';
   } else if (ref) {
     source = 'other-referral';
   } else {

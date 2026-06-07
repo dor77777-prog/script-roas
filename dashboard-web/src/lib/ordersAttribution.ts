@@ -103,14 +103,17 @@ export type OrderLineItem = {
 
 export type OrderSource =
   | 'meta-paid'        // fbclid OR utm_source=facebook + cpc
-  | 'google-paid'      // gclid OR utm_source=google + cpc
+  | 'google-paid'      // gclid OR utm_source=google + cpc OR utm_medium=product_sync (Merchant feed)
   | 'tiktok-paid'      // ttclid OR utm_source=tiktok + cpc OR source_name=tiktok (Phase 05.7.5)
   | 'meta-organic'     // referrer fb/ig, no UTM
-  | 'google-organic'   // referrer google, no UTM
-  | 'email'            // utm_source = email/newsletter/klaviyo
+  | 'google-organic'   // referrer google/youtube, no UTM
+  | 'tiktok-organic'   // referrer tiktok.com, no UTM (diag 2026-06)
+  | 'search-organic'   // referrer bing/duckduckgo/ecosia/yahoo, no UTM (diag 2026-06)
+  | 'email'            // utm_medium=email OR utm_source ~ email/newsletter/klaviyo/mailchimp/shopify_email
   | 'other-paid'       // UTM-tagged but unrecognised source
   | 'other-referral'   // referrer set but not classifiable
-  | 'direct'           // no UTM, no referrer
+  | 'app-referral'     // android-app:/ios-app: referrer — in-app browser entry (diag 2026-06)
+  | 'direct'           // no UTM, no referrer (incl. self-referral, same-host nav)
   | '';                // unknown / missing
 
 /**

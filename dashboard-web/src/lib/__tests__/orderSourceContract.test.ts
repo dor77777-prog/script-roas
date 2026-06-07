@@ -24,9 +24,13 @@ describe('OrderSource writer↔reader contract', () => {
     'meta-organic',
     'google-paid',
     'google-organic',
+    'tiktok-paid',
+    'tiktok-organic',  // diag 2026-06 — tiktok.com referrer
+    'search-organic',  // diag 2026-06 — bing/ddg/ecosia/yahoo referrer
     'email',
     'other-paid',
     'other-referral',
+    'app-referral',    // diag 2026-06 — android-app:/ios-app: referrer
     'direct',
   ] as const satisfies readonly OrderSource[];
 

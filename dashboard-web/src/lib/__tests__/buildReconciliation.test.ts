@@ -635,9 +635,14 @@ describe('OrderSource sweep — locks FIX-01 (5.2.2.1)', () => {
     // Phase 05.7.5: tiktok-paid is a paid source (not organic) — same
     // classification as meta-paid / google-paid for reconciliation purposes.
     'tiktok-paid': false,
+    // diag 2026-06 — new not-paid channels bucket as organic in reconciliation
+    // (isOrganicSource returns true for anything outside the paid-exclusion set).
+    'tiktok-organic': true,
+    'search-organic': true,
     email: true,
     'other-paid': false,
     'other-referral': true,
+    'app-referral': true,
     direct: true,
     '': false,
   } satisfies Record<OrderSource, boolean>;
@@ -648,9 +653,12 @@ describe('OrderSource sweep — locks FIX-01 (5.2.2.1)', () => {
     { source: 'google-paid', organic: SOURCE_COVERAGE['google-paid'] },
     { source: 'google-organic', organic: SOURCE_COVERAGE['google-organic'] },
     { source: 'tiktok-paid', organic: SOURCE_COVERAGE['tiktok-paid'] },
+    { source: 'tiktok-organic', organic: SOURCE_COVERAGE['tiktok-organic'] },
+    { source: 'search-organic', organic: SOURCE_COVERAGE['search-organic'] },
     { source: 'email', organic: SOURCE_COVERAGE.email },
     { source: 'other-paid', organic: SOURCE_COVERAGE['other-paid'] },
     { source: 'other-referral', organic: SOURCE_COVERAGE['other-referral'] },
+    { source: 'app-referral', organic: SOURCE_COVERAGE['app-referral'] },
     { source: 'direct', organic: SOURCE_COVERAGE.direct },
     { source: '', organic: SOURCE_COVERAGE[''] },
   ] satisfies Array<{ source: OrderSource; organic: boolean }>;

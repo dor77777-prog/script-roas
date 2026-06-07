@@ -703,8 +703,10 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
     expect(byId.get('tt-source-name')).toBe('tiktok-paid');
     expect(byId.get('tt-utm-cpc')).toBe('tiktok-paid');
     expect(byId.get('tt-utm-no-medium')).toBe('tiktok-paid');
-    // Organic referrer falls under other-referral, NOT tiktok-paid.
-    expect(byId.get('tt-organic-referral')).toBe('other-referral');
+    // Organic referrer (tiktok.com) → tiktok-organic, NOT tiktok-paid
+    // (diag 2026-06 split organic TikTok shares out of other-referral; still
+    // a not-paid channel so it never counts toward paid TikTok ROAS).
+    expect(byId.get('tt-organic-referral')).toBe('tiktok-organic');
   });
 
   it('Orders Test 4: drops test=true and financial_status=voided orders', async () => {
