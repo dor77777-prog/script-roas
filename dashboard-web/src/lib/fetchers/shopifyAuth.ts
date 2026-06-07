@@ -34,6 +34,8 @@
  *     secret. Worst-case window: until the next deploy.
  */
 
+import { getStoreSecret } from '@/lib/storeSecretsReader';
+
 type TokenCacheEntry = {
   accessToken: string;
   expiresAt: number; // unix ms
@@ -76,9 +78,12 @@ export async function getShopifyAccessToken(storeId: string): Promise<string> {
   }
 
   const upper = storeId.toUpperCase();
-  const domain = process.env[`${upper}_SHOPIFY_DOMAIN`];
-  const clientId = process.env[`${upper}_SHOPIFY_CLIENT_ID`];
-  const clientSecret = process.env[`${upper}_SHOPIFY_CLIENT_SECRET`];
+  // Phase 3B: source creds via getStoreSecret (encrypted DB FIRST, then the
+  // ${STORE}_SHOPIFY_* env var as fallback, then null). A DB miss is
+  // byte-identical to the previous process.env read.
+  const domain = await getStoreSecret(storeId, 'SHOPIFY_DOMAIN');
+  const clientId = await getStoreSecret(storeId, 'SHOPIFY_CLIENT_ID');
+  const clientSecret = await getStoreSecret(storeId, 'SHOPIFY_CLIENT_SECRET');
 
   const missing: string[] = [];
   if (!domain) missing.push(`${upper}_SHOPIFY_DOMAIN`);

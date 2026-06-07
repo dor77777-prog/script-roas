@@ -65,6 +65,7 @@ import {
   invalidateShopifyToken,
 } from '@/lib/fetchers/shopifyAuth';
 import { STORE_ID_TO_NAME } from '@/lib/platformsByStore';
+import { getStoreSecret } from '@/lib/storeSecretsReader';
 import { primaryGateway } from '@/lib/payments';
 import { fetchWithBackoff } from './withBackoff';
 import {
@@ -609,7 +610,9 @@ export async function fetchShopifyDayRows(
   // exchange Client ID + Secret for a 24h access token (cached in-process).
   // See shopifyAuth.ts for the helper that owns the cache + refresh logic.
   const upper = storeId.toUpperCase();
-  const domain = process.env[`${upper}_SHOPIFY_DOMAIN`];
+  // Phase 3B: domain via getStoreSecret (encrypted DB FIRST, then the
+  // ${STORE}_SHOPIFY_DOMAIN env var fallback) — DB miss is byte-identical.
+  const domain = await getStoreSecret(storeId, 'SHOPIFY_DOMAIN');
   if (!domain) {
     throw new Error(
       `Missing Shopify domain for store "${storeId}" — expected ` +
@@ -677,7 +680,9 @@ async function getShopifyCreds(
   storeId: string,
 ): Promise<{ domain: string; token: string }> {
   const upper = storeId.toUpperCase();
-  const domain = process.env[`${upper}_SHOPIFY_DOMAIN`];
+  // Phase 3B: domain via getStoreSecret (encrypted DB FIRST, then the
+  // ${STORE}_SHOPIFY_DOMAIN env var fallback) — DB miss is byte-identical.
+  const domain = await getStoreSecret(storeId, 'SHOPIFY_DOMAIN');
 
   if (!domain) {
     throw new Error(
