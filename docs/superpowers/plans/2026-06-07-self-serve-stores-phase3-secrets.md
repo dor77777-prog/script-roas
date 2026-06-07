@@ -447,12 +447,11 @@ git commit -m "feat(secrets): operator backfill-secrets route (encrypt env→sto
 
 ## Task 4: 3A docs + gate, ship 3A
 
-**Files:** `docs/ARCHITECTURE.md` (extend §45 stub), `docs/ROAS-Dashboard-User-Manual.md` (1-line changelog — operator-invisible).
+**Files:** `docs/ARCHITECTURE.md` (extend §45). **No User Manual** — the docs-currency gate's UX rule fires only for `components/*.tsx` / `app/**/page|layout.tsx`; 3A touches only `lib/*` + an `app/api/**/route.ts`, so neither the UX rule nor the Arch rule (inngest/migrations/fetchers/postgresReaders) requires a doc. ARCHITECTURE §45 is good practice, not gate-mandated; a UM entry would be misleading UX noise for a backend-only change.
 
-- [ ] **Step 1: ARCHITECTURE §45 (part 1).** Add "Self-serve stores Phase 3A — secrets infra". Cover: `getStoreSecret` hardened (empty→env) + `getGlobalSecret`/`__global__` with unprefixed env fallback; `secretsRegistry`; the backfill route (auth via middleware, idempotent UPSERT, skip-absent, decrypt-roundtrip-verify, no plaintext echo); state that 3A is inert in the pipeline (only the on-demand route uses the writers) so it ships before `ENCRYPTION_MASTER_KEY` is set with zero risk.
-- [ ] **Step 2: User Manual changelog** (version bump, "תשתית להצפנת סודות — בלי שינוי גלוי"). The docs-currency pre-push gate requires the User Manual when component/UX files change; 3A touches none, but bump anyway to keep the gate satisfied and the manual current.
-- [ ] **Step 3: Full local gate.** `cd dashboard-web && npm test && npm run test:components && npx tsc --noEmit && npm run lint` — all green.
-- [ ] **Step 4: Commit.** `git commit -m "docs(secrets): ARCHITECTURE §45 + User Manual — Phase 3A secrets infra"`.
+- [ ] **Step 1: ARCHITECTURE §45 (part 1).** Add "Self-serve stores Phase 3A — secrets infra". Cover: `getStoreSecret` hardened (empty→env, decrypt-throw→env) + `getGlobalSecret`/`__global__` with unprefixed env fallback; `secretsRegistry` (TikTok uzoshop-only); the backfill route (middleware auth, idempotent UPSERT `onConflict store_id,secret_key`, skip-absent, decrypt-roundtrip-verify, no plaintext echo, probe-fail-fast); state that 3A is inert in the pipeline (only the on-demand route uses the writers) so it ships before `ENCRYPTION_MASTER_KEY` is set with zero risk.
+- [ ] **Step 2: Full local gate.** `cd dashboard-web && npm test && npm run test:components && npx tsc --noEmit && npm run lint` — all green.
+- [ ] **Step 3: Commit.** `git commit -m "docs(secrets): ARCHITECTURE §45 — Phase 3A secrets infra"`.
 
 ---
 
@@ -657,7 +656,7 @@ Preserve every existing throw message verbatim (read them in Step 1; reuse the e
 
 - [ ] **Step 1:** Cut the two bulk-utility domain reads over to `await getStoreSecret(storeId, 'SHOPIFY_DOMAIN')` (both inside async fns). Preserve the exact missing-env throw. Add/extend a test mocking `getStoreSecret`.
 - [ ] **Step 2: COGS + feature-gates note (no code).** In ARCHITECTURE §45, explicitly record: `${STORE}_COGS_RATE` (cronDaily/cronLive/analytics) is calibration config (default 0.25, client-editable via `cogs-settings`) — NOT in `store_secrets`; P7 may drop these env vars independently. The sync Boolean feature-gates (`isTikTokConfiguredForStore`, `googleAccountConfig`) stay env-based in P3; **Phase 4/6 follow-up:** they must consult DB/a config map before a DB-only new store can be enabled, else it is silently skipped.
-- [ ] **Step 3: ARCHITECTURE §45 (part 2)** — the full reader cutover list (Shopify/Meta/Google/TikTok + postgresReaders + store-meta + bulk utilities), the per-store→global precedence, the `__global__` model, and that env fallback stays until P7. **User Manual** changelog bump.
+- [ ] **Step 3: ARCHITECTURE §45 (part 2)** — the full reader cutover list (Shopify/Meta/Google/TikTok + postgresReaders + store-meta + bulk utilities), the per-store→global precedence, the `__global__` model, and that env fallback stays until P7. (3B touches `lib/fetchers/*` + `lib/postgresReaders.ts` → the docs-currency **Arch rule** REQUIRES `docs/ARCHITECTURE.md` in the push; no component/`page`/`layout` files change so the User Manual is NOT required — `app/api/store-meta/route.ts` is a `route.ts`, not a UX file.)
 - [ ] **Step 4: Full gate.** `cd dashboard-web && npm test && npm run test:components && npx tsc --noEmit && npm run lint` — all green. Then run the live harness `npm run audit:reconcile` (production data) and confirm pipeline parity unchanged (campaigns_daily SUM == data_daily) — i.e. the credentials still fetch identically. Confirm Shopify token self-heal (`invalidateShopifyToken`) still works with DB-sourced creds.
 - [ ] **Step 5: Commit.** `git commit -m "feat(secrets): bulk-utility creds via getStoreSecret + ARCHITECTURE §45 + User Manual (Phase 3B close)"`.
 
