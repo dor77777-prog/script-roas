@@ -1,6 +1,7 @@
 import { fetchWithBackoff } from './withBackoff';
 import { loadCampaignStoreMapFromSupabase } from '@/lib/inngest/campaignStoreMap';
 import { resolveStoreForCampaign } from '@/lib/campaignStoreMap';
+import { getStoreSecret } from '@/lib/storeSecretsReader';
 
 /**
  * Phase 05.7.5-B (scaffold) — TikTok Marketing API fetcher.
@@ -125,13 +126,16 @@ export type TikTokAdvertiserInfo = {
 // Cred resolver — PROPS-MAP convention ${STORE}_TIKTOK_*
 // ───────────────────────────────────────────────────────────────────────
 
-function getTikTokCreds(storeId: string): {
+async function getTikTokCreds(storeId: string): Promise<{
   advertiserId: string;
   accessToken: string;
-} {
+}> {
   const upper = storeId.toUpperCase();
-  const advertiserId = process.env[`${upper}_TIKTOK_ADVERTISER_ID`];
-  const accessToken = process.env[`${upper}_TIKTOK_ACCESS_TOKEN`];
+  // Phase 3B (Task 8): per-store DB→env dual-read via getStoreSecret. The
+  // ${UPPER}_TIKTOK_* env fallback is preserved inside getStoreSecret, so the
+  // throw string + degradation are byte-identical to the env-only version.
+  const advertiserId = await getStoreSecret(storeId, 'TIKTOK_ADVERTISER_ID');
+  const accessToken = await getStoreSecret(storeId, 'TIKTOK_ACCESS_TOKEN');
   const missing: string[] = [];
   if (!advertiserId) missing.push(`${upper}_TIKTOK_ADVERTISER_ID`);
   if (!accessToken) missing.push(`${upper}_TIKTOK_ACCESS_TOKEN`);
@@ -237,7 +241,7 @@ export async function fetchTikTokAdvertiserInfo(
   const cached = advertiserInfoCache.get(storeId);
   if (cached) return cached;
 
-  const { advertiserId, accessToken } = getTikTokCreds(storeId);
+  const { advertiserId, accessToken } = await getTikTokCreds(storeId);
   type AdvertiserInfoPayload = {
     list?: Array<{
       advertiser_id?: string | number;
@@ -292,7 +296,7 @@ export async function fetchTikTokSpendForDay(
   storeId: string,
   dateStr: string,
 ): Promise<TikTokDaySpend> {
-  const { advertiserId, accessToken } = getTikTokCreds(storeId);
+  const { advertiserId, accessToken } = await getTikTokCreds(storeId);
   const info = await fetchTikTokAdvertiserInfo(storeId);
 
   type ReportPayload = {
@@ -380,12 +384,19 @@ export type TikTokAdGroupMeta = {
 
 export async function fetchTikTokAdGroupStatuses(
   storeId: string,
+  // Phase 3B (Task 8): getTikTokCreds became async (DB→env via getStoreSecret).
+  // fetchTikTokAdInsights kicks this off "in parallel" with the report fetch; to
+  // keep the two fetches firing in the SAME order as before (creds resolved
+  // before either fetch), the caller passes already-resolved creds so this
+  // helper does not insert its own async cred read between them. Standalone
+  // callers omit it and the helper resolves creds itself (unchanged soft-fail).
+  preResolvedCreds?: { advertiserId: string; accessToken: string },
 ): Promise<Map<string, TikTokAdGroupMeta>> {
   const out = new Map<string, TikTokAdGroupMeta>();
   let advertiserId: string;
   let accessToken: string;
   try {
-    ({ advertiserId, accessToken } = getTikTokCreds(storeId));
+    ({ advertiserId, accessToken } = preResolvedCreds ?? (await getTikTokCreds(storeId)));
   } catch {
     // No creds → no statuses. Caller already short-circuits via
     // STORES_WITH_TIKTOK; reaching here is a soft-fail edge case.
@@ -461,13 +472,18 @@ export async function fetchTikTokAdInsights(
   storeId: string,
   dateStr: string,
 ): Promise<TikTokAdRow[]> {
-  const { advertiserId, accessToken } = getTikTokCreds(storeId);
+  const { advertiserId, accessToken } = await getTikTokCreds(storeId);
   const info = await fetchTikTokAdvertiserInfo(storeId);
 
   // Phase 05.7.x — fetch ad-group statuses in parallel with the
   // first report page. /adgroup/get/ is an entity endpoint (status
   // doesn't change per-day), so one call serves the whole day.
-  const statusesPromise = fetchTikTokAdGroupStatuses(storeId);
+  // Phase 3B (Task 8): pass the creds resolved above so the parallel helper
+  // doesn't re-resolve (async) and shift the relative fetch ordering.
+  const statusesPromise = fetchTikTokAdGroupStatuses(storeId, {
+    advertiserId,
+    accessToken,
+  });
 
   type AdReportRow = {
     metrics?: {

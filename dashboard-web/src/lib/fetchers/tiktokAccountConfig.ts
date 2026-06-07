@@ -38,6 +38,7 @@ import {
 import { getFxRate } from './fx';
 import { notifyFxFailure } from '@/lib/notifications/fxFailure';
 import type { StoreId } from '@/lib/registries/types';
+import { getStoreSecret } from '@/lib/storeSecretsReader';
 
 export type TikTokAccountConfig = {
   advertiserId: string;
@@ -45,13 +46,17 @@ export type TikTokAccountConfig = {
   accountCurrency: 'USD' | 'CAD' | 'ILS';
 };
 
-function readTikTokCredsFromEnv(storeId: StoreId): {
+async function readTikTokCredsFromEnv(storeId: StoreId): Promise<{
   advertiserId: string;
   accessToken: string;
-} {
+}> {
   const upper = storeId.toUpperCase();
-  const advertiserId = process.env[`${upper}_TIKTOK_ADVERTISER_ID`];
-  const accessToken = process.env[`${upper}_TIKTOK_ACCESS_TOKEN`];
+  // Phase 3B (Task 8): per-store DB→env dual-read via getStoreSecret. The
+  // ${UPPER}_TIKTOK_* env fallback lives inside getStoreSecret, so the throw
+  // string is byte-identical to the env-only version. (Name retained for
+  // call-site stability even though the source is now DB-first.)
+  const advertiserId = await getStoreSecret(storeId, 'TIKTOK_ADVERTISER_ID');
+  const accessToken = await getStoreSecret(storeId, 'TIKTOK_ACCESS_TOKEN');
   const missing: string[] = [];
   if (!advertiserId) missing.push(`${upper}_TIKTOK_ADVERTISER_ID`);
   if (!accessToken) missing.push(`${upper}_TIKTOK_ACCESS_TOKEN`);
@@ -78,6 +83,10 @@ function readTikTokCredsFromEnv(storeId: StoreId): {
  */
 export function isTikTokConfiguredForStore(storeId: StoreId): boolean {
   const upper = storeId.toUpperCase();
+  // Phase 3B (Task 8 / Decision 7): this SYNC boolean gate STAYS env-based on
+  // purpose. getStoreSecret is async (DB round-trip) and this gate is called on
+  // a hot sync path in tiktokWorker to no-op tenant stores. Converting it to a
+  // DB read here is a Phase-4/6 follow-up (make the gate async + cut over).
   return (
     Boolean(process.env[`${upper}_TIKTOK_ADVERTISER_ID`]) &&
     Boolean(process.env[`${upper}_TIKTOK_ACCESS_TOKEN`])
@@ -108,7 +117,7 @@ function normalizeCurrency(raw: string): 'USD' | 'CAD' | 'ILS' {
 export async function getTikTokAccountForStore(
   storeId: StoreId,
 ): Promise<TikTokAccountConfig> {
-  const { advertiserId, accessToken } = readTikTokCredsFromEnv(storeId);
+  const { advertiserId, accessToken } = await readTikTokCredsFromEnv(storeId);
   const info: TikTokAdvertiserInfo = await fetchTikTokAdvertiserInfo(storeId);
   return {
     advertiserId,

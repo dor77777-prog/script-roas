@@ -45,6 +45,7 @@ import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
 import { categorizePaymentGateway, type PaymentCategory } from './payments';
 import type { OverrideRowAsRead } from '@/lib/home/overridesActive';
 import type { AdStateMap } from '@/lib/adState';
+import { getStoreSecret } from '@/lib/storeSecretsReader';
 
 /**
  * Generic row type. Without a generated `Database` schema, supabase-js's
@@ -1806,8 +1807,11 @@ export async function fetchTikTokCoverageInputs(
   // Single shared TikTok account → advertiser id from the default/owning
   // store's env var. Trim to '' (not undefined) so the key shape stays a
   // string in every branch.
+  // Phase 3B (Task 8): per-store DB→env dual-read via getStoreSecret (uzoshop
+  // owns the shared TikTok account). Preserves the exact `?.trim() || ''`
+  // degradation — unset → '' so the key shape stays a string in every branch.
   const advertiserId =
-    process.env.UZOSHOP_TIKTOK_ADVERTISER_ID?.trim() || '';
+    (await getStoreSecret('uzoshop', 'TIKTOK_ADVERTISER_ID'))?.trim() || '';
 
   try {
     // 1. Account total = Σ tt_spend_cad across all stores in range. Project
