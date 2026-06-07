@@ -255,7 +255,7 @@ export function ordersAttributionRowKeys(): string[] {
 // STORES — single source of truth for the 3 stores. Aligns with:
 //   - Config.gs:22-26 STORES (uzoshop / zolplus / usmile360)
 //   - Phase 05.5-01 seed (`stores` table) — same 3 IDs
-//   - googleAds.ts:73 STORES_WITH_GOOGLE_ADS (uzoshop only)
+//   - googleAds.ts isGoogleConfiguredForStoreAsync gate (DB→env per-store; uzoshop today)
 //
 // COGS rate per Config.gs:20 (COGS_RATE_OF_REVENUE = 0.25 = 25% of revenue).
 // ---------------------------------------------------------------------------

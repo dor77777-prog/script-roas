@@ -221,34 +221,43 @@ describe('googleAds fetcher — uzoshop happy path', () => {
   });
 });
 
-describe('googleAds fetcher — env-var error path', () => {
-  it('throws a clear error naming the missing env-var (no token leak — T-05.6-05-I2)', async () => {
+describe('googleAds fetcher — missing customer-id path (Phase 6a T9: gate-driven)', () => {
+  it('short-circuits (no fetch, no token leak) when a store has NO customer id', async () => {
+    // Phase 6a T9 (2026-06-07): the fetcher now gates on the DB-aware
+    // `isGoogleConfiguredForStoreAsync` (= getStoreSecret(GOOGLEADS_CUSTOMER_ID)
+    // DB→env→null) BEFORE calling getCustomerIdOrThrow. A store with NO customer
+    // id resolves the gate to FALSE and short-circuits to zero spend — the SAME
+    // "not configured ⇒ no-op" semantics the live googleWorker already uses
+    // (configGatesDbAware.secrets.test.ts). This supersedes the pre-T9 behavior
+    // where uzoshop-without-customer-id threw at getCustomerIdOrThrow.
+    //
+    // The security intent of the original test (T-05.6-05-I2 — never surface the
+    // refresh-token VALUE) is preserved and strengthened: with no fetch + no
+    // throw, the secret value can reach neither an error message nor the wire.
+    // The getCustomerIdOrThrow throw + its no-leak guarantee remain exercised
+    // via its direct caller getGoogleCustomerForStore (googleAccountConfig.ts).
     clearGoogleAdsEnv();
-    // Set everything EXCEPT the customer ID for uzoshop — the operator's
-    // most likely Vercel misconfiguration after a fresh deploy.
     process.env.GOOGLEADS_DEVELOPER_TOKEN = 'dev-tok';
     process.env.GOOGLEADS_CLIENT_ID = 'cid';
     process.env.GOOGLEADS_CLIENT_SECRET = 'csec';
     process.env.GOOGLEADS_REFRESH_TOKEN = 'super-secret-refresh-token-value-xyz';
-    // UZOSHOP_GOOGLEADS_CUSTOMER_ID intentionally unset.
+    // UZOSHOP_GOOGLEADS_CUSTOMER_ID intentionally unset → gate FALSE.
 
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
 
     const { fetchGoogleAdsSpendForDay } = await import('../googleAds');
 
-    let caught: unknown = null;
-    try {
-      await fetchGoogleAdsSpendForDay('uzoshop', '2026-05-19');
-    } catch (e) {
-      caught = e;
-    }
-    expect(caught).toBeInstanceOf(Error);
-    const msg = (caught as Error).message;
-    // The env-var name MUST appear (operator-actionable) and the actual
-    // refresh-token VALUE must NOT appear (info-disclosure mitigation).
-    expect(msg).toMatch(/UZOSHOP_GOOGLEADS_CUSTOMER_ID/);
-    expect(msg).not.toContain('super-secret-refresh-token-value-xyz');
+    const out = await fetchGoogleAdsSpendForDay('uzoshop', '2026-05-19');
+    // Same zero-spend short-circuit shape as any not-configured store.
+    expect(out).toEqual({
+      storeId: 'uzoshop',
+      date: '2026-05-19',
+      spend: 0,
+      currency: 'CAD',
+      impressions: 0,
+    });
+    // No network call → the refresh-token value never leaves the process.
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

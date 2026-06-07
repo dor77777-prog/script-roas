@@ -1,5 +1,6 @@
 import { fetchWithBackoff } from './withBackoff';
 import { getStoreSecret, getGlobalSecret } from '@/lib/storeSecretsReader';
+import { isGoogleConfiguredForStoreAsync } from './googleAccountConfig';
 
 /**
  * dashboard-web/src/lib/fetchers/googleAds.ts — TS port of GoogleAds.gs.
@@ -20,14 +21,20 @@ import { getStoreSecret, getGlobalSecret } from '@/lib/storeSecretsReader';
  *      verification while working at runtime. Documented as deviation in
  *      05.6-05-SUMMARY.md (assumption A3 mitigation).
  *
- *   2. STORES_WITH_GOOGLE_ADS = new Set(['uzoshop']) — single source of truth
- *      for the TS port, must align with Config.gs:23 (hasGoogleAds:true for
- *      uzoshop only) AND the Phase 05.5-01 stores seed
- *      (has_google_ads = TRUE for the same row). The short-circuit lives
- *      INSIDE this module so callers (Inngest functions in plans 05.6-08..09)
- *      do not have to remember to gate Google Ads themselves; the dominant
- *      code path (2 of 3 stores) returns immediately with zero spend and NO
- *      API call, saving OAuth + GAQL quota.
+ *   2. Per-store Google-Ads gate (Phase 6a T9, 2026-06-07): the FETCH
+ *      short-circuit now consults the DB-aware `isGoogleConfiguredForStoreAsync`
+ *      (googleAccountConfig.ts) — a dual-read of GOOGLEADS_CUSTOMER_ID via
+ *      getStoreSecret (store_secrets DB → ${STORE}_GOOGLEADS_CUSTOMER_ID env →
+ *      null). This is the SAME gate the live Phase-C googleWorker uses, so the
+ *      nightly + live paths agree on which stores have Google Ads. A self-serve
+ *      store whose customer id lives ONLY in the DB now gets nightly data
+ *      instead of being silently skipped. INERT for the current 3 stores
+ *      (uzoshop env→true; zolplus/usmile360 no cred→false), so the dominant
+ *      code path still returns immediately with zero spend and NO API call,
+ *      saving OAuth + GAQL quota. The short-circuit lives INSIDE this module so
+ *      callers (Inngest cron functions) do not have to gate Google themselves.
+ *      (Replaces the old hardcoded `STORES_WITH_GOOGLE_ADS = Set(['uzoshop'])`,
+ *      which silently skipped any store not literally named 'uzoshop'.)
  *
  *   3. CacheService.getScriptCache() (GoogleAds.gs:193-218) → a module-level
  *      Map<string, {token, expiresAt}>. RESEARCH §Don't Hand-Roll (line 1330)
@@ -61,19 +68,6 @@ import { getStoreSecret, getGlobalSecret } from '@/lib/storeSecretsReader';
  */
 
 export const GOOGLE_ADS_API_VERSION = 'v24';
-
-/**
- * Single source of truth in the TS port for "which stores use Google Ads".
- * MUST align with Config.gs:23 STORES.hasGoogleAds=true rows AND the Phase
- * 05.5-01 stores seed `has_google_ads = TRUE` rows. Current state (2026-05-21):
- *   uzoshop   → true  (in this set)
- *   zolplus   → false (not in set; short-circuits)
- *   usmile360 → false (not in set; short-circuits)
- *
- * If a 4th store is added later, update BOTH this set and the stores seed
- * in lockstep. The algorithm-parity test at plan 05.6-21 will catch drift.
- */
-export const STORES_WITH_GOOGLE_ADS: ReadonlySet<string> = new Set(['uzoshop']);
 
 /**
  * Module-level token cache, keyed by storeId.
@@ -427,8 +421,13 @@ export async function fetchGoogleAdsSpendForDay(
   storeId: string,
   dateStr: string,
 ): Promise<GoogleAdsSpend> {
-  // ---- Short-circuit FIRST: 2 of 3 stores skip the API entirely.
-  if (!STORES_WITH_GOOGLE_ADS.has(storeId)) {
+  // ---- Short-circuit FIRST: stores without Google Ads creds skip the API
+  // entirely. DB-aware gate (Phase 6a T9): a self-serve store whose
+  // GOOGLEADS_CUSTOMER_ID lives only in store_secrets is now recognized, so it
+  // gets nightly data instead of being silently skipped. INERT for the current
+  // 3 stores (uzoshop env→true; zolplus/usmile360 no cred→false), so uzoshop's
+  // nightly spend fetch runs byte-identically to before.
+  if (!(await isGoogleConfiguredForStoreAsync(storeId))) {
     return { storeId, date: dateStr, spend: 0, currency: 'CAD', impressions: 0 };
   }
 
@@ -475,8 +474,9 @@ export async function fetchGoogleAdsAdGroupInsights(
   storeId: string,
   dateStr: string,
 ): Promise<GoogleAdsAdGroupRow[]> {
-  // ---- Short-circuit FIRST: 2 of 3 stores skip the API entirely.
-  if (!STORES_WITH_GOOGLE_ADS.has(storeId)) {
+  // ---- Short-circuit FIRST: stores without Google Ads creds skip the API
+  // entirely. DB-aware gate (Phase 6a T9) — see fetchGoogleAdsSpendForDay.
+  if (!(await isGoogleConfiguredForStoreAsync(storeId))) {
     return [];
   }
 
@@ -636,9 +636,10 @@ export async function fetchGoogleAdsAdGroupInsights(
  * granularity, with no Shopping/PMax fallback (Shopping/PMax campaigns return
  * zero ads here — they are aggregated at the ad-group/campaign level only).
  *
- * Short-circuits to `[]` for non-Google-Ads stores (per `STORES_WITH_GOOGLE_ADS`,
- * only uzoshop has Google Ads). The dominant code path (2 of 3 stores) thus
- * makes zero API calls for ad-level insights.
+ * Short-circuits to `[]` for stores without Google Ads creds (per the DB-aware
+ * `isGoogleConfiguredForStoreAsync` gate; today only uzoshop has Google Ads).
+ * The dominant code path (stores without Google) thus makes zero API calls for
+ * ad-level insights.
  *
  * GAQL query targets the `ad_group_ad` resource — the canonical "ad inside an
  * ad group" view. Metrics are 1:1 with ad-group-level metrics in semantics
@@ -658,8 +659,9 @@ export async function fetchGoogleAdsAdInsights(
   storeId: string,
   dateStr: string,
 ): Promise<GoogleAdsAdRow[]> {
-  // ---- Short-circuit FIRST: 2 of 3 stores skip the API entirely.
-  if (!STORES_WITH_GOOGLE_ADS.has(storeId)) {
+  // ---- Short-circuit FIRST: stores without Google Ads creds skip the API
+  // entirely. DB-aware gate (Phase 6a T9) — see fetchGoogleAdsSpendForDay.
+  if (!(await isGoogleConfiguredForStoreAsync(storeId))) {
     return [];
   }
 
@@ -781,7 +783,8 @@ export type GoogleAdsAdGroupStatus = {
 export async function fetchGoogleAdsAdGroupStatuses(
   storeId: string,
 ): Promise<GoogleAdsAdGroupStatus[]> {
-  if (!STORES_WITH_GOOGLE_ADS.has(storeId)) {
+  // DB-aware gate (Phase 6a T9) — see fetchGoogleAdsSpendForDay.
+  if (!(await isGoogleConfiguredForStoreAsync(storeId))) {
     return [];
   }
 
