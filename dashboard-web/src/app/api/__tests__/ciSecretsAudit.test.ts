@@ -38,20 +38,60 @@ const enc = vi.hoisted(() => ({
 
 vi.mock('@/lib/supabaseAdmin', () => ({
   getSupabaseAdmin: () => ({
-    from: () => ({
-      upsert: (row: { store_id: string; secret_key: string }) => {
-        up.rows.push(row);
+    // Supports both the backfill route's `.from().upsert()` AND the
+    // operator/stores route's richer chains (pre-check selects, display_order
+    // select, plain inserts, delete-rollback). All writes succeed; the audit
+    // only cares that NO sentinel is echoed in the response, not the write path.
+    from: (table: string) => ({
+      upsert: (rowOrRows: unknown) => {
+        const rows = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows];
+        for (const r of rows) up.rows.push(r as { store_id: string; secret_key: string });
         return Promise.resolve({ error: up.error });
       },
+      insert: () => Promise.resolve({ error: null }),
+      select: (cols: string) => {
+        // operator/stores GET: grouped secret presence read (no values).
+        if (table === 'store_secrets') {
+          return Promise.resolve({ data: [], error: null });
+        }
+        // operator/stores POST: display_order max calc.
+        if (table === 'stores' && cols.includes('display_order') && !cols.includes('id')) {
+          return Promise.resolve({ data: [{ display_order: 1 }], error: null });
+        }
+        // operator/stores POST: dup pre-checks → nothing exists (clean add path).
+        return {
+          eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+        };
+      },
+      delete: () => ({ eq: () => Promise.resolve({ error: null }) }),
     }),
   }),
 }));
 vi.mock('@/lib/secretsEncryption', () => ({
   encryptSecret: (p: string) => enc.encrypt(p),
   decryptSecret: (c: string) => enc.decrypt(c),
+  // operator/stores POST masks secrets in its response — never raw plaintext.
+  maskSecret: (v: string) => (v.length > 4 ? '••••' + v.slice(-4) : '••••'),
 }));
 vi.mock('@/lib/getStores', () => ({
   loadActiveStoreIds: () => Promise.resolve(['uzoshop', 'zolplus', 'usmile360']),
+  // The operator/stores GET maps getStores() → a platform-annotated list; it
+  // never decrypts a secret, so a minimal stub here is enough for the audit.
+  getStores: () => Promise.resolve([
+    { storeId: 'uzoshop', storeName: 'uzoshop', brandColor: 'var(--store-uzo)', isHeadless: false, hasTikTok: true, status: 'active', displayOrder: 1 },
+  ]),
+}));
+
+// credVerifiers: the operator/stores POST + verify-creds POST both call these.
+// Stub them to return the SENTINEL credentials echoed BACK in the (Hebrew)
+// message — a deliberately hostile stub. The audit then proves neither route
+// surfaces that sentinel: the stores route never includes a verifier message on
+// success, and the verify-creds route returns ONLY ok/message/currency for the
+// creds the operator typed (which we keep sentinel-free in the request bodies).
+vi.mock('@/lib/credVerifiers', () => ({
+  verifyShopify: () => Promise.resolve({ ok: true, message: 'ok' }),
+  verifyMeta: () => Promise.resolve({ ok: true, message: 'ok', currency: 'ILS' }),
+  verifyGoogle: () => Promise.resolve({ ok: true, message: 'ok', currency: 'CAD' }),
 }));
 
 // store-meta: mock the postgres reader, Sentry, and getStoreSecret. The secret
@@ -92,6 +132,8 @@ vi.mock('@/lib/storeSecretsReader', async () => {
 
 import { POST as backfillSecretsPOST } from '../operator/backfill-secrets/route';
 import { GET as storeMetaGET } from '../store-meta/route';
+import { POST as storesPOST, GET as storesGET } from '../operator/stores/route';
+import { POST as verifyCredsPOST } from '../operator/stores/verify-creds/route';
 
 // ---------------------------------------------------------------------------
 // Sentinels — every secret-shaped env var stubbed to a uniquely-grep-able token.
@@ -123,6 +165,17 @@ const SECRET_ENV_SENTINELS: Record<string, string> = {
   INNGEST_SIGNING_KEY: 'SENTINEL_INNGEST_SIGNING_KEY',
 };
 
+// REQUEST-BODY secrets — the operator/stores POST + verify-creds POST receive
+// raw platform credentials in the request body (not from env). These uniquely
+// grep-able sentinels are fed IN via those bodies; the audit then proves they
+// never come back OUT in any response. (Env sentinels above cover server-read
+// secrets; these cover client-submitted ones.)
+const STORES_BODY_SECRET_SENTINELS = {
+  SHOPIFY_CLIENT_SECRET: 'SENTINEL_BODY_SHOPIFY_CLIENT_SECRET',
+  META_ACCESS_TOKEN: 'SENTINEL_BODY_META_ACCESS_TOKEN',
+  GOOGLEADS_REFRESH_TOKEN: 'SENTINEL_BODY_GADS_REFRESH_TOKEN',
+} as const;
+
 // Secret-shaped LEAK patterns. These target a secret-shaped key paired with an
 // emitted VALUE — i.e. the actual leak shape — NOT a bare key NAME. The backfill
 // route legitimately lists secret key NAMES (e.g. `"key":"META_ACCESS_TOKEN"`,
@@ -150,6 +203,11 @@ function assertNoSecretLeak(label: string, body: string): void {
   // leak is caught here regardless of how it was serialised.
   for (const sentinel of Object.values(SECRET_ENV_SENTINELS)) {
     expect(body, `${label} leaked env sentinel ${sentinel}`).not.toContain(sentinel);
+  }
+  // Same authoritative check for request-BODY-submitted secrets (stores POST +
+  // verify-creds POST): a credential the operator typed must never echo back.
+  for (const sentinel of Object.values(STORES_BODY_SECRET_SENTINELS)) {
+    expect(body, `${label} leaked body sentinel ${sentinel}`).not.toContain(sentinel);
   }
   // Defense-in-depth: no secret-shaped value-leak pattern may appear, even for
   // a value we did not anticipate stubbing.
@@ -179,6 +237,59 @@ const COVERED: Array<{ label: string; run: () => Promise<string> }> = [
       return res.text();
     },
   },
+  {
+    // POST /api/operator/stores accepts raw platform secrets in its BODY and
+    // must never echo them. We feed sentinel-shaped secrets and assert the
+    // response (which masks them) carries none of those sentinel VALUES.
+    label: 'POST /api/operator/stores',
+    run: async () => {
+      const req = new Request('http://x/api/operator/stores', {
+        method: 'POST',
+        body: JSON.stringify({
+          storeId: 'auditstore',
+          name: 'Audit Store',
+          shopDomain: 'auditstore.myshopify.com',
+          isHeadless: false,
+          brandColor: '#1d4ed8',
+          hasTiktok: false,
+          shopify: { clientId: 'cid', clientSecret: STORES_BODY_SECRET_SENTINELS.SHOPIFY_CLIENT_SECRET },
+          meta: { token: STORES_BODY_SECRET_SENTINELS.META_ACCESS_TOKEN, adAccountId: 'act_999' },
+          google: { customerId: '111-222-3333', refreshToken: STORES_BODY_SECRET_SENTINELS.GOOGLEADS_REFRESH_TOKEN },
+        }),
+      });
+      const res = await storesPOST(req);
+      return res.text();
+    },
+  },
+  {
+    // GET /api/operator/stores returns the platform-annotated store list. It
+    // never decrypts a secret, but is covered so a future regression that joins
+    // in a secret value is caught.
+    label: 'GET /api/operator/stores',
+    run: async () => {
+      const res = await storesGET();
+      return res.text();
+    },
+  },
+  {
+    // POST /api/operator/stores/verify-creds takes the operator-typed creds in
+    // its BODY and must return ONLY { platform, ok, message, currency? } — never
+    // the submitted secret. We feed sentinel secrets and assert none echo back.
+    label: 'POST /api/operator/stores/verify-creds',
+    run: async () => {
+      const req = new Request('http://x/api/operator/stores/verify-creds', {
+        method: 'POST',
+        body: JSON.stringify({
+          platform: 'meta',
+          creds: { token: STORES_BODY_SECRET_SENTINELS.META_ACCESS_TOKEN, adAccountId: 'act_999' },
+        }),
+      });
+      const res = await verifyCredsPOST(req);
+      return res.text();
+    },
+  },
+  // T8 will add PATCH/DELETE /api/operator/stores/[id] here once that route file
+  // exists — leave this slot; do NOT import a route that does not exist yet.
 ];
 
 describe('CI secret-echo audit — no secret-touching route echoes a secret', () => {
@@ -199,10 +310,25 @@ describe('CI secret-echo audit — no secret-touching route echoes a secret', ()
     });
   }
 
-  it('covers at least the two baseline secret-touching routes (regression: list not silently emptied)', () => {
+  it('covers the baseline + Phase-6a secret-touching routes (regression: list not silently emptied)', () => {
     const labels = COVERED.map((c) => c.label);
     expect(labels).toContain('POST /api/operator/backfill-secrets');
     expect(labels).toContain('GET /api/store-meta');
+    expect(labels).toContain('POST /api/operator/stores');
+    expect(labels).toContain('GET /api/operator/stores');
+    expect(labels).toContain('POST /api/operator/stores/verify-creds');
+  });
+
+  it('would CATCH a body-submitted secret echo (guard self-test for the stores/verify-creds routes)', () => {
+    // Simulate a route that echoed back a credential it received in the request
+    // body — assertNoSecretLeak MUST throw. Proves the body-sentinel scan works,
+    // so a future verify-creds/stores regression that echoes a typed secret is
+    // visible.
+    const leaked = JSON.stringify({ platform: 'meta', ok: true, token: STORES_BODY_SECRET_SENTINELS.META_ACCESS_TOKEN });
+    expect(() => assertNoSecretLeak('self-test', leaked)).toThrow();
+    // And a clean verify-creds response (no submitted secret) must NOT throw.
+    const clean = JSON.stringify({ platform: 'meta', ok: true, message: 'ok', currency: 'ILS' });
+    expect(() => assertNoSecretLeak('self-test', clean)).not.toThrow();
   });
 
   it('the secret-shaped patterns catch a known leak shape (guard self-test)', () => {
