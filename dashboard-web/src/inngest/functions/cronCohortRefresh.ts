@@ -76,8 +76,7 @@ import { type CadConvert } from '@/lib/inngest/cadConvert';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { captureStepError } from '@/lib/sentry/capture';
 import { recordFreshness } from '@/lib/inngest/freshness';
-
-const STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
+import { loadActiveStoreIds } from '@/lib/getStores';
 
 // Bulk poll budget for the step.sleep loop: 15s between checks × 40 attempts
 // = up to 10 min of durable wait per store (full-history exports complete well
@@ -355,7 +354,7 @@ export async function runCohortRefreshStepped(input: {
       // cohort/LTV surface can show a "data as of" timestamp (fetchCohortAsOf
       // reads max(last_success_at) for scope='cohort_monthly'). recordFreshness
       // swallows its own errors, so this never breaks the per-store success.
-      // `store` is one of STORES ('uzoshop' | 'zolplus' | 'usmile360').
+      // `store` is one of the active store ids (loadActiveStoreIds).
       await recordFreshness({
         storeId: store,
         platform: 'shopify',
@@ -412,13 +411,20 @@ export const cronCohortRefresh = inngest.createFunction(
     triggers: [{ cron: 'TZ=Asia/Jerusalem 0 4 * * 1' }],
   },
   async ({ step }) => {
+    // Phase 4a: enumerate the ACTIVE store list from the DB (loadActiveStoreIds
+    // → DB rows, hardcoded-3 fallback on a DB blip) so a store added later flows
+    // into the cohort refresh without a code change. Resolved in a durable
+    // early step so the read is memoized across the function-level retry. Zero
+    // behavior change for the current 3 stores (the list resolves to the same 3).
+    const stores = await step.run('load-stores', () => loadActiveStoreIds());
+
     // Per-store step decomposition (NOT one mega-step) so each store's Bulk
     // export + FX conversion stays under the 60s maxDuration. step.sleep
     // handles the multi-minute Bulk wait durably; the per-store soft-fail loop
     // is idempotent (full replace), so a function-level retry resumes via step
     // memoization rather than restarting completed stores.
     const result = await runCohortRefreshStepped({
-      stores: STORES,
+      stores,
       step,
       startExport: startBulkCohortExport,
       pollBulkRows: pollBulkCohortRows,

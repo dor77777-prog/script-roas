@@ -22,6 +22,41 @@ import {
 import type { BulkCohortRow } from '@/lib/fetchers/shopifyBulkCohort';
 import type { CohortCell } from '@/lib/cohorts/cohortAggregate';
 
+// Phase 4a: leaf deps mocked so we can drive the cronCohortRefresh wrapper
+// handler end-to-end and assert it enumerates the store list via
+// loadActiveStoreIds (DB → hardcoded fallback) instead of a hardcoded const.
+const loadActiveStoreIdsMock = vi.fn<() => Promise<string[]>>();
+vi.mock('@/lib/getStores', () => ({
+  loadActiveStoreIds: () => loadActiveStoreIdsMock(),
+}));
+const startBulkCohortExportMock = vi.fn(async (_store: string) => `gid://op/${_store}`);
+const checkBulkCohortStatusMock = vi.fn(async (_store: string) => ({
+  status: 'completed' as const,
+  url: 'https://x/ndjson',
+}));
+const downloadBulkCohortRowsMock = vi.fn(
+  async (_store: string, _url: string): Promise<BulkCohortRow[]> => [],
+);
+vi.mock('@/lib/fetchers/shopifyBulkCohort', () => ({
+  startBulkCohortExport: (s: string) => startBulkCohortExportMock(s),
+  checkBulkCohortStatus: (s: string) => checkBulkCohortStatusMock(s),
+  downloadBulkCohortRows: (s: string, u: string) => downloadBulkCohortRowsMock(s, u),
+}));
+vi.mock('@/lib/fetchers/fx', () => ({ getFxRate: async () => 1 }));
+vi.mock('@/lib/sentry/capture', () => ({ captureStepError: vi.fn() }));
+vi.mock('@/lib/inngest/freshness', () => ({ recordFreshness: vi.fn(async () => undefined) }));
+// loadFirstOrderMonths / replaceCohortCells read Supabase admin; stub it so the
+// ingest step is a no-op (we only assert the store enumeration here).
+vi.mock('@/lib/supabaseAdmin', () => ({
+  getSupabaseAdmin: () => ({
+    from: () => ({
+      select: () => ({ eq: () => ({ range: async () => ({ data: [], error: null }) }) }),
+      delete: () => ({ eq: async () => ({ error: null }) }),
+      insert: async () => ({ error: null }),
+    }),
+  }),
+}));
+
 function readCronTrigger(fn: unknown): string | undefined {
   const opts = (fn as { opts?: { triggers?: Array<{ cron?: string }> } }).opts;
   return opts?.triggers?.[0]?.cron;
@@ -313,5 +348,60 @@ describe('runCohortRefreshStepped() — per-store steps (60s-budget fix)', () =>
     // At least one step.sleep happened while the export was still running.
     expect(sleeps.length).toBeGreaterThanOrEqual(1);
     expect(result.refreshed).toBe(1);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// Phase 4a — the cronCohortRefresh wrapper enumerates the store list from the
+// DB (loadActiveStoreIds) instead of a hardcoded const. A store added later
+// flows into the weekly refresh with no code change; a DB blip falls back to
+// the hardcoded 3 (zero behavior change for the current 3 stores).
+// ────────────────────────────────────────────────────────────────────────
+describe('cronCohortRefresh wrapper — store enumeration (Phase 4a)', () => {
+  // Minimal step stub: run executes inline (records ids), sleep is a no-op.
+  function makeWrapperStep(): { step: CohortStep; ids: string[] } {
+    const ids: string[] = [];
+    const step: CohortStep = {
+      run: async (id: string, cb: () => Promise<unknown>) => {
+        ids.push(id);
+        return cb();
+      },
+      sleep: async () => undefined,
+    };
+    return { step, ids };
+  }
+
+  function getHandler() {
+    return (cronCohortRefreshFunctions[0] as unknown as {
+      fn: (ctx: { step: CohortStep }) => Promise<unknown>;
+    }).fn;
+  }
+
+  it('resolves the store list via loadActiveStoreIds and refreshes exactly those stores', async () => {
+    loadActiveStoreIdsMock.mockReset();
+    startBulkCohortExportMock.mockClear();
+    loadActiveStoreIdsMock.mockResolvedValue(['a', 'b']);
+
+    const { step, ids } = makeWrapperStep();
+    const result = (await getHandler()({ step })) as {
+      refreshed: number;
+      failures: unknown[];
+    };
+
+    // The DB list was consulted, resolved in a durable 'load-stores' step.
+    expect(loadActiveStoreIdsMock).toHaveBeenCalledTimes(1);
+    expect(ids).toContain('load-stores');
+
+    // The resolved ids — NOT a hardcoded ['uzoshop','zolplus','usmile360'] —
+    // flow into the per-store pipeline (fail-if-reverted).
+    expect(startBulkCohortExportMock.mock.calls.map((c) => c[0])).toEqual(['a', 'b']);
+    expect(ids).toContain('start-bulk-a');
+    expect(ids).toContain('ingest-cohorts-a');
+    expect(ids).toContain('start-bulk-b');
+    expect(ids).toContain('ingest-cohorts-b');
+    expect(ids).not.toContain('start-bulk-uzoshop');
+
+    expect(result.refreshed).toBe(2);
+    expect(result.failures).toHaveLength(0);
   });
 });
