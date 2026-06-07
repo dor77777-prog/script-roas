@@ -49,18 +49,50 @@ vi.mock('@/lib/supabaseAdmin', () => ({
         return Promise.resolve({ error: up.error });
       },
       insert: () => Promise.resolve({ error: null }),
+      // operator/stores/[id] PATCH: stores/store_webhooks updates.
+      update: () => ({ eq: () => Promise.resolve({ error: null }) }),
       select: (cols: string) => {
-        // operator/stores GET: grouped secret presence read (no values).
+        // operator/stores/[id] GET/PATCH: grouped secret presence read for one
+        // store via .select('secret_key').eq('store_id', id). operator/stores
+        // GET (list): grouped read awaited directly. Support BOTH shapes.
         if (table === 'store_secrets') {
-          return Promise.resolve({ data: [], error: null });
+          const p = Promise.resolve({ data: [], error: null }) as Promise<{ data: unknown[]; error: null }> & {
+            eq?: (col: string, val: unknown) => Promise<{ data: unknown[]; error: null }>;
+          };
+          p.eq = () => Promise.resolve({ data: [], error: null });
+          return p;
         }
         // operator/stores POST: display_order max calc.
         if (table === 'stores' && cols.includes('display_order') && !cols.includes('id')) {
           return Promise.resolve({ data: [{ display_order: 1 }], error: null });
         }
-        // operator/stores POST: dup pre-checks → nothing exists (clean add path).
+        // operator/stores/[id] GET: the store row read (id present + basics).
+        if (table === 'stores' && cols.includes('name')) {
+          return {
+            eq: () => ({
+              maybeSingle: () =>
+                Promise.resolve({
+                  data: { id: 'auditstore', name: 'Audit Store', brand_color: 'var(--store-uzo)', is_headless: false, has_tiktok: false, display_order: 1 },
+                  error: null,
+                }),
+            }),
+          };
+        }
+        // operator/stores/[id]: the store EXISTS (404 guard passes) +
+        // store_webhooks.shop_domain read; dup-domain check resolves to no OTHER
+        // owner. operator/stores POST: dup pre-checks → nothing exists.
         return {
-          eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+          eq: (col: string, _val: unknown) => ({
+            maybeSingle: () => {
+              if (table === 'stores' && col === 'id') {
+                return Promise.resolve({ data: { id: 'auditstore' }, error: null });
+              }
+              if (table === 'store_webhooks' && col === 'store_id') {
+                return Promise.resolve({ data: { shop_domain: 'auditstore.myshopify.com', allowed_origins: [] }, error: null });
+              }
+              return Promise.resolve({ data: null, error: null });
+            },
+          }),
         };
       },
       delete: () => ({ eq: () => Promise.resolve({ error: null }) }),
@@ -134,6 +166,7 @@ import { POST as backfillSecretsPOST } from '../operator/backfill-secrets/route'
 import { GET as storeMetaGET } from '../store-meta/route';
 import { POST as storesPOST, GET as storesGET } from '../operator/stores/route';
 import { POST as verifyCredsPOST } from '../operator/stores/verify-creds/route';
+import { GET as storeByIdGET, PATCH as storeByIdPATCH } from '../operator/stores/[id]/route';
 
 // ---------------------------------------------------------------------------
 // Sentinels — every secret-shaped env var stubbed to a uniquely-grep-able token.
@@ -288,8 +321,37 @@ const COVERED: Array<{ label: string; run: () => Promise<string> }> = [
       return res.text();
     },
   },
-  // T8 will add PATCH/DELETE /api/operator/stores/[id] here once that route file
-  // exists — leave this slot; do NOT import a route that does not exist yet.
+  {
+    // GET /api/operator/stores/[id] returns the edit-prefill basics — NEVER a
+    // secret. Covered so a future regression that joins in a secret value is
+    // caught.
+    label: 'GET /api/operator/stores/[id]',
+    run: async () => {
+      const res = await storeByIdGET(new Request('http://x/api/operator/stores/auditstore'), {
+        params: Promise.resolve({ id: 'auditstore' }),
+      });
+      return res.text();
+    },
+  },
+  {
+    // PATCH /api/operator/stores/[id] accepts raw platform secrets in its BODY
+    // (cred rotation) and must never echo them. We feed sentinel-shaped secrets
+    // and assert the response (which masks them) carries none of those sentinels.
+    label: 'PATCH /api/operator/stores/[id]',
+    run: async () => {
+      const req = new Request('http://x/api/operator/stores/auditstore', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: 'Audit Store Renamed',
+          shopify: { clientId: 'cid', clientSecret: STORES_BODY_SECRET_SENTINELS.SHOPIFY_CLIENT_SECRET },
+          meta: { token: STORES_BODY_SECRET_SENTINELS.META_ACCESS_TOKEN, adAccountId: 'act_999' },
+          google: { customerId: '111-222-3333', refreshToken: STORES_BODY_SECRET_SENTINELS.GOOGLEADS_REFRESH_TOKEN },
+        }),
+      });
+      const res = await storeByIdPATCH(req, { params: Promise.resolve({ id: 'auditstore' }) });
+      return res.text();
+    },
+  },
 ];
 
 describe('CI secret-echo audit — no secret-touching route echoes a secret', () => {
@@ -317,6 +379,8 @@ describe('CI secret-echo audit — no secret-touching route echoes a secret', ()
     expect(labels).toContain('POST /api/operator/stores');
     expect(labels).toContain('GET /api/operator/stores');
     expect(labels).toContain('POST /api/operator/stores/verify-creds');
+    expect(labels).toContain('GET /api/operator/stores/[id]');
+    expect(labels).toContain('PATCH /api/operator/stores/[id]');
   });
 
   it('would CATCH a body-submitted secret echo (guard self-test for the stores/verify-creds routes)', () => {

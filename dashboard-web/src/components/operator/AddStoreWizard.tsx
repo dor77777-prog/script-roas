@@ -38,7 +38,7 @@
 //   - PATCH /api/operator/stores/{id} — edit (route lands in T8). The edit path
 //       here is a lightweight scaffold; T8 completes prefill + its DOM test.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, X, Copy, Loader2 } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
 import { generateStoreSnippet } from '@/lib/storeSnippets';
@@ -157,6 +157,57 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedStore | null>(null);
+
+  // Edit mode: prefill step-1 basics from GET /api/operator/stores/{id}. The
+  // GET returns BASICS ONLY — never a secret — so the step-2 cred fields stay
+  // EMPTY (leave-empty-to-keep semantics). `prefilling` shows a loading state.
+  const [prefilling, setPrefilling] = useState(isEdit);
+  const [prefillError, setPrefillError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isEdit) return;
+    let cancelled = false;
+    (async () => {
+      setPrefilling(true);
+      setPrefillError(null);
+      try {
+        const res = await operatorFetch(`/api/operator/stores/${editStoreId}`);
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          storeId?: string;
+          name?: string;
+          shopDomain?: string;
+          isHeadless?: boolean;
+          brandColor?: string | null;
+          displayOrder?: number | null;
+          hasTiktok?: boolean;
+          platforms?: string[];
+        };
+        if (res.status >= 400) throw new Error(body.error ?? `HTTP ${res.status}`);
+        if (cancelled) return;
+        const platforms = (body.platforms ?? []) as Platform[];
+        setS1((s) => ({
+          ...s,
+          storeId: editStoreId!,
+          name: body.name ?? '',
+          shopDomain: body.shopDomain ?? '',
+          isHeadless: body.isHeadless === true,
+          brandColor: body.brandColor ?? s.brandColor,
+          displayOrder: body.displayOrder == null ? '' : String(body.displayOrder),
+          hasMeta: platforms.includes('meta'),
+          hasGoogle: platforms.includes('google'),
+          hasTiktok: body.hasTiktok === true,
+        }));
+      } catch (e) {
+        if (!cancelled) setPrefillError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setPrefilling(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isEdit, editStoreId]);
 
   // -------------------------------------------------------------------------
   // Step 1 → Step 2 gate (client validation).
@@ -279,14 +330,38 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
     clearVerify('google');
   }
 
-  // Required platforms = Shopify always + Meta-if-checked + Google-if-checked.
-  const requiredPlatforms: Platform[] = ['shopify'];
-  if (s1.hasMeta) requiredPlatforms.push('meta');
-  if (s1.hasGoogle) requiredPlatforms.push('google');
+  // A platform is "rotated" when its cred fields are filled. In EDIT mode an
+  // untouched (empty) platform keeps its existing secret and needs NO verify;
+  // only a rotated platform requires a fresh ✓. In ADD mode Shopify is always
+  // required and Meta/Google are required when toggled on.
+  function isRotated(platform: Platform): boolean {
+    switch (platform) {
+      case 'shopify':
+        return s2.shopifyClientId.trim() !== '' || s2.shopifyClientSecret.trim() !== '';
+      case 'meta':
+        return s2.metaToken.trim() !== '' || s2.metaAdAccountId.trim() !== '';
+      case 'google':
+        return s2.googleCustomerId.trim() !== '' || s2.googleRefreshToken.trim() !== '';
+    }
+  }
+
+  // Required-✓ platforms.
+  //   ADD:  Shopify always + Meta-if-checked + Google-if-checked.
+  //   EDIT: ONLY the platforms the operator chose to rotate (filled fields).
+  const requiredPlatforms: Platform[] = isEdit
+    ? (['shopify', 'meta', 'google'] as Platform[]).filter(isRotated)
+    : (() => {
+        const req: Platform[] = ['shopify'];
+        if (s1.hasMeta) req.push('meta');
+        if (s1.hasGoogle) req.push('google');
+        return req;
+      })();
 
   // Gate ONLY on currently-required platforms — a stale ✓ for a platform that
   // is no longer checked must never count, and re-checking a platform requires
-  // a fresh ✓ (its verify entry was cleared on toggle-off).
+  // a fresh ✓ (its verify entry was cleared on toggle-off). In edit mode with
+  // no platform rotated, requiredPlatforms is empty → every() is vacuously true,
+  // so a basics-only edit can save without any verify.
   const allVerified = requiredPlatforms.every((p) => verify[p]?.ok === true);
   const canCreate = (allVerified || saveAnyway) && !submitting;
 
@@ -298,21 +373,44 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
     setSubmitError(null);
     try {
       const displayOrderNum = s1.displayOrder.trim() === '' ? undefined : Number(s1.displayOrder);
-      const payload: Record<string, unknown> = {
-        storeId: s1.storeId.trim(),
-        name: s1.name.trim(),
-        shopDomain: s1.shopDomain.trim().toLowerCase(),
-        isHeadless: s1.isHeadless,
-        brandColor: s1.brandColor,
-        hasTiktok: s1.hasTiktok,
-        shopify: { clientId: s2.shopifyClientId, clientSecret: s2.shopifyClientSecret },
-      };
+      const payload: Record<string, unknown> = isEdit
+        ? {
+            // EDIT (PATCH): basics always; the id comes from the URL path, NOT
+            // the body. Cred objects are included ONLY for rotated platforms
+            // (filled fields) — an untouched platform keeps its existing secret.
+            name: s1.name.trim(),
+            shopDomain: s1.shopDomain.trim().toLowerCase(),
+            isHeadless: s1.isHeadless,
+            brandColor: s1.brandColor,
+            hasTiktok: s1.hasTiktok,
+          }
+        : {
+            // ADD (POST): full creation payload (Shopify creds always required).
+            storeId: s1.storeId.trim(),
+            name: s1.name.trim(),
+            shopDomain: s1.shopDomain.trim().toLowerCase(),
+            isHeadless: s1.isHeadless,
+            brandColor: s1.brandColor,
+            hasTiktok: s1.hasTiktok,
+            shopify: { clientId: s2.shopifyClientId, clientSecret: s2.shopifyClientSecret },
+          };
       if (displayOrderNum !== undefined && Number.isFinite(displayOrderNum)) {
         payload.displayOrder = displayOrderNum;
       }
-      if (s1.hasMeta) payload.meta = { token: s2.metaToken, adAccountId: s2.metaAdAccountId };
-      if (s1.hasGoogle) {
-        payload.google = { customerId: s2.googleCustomerId, refreshToken: s2.googleRefreshToken };
+      if (isEdit) {
+        // Only rotated platforms (filled fields) → full cred set each.
+        if (isRotated('shopify')) {
+          payload.shopify = { clientId: s2.shopifyClientId, clientSecret: s2.shopifyClientSecret };
+        }
+        if (isRotated('meta')) payload.meta = { token: s2.metaToken, adAccountId: s2.metaAdAccountId };
+        if (isRotated('google')) {
+          payload.google = { customerId: s2.googleCustomerId, refreshToken: s2.googleRefreshToken };
+        }
+      } else {
+        if (s1.hasMeta) payload.meta = { token: s2.metaToken, adAccountId: s2.metaAdAccountId };
+        if (s1.hasGoogle) {
+          payload.google = { customerId: s2.googleCustomerId, refreshToken: s2.googleRefreshToken };
+        }
       }
 
       const url = isEdit ? `/api/operator/stores/${editStoreId}` : '/api/operator/stores';
@@ -334,6 +432,12 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
           ? ' — ' + Object.values(body.verification).join(' · ')
           : '';
         throw new Error((body.error ?? `HTTP ${res.status}`) + verifMsg);
+      }
+      if (isEdit) {
+        // Edit has no snippet/checklist success screen — the store already
+        // exists. On a successful PATCH return to the list (StoresTab refetches).
+        onDone();
+        return;
       }
       setCreated({
         storeId: body.store?.storeId ?? s1.storeId.trim(),
@@ -359,7 +463,20 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
       </Heading>
       <StepDots step={step} />
 
-      {step === 1 && (
+      {prefilling && (
+        <Text as="p" tone="muted" role="status" className="flex items-center gap-2 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          טוען פרטי חנות…
+        </Text>
+      )}
+
+      {prefillError && (
+        <Text as="p" role="alert" className="mb-3 text-sm text-status-redFg">
+          טעינת פרטי החנות נכשלה — {prefillError}
+        </Text>
+      )}
+
+      {!prefilling && step === 1 && (
         <Step1
           s1={s1}
           setS1={setS1}
@@ -679,6 +796,10 @@ function Step2({
   onBack: () => void;
   onSubmit: () => void;
 }) {
+  // In edit mode the cred fields start EMPTY — a placeholder says leaving them
+  // blank keeps the existing secret; only filling them rotates (and re-verifies).
+  const keep = 'השאר ריק כדי לשמור את הקיים';
+  const ph = (add: string) => (isEdit ? keep : add);
   return (
     <form
       onSubmit={(e) => {
@@ -687,8 +808,9 @@ function Step2({
       }}
     >
       <Text as="p" tone="muted" className="mb-4 text-xs">
-        הדבק את הטוקנים. ה-&quot;בדוק&quot; מאמת חי מול הספק לפני יצירת החנות.
-        הטוקנים נשמרים מוצפנים — לעולם לא מוחזרים גלויים.
+        {isEdit
+          ? 'מלא רק את הפלטפורמות שברצונך להחליף את הטוקנים שלהן. שדה ריק = הטוקן הקיים נשמר. ה-"בדוק" מאמת חי לפני השמירה.'
+          : 'הדבק את הטוקנים. ה-"בדוק" מאמת חי מול הספק לפני יצירת החנות. הטוקנים נשמרים מוצפנים — לעולם לא מוחזרים גלויים.'}
       </Text>
 
       {/* Shopify — always */}
@@ -704,7 +826,7 @@ function Step2({
             dir="ltr"
             value={s2.shopifyClientId}
             onChange={(e) => setCred('shopify', { shopifyClientId: e.target.value })}
-            placeholder="paste"
+            placeholder={ph('paste')}
           />
         </Field>
         <Field id="cred-shop-secret" label="Shopify client_secret">
@@ -714,7 +836,7 @@ function Step2({
             type="password"
             value={s2.shopifyClientSecret}
             onChange={(e) => setCred('shopify', { shopifyClientSecret: e.target.value })}
-            placeholder="paste"
+            placeholder={ph('paste')}
           />
         </Field>
       </PlatformCredBlock>
@@ -734,7 +856,7 @@ function Step2({
               type="password"
               value={s2.metaToken}
               onChange={(e) => setCred('meta', { metaToken: e.target.value })}
-              placeholder="paste"
+              placeholder={ph('paste')}
             />
           </Field>
           <Field id="cred-meta-act" label="Meta ad_account_id">
@@ -743,7 +865,7 @@ function Step2({
               dir="ltr"
               value={s2.metaAdAccountId}
               onChange={(e) => setCred('meta', { metaAdAccountId: e.target.value })}
-              placeholder="800776975668"
+              placeholder={ph('800776975668')}
             />
           </Field>
         </PlatformCredBlock>
@@ -763,7 +885,7 @@ function Step2({
               dir="ltr"
               value={s2.googleCustomerId}
               onChange={(e) => setCred('google', { googleCustomerId: e.target.value })}
-              placeholder="4014537400"
+              placeholder={ph('4014537400')}
             />
           </Field>
           <Field
@@ -777,7 +899,7 @@ function Step2({
               type="password"
               value={s2.googleRefreshToken}
               onChange={(e) => setCred('google', { googleRefreshToken: e.target.value })}
-              placeholder="paste"
+              placeholder={ph('paste')}
             />
           </Field>
         </PlatformCredBlock>

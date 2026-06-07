@@ -342,3 +342,132 @@ describe('AddStoreWizard — ADD mode (Phase 6a Task 5)', () => {
     expect(within(section as HTMLElement).getByRole('button', { name: /בדוק/ })).toBeDefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// EDIT mode (Phase 6a Task 8) — prefill basics + rotate-only-verify-gating.
+// ---------------------------------------------------------------------------
+describe('AddStoreWizard — EDIT mode (Phase 6a Task 8)', () => {
+  // The GET prefill payload the edit route returns (basics only, NO secrets).
+  const PREFILL = {
+    storeId: 'mystore',
+    name: 'My Store',
+    shopDomain: 'mystore.myshopify.com',
+    isHeadless: false,
+    brandColor: 'var(--store-uzo)',
+    displayOrder: 2,
+    hasTiktok: true,
+    platforms: ['shopify', 'meta'],
+  };
+
+  beforeEach(() => {
+    // Default edit responder: GET prefill, verify ok, PATCH success.
+    responder = (url, init) => {
+      if (url.includes('verify-creds')) {
+        return { status: 200, json: async () => ({ platform: 'meta', ok: true, message: 'תקין' }) };
+      }
+      if (url.endsWith('/api/operator/stores/mystore') && (init?.method ?? 'GET') === 'GET') {
+        return { status: 200, json: async () => PREFILL };
+      }
+      if (url.endsWith('/api/operator/stores/mystore') && init?.method === 'PATCH') {
+        return {
+          status: 200,
+          json: async () => ({ ok: true, store: { storeId: 'mystore' }, updated: [], secretsMasked: {} }),
+        };
+      }
+      return { status: 200, json: async () => ({}) };
+    };
+  });
+
+  it('GETs the store on mount and prefills the step-1 basics', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" />);
+    // Name is prefilled from the GET (async).
+    await screen.findByDisplayValue('My Store');
+    expect((screen.getByLabelText(/דומיין/) as HTMLInputElement).value).toBe('mystore.myshopify.com');
+    // The slug field is locked in edit mode.
+    expect((screen.getByLabelText(/מזהה/) as HTMLInputElement).disabled).toBe(true);
+    // The GET was made.
+    const getCall = calls.find(
+      (c) => c.url.endsWith('/api/operator/stores/mystore') && (c.init?.method ?? 'GET') === 'GET',
+    );
+    expect(getCall).toBeDefined();
+  });
+
+  it('prefilled Meta toggle surfaces the Meta cred block in step 2 (empty fields)', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" />);
+    await screen.findByDisplayValue('My Store');
+    clickNext();
+    const metaToken = (await screen.findByLabelText(/Meta access[_ ]?token/i)) as HTMLInputElement;
+    // Cred fields start EMPTY (leave-empty-to-keep semantics).
+    expect(metaToken.value).toBe('');
+  });
+
+  it('shows "שמור שינויים" (not "צור חנות") in edit mode', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" />);
+    await screen.findByDisplayValue('My Store');
+    clickNext();
+    expect(screen.getByRole('button', { name: /שמור שינויים/ })).toBeDefined();
+    expect(screen.queryByRole('button', { name: /צור חנות/ })).toBeNull();
+  });
+
+  it('submitting basics-only (no creds touched) PATCHes WITHOUT any cred blocks', async () => {
+    const onDone = vi.fn();
+    render(<AddStoreWizard onDone={onDone} editStoreId="mystore" />);
+    await screen.findByDisplayValue('My Store');
+    // Change the name only.
+    fill(/שם תצוגה/, 'My Store Renamed');
+    clickNext();
+    // No platform was rotated → Save is enabled without any verify (untouched
+    // platforms need no ✓).
+    const save = screen.getByRole('button', { name: /שמור שינויים/ }) as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+    await new Promise((r) => setTimeout(r, 0));
+
+    const patchCall = calls.find(
+      (c) => c.url.endsWith('/api/operator/stores/mystore') && c.init?.method === 'PATCH',
+    );
+    expect(patchCall).toBeDefined();
+    const body = jsonOf(patchCall!.init);
+    expect(body.name).toBe('My Store Renamed');
+    // No cred objects when nothing was rotated.
+    expect(body.shopify).toBeUndefined();
+    expect(body.meta).toBeUndefined();
+    expect(body.google).toBeUndefined();
+    expect(onDone).toHaveBeenCalled();
+  });
+
+  it('rotating Meta REQUIRES a fresh verify ✓ before the PATCH includes its creds', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" />);
+    await screen.findByDisplayValue('My Store');
+    clickNext();
+    // Type new Meta creds — the platform is now "rotated", so Save must gate on ✓.
+    fill(/Meta access[_ ]?token/i, 'NEW-META-TOKEN');
+    fill(/Meta.*account/i, 'act_777');
+    const save = screen.getByRole('button', { name: /שמור שינויים/ }) as HTMLButtonElement;
+    // Not verified yet → disabled.
+    expect(save.disabled).toBe(true);
+    // Verify Meta.
+    const metaBlock = screen.getByText('Meta').closest('div')!;
+    fireEvent.click(within(metaBlock.parentElement as HTMLElement).getByRole('button', { name: /בדוק/ }));
+    await screen.findByText(/תקין/);
+    expect((screen.getByRole('button', { name: /שמור שינויים/ }) as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: /שמור שינויים/ }));
+    await new Promise((r) => setTimeout(r, 0));
+    const patchCall = calls.find(
+      (c) => c.url.endsWith('/api/operator/stores/mystore') && c.init?.method === 'PATCH',
+    );
+    const body = jsonOf(patchCall!.init);
+    // The rotated platform's full cred set is included.
+    expect(body.meta).toEqual({ token: 'NEW-META-TOKEN', adAccountId: 'act_777' });
+  });
+
+  it('an untouched platform does NOT require verify (Save enabled on a basics-only edit)', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" />);
+    await screen.findByDisplayValue('My Store');
+    fill(/שם תצוגה/, 'Renamed Again');
+    clickNext();
+    // Shopify + Meta are configured but UNTOUCHED → no ✓ required.
+    expect((screen.getByRole('button', { name: /שמור שינויים/ }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
