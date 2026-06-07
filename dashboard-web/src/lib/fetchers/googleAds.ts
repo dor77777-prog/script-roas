@@ -188,6 +188,64 @@ export async function getCustomerIdOrThrow(storeId: string): Promise<string> {
 }
 
 /**
+ * Result of a single Google Ads OAuth refresh-token exchange.
+ *
+ * `ok` mirrors `Response.ok` (HTTP 2xx). On 2xx, `accessToken` / `expiresIn`
+ * come from the JSON body. On non-2xx, `errorBody` carries Google's diagnostic
+ * text (Google does NOT echo `refresh_token` in the OAuth error response —
+ * T-05.6-05-I2 — but callers must still avoid logging the inputs).
+ */
+export type GoogleOAuthRefreshResult = {
+  ok: boolean;
+  status: number;
+  accessToken?: string;
+  expiresIn?: number;
+  errorBody?: string;
+};
+
+/**
+ * Pure helper — POSTs the Google `refresh_token` grant to
+ * `https://oauth2.googleapis.com/token` and returns the parsed result.
+ *
+ * This is the SINGLE OAuth-refresh code path, reused by both `getAccessToken`
+ * (the live cron/pipeline) and the Phase-6a `verifyGoogle` cred-verifier. It
+ * accepts creds as arguments (no DB / no env read) so it stays pure and
+ * testable, and it NEVER throws on a non-2xx — the caller decides whether a
+ * non-2xx is fatal (cron throws) or a verification failure (verifier returns
+ * ok:false). Network errors DO reject; callers wrap.
+ *
+ * NEVER include a raw credential value (refresh token, client secret) in any
+ * thrown error or log.
+ */
+export async function refreshGoogleOAuthToken(
+  clientId: string,
+  clientSecret: string,
+  refreshToken: string,
+): Promise<GoogleOAuthRefreshResult> {
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }).toString(),
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    return { ok: false, status: res.status, errorBody };
+  }
+  const body = (await res.json()) as { access_token: string; expires_in: number };
+  return {
+    ok: true,
+    status: res.status,
+    accessToken: body.access_token,
+    expiresIn: body.expires_in,
+  };
+}
+
+/**
  * Returns an access token for `storeId`, refreshing via OAuth if the cache
  * is cold or expired. Caches the token with a 60-second safety margin
  * (`expires_in - 60`) to avoid clock-skew-driven 401s mid-call.
@@ -227,36 +285,28 @@ export async function getAccessToken(storeId: string): Promise<string> {
     );
   }
 
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }).toString(),
-  });
-
-  if (!res.ok) {
+  // Phase 6a: the OAuth refresh is the extracted pure helper
+  // `refreshGoogleOAuthToken` — the SINGLE code path shared with the
+  // `verifyGoogle` cred-verifier. This caller keeps the existing storeId-named
+  // throw message + token-cache behavior (byte-identical vs the inline version).
+  const result = await refreshGoogleOAuthToken(clientId, clientSecret, refreshToken);
+  if (!result.ok) {
     // Body may contain Google's own diagnostic — include it because it never
     // contains the refresh-token value (Google does NOT echo refresh_token
     // in the OAuth error response). If a future Google change starts
     // echoing refresh_token, this line MUST be revisited (T-05.6-05-I2).
-    const text = await res.text();
     throw new Error(
-      `Google Ads OAuth refresh failed for ${storeId} (HTTP ${res.status}): ${text}`,
+      `Google Ads OAuth refresh failed for ${storeId} (HTTP ${result.status}): ${result.errorBody ?? ''}`,
     );
   }
 
-  const body = (await res.json()) as { access_token: string; expires_in: number };
   tokenCache.set(storeId, {
-    token: body.access_token,
+    token: result.accessToken!,
     // 60s safety margin per Pitfall 8 (RESEARCH line 1456) — covers
     // clock-skew between Vercel runtime and Google's OAuth issuer.
-    expiresAt: Date.now() + (body.expires_in - 60) * 1000,
+    expiresAt: Date.now() + (result.expiresIn! - 60) * 1000,
   });
-  return body.access_token;
+  return result.accessToken!;
 }
 
 /**
@@ -264,7 +314,7 @@ export async function getAccessToken(storeId: string): Promise<string> {
  * developer-token + optional login-customer-id). Throws if developer-token
  * is missing (the operator's most likely Vercel misconfig).
  */
-async function buildGoogleAdsHeaders(accessToken: string): Promise<Record<string, string>> {
+export async function buildGoogleAdsHeaders(accessToken: string): Promise<Record<string, string>> {
   // PROPS-MAP row 19 — `GOOGLEADS_DEVELOPER_TOKEN` (global; REQUIRED).
   // getGlobalSecret: DB (__global__) → UNPREFIXED env → null.
   const developerToken = await getGlobalSecret('GOOGLEADS_DEVELOPER_TOKEN');

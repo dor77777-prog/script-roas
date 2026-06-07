@@ -70,6 +70,76 @@ export function invalidateShopifyToken(storeId: string): void {
   tokenCache.delete(storeId);
 }
 
+/**
+ * Result of a single Shopify OAuth `client_credentials` exchange.
+ *
+ * `ok` mirrors `Response.ok` (HTTP 2xx). On a non-2xx response, `errorBody`
+ * carries the response body (already sliced/`.catch`-guarded by the caller's
+ * convention). On 2xx, `accessToken` / `expiresIn` / `scope` are populated from
+ * the JSON body (any may be absent if Shopify returns a malformed 200).
+ */
+export type ShopifyClientCredentialsResult = {
+  ok: boolean;
+  status: number;
+  accessToken?: string;
+  expiresIn?: number;
+  scope?: string;
+  /** Raw parsed JSON body on a 2xx (for the caller's exact error stringify). */
+  rawBody?: unknown;
+  /** Raw response text when `ok` is false (for the caller's error message). */
+  errorBody?: string;
+};
+
+/**
+ * Pure helper — POSTs the Shopify OAuth `client_credentials` grant to
+ * `https://{domain}/admin/oauth/access_token` and returns the parsed result.
+ *
+ * This is the SINGLE code path for the exchange, reused by both
+ * `getShopifyAccessToken` (the live cron/pipeline) and the Phase-6a
+ * `verifyShopify` cred-verifier. It accepts creds as arguments (no DB / no env
+ * read) so it stays pure and testable, and it NEVER throws on a non-2xx — the
+ * caller decides whether a non-2xx is fatal (cron throws) or a verification
+ * failure (verifier returns ok:false). Network errors DO reject; callers wrap.
+ *
+ * NEVER include a raw credential value in any thrown error or log — the body of
+ * a Shopify OAuth error response does not echo the client secret, but callers
+ * must still avoid logging the inputs.
+ */
+export async function exchangeShopifyClientCredentials(
+  domain: string,
+  clientId: string,
+  clientSecret: string,
+): Promise<ShopifyClientCredentialsResult> {
+  const url = `https://${domain}/admin/oauth/access_token`;
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: clientId,
+    client_secret: clientSecret,
+  });
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  if (!res.ok) {
+    const errorBody = await res.text().catch(() => '');
+    return { ok: false, status: res.status, errorBody };
+  }
+  const data = (await res.json()) as {
+    access_token?: string;
+    expires_in?: number;
+    scope?: string;
+  };
+  return {
+    ok: true,
+    status: res.status,
+    accessToken: data.access_token,
+    expiresIn: data.expires_in,
+    scope: data.scope,
+    rawBody: data,
+  };
+}
+
 export async function getShopifyAccessToken(storeId: string): Promise<string> {
   const cached = tokenCache.get(storeId);
   // Refresh 60 seconds before expiry to avoid races during the exchange.
@@ -97,36 +167,24 @@ export async function getShopifyAccessToken(storeId: string): Promise<string> {
     );
   }
 
-  const url = `https://${domain}/admin/oauth/access_token`;
-  const body = new URLSearchParams({
-    grant_type: 'client_credentials',
-    client_id: clientId!,
-    client_secret: clientSecret!,
-  });
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => '');
+  // Phase 6a: the exchange itself is the extracted pure helper
+  // `exchangeShopifyClientCredentials` — the SINGLE code path shared with the
+  // `verifyShopify` cred-verifier. This caller keeps the existing storeId-named
+  // throw messages (byte-identical behavior vs the inline version).
+  const result = await exchangeShopifyClientCredentials(domain!, clientId!, clientSecret!);
+  if (!result.ok) {
     throw new Error(
-      `Shopify OAuth token exchange failed for "${storeId}" (HTTP ${res.status}): ${errBody.slice(0, 400)}`,
+      `Shopify OAuth token exchange failed for "${storeId}" (HTTP ${result.status}): ${(result.errorBody ?? '').slice(0, 400)}`,
     );
   }
-  const data = (await res.json()) as {
-    access_token?: string;
-    expires_in?: number;
-    scope?: string;
-  };
-  if (!data.access_token || !data.expires_in) {
+  if (!result.accessToken || !result.expiresIn) {
     throw new Error(
-      `Shopify OAuth response missing access_token/expires_in for "${storeId}": ${JSON.stringify(data)}`,
+      `Shopify OAuth response missing access_token/expires_in for "${storeId}": ${JSON.stringify(result.rawBody)}`,
     );
   }
   const entry: TokenCacheEntry = {
-    accessToken: data.access_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
+    accessToken: result.accessToken,
+    expiresAt: Date.now() + result.expiresIn * 1000,
   };
   tokenCache.set(storeId, entry);
   return entry.accessToken;

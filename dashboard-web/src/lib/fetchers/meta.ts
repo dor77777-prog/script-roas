@@ -259,6 +259,43 @@ async function getMetaToken(storeId: string): Promise<string> {
   return token;
 }
 
+/**
+ * Strip a leading `act_` from a Meta ad-account id so the URL builder can
+ * always re-prepend exactly one. Mirrors MetaAds.gs:26 — operators sometimes
+ * paste the `act_` prefix from the Meta UI and we want both forms to work.
+ *
+ * Pure (no DB / no env). Extracted in Phase 6a so the `verifyMeta`
+ * cred-verifier normalizes the operator-typed id identically to the live
+ * fetchers.
+ */
+export function normalizeMetaAdAccountId(raw: string): string {
+  return (raw || '').replace(/^act_/, '').trim();
+}
+
+/**
+ * Build the `level=account` Meta /insights probe URL for a single day. This is
+ * the exact URL shape `fetchMetaSpendForDayLight` issues; extracted in Phase 6a
+ * so the `verifyMeta` cred-verifier hits a byte-identical endpoint.
+ *
+ * `adAccountId` MUST already be normalized (no `act_` prefix) — the builder
+ * re-prepends exactly one. The access token rides in the query string (Meta's
+ * Marketing API does NOT accept a Bearer header) — callers MUST NEVER log the
+ * returned URL.
+ */
+export function buildMetaAccountInsightsUrl(
+  adAccountId: string,
+  token: string,
+  dateStr: string,
+): string {
+  return (
+    `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/insights` +
+    `?fields=spend,impressions,account_currency` +
+    `&time_range=${encodeURIComponent(JSON.stringify({ since: dateStr, until: dateStr }))}` +
+    `&level=account` +
+    `&access_token=${encodeURIComponent(token)}`
+  );
+}
+
 async function getMetaAdAccountId(storeId: string): Promise<string> {
   const upper = storeId.toUpperCase();
   // PROPS-MAP rows 27/34/40 (dual-read: store_secrets → ${STORE}_META_AD_ACCOUNT_ID)
@@ -266,7 +303,7 @@ async function getMetaAdAccountId(storeId: string): Promise<string> {
   // Strip a leading `act_` so the URL builder can always re-prepend it. This
   // mirrors MetaAds.gs:26 — operators sometimes paste the `act_` prefix from
   // the Meta UI and we want both forms to work.
-  const stripped = raw.replace(/^act_/, '').trim();
+  const stripped = normalizeMetaAdAccountId(raw);
   if (!stripped) {
     throw new Error(
       `Missing Meta ad account id for ${storeId}. ` +
@@ -454,12 +491,9 @@ export async function fetchMetaSpendForDayLight(
   // No pagination needed (1 row max). Phase 13.8 (2026-05-26) — added
   // `impressions` to the fields list so cron-live can write a live CPM
   // signal to data_daily. Same single call, just one extra field.
-  const url =
-    `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/insights` +
-    `?fields=spend,impressions,account_currency` +
-    `&time_range=${encodeURIComponent(JSON.stringify({ since: dateStr, until: dateStr }))}` +
-    `&level=account` +
-    `&access_token=${encodeURIComponent(token)}`;
+  // Phase 6a: URL built via the extracted `buildMetaAccountInsightsUrl` helper
+  // — the SINGLE code path shared with the `verifyMeta` cred-verifier.
+  const url = buildMetaAccountInsightsUrl(adAccountId, token, dateStr);
 
   const res = await fetchMeta(url, {});
   if (!res.ok) {
