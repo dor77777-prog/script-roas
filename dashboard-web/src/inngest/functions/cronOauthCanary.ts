@@ -31,9 +31,12 @@ import { fetchGoogleAdsSpendForDay } from '@/lib/fetchers/googleAds';
 import { fetchMetaSpendForDayLight } from '@/lib/fetchers/meta';
 import { fetchTikTokAdvertiserInfo } from '@/lib/fetchers/tiktok';
 import { captureStepError } from '@/lib/sentry/capture';
-import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
+import { notifyTokenFailure, type TokenFailureStore } from '@/lib/notifications/tokenFailures';
+import { loadActiveStoreIds } from '@/lib/getStores';
 
-type CanaryStore = 'uzoshop' | 'zolplus' | 'usmile360';
+// Phase 4a: store ids now flow from the DB (loadActiveStoreIds) at runtime, so
+// CanaryStore is a plain string rather than the old fixed 3-store union.
+type CanaryStore = string;
 type CanaryProvider = 'google' | 'meta' | 'tiktok';
 
 function yesterdayInIsrael(): string {
@@ -81,7 +84,10 @@ async function runCheck(
       );
       await notifyTokenFailure({
         provider: spec.provider,
-        storeId: spec.storeId,
+        // Phase 4a: storeId now flows from the DB (runtime string). It is only
+        // used as a throttle-key / store_id DB value, so widening to string is
+        // safe — cast to the narrower alert-store type at this boundary.
+        storeId: spec.storeId as TokenFailureStore,
         operation: 'canary',
         errorMsg,
         advice: spec.advice,
@@ -100,7 +106,15 @@ export const cronOauthCanary = inngest.createFunction(
   async ({ step }) => {
     const yesterday = yesterdayInIsrael();
 
-    // 5 checks total: Google×1 + Meta×3 + TikTok×1.
+    // Phase 4a: the per-store Meta probe list comes from the DB
+    // (loadActiveStoreIds → DB rows, hardcoded-3 fallback on a DB blip) so a
+    // store added later gets a Meta token canary with no code change. Zero
+    // behavior change for the current 3 stores (the list resolves to the same
+    // 3). The canary is non-critical and iterates inside this single handler,
+    // so this is an in-handler read only — no Inngest registration change.
+    const stores = await loadActiveStoreIds();
+
+    // (3 + #stores) checks total: Google×1 + Meta×#stores + TikTok×1.
     // Order: cheapest / most-likely-to-fail first.
     const checks: Array<Promise<{ provider: CanaryProvider; storeId: CanaryStore; ok: boolean; error?: string }>> = [
       // Google — historically the 7-day-expiry trap (now permanent if the
@@ -111,8 +125,8 @@ export const cronOauthCanary = inngest.createFunction(
         advice: 'Re-mint GOOGLEADS_REFRESH_TOKEN via OAuth Playground + update Vercel env + redeploy.',
         probe: () => fetchGoogleAdsSpendForDay('uzoshop', yesterday),
       }),
-      // Meta — 60-day rotating access tokens, one per store.
-      ...(['uzoshop', 'zolplus', 'usmile360'] as const).map((storeId) =>
+      // Meta — 60-day rotating access tokens, one per active store.
+      ...stores.map((storeId) =>
         runCheck(step, {
           provider: 'meta',
           storeId,

@@ -32,6 +32,13 @@ vi.mock('@/lib/fetchers/tiktok', () => ({
   fetchTikTokAdvertiserInfo: (...args: unknown[]) => fetchTikTokAdvertiserInfoMock(...args),
 }));
 
+// Phase 4a: the Meta probe list comes from the DB store list. Mock it so the
+// canary enumerates a deterministic set instead of hitting Supabase.
+const loadActiveStoreIdsMock = vi.fn<() => Promise<string[]>>();
+vi.mock('@/lib/getStores', () => ({
+  loadActiveStoreIds: () => loadActiveStoreIdsMock(),
+}));
+
 import { cronOauthCanary } from '../cronOauthCanary';
 
 type StepStub = {
@@ -61,6 +68,9 @@ beforeEach(() => {
   fetchGoogleAdsSpendForDayMock.mockReset();
   fetchMetaSpendForDayLightMock.mockReset();
   fetchTikTokAdvertiserInfoMock.mockReset();
+  loadActiveStoreIdsMock.mockReset();
+  // Default: the canonical 3 active stores (zero behavior change).
+  loadActiveStoreIdsMock.mockResolvedValue(['uzoshop', 'zolplus', 'usmile360']);
   // Default: all 5 checks succeed.
   fetchGoogleAdsSpendForDayMock.mockResolvedValue(okGoogle);
   fetchMetaSpendForDayLightMock.mockResolvedValue(okMeta);
@@ -132,5 +142,33 @@ describe('cronOauthCanary', () => {
     );
     expect(notifyTokenFailureMock).toHaveBeenCalledTimes(5);
     expect(captureStepErrorMock).toHaveBeenCalledTimes(5);
+  });
+
+  it('Test 5 (Phase 4a): Meta probes follow the DB store list; Google+TikTok stay uzoshop-only', async () => {
+    // DB returns a DIFFERENT set than the hardcoded 3 → fail-if-reverted.
+    loadActiveStoreIdsMock.mockResolvedValue(['alpha', 'beta']);
+    const { step, ids } = makeMockStep();
+    const handler = (cronOauthCanary as unknown as { fn: (ctx: { step: StepStub }) => Promise<unknown> }).fn;
+    const result = (await handler({ step })) as { status: string; checks: number; passed: number };
+
+    expect(loadActiveStoreIdsMock).toHaveBeenCalledTimes(1);
+    // 1 Google + 2 Meta (alpha, beta) + 1 TikTok = 4 checks.
+    expect(result.checks).toBe(4);
+    expect(result.status).toBe('ok');
+    // Meta steps enumerate the DB list; Google + TikTok stay uzoshop-only.
+    expect(ids).toEqual([
+      'check-google-uzoshop',
+      'check-meta-alpha',
+      'check-meta-beta',
+      'check-tiktok-uzoshop',
+    ]);
+    // Meta probe was called once per DB store with the right store id.
+    expect(fetchMetaSpendForDayLightMock).toHaveBeenCalledTimes(2);
+    expect(fetchMetaSpendForDayLightMock.mock.calls.map((c) => c[0])).toEqual(['alpha', 'beta']);
+    // Google + TikTok unchanged: hardcoded uzoshop, one call each.
+    expect(fetchGoogleAdsSpendForDayMock).toHaveBeenCalledTimes(1);
+    expect(fetchGoogleAdsSpendForDayMock.mock.calls[0][0]).toBe('uzoshop');
+    expect(fetchTikTokAdvertiserInfoMock).toHaveBeenCalledTimes(1);
+    expect(fetchTikTokAdvertiserInfoMock.mock.calls[0][0]).toBe('uzoshop');
   });
 });
