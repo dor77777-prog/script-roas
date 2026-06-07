@@ -22,7 +22,10 @@ async function upsertSecret(storeId: string, key: string, plaintext: string): Pr
   const { ciphertext, iv, tag } = encryptSecret(plaintext);
   const { error } = await getSupabaseAdmin()
     .from('store_secrets')
-    .upsert({ store_id: storeId, secret_key: key, ciphertext, iv, tag, updated_at: new Date().toISOString() });
+    .upsert(
+      { store_id: storeId, secret_key: key, ciphertext, iv, tag, updated_at: new Date().toISOString() },
+      { onConflict: 'store_id,secret_key' }, // explicit PK conflict target (house convention)
+    );
   if (error) throw new Error(error.message);
   // Roundtrip-verify without echoing plaintext: decrypt and compare in-memory.
   const verified = decryptSecret(ciphertext, iv, tag) === plaintext;
