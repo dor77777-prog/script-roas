@@ -38,7 +38,7 @@
 //   - PATCH /api/operator/stores/{id} — edit (route lands in T8). The edit path
 //       here is a lightweight scaffold; T8 completes prefill + its DOM test.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, X, Copy, Loader2 } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
 import { generateStoreSnippet } from '@/lib/storeSnippets';
@@ -89,11 +89,19 @@ interface Step1State {
 interface Step2State {
   shopifyClientId: string;
   shopifyClientSecret: string;
+  // OPERATOR-ENTERED Shopify webhook signing secret (D3 / Fix B1). NOT the
+  // client_secret — it's the shop-level secret Shopify shows when you register
+  // the order/refund webhook. Sent as `webhookSecret`. Never prefilled in edit;
+  // the wizard only shows a "מוגדר / לא מוגדר" status from hasWebhookSecret.
+  webhookSecret: string;
   metaToken: string;
   metaAdAccountId: string;
   googleCustomerId: string;
   googleRefreshToken: string;
 }
+
+/** Credential-matrix focus targets (mirrors StoreList.ManageFocus). */
+export type FocusPlatform = 'shopify' | 'meta' | 'google' | 'tiktok' | 'webhook';
 
 interface CreatedStore {
   storeId: string;
@@ -106,6 +114,13 @@ export interface AddStoreWizardProps {
   onDone: () => void;
   /** When set the wizard runs in EDIT mode → PATCH /api/operator/stores/{id}. */
   editStoreId?: string;
+  /**
+   * D3 — credential-matrix focus. In EDIT mode, when set the wizard pre-enables
+   * that platform's toggle (for a currently-off ad platform / TikTok) and
+   * highlights its creds section; for 'webhook' it focuses the webhook field.
+   * Ignored in ADD mode.
+   */
+  focusPlatform?: FocusPlatform;
 }
 
 const EMPTY_STEP1: Step1State = {
@@ -123,13 +138,14 @@ const EMPTY_STEP1: Step1State = {
 const EMPTY_STEP2: Step2State = {
   shopifyClientId: '',
   shopifyClientSecret: '',
+  webhookSecret: '',
   metaToken: '',
   metaAdAccountId: '',
   googleCustomerId: '',
   googleRefreshToken: '',
 };
 
-export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
+export function AddStoreWizard({ onDone, editStoreId, focusPlatform }: AddStoreWizardProps) {
   const isEdit = typeof editStoreId === 'string' && editStoreId.length > 0;
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -163,6 +179,9 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
   // EMPTY (leave-empty-to-keep semantics). `prefilling` shows a loading state.
   const [prefilling, setPrefilling] = useState(isEdit);
   const [prefillError, setPrefillError] = useState<string | null>(null);
+  // D3 — the webhook signing-secret PRESENCE (from GET hasWebhookSecret). Drives
+  // the "מוגדר / לא מוגדר" status in edit; the raw value is NEVER prefilled.
+  const [hasWebhookSecret, setHasWebhookSecret] = useState(false);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -182,10 +201,12 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
           displayOrder?: number | null;
           hasTiktok?: boolean;
           platforms?: string[];
+          hasWebhookSecret?: boolean;
         };
         if (res.status >= 400) throw new Error(body.error ?? `HTTP ${res.status}`);
         if (cancelled) return;
         const platforms = (body.platforms ?? []) as Platform[];
+        setHasWebhookSecret(body.hasWebhookSecret === true);
         setS1((s) => ({
           ...s,
           storeId: editStoreId!,
@@ -194,9 +215,11 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
           isHeadless: body.isHeadless === true,
           brandColor: body.brandColor ?? s.brandColor,
           displayOrder: body.displayOrder == null ? '' : String(body.displayOrder),
-          hasMeta: platforms.includes('meta'),
-          hasGoogle: platforms.includes('google'),
-          hasTiktok: body.hasTiktok === true,
+          // D3 — focusPlatform pre-enables a currently-OFF ad platform / TikTok so
+          // the operator lands ready to add it. An already-on platform stays on.
+          hasMeta: platforms.includes('meta') || focusPlatform === 'meta',
+          hasGoogle: platforms.includes('google') || focusPlatform === 'google',
+          hasTiktok: body.hasTiktok === true || focusPlatform === 'tiktok',
         }));
       } catch (e) {
         if (!cancelled) setPrefillError(e instanceof Error ? e.message : String(e));
@@ -207,7 +230,7 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
     return () => {
       cancelled = true;
     };
-  }, [isEdit, editStoreId]);
+  }, [isEdit, editStoreId, focusPlatform]);
 
   // -------------------------------------------------------------------------
   // Step 1 → Step 2 gate (client validation).
@@ -397,6 +420,13 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
       if (displayOrderNum !== undefined && Number.isFinite(displayOrderNum)) {
         payload.displayOrder = displayOrderNum;
       }
+      // D3 — operator-entered webhook signing secret. Sent (top-level) whenever
+      // the field is non-empty, in BOTH add + edit. Empty → omitted (edit keeps
+      // the existing secret; add leaves signing_secret null). NEVER prefilled.
+      const webhookSecretTrimmed = s2.webhookSecret.trim();
+      if (webhookSecretTrimmed !== '') {
+        payload.webhookSecret = webhookSecretTrimmed;
+      }
       if (isEdit) {
         // Only rotated platforms (filled fields) → full cred set each.
         if (isRotated('shopify')) {
@@ -497,6 +527,9 @@ export function AddStoreWizard({ onDone, editStoreId }: AddStoreWizardProps) {
           s1={s1}
           s2={s2}
           setCred={setCred}
+          setWebhookSecret={(v) => setS2((s) => ({ ...s, webhookSecret: v }))}
+          hasWebhookSecret={hasWebhookSecret}
+          focusPlatform={focusPlatform}
           verify={verify}
           verifying={verifying}
           runVerify={runVerify}
@@ -769,6 +802,9 @@ function Step2({
   s1,
   s2,
   setCred,
+  setWebhookSecret,
+  hasWebhookSecret,
+  focusPlatform,
   verify,
   verifying,
   runVerify,
@@ -784,6 +820,9 @@ function Step2({
   s1: Step1State;
   s2: Step2State;
   setCred: (platform: Platform, patch: Partial<Step2State>) => void;
+  setWebhookSecret: (v: string) => void;
+  hasWebhookSecret: boolean;
+  focusPlatform?: FocusPlatform;
   verify: Record<Platform, VerifyState>;
   verifying: Record<Platform, boolean>;
   runVerify: (p: Platform) => void;
@@ -819,6 +858,7 @@ function Step2({
         verifyState={verify.shopify}
         verifying={verifying.shopify}
         onVerify={() => runVerify('shopify')}
+        highlight={focusPlatform === 'shopify' || focusPlatform === 'webhook'}
       >
         <Field id="cred-shop-id" label="Shopify client_id">
           <Input
@@ -839,6 +879,34 @@ function Step2({
             placeholder={ph('paste')}
           />
         </Field>
+
+        {/* D3 — Webhook signing secret. SHOP-LEVEL secret (NOT the Client
+            Secret). In edit mode we show a presence status + a "החלף" affordance;
+            the value is NEVER prefilled. focusPlatform='webhook' autofocuses it. */}
+        <Field
+          id="cred-webhook-secret"
+          label="סוד חתימת Webhook"
+          hint="הדבק את ה-signing secret ש-Shopify מציג כשאתה רושם את ה-webhook (Settings → Notifications → Webhooks, או ב-custom app). לא ה-Client Secret."
+        >
+          {isEdit && (
+            <Text as="p" tone="muted" className="mb-1 text-2xs">
+              סטטוס נוכחי:{' '}
+              <span className={hasWebhookSecret ? 'text-status-greenFg' : 'text-status-warningFg'}>
+                {hasWebhookSecret ? 'מוגדר' : 'לא מוגדר'}
+              </span>
+              {hasWebhookSecret ? ' — הזן ערך חדש כדי להחליף' : ' — הדבק כדי להפעיל את הפיד בזמן-אמת'}
+            </Text>
+          )}
+          <Input
+            id="cred-webhook-secret"
+            dir="ltr"
+            type="password"
+            autoFocus={focusPlatform === 'webhook'}
+            value={s2.webhookSecret}
+            onChange={(e) => setWebhookSecret(e.target.value)}
+            placeholder={isEdit ? (hasWebhookSecret ? 'מוגדר — השאר ריק לשמירה' : 'paste') : 'paste'}
+          />
+        </Field>
       </PlatformCredBlock>
 
       {/* Meta — if checked */}
@@ -848,6 +916,7 @@ function Step2({
           verifyState={verify.meta}
           verifying={verifying.meta}
           onVerify={() => runVerify('meta')}
+          highlight={focusPlatform === 'meta'}
         >
           <Field id="cred-meta-token" label="Meta access_token">
             <Input
@@ -878,6 +947,7 @@ function Step2({
           verifyState={verify.google}
           verifying={verifying.google}
           onVerify={() => runVerify('google')}
+          highlight={focusPlatform === 'google'}
         >
           <Field id="cred-google-cid" label="Google customer_id">
             <Input
@@ -945,16 +1015,33 @@ function PlatformCredBlock({
   verifyState,
   verifying,
   onVerify,
+  highlight = false,
   children,
 }: {
   title: string;
   verifyState: VerifyState;
   verifying: boolean;
   onVerify: () => void;
+  /** D3 — when the credential matrix focuses this platform, ring it + scroll to it. */
+  highlight?: boolean;
   children: React.ReactNode;
 }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    // jsdom does not implement scrollIntoView — guard so component tests pass.
+    if (highlight && typeof ref.current?.scrollIntoView === 'function') {
+      ref.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [highlight]);
   return (
-    <Card variant="flat" className="mb-4 rounded-lg border border-glass-edge bg-glass-2 p-3">
+    <Card
+      ref={ref}
+      variant="flat"
+      className={
+        'mb-4 rounded-lg border bg-glass-2 p-3 ' +
+        (highlight ? 'border-accent ring-2 ring-accent' : 'border-glass-edge')
+      }
+    >
       <div className="mb-2 flex items-center justify-between gap-2">
         <Heading level="panel" as="h3">
           {title}
@@ -1038,8 +1125,8 @@ function Step3({ created, onDone }: { created: CreatedStore; onDone: () => void 
           הענק scopes: <span dir="ltr">read_orders, read_products, read_customers</span>
         </li>
         <li>
-          רשום webhook הזמנות/החזרים → <span dir="ltr">/api/webhooks/shopify</span> (signing
-          secret = ה-API secret key של האפליקציה שהזנת)
+          רשום webhook הזמנות/החזרים → <span dir="ltr">/api/webhooks/shopify</span>. הדבק כאן
+          את ה-signing secret ש-Shopify הציג כשרשמת את ה-webhook (לא ה-Client Secret).
         </li>
         <li>
           {created.isHeadless

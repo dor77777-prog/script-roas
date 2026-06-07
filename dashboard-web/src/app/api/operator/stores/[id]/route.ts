@@ -125,6 +125,20 @@ async function readShopDomain(storeId: string): Promise<string | null> {
   return (data?.shop_domain as string | undefined) ?? null;
 }
 
+// D0 — webhook signing-secret PRESENCE (set / not-set) for a store. Selects
+// signing_secret ONLY to compute the boolean; the raw value is NEVER returned.
+// false when there is no store_webhooks row OR the signing_secret is null/empty.
+async function readHasWebhookSecret(storeId: string): Promise<boolean> {
+  const { data, error } = await getSupabaseAdmin()
+    .from('store_webhooks')
+    .select('signing_secret')
+    .eq('store_id', storeId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const sig = (data?.signing_secret as string | null | undefined) ?? null;
+  return typeof sig === 'string' && sig.trim() !== '';
+}
+
 // =============================================================================
 // GET — basics only (edit prefill). NO secrets.
 // =============================================================================
@@ -155,6 +169,9 @@ export async function GET(_req: Request, ctx: RouteCtx): Promise<NextResponse> {
     if (store.has_tiktok === true) platformSet.add('tiktok');
     const platforms = Array.from(platformSet);
     const shopDomain = await readShopDomain(id);
+    // D0 — presence boolean only (powers the wizard's "מוגדר / לא מוגדר" webhook
+    // affordance + the row matrix). The raw signing_secret is NEVER returned.
+    const hasWebhookSecret = await readHasWebhookSecret(id);
 
     return NextResponse.json(
       {
@@ -166,6 +183,7 @@ export async function GET(_req: Request, ctx: RouteCtx): Promise<NextResponse> {
         displayOrder: store.display_order == null ? null : Number(store.display_order),
         hasTiktok: store.has_tiktok === true,
         platforms: platforms.sort(),
+        hasWebhookSecret,
       },
       { status: 200 },
     );

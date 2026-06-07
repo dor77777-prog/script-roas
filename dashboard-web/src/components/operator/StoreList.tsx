@@ -5,9 +5,10 @@
 // Self-serve stores Phase 6a — Task 6: the operator's ACTIVE-store list.
 //
 // PRESENTATIONAL. The parent (T7 StoresTab) fetches GET /api/operator/stores and
-// passes the rows + an onEdit callback down; this component does NO data
-// fetching. It renders only the ACTIVE stores (status === 'active') as a list of
-// StoreRow, with a friendly Hebrew empty state when there are none. Archived
+// passes the rows + an onManage(storeId, focus) callback down; this component
+// does NO data fetching. It renders only the ACTIVE stores (status === 'active')
+// as a list of StoreRow (each carrying the per-store credential-status matrix),
+// with a friendly Hebrew empty state when there are none. Archived
 // stores + the "חנויות שהוסרו" removed-area (archive/restore/delete) are Phase
 // 6b and are intentionally not rendered here.
 //
@@ -44,14 +45,32 @@ export interface StoreRowData {
   displayOrder: number;
   /** Configured platforms, derived server-side from store_secrets presence. */
   platforms: StorePlatform[];
+  /**
+   * D0 — PRESENCE boolean only (never the secret value): true when the store's
+   * store_webhooks.signing_secret is set (non-empty). Powers the "פיד זמן-אמת"
+   * (real-time feed) cell in the credential matrix — a themed store without it
+   * silently has no real-time sales feed. NEVER the secret value.
+   */
+  hasWebhookSecret: boolean;
 }
+
+/**
+ * The credential-matrix focus targets. `onManage(storeId, focus)` opens the edit
+ * wizard scrolled-to / pre-enabling the given platform (or the webhook field):
+ *   - meta/google      → enable + paste/rotate that ad platform's creds
+ *   - tiktok           → enable has_tiktok (shared account, no creds)
+ *   - shopify          → rotate the Shopify creds
+ *   - webhook          → paste/rotate the Shopify webhook signing secret
+ */
+export type ManageFocus = 'shopify' | 'meta' | 'google' | 'tiktok' | 'webhook';
 
 export function StoreList({
   stores,
-  onEdit,
+  onManage,
 }: {
   stores: StoreRowData[];
-  onEdit: (storeId: string) => void;
+  /** Open the edit wizard for a store, focused on a platform / the webhook. */
+  onManage: (storeId: string, focus: ManageFocus) => void;
 }) {
   const active = stores.filter((s) => s.status === 'active');
 
@@ -72,7 +91,7 @@ export function StoreList({
         <ul className="space-y-2">
           {active.map((store) => (
             <li key={store.storeId}>
-              <StoreRow store={store} onEdit={onEdit} />
+              <StoreRow store={store} onManage={onManage} />
             </li>
           ))}
         </ul>

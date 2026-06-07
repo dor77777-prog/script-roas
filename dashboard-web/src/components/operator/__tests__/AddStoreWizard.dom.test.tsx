@@ -341,6 +341,46 @@ describe('AddStoreWizard — ADD mode (Phase 6a Task 5)', () => {
     const section = screen.getByText(/Shopify client_id/i).closest('form') ?? document.body;
     expect(within(section as HTMLElement).getByRole('button', { name: /בדוק/ })).toBeDefined();
   });
+
+  it('exposes a webhook signing-secret field in the Shopify section (D3)', () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    clickNext();
+    const field = screen.getByLabelText(/סוד חתימת Webhook/i) as HTMLInputElement;
+    expect(field).toBeDefined();
+    // It is a secret input (type=password).
+    expect(field.type).toBe('password');
+  });
+
+  it('sends the webhookSecret in the POST body when provided (D3)', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    clickNext();
+    fill(/Shopify client_id/i, 'cid_123');
+    fill(/Shopify.*secret/i, 'shpss_secret');
+    fill(/סוד חתימת Webhook/i, 'WH-SIGNING-SECRET');
+    fireEvent.click(screen.getByLabelText(/שמור בכל זאת/));
+    fireEvent.click(screen.getByRole('button', { name: /צור חנות/ }));
+    await screen.findByText(/ct_TESTTOKEN_123/);
+    const createCall = calls.find((c) => c.url.endsWith('/api/operator/stores'));
+    const body = jsonOf(createCall!.init);
+    expect(body.webhookSecret).toBe('WH-SIGNING-SECRET');
+  });
+
+  it('the step-3 checklist no longer claims the signing secret IS the client secret (MF-2 fix)', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    clickNext();
+    fill(/Shopify client_id/i, 'cid_123');
+    fill(/Shopify.*secret/i, 'shpss_secret');
+    fireEvent.click(screen.getByLabelText(/שמור בכל זאת/));
+    fireEvent.click(screen.getByRole('button', { name: /צור חנות/ }));
+    await screen.findByText(/ct_TESTTOKEN_123/);
+    // The corrected copy explicitly says it is NOT the Client Secret.
+    expect(screen.getByText(/לא ה-Client Secret/)).toBeDefined();
+    // The old, wrong wording (signing secret = the app API/Client secret) is gone.
+    expect(screen.queryByText(/signing secret = ה-API secret key/)).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -357,6 +397,7 @@ describe('AddStoreWizard — EDIT mode (Phase 6a Task 8)', () => {
     displayOrder: 2,
     hasTiktok: true,
     platforms: ['shopify', 'meta'],
+    hasWebhookSecret: false,
   };
 
   beforeEach(() => {
@@ -469,5 +510,85 @@ describe('AddStoreWizard — EDIT mode (Phase 6a Task 8)', () => {
     clickNext();
     // Shopify + Meta are configured but UNTOUCHED → no ✓ required.
     expect((screen.getByRole('button', { name: /שמור שינויים/ }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // D3 — webhookSecret field (set/not-set in edit, never prefilled) +
+  // focusPlatform pre-enable.
+  // -------------------------------------------------------------------------
+  it('shows the webhook signing-secret status (לא מוגדר) in EDIT mode and never prefills a value', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" />);
+    await screen.findByDisplayValue('My Store');
+    clickNext();
+    // hasWebhookSecret=false → status reads "לא מוגדר" (not the secret value).
+    expect(screen.getByText(/לא מוגדר/)).toBeDefined();
+    // The field itself, if rendered, must be EMPTY (never prefilled with a secret).
+    const field = screen.queryByLabelText(/סוד חתימת Webhook/i) as HTMLInputElement | null;
+    if (field) expect(field.value).toBe('');
+  });
+
+  it('shows "מוגדר" when hasWebhookSecret is true (still never prefills the value)', async () => {
+    responder = (url, init) => {
+      if (url.includes('verify-creds')) {
+        return { status: 200, json: async () => ({ platform: 'meta', ok: true, message: 'תקין' }) };
+      }
+      if (url.endsWith('/api/operator/stores/mystore') && (init?.method ?? 'GET') === 'GET') {
+        return { status: 200, json: async () => ({ ...PREFILL, hasWebhookSecret: true }) };
+      }
+      return { status: 200, json: async () => ({}) };
+    };
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" />);
+    await screen.findByDisplayValue('My Store');
+    clickNext();
+    expect(screen.getByText(/מוגדר/)).toBeDefined();
+    const field = screen.queryByLabelText(/סוד חתימת Webhook/i) as HTMLInputElement | null;
+    if (field) expect(field.value).toBe('');
+  });
+
+  it('sends webhookSecret in the PATCH body when the operator enters one (D3)', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" />);
+    await screen.findByDisplayValue('My Store');
+    clickNext();
+    fill(/סוד חתימת Webhook/i, 'NEW-WEBHOOK-SIGNING-SECRET');
+    const save = screen.getByRole('button', { name: /שמור שינויים/ }) as HTMLButtonElement;
+    expect(save.disabled).toBe(false); // webhookSecret needs no cred verify
+    fireEvent.click(save);
+    await new Promise((r) => setTimeout(r, 0));
+    const patchCall = calls.find(
+      (c) => c.url.endsWith('/api/operator/stores/mystore') && c.init?.method === 'PATCH',
+    );
+    const body = jsonOf(patchCall!.init);
+    expect(body.webhookSecret).toBe('NEW-WEBHOOK-SIGNING-SECRET');
+  });
+
+  it('focusPlatform="google" pre-enables the Google toggle so its cred block shows in step 2 (D3)', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" focusPlatform="google" />);
+    await screen.findByDisplayValue('My Store');
+    // Google was NOT in platforms; focusPlatform pre-enabled it → its switch is on.
+    const googleSwitch = screen.getByRole('switch', { name: /Google/i }) as HTMLButtonElement;
+    expect(googleSwitch.getAttribute('aria-checked')).toBe('true');
+    clickNext();
+    expect(await screen.findByLabelText(/Google customer/i)).toBeDefined();
+  });
+
+  it('focusPlatform="tiktok" pre-enables has_tiktok (no creds needed)', async () => {
+    // mystore prefill has hasTiktok=true already; use a no-tiktok prefill to prove
+    // the pre-enable actually flips it.
+    responder = (url, init) => {
+      if (url.includes('verify-creds')) {
+        return { status: 200, json: async () => ({ platform: 'meta', ok: true, message: 'תקין' }) };
+      }
+      if (url.endsWith('/api/operator/stores/mystore') && (init?.method ?? 'GET') === 'GET') {
+        return { status: 200, json: async () => ({ ...PREFILL, hasTiktok: false }) };
+      }
+      if (url.endsWith('/api/operator/stores/mystore') && init?.method === 'PATCH') {
+        return { status: 200, json: async () => ({ ok: true, store: { storeId: 'mystore' }, updated: [], secretsMasked: {} }) };
+      }
+      return { status: 200, json: async () => ({}) };
+    };
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" focusPlatform="tiktok" />);
+    await screen.findByDisplayValue('My Store');
+    const tkSwitch = screen.getByRole('switch', { name: /TikTok/i }) as HTMLButtonElement;
+    expect(tkSwitch.getAttribute('aria-checked')).toBe('true');
   });
 });

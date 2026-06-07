@@ -23,6 +23,9 @@ const db = vi.hoisted(() => ({
   // the store's existing allowed_origins (store_webhooks read; the OLD code
   // inferred headless from this being empty — the bug Fix 2 removes)
   ownAllowedOrigins: ['https://mystore.myshopify.com'] as string[],
+  // the store's existing webhook signing_secret (store_webhooks read; the GET
+  // maps presence → hasWebhookSecret boolean — D0 — and NEVER returns the value).
+  ownSigningSecret: null as string | null,
   // the store's authoritative is_headless flag (stores row read)
   isHeadless: false as boolean,
   // the store's authoritative has_tiktok flag (stores row read; GET derives the
@@ -84,7 +87,11 @@ vi.mock('@/lib/supabaseAdmin', () => {
                 return Promise.resolve({
                   data:
                     db.ownShopDomain !== null
-                      ? { shop_domain: db.ownShopDomain, allowed_origins: db.ownAllowedOrigins }
+                      ? {
+                          shop_domain: db.ownShopDomain,
+                          allowed_origins: db.ownAllowedOrigins,
+                          signing_secret: db.ownSigningSecret,
+                        }
                       : null,
                   error: null,
                 });
@@ -183,6 +190,7 @@ beforeEach(() => {
   db.shopDomainOwners = {};
   db.ownShopDomain = 'mystore.myshopify.com';
   db.ownAllowedOrigins = ['https://mystore.myshopify.com'];
+  db.ownSigningSecret = null;
   db.isHeadless = false;
   db.hasTiktok = false;
   db.secretRows = [];
@@ -225,6 +233,33 @@ describe('GET /api/operator/stores/[id]', () => {
   it('404 when the store does not exist', async () => {
     const res = await getReq('ghost');
     expect(res.status).toBe(404);
+  });
+
+  it('returns hasWebhookSecret=true when signing_secret is set (presence only, no value) [D0]', async () => {
+    db.ownSigningSecret = 'a-real-signing-secret-value';
+    db.secretRows = [{ store_id: 'mystore', secret_key: 'SHOPIFY_DOMAIN' }];
+    const res = await getReq('mystore');
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    const body = JSON.parse(text);
+    expect(body.hasWebhookSecret).toBe(true);
+    // PRESENCE only — the raw value must NEVER be echoed.
+    expect(text).not.toContain('a-real-signing-secret-value');
+    expect(text).not.toContain('signing_secret');
+  });
+
+  it('returns hasWebhookSecret=false when signing_secret is null [D0]', async () => {
+    db.ownSigningSecret = null;
+    const res = await getReq('mystore');
+    const body = await res.json();
+    expect(body.hasWebhookSecret).toBe(false);
+  });
+
+  it('returns hasWebhookSecret=false when signing_secret is an empty string [D0]', async () => {
+    db.ownSigningSecret = '';
+    const res = await getReq('mystore');
+    const body = await res.json();
+    expect(body.hasWebhookSecret).toBe(false);
   });
 
   it('400 for the reserved __global__ id (Fix B3 — defensive short-circuit, no DB read)', async () => {

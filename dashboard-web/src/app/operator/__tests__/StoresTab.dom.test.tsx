@@ -47,6 +47,7 @@ const STORES: StoreRowData[] = [
     status: 'active',
     displayOrder: 1,
     platforms: ['google', 'meta', 'shopify', 'tiktok'],
+    hasWebhookSecret: true,
   },
   {
     storeId: 'usmile360',
@@ -62,6 +63,7 @@ const STORES: StoreRowData[] = [
     status: 'active',
     displayOrder: 3,
     platforms: ['meta', 'shopify', 'tiktok'],
+    hasWebhookSecret: false,
   },
 ];
 
@@ -151,16 +153,62 @@ describe('StoresTab — חנויות operator tab (Phase 6a Task 7)', () => {
     expect((screen.getByLabelText(/מזהה/) as HTMLInputElement).disabled).toBe(false);
   });
 
-  it('opens the AddStoreWizard in EDIT mode when a row edit button is clicked', async () => {
+  it('opens the AddStoreWizard in EDIT mode when a matrix "החלף" action is clicked', async () => {
+    // The GET[id] prefill must resolve so the slug locks. Default responder
+    // returns a generic 200 {} for the [id] GET, which is enough here.
     render(<StoresTab />);
     await screen.findByText('360usmile');
     const row = screen.getByTestId('store-row-usmile360');
-    fireEvent.click(within(row).getByRole('button', { name: /ערוך/ }));
+    // Meta is connected on usmile360 → its cell shows a rotate ("החלף") action.
+    const metaCell = within(row).getByTestId('cred-cell-usmile360-meta');
+    fireEvent.click(within(metaCell).getByRole('button', { name: /החלף|ערוך/ }));
     // EDIT mode mounts the wizard with the edit heading + prefilled, disabled slug.
     expect(await screen.findByText('עריכת חנות')).toBeDefined();
     const slug = screen.getByLabelText(/מזהה/) as HTMLInputElement;
     expect(slug.disabled).toBe(true);
     expect(slug.value).toBe('usmile360');
+  });
+
+  it('connecting a MISSING platform from the matrix opens the wizard focused on it', async () => {
+    // usmile360 prefill: only meta+shopify configured → Google is missing, so
+    // clicking "חבר" must open EDIT focused on Google with the toggle pre-enabled.
+    responder = (url, init) => {
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/api/operator/stores') && method === 'GET') return okStores();
+      if (url.endsWith('/api/operator/stores/usmile360') && method === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            storeId: 'usmile360',
+            name: '360usmile',
+            shopDomain: 'usmile360.myshopify.com',
+            isHeadless: true,
+            brandColor: 'var(--store-usm)',
+            displayOrder: 3,
+            hasTiktok: true,
+            platforms: ['meta', 'shopify', 'tiktok'],
+            hasWebhookSecret: false,
+          }),
+        };
+      }
+      if (url.includes('verify-creds')) {
+        return { ok: true, status: 200, json: async () => ({ platform: 'google', ok: true, message: 'תקין' }) };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+    render(<StoresTab />);
+    await screen.findByText('360usmile');
+    const row = screen.getByTestId('store-row-usmile360');
+    const googleCell = within(row).getByTestId('cred-cell-usmile360-google');
+    fireEvent.click(within(googleCell).getByRole('button', { name: /חבר/ }));
+    // Edit wizard opened + prefilled.
+    await screen.findByText('עריכת חנות');
+    await screen.findByDisplayValue('360usmile');
+    // focusPlatform='google' pre-enabled the Google toggle → advancing to step 2
+    // surfaces the Google cred block.
+    fireEvent.click(screen.getByRole('button', { name: /הבא|Next/ }));
+    expect(await screen.findByLabelText(/Google customer/i)).toBeDefined();
   });
 
   it('re-fetches the list after the wizard calls onDone (cancel from ADD step 1)', async () => {

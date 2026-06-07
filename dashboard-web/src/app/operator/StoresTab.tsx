@@ -12,7 +12,9 @@
 //     empty grid).
 //   - It OWNS the AddStoreWizard open/close state:
 //       · "+ הוסף חנות" → wizard in ADD mode (no editStoreId).
-//       · StoreList.onEdit(storeId) → wizard in EDIT mode (editStoreId set).
+//       · StoreList.onManage(storeId, focus) → wizard in EDIT mode (editStoreId
+//         set + focusPlatform = the matrix cell the operator clicked, so the
+//         wizard opens scrolled-to / pre-enabling that platform or the webhook).
 //       · the wizard's onDone → CLOSE the wizard AND re-fetch the list, so a
 //         newly-added/edited store appears immediately.
 //
@@ -31,18 +33,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
-import { StoreList, type StoreRowData } from '@/components/operator/StoreList';
+import { StoreList, type StoreRowData, type ManageFocus } from '@/components/operator/StoreList';
 import { AddStoreWizard } from '@/components/operator/AddStoreWizard';
 import { Button } from '@/components/ui/Button';
 import { Heading, Text } from '@/components/ui/Typography';
 
 // The wizard is either closed (null) or open in ADD ({mode:'add'}) or EDIT
-// ({mode:'edit', storeId}) mode. A discriminated union keeps the editStoreId
-// impossible to set in ADD mode.
+// ({mode:'edit', storeId, focus?}) mode. A discriminated union keeps the
+// editStoreId impossible to set in ADD mode. `focus` (optional) carries the
+// credential-matrix focus target through to the wizard's focusPlatform prop so
+// EDIT opens scrolled-to / pre-enabling that platform (D2/D3).
 type WizardState =
   | { mode: 'closed' }
   | { mode: 'add' }
-  | { mode: 'edit'; storeId: string };
+  | { mode: 'edit'; storeId: string; focus?: ManageFocus };
 
 export function StoresTab() {
   const [stores, setStores] = useState<StoreRowData[]>([]);
@@ -80,7 +84,11 @@ export function StoresTab() {
   }, [load]);
 
   const openAdd = useCallback(() => setWizard({ mode: 'add' }), []);
-  const openEdit = useCallback((storeId: string) => setWizard({ mode: 'edit', storeId }), []);
+  // Open EDIT focused on a specific platform / the webhook (credential matrix).
+  const openManage = useCallback(
+    (storeId: string, focus: ManageFocus) => setWizard({ mode: 'edit', storeId, focus }),
+    [],
+  );
 
   // ---------------------------------------------------------------------------
   // Wizard view — replaces the list while open (inline, no overlay).
@@ -94,6 +102,7 @@ export function StoresTab() {
         <AddStoreWizard
           onDone={handleDone}
           editStoreId={wizard.mode === 'edit' ? wizard.storeId : undefined}
+          focusPlatform={wizard.mode === 'edit' ? wizard.focus : undefined}
         />
       </div>
     );
@@ -128,7 +137,7 @@ export function StoresTab() {
           טוען חנויות…
         </Text>
       ) : error ? null : (
-        <StoreList stores={stores} onEdit={openEdit} />
+        <StoreList stores={stores} onManage={openManage} />
       )}
     </div>
   );

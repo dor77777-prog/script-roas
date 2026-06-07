@@ -352,10 +352,28 @@ export async function GET(): Promise<NextResponse> {
     const stores = await getStores({ includeArchived: true });
 
     // Group store_secrets by store_id WITHOUT decrypting — presence only.
-    const { data: secretRows, error } = await getSupabaseAdmin()
+    const admin = getSupabaseAdmin();
+    const { data: secretRows, error } = await admin
       .from('store_secrets')
       .select('store_id, secret_key');
     if (error) throw new Error(error.message);
+
+    // D0 — webhook signing-secret PRESENCE per store (powers hasWebhookSecret in
+    // the credential matrix). We select signing_secret ONLY to compute a boolean
+    // (set / not-set) — the raw value is NEVER returned to the client. A themed
+    // store with no signing_secret silently has no real-time sales feed, so the
+    // matrix surfaces it as ⚠ "missing" so the operator can paste it.
+    const { data: webhookRows, error: whErr } = await admin
+      .from('store_webhooks')
+      .select('store_id, signing_secret');
+    if (whErr) throw new Error(whErr.message);
+    const webhookSecretByStore = new Map<string, boolean>();
+    for (const w of (webhookRows ?? []) as Array<{ store_id: string; signing_secret: string | null }>) {
+      webhookSecretByStore.set(
+        w.store_id,
+        typeof w.signing_secret === 'string' && w.signing_secret.trim() !== '',
+      );
+    }
 
     // secret_key prefix → platform.
     const platformOf = (key: string): Platform | null => {
@@ -389,6 +407,9 @@ export async function GET(): Promise<NextResponse> {
         status: s.status,
         displayOrder: s.displayOrder,
         platforms: Array.from(set).sort(),
+        // D0 — PRESENCE boolean only (never the secret value). false when the
+        // store has no store_webhooks row OR an empty/null signing_secret.
+        hasWebhookSecret: webhookSecretByStore.get(s.storeId) ?? false,
       };
     });
 

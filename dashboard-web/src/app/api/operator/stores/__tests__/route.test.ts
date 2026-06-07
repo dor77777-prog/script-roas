@@ -20,6 +20,11 @@ const db = vi.hoisted(() => ({
   existingDisplayOrders: [] as number[],
   // store_secrets rows returned by the grouped GET select
   secretRows: [] as Array<{ store_id: string; secret_key: string }>,
+  // store_webhooks rows returned by the GET signing-secret-presence select
+  // (D0 hasWebhookSecret) — { store_id, signing_secret }. signing_secret is a
+  // PRESENCE proxy: the GET maps null/'' → false, any non-empty string → true.
+  // The actual value is NEVER returned (only the boolean).
+  webhookRows: [] as Array<{ store_id: string; signing_secret: string | null }>,
   // toggle: make a specific table's insert/upsert return an error (rollback path)
   throwOn: null as null | 'stores' | 'store_webhooks' | 'store_ad_state' | 'store_secrets',
   // optional Postgres-style error code attached to the throwOn error (e.g. '23505'
@@ -62,6 +67,12 @@ vi.mock('@/lib/supabaseAdmin', () => {
         // grouped secrets read for GET: .select('store_id, secret_key') -> awaited directly
         if (table === 'store_secrets') {
           return Promise.resolve({ data: db.secretRows, error: null });
+        }
+        // grouped webhook signing-secret presence read for GET (D0):
+        // .select('store_id, signing_secret') -> awaited directly. Never returns
+        // the secret VALUE to the client — the route maps presence → boolean.
+        if (table === 'store_webhooks' && cols.includes('signing_secret') && cols.includes('store_id')) {
+          return Promise.resolve({ data: db.webhookRows, error: null });
         }
         // stores .select('display_order') -> awaited directly (max calc)
         if (table === 'stores' && cols.includes('display_order') && !cols.includes('id')) {
@@ -152,6 +163,7 @@ beforeEach(() => {
   db.existingShopDomains = [];
   db.existingDisplayOrders = [1, 2, 3];
   db.secretRows = [];
+  db.webhookRows = [];
   db.throwOn = null;
   db.throwOnCode = null;
   db.decryptMismatchPlaintext = null;
@@ -477,6 +489,40 @@ describe('GET /api/operator/stores', () => {
     expect(text).not.toContain('ciphertext');
     expect(text).not.toContain('"iv"');
     expect(text).not.toContain('"tag"');
+  });
+
+  it('annotates each store with hasWebhookSecret (presence only — never the value) [D0]', async () => {
+    db.secretRows = [{ store_id: 'uzoshop', secret_key: 'SHOPIFY_DOMAIN' }];
+    db.webhookRows = [
+      { store_id: 'uzoshop', signing_secret: 'a-real-shop-level-signing-secret' },
+      { store_id: 'zolplus', signing_secret: null }, // themed store w/o a webhook secret
+    ];
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    const body = JSON.parse(text);
+    const uzo = body.stores.find((s: { storeId: string }) => s.storeId === 'uzoshop');
+    const zol = body.stores.find((s: { storeId: string }) => s.storeId === 'zolplus');
+    expect(uzo.hasWebhookSecret).toBe(true);
+    expect(zol.hasWebhookSecret).toBe(false);
+    // PRESENCE only — the raw signing_secret value must NEVER appear in the body.
+    expect(text).not.toContain('a-real-shop-level-signing-secret');
+    expect(text).not.toContain('signing_secret');
+  });
+
+  it('hasWebhookSecret is false for a store with an empty-string signing_secret [D0]', async () => {
+    db.webhookRows = [{ store_id: 'uzoshop', signing_secret: '' }];
+    const res = await GET();
+    const body = await res.json();
+    const uzo = body.stores.find((s: { storeId: string }) => s.storeId === 'uzoshop');
+    expect(uzo.hasWebhookSecret).toBe(false);
+  });
+
+  it('hasWebhookSecret defaults to false when a store has no store_webhooks row [D0]', async () => {
+    db.webhookRows = []; // no webhook rows at all
+    const res = await GET();
+    const body = await res.json();
+    for (const s of body.stores) expect(s.hasWebhookSecret).toBe(false);
   });
 
   it('includes tiktok in platforms purely from has_tiktok even with NO secrets at all (Fix B4)', async () => {
