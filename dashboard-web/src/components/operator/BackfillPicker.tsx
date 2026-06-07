@@ -45,7 +45,7 @@
 // per (date × store) pair × 21 days × 3 stores ≈ 380 execs (<1% of 50K
 // monthly cap). Phase 22 smoke covers the typical 1-7-day range.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CalendarDays, Loader2 } from 'lucide-react';
 import { useStores } from '@/lib/useStores';
 import { operatorFetch } from '@/lib/operatorClient';
@@ -96,6 +96,23 @@ export function BackfillPicker() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // FIX: When SWR resolves more stores than the fallback had at mount time
+  // (e.g. operator added a 4th store), union any NEW store ids into the
+  // checked set so they default to CHECKED. Existing membership (including
+  // any manual unchecks the user made) is left untouched.
+  useEffect(() => {
+    const currentIds = stores.map((s) => s.storeId);
+    setStoreIds((prev) => {
+      // Fast path: if every id is already in the set, nothing to do.
+      if (currentIds.every((id) => prev.has(id))) return prev;
+      const next = new Set(prev);
+      for (const id of currentIds) {
+        if (!next.has(id)) next.add(id);
+      }
+      return next;
+    });
+  }, [stores.map((s) => s.storeId).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async () => {
     setSubmitting(true);

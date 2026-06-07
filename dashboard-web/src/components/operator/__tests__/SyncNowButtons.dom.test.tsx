@@ -5,6 +5,7 @@
 //   1. With useStores() mocked to the 3 live stores, the same store buttons
 //      render as today (byte-identical labels).
 //   2. With a 4th store added, a 4th button appears.
+//   3. Per-store buttons are rendered in displayOrder (uzoshop → zolplus → usmile360).
 //
 // Pattern: mirror MetaBucPanel.dom.test.tsx — mock @/lib/useStores directly
 // (the hook), mock @/lib/operatorClient to avoid fetch side-effects.
@@ -86,5 +87,15 @@ describe('SyncNowButtons — useStores() integration (Phase 2 Task 3)', () => {
   it('does NOT render a button labeled "newshop" when only the original 3 are present', () => {
     render(<SyncNowButtons />);
     expect(screen.queryByText('New Shop')).toBeNull();
+  });
+
+  it('per-store buttons are rendered in displayOrder: uzoshop → zolplus → usmile360', () => {
+    render(<SyncNowButtons />);
+    const buttons = screen.getAllByRole('button');
+    // First button is the global "Sync all" button; per-store buttons follow.
+    const perStoreNames = buttons.slice(1).map((b) => b.textContent?.trim());
+    expect(perStoreNames[0]).toBe('uzoshop');
+    expect(perStoreNames[1]).toBe('Zol Plus');
+    expect(perStoreNames[2]).toBe('360usmile');
   });
 });

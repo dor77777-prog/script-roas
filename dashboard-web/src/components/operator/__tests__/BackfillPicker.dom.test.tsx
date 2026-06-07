@@ -5,11 +5,13 @@
 //   1. With useStores() mocked to the 3 live stores, the same checkboxes
 //      render as today (byte-identical labels).
 //   2. With a 4th store added, that store's checkbox appears.
+//   3. Checkboxes are rendered in displayOrder (uzoshop → zolplus → usmile360).
+//   4. A 4th store arriving after mount is CHECKED by default (union fix).
 //
 // Pattern: mirrors MetaBucPanel.dom.test.tsx + manualOverridesTikTokOption.dom.test.tsx
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, act } from '@testing-library/react';
 import type { StoreInfo } from '@/lib/getStores';
 
 // ---------------------------------------------------------------------------
@@ -75,9 +77,8 @@ describe('BackfillPicker — useStores() integration (Phase 2 Task 3)', () => {
 
   it('renders a checkbox for a dynamically added 4th store', () => {
     mockStores = FOUR_STORES;
-    render(<BackfillPicker />);
-    expect(screen.getByText('New Shop')).toBeDefined();
     const { container } = render(<BackfillPicker />);
+    expect(screen.getByText('New Shop')).toBeDefined();
     const checkboxes = container.querySelectorAll('input[type="checkbox"]');
     expect(checkboxes.length).toBe(4);
   });
@@ -85,5 +86,36 @@ describe('BackfillPicker — useStores() integration (Phase 2 Task 3)', () => {
   it('does NOT render a "New Shop" checkbox when only the original 3 are present', () => {
     render(<BackfillPicker />);
     expect(screen.queryByText('New Shop')).toBeNull();
+  });
+
+  it('checkboxes are rendered in displayOrder: uzoshop → zolplus → usmile360', () => {
+    const { container } = render(<BackfillPicker />);
+    // Grab all checkbox labels in DOM order — each <label> wraps the <input> + <span>
+    const labels = Array.from(container.querySelectorAll('label')).filter(
+      (l) => l.querySelector('input[type="checkbox"]'),
+    );
+    const names = labels.map((l) => l.querySelector('span')?.textContent?.trim());
+    expect(names).toEqual(['uzoshop', 'Zol Plus', '360usmile']);
+  });
+
+  it('4th store arriving post-mount is CHECKED by default (union fix)', () => {
+    // Start with 3 stores, then simulate SWR resolving more stores.
+    mockStores = THREE_STORES;
+    const { rerender, container } = render(<BackfillPicker />);
+
+    // Now the hook "resolves" to 4 stores (simulates SWR updating after mount).
+    mockStores = FOUR_STORES;
+    act(() => {
+      rerender(<BackfillPicker />);
+    });
+
+    // The 4th store's checkbox must be CHECKED by default (union effect).
+    const checkboxes = Array.from(
+      container.querySelectorAll('input[type="checkbox"]'),
+    ) as HTMLInputElement[];
+    expect(checkboxes.length).toBe(4);
+    // Find the one for 'New Shop' — it's last in displayOrder.
+    const newShopCb = checkboxes[checkboxes.length - 1];
+    expect(newShopCb.checked).toBe(true);
   });
 });

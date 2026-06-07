@@ -6,6 +6,7 @@
 //      render as today (byte-identical values/labels).
 //   2. With a 4th store added, a 4th <option> appears.
 //   3. Default selected store is stores[0].storeId = 'uzoshop'.
+//   4. Store <option>s are rendered in displayOrder (uzoshop → zolplus → usmile360).
 //
 // Pattern: mirrors manualOverridesTikTokOption.dom.test.tsx — mock swr +
 // @/lib/operatorClient + @/lib/useStores.
@@ -116,5 +117,15 @@ describe('ManualOverridesCrud — useStores() integration (Phase 2 Task 3)', () 
     expect(values).toContain('meta');
     expect(values).toContain('google');
     expect(values).toContain('tiktok');
+  });
+
+  it('store <option>s are rendered in displayOrder: uzoshop → zolplus → usmile360', () => {
+    const { container } = render(<ManualOverridesCrud />);
+    // The store NativeSelect is the first <select> element in the form.
+    const storeSelect = container.querySelectorAll('select')[0];
+    const storeOptionValues = Array.from(storeSelect.querySelectorAll('option')).map(
+      (o) => o.getAttribute('value'),
+    );
+    expect(storeOptionValues).toEqual(['uzoshop', 'zolplus', 'usmile360']);
   });
 });
