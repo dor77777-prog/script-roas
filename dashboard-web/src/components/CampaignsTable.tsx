@@ -81,6 +81,7 @@ import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
 import { isReconciliationCoherent } from '@/lib/reconciliationCoherence';
 import { roasLabel } from '@/lib/analytics';
 import { useCampaignTrueRevenue } from '@/lib/hooks/useCampaignTrueRevenue';
+import { useStores } from '@/lib/useStores';
 import { CampaignsTableRow } from './CampaignsTableRow';
 import { Button } from '@/components/ui/Button';
 import { HelpTooltip } from '@/components/ui/Tooltip';
@@ -301,6 +302,12 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
   // the name `localRange` so the ~40 downstream references (SWR keys, attribution
   // math, CPM comparison) read unchanged; it is now simply an alias of `range`.
   const localRange = range;
+
+  // Self-serve stores Phase 2 — the store display-name map (read by
+  // effectiveStoreByRowKey below to override a remapped TikTok row's storeName)
+  // is now sourced from the DB-backed store list. Falls back to the hardcoded 3
+  // so first paint + any fetch failure stays byte-identical to today.
+  const { stores: storeList } = useStores();
 
   const { data, error, isLoading } = useSWR<CampaignsResponse>(
     buildDateRangeKey('/api/campaigns', localRange),
@@ -847,11 +854,18 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
   }, [aggregated, showOnlyMultiMapped, multiMappedCampaignKeys]);
 
   // Phase A.5 v2 post-deploy fix (2026-05-29) — display name lookup used by
-  // effectiveStoreByRowKey below.  Stable object reference (no deps).
-  const STORE_DISPLAY_NAMES_MAP: Record<string, string> = useMemo(
-    () => ({ uzoshop: 'uzoshop', zolplus: 'Zol Plus', usmile360: '360usmile' }),
-    [],
-  );
+  // effectiveStoreByRowKey below. Self-serve stores Phase 2 (2026-06-06) —
+  // built from the DB-backed store list so a newly-added store resolves to its
+  // real display name; the hardcoded 3 are retained as fallback so first paint
+  // / fetch-failure stays byte-identical to today.
+  const STORE_DISPLAY_NAMES_MAP: Record<string, string> = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const s of storeList) m[s.storeId] = s.storeName;
+    if (!m.uzoshop) m.uzoshop = 'uzoshop';
+    if (!m.zolplus) m.zolplus = 'Zol Plus';
+    if (!m.usmile360) m.usmile360 = '360usmile';
+    return m;
+  }, [storeList]);
 
   // Phase A.5 v2 post-deploy fix (2026-05-29) — for TikTok rows that the
   // operator has tagged to a different store via the campaign-store-map drawer,

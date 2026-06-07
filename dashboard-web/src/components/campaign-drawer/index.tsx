@@ -92,6 +92,7 @@ import {
   type ProductMap,
 } from '@/lib/campaignProductMap';
 import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
+import { useStores } from '@/lib/useStores';
 import type { CampaignHealth } from '@/lib/campaignHealthScore';
 
 import { CampaignDrawerOverview } from './CampaignDrawerOverview';
@@ -116,7 +117,10 @@ type Props = {
 
 type SubTab = 'overview' | 'daily' | 'adsets' | 'ads' | 'status' | 'history';
 
-const STORE_DISPLAY_NAMES_CONST: Record<string, string> = {
+// Self-serve stores Phase 2 — fallback only. The live label map + the dropdown
+// option list are sourced from useStores() inside the component; this hardcoded
+// 3-store map preserves byte-identical labels on first paint / fetch failure.
+const STORE_DISPLAY_NAMES_FALLBACK: Record<string, string> = {
   uzoshop: 'uzoshop',
   zolplus: 'Zol Plus',
   usmile360: '360usmile',
@@ -159,6 +163,19 @@ export function CampaignDrawer({
   const [storeMap, setStoreMap] = useState<CampaignStoreMap>(() => ({}));
   // Optimization marks — shared with CampaignsTable.
   const [optimized, setOptimized] = useState<Set<string>>(() => new Set());
+
+  // Self-serve stores Phase 2 — the TikTok store-remap dropdown + the
+  // effective-store label both source the store list from the DB-backed
+  // useStores() hook. Falls back to the hardcoded 3 so first paint / fetch
+  // failure is byte-identical to today.
+  const { stores: storeList } = useStores();
+  // storeId → display-name map derived from the live list (used by the
+  // effective-store name lookup; the option list maps over storeList directly).
+  const storeNameById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const s of storeList) m[s.storeId] = s.storeName;
+    return m;
+  }, [storeList]);
 
   function handleSort(key: AdSetSortKey) {
     if (key === sortKey) {
@@ -348,8 +365,13 @@ export function CampaignDrawer({
   }, [summary?.platform, storeMap, adAccounts, storeId, campaignId]);
 
   const effectiveStoreName = useMemo(() => {
-    return STORE_DISPLAY_NAMES_CONST[effectiveStoreId] ?? summary?.storeName ?? effectiveStoreId;
-  }, [effectiveStoreId, summary?.storeName]);
+    return (
+      storeNameById[effectiveStoreId] ??
+      STORE_DISPLAY_NAMES_FALLBACK[effectiveStoreId] ??
+      summary?.storeName ??
+      effectiveStoreId
+    );
+  }, [effectiveStoreId, storeNameById, summary?.storeName]);
 
   // ---- Stable references for downstream memos -------------------------
   const mappedIds = useMemo(
@@ -730,9 +752,9 @@ export function CampaignDrawer({
               className="text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="__unmapped__">(לא ממופה · ברירת מחדל uzoshop)</option>
-              <option value="uzoshop">uzoshop</option>
-              <option value="zolplus">Zol Plus</option>
-              <option value="usmile360">360usmile</option>
+              {storeList.map((s) => (
+                <option key={s.storeId} value={s.storeId}>{s.storeName}</option>
+              ))}
             </NativeSelect>
             {!isUnmapped && currentValue !== storeId && (
               <p className="text-[11px] text-status-orangeFg mt-2 inline-flex items-start gap-1">
