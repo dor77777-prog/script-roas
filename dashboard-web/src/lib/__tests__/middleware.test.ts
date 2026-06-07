@@ -16,12 +16,14 @@ import { describe, it, expect, vi } from 'vitest';
 // the full Next.js route machinery.
 // ---------------------------------------------------------------------------
 
+import { afterEach } from 'vitest';
 import {
   shouldEnforceSecret,
   isOperatorApiPath,
   constantTimeEqual,
   checkOperatorSecret,
   isDashboardAuthAllowlisted,
+  shouldEnforceDashboardAuth,
 } from '../middlewareHelpers';
 
 describe('isOperatorApiPath', () => {
@@ -75,6 +77,8 @@ describe('constantTimeEqual', () => {
 });
 
 describe('shouldEnforceSecret', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   it('returns false when OPERATOR_SECRET env is not set', () => {
     expect(shouldEnforceSecret(undefined)).toBe(false);
     expect(shouldEnforceSecret('')).toBe(false);
@@ -83,6 +87,62 @@ describe('shouldEnforceSecret', () => {
   it('returns true when OPERATOR_SECRET env is truthy', () => {
     expect(shouldEnforceSecret('my-secret')).toBe(true);
     expect(shouldEnforceSecret('x')).toBe(true);
+  });
+
+  // Phase 5c — fail-CLOSED in production. On VERCEL_ENV=production the gate is
+  // force-enforced even if the env var is unset (a missing secret must lock the
+  // route, never silently degrade to pass-through).
+  it('returns TRUE in production even when the secret is unset (fail-closed)', () => {
+    vi.stubEnv('VERCEL_ENV', 'production');
+    expect(shouldEnforceSecret(undefined)).toBe(true);
+    expect(shouldEnforceSecret('')).toBe(true);
+  });
+
+  it('stays config-driven when VERCEL_ENV is preview (true only if set)', () => {
+    vi.stubEnv('VERCEL_ENV', 'preview');
+    expect(shouldEnforceSecret(undefined)).toBe(false);
+    expect(shouldEnforceSecret('')).toBe(false);
+    expect(shouldEnforceSecret('my-secret')).toBe(true);
+  });
+
+  it('stays config-driven when VERCEL_ENV is unset (true only if set)', () => {
+    vi.stubEnv('VERCEL_ENV', '');
+    expect(shouldEnforceSecret(undefined)).toBe(false);
+    expect(shouldEnforceSecret('my-secret')).toBe(true);
+  });
+});
+
+describe('shouldEnforceDashboardAuth', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('returns false when either env var is unset (dev pass-through)', () => {
+    expect(shouldEnforceDashboardAuth(undefined, undefined)).toBe(false);
+    expect(shouldEnforceDashboardAuth('pw', undefined)).toBe(false);
+    expect(shouldEnforceDashboardAuth(undefined, 'sig')).toBe(false);
+    expect(shouldEnforceDashboardAuth('', '')).toBe(false);
+  });
+
+  it('returns true when BOTH env vars are set', () => {
+    expect(shouldEnforceDashboardAuth('pw', 'sig')).toBe(true);
+  });
+
+  // Phase 5c — fail-CLOSED in production.
+  it('returns TRUE in production even when both are unset (fail-closed)', () => {
+    vi.stubEnv('VERCEL_ENV', 'production');
+    expect(shouldEnforceDashboardAuth(undefined, undefined)).toBe(true);
+    expect(shouldEnforceDashboardAuth('', '')).toBe(true);
+  });
+
+  it('stays config-driven when VERCEL_ENV is preview (true only if both set)', () => {
+    vi.stubEnv('VERCEL_ENV', 'preview');
+    expect(shouldEnforceDashboardAuth(undefined, undefined)).toBe(false);
+    expect(shouldEnforceDashboardAuth('pw', 'sig')).toBe(true);
+  });
+
+  it('stays config-driven when VERCEL_ENV is unset (true only if both set)', () => {
+    vi.stubEnv('VERCEL_ENV', '');
+    expect(shouldEnforceDashboardAuth(undefined, undefined)).toBe(false);
+    expect(shouldEnforceDashboardAuth('pw', 'sig')).toBe(true);
   });
 });
 

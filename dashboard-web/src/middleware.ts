@@ -38,6 +38,22 @@ import { verifyAuthToken, COOKIE_NAME } from '@/lib/auth/dashboardAuth';
 
 const NOINDEX = 'noindex, nofollow';
 
+// Phase 5c — fail-CLOSED boot guard (mirrors the Inngest route's
+// INNGEST_SIGNING_KEY assert in src/app/api/inngest/route.ts). On Vercel
+// production, a MISSING auth env var must fail the deploy LOUDLY at module load
+// rather than silently degrade either gate to pass-through. All three vars ARE
+// set in prod today, so this is a no-op safety net; it only throws if a future
+// deploy drops one. VERCEL_ENV (NOT NODE_ENV) — NODE_ENV is 'production' in
+// Vercel preview too, where the gate is intentionally allowed to be off.
+if (process.env.VERCEL_ENV === 'production') {
+  if (!process.env.DASHBOARD_PASSWORD || !process.env.AUTH_SIGNING_SECRET) {
+    throw new Error('DASHBOARD_PASSWORD + AUTH_SIGNING_SECRET are required in production (VERCEL_ENV=production).');
+  }
+  if (!process.env.OPERATOR_SECRET) {
+    throw new Error('OPERATOR_SECRET is required in production (VERCEL_ENV=production).');
+  }
+}
+
 function withNoindex(response: NextResponse): NextResponse {
   response.headers.set('X-Robots-Tag', NOINDEX);
   return response;

@@ -30,11 +30,27 @@ export function isOperatorApiPath(pathname: string): boolean {
 }
 
 /**
- * Returns true if the OPERATOR_SECRET env var is set to a non-empty string,
- * meaning the secret gate should be enforced.
+ * Returns true if the OPERATOR_SECRET gate should be enforced.
+ *
+ * Fail-CLOSED in production (self-serve stores Phase 5c): when
+ * VERCEL_ENV='production' the gate is ALWAYS enforced — a missing
+ * OPERATOR_SECRET in prod must lock the route, never silently degrade to
+ * pass-through. (The middleware boot-guard additionally throws at module load
+ * so the deploy fails loudly rather than running with the var unset; this is
+ * the second line of defence in case that guard is ever bypassed.)
+ *
+ * Outside production (preview / dev / test) the gate stays config-driven:
+ * enforced only when the env var is a non-empty string, so a developer without
+ * a populated .env.local is never locked out.
+ *
+ * Uses VERCEL_ENV (NOT NODE_ENV) — NODE_ENV is 'production' in Vercel preview
+ * too, which would wrongly fail-close previews. Mirrors the Inngest route.
  */
 export function shouldEnforceSecret(envSecret: string | undefined): boolean {
-  return typeof envSecret === 'string' && envSecret.length > 0;
+  return (
+    process.env.VERCEL_ENV === 'production' ||
+    (typeof envSecret === 'string' && envSecret.length > 0)
+  );
 }
 
 /**
@@ -99,20 +115,30 @@ export function isDashboardAuthAllowlisted(pathname: string): boolean {
 }
 
 /**
- * Returns true iff BOTH password-gate env vars are configured, meaning the
- * dashboard-auth gate should be enforced. Mirrors `shouldEnforceSecret` — when
- * either env var is unset the gate degrades to INACTIVE (dev safety), so a
- * developer without a populated .env.local is never locked out.
+ * Returns true iff the dashboard-auth gate should be enforced.
+ *
+ * Fail-CLOSED in production (self-serve stores Phase 5c): when
+ * VERCEL_ENV='production' the gate is ALWAYS enforced even if either env var is
+ * unset — a missing DASHBOARD_PASSWORD / AUTH_SIGNING_SECRET in prod must lock
+ * the dashboard, never silently degrade to pass-through. (The middleware
+ * boot-guard additionally throws at module load so the deploy fails loudly.)
+ *
+ * Outside production (preview / dev / test) the gate stays config-driven:
+ * enforced only when BOTH env vars are non-empty, so a developer without a
+ * populated .env.local is never locked out. Mirrors `shouldEnforceSecret`.
+ *
+ * Uses VERCEL_ENV (NOT NODE_ENV) for the same reason as shouldEnforceSecret.
  */
 export function shouldEnforceDashboardAuth(
   dashboardPassword: string | undefined,
   signingSecret: string | undefined,
 ): boolean {
   return (
-    typeof dashboardPassword === 'string' &&
-    dashboardPassword.length > 0 &&
-    typeof signingSecret === 'string' &&
-    signingSecret.length > 0
+    process.env.VERCEL_ENV === 'production' ||
+    (typeof dashboardPassword === 'string' &&
+      dashboardPassword.length > 0 &&
+      typeof signingSecret === 'string' &&
+      signingSecret.length > 0)
   );
 }
 
