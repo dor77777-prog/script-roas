@@ -89,6 +89,13 @@
  */
 
 import { inngest } from '@/inngest/client';
+// Self-serve stores Phase 4b (Task 8) — scheduler→worker fold imports.
+// loadActiveStoreIds enumerates active stores at runtime; planStoreJobs builds
+// one event per store; tickIdForNow supplies the 10-min-bucket id discriminator
+// so repeated live runs get collision-free event ids (live carries no date).
+import { loadActiveStoreIds } from '@/lib/getStores';
+import { planStoreJobs } from '@/lib/inngest/planStoreJobs';
+import { tickIdForNow } from '@/lib/registries/snapshots';
 import {
   fetchShopifyDayRows,
   fetchShopifyOrdersAttribution,
@@ -837,3 +844,82 @@ function makeCronLive(storeId: StoreId) {
  *   serve({ client: inngest, functions: [...cronLiveFunctions, ...] });
  */
 export const cronLiveFunctions = STORES.map(makeCronLive);
+
+// ===========================================================================
+// Self-serve stores Phase 4b (Task 8) — scheduler→worker FOLD.
+//
+// The per-store factory above (`makeCronLive` + `cronLiveFunctions`) is KEPT on
+// disk as a revert lever. The pair below replaces it once T9 registers them in
+// serve(); until then these functions are INERT.
+//
+// Shape: ONE static-trigger scheduler (keeps the factory's EXACT */10 cron)
+// loads the active store list at runtime and emits one
+// `cron/live.store.requested` event per store; ONE event-driven worker
+// (concurrency-keyed by store) calls the unchanged `runLiveForStore` handler.
+//
+// Live carries NO date (runLiveForStore's rolling window is internal). The
+// scheduler passes `tickId: tickIdForNow(Date.now())` to planStoreJobs purely
+// as an id discriminator so the every-10-min cadence produces collision-free
+// event ids (the id encodes the 10-min bucket, so a retry inside the same
+// bucket dedupes while consecutive ticks do not).
+//
+// NOTE: `step.sendEvent` is at the OUTER function level, NEVER inside step.run.
+// ===========================================================================
+
+export const cronLiveScheduler = inngest.createFunction(
+  {
+    id: 'cron-live-scheduler',
+    // Identical trigger to the factory's `cron-live-{store}` functions.
+    triggers: [{ cron: 'TZ=Asia/Jerusalem */10 * * * *' }],
+  },
+  async ({ step }) => {
+    const jobs = await step.run('load-stores', async () => {
+      const stores = await loadActiveStoreIds();
+      // tickId read inside step.run is fine — it's an id discriminator, and the
+      // step result is memoized, so a retry reuses the SAME tickId (and thus
+      // the same event ids) → dedup-safe.
+      return planStoreJobs(stores, { family: 'live', tickId: tickIdForNow(Date.now()) });
+    });
+    if (jobs.length > 0) {
+      await step.sendEvent(
+        'fan-out-live',
+        jobs.map((j) => ({ name: j.eventName, id: j.id, data: j.data })),
+      );
+    }
+    return { enqueued: jobs.length };
+  },
+);
+
+/**
+ * Pure worker core — exported so vitest can assert the worker threads
+ * `event.data.storeId` into the handler without the co-located mock-resolution
+ * problem (a `vi.mock` of this module does NOT intercept the binding's in-module
+ * call to `runLiveForStore`). The Inngest binding passes the real
+ * `runLiveForStore`; tests pass a `vi.fn()`. `runLiveForStore` itself is
+ * UNCHANGED. Live carries NO date (its rolling window is internal).
+ */
+export async function runCronLiveWorker(
+  event: { data: { storeId: string } },
+  step: StepRunner,
+  handler: typeof runLiveForStore = runLiveForStore,
+): ReturnType<typeof runLiveForStore> {
+  // Untyped event payload (no EventSchemas on the client) — cast at the boundary.
+  return handler(event.data.storeId as StoreId, { step });
+}
+
+export const cronLiveWorker = inngest.createFunction(
+  {
+    id: 'cron-live-worker',
+    triggers: [{ event: 'cron/live.store.requested' }],
+    // Concurrency key matches the planStoreJobs payload field (`data.storeId`).
+    concurrency: [{ key: 'event.data.storeId', limit: 1 }],
+    retries: 1,
+  },
+  // The `step` cast narrows Inngest's full API to the `StepRunner` subset
+  // runLiveForStore consumes.
+  async ({ event, step }) =>
+    runCronLiveWorker(
+      event as unknown as { data: { storeId: string } },
+      step as unknown as StepRunner,
+    ),
+);
