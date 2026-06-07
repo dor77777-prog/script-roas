@@ -50,11 +50,9 @@ import { inngest } from '@/inngest/client';
 import { userFacingError } from '@/lib/apiErrors';
 import { isDate } from '@/lib/dateValidation';
 import { captureRouteError } from '@/lib/sentry/capture';
+import { loadActiveStoreIds } from '@/lib/getStores';
 
 export const dynamic = 'force-dynamic';
-
-const ALL_STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
-const VALID_STORES = new Set<string>(ALL_STORES);
 
 // D-A3 history boundary. Phase 05.5-20 seeded Supabase rows starting at
 // 2026-05-01; backfill requests for older dates would hit upstream APIs
@@ -114,14 +112,18 @@ export async function POST(req: Request) {
 
     // Store list — non-empty and every element in allowlist.
     // T-05.6-14-T3 (Tampering) mitigation.
+    // Phase 2 (self-serve stores): resolve the active store list from DB
+    // (falls back to hardcoded 3 on DB error — zero regression guarantee).
     if (!Array.isArray(body.storeIds) || body.storeIds.length === 0) {
       return NextResponse.json(
         { error: 'storeIds must be a non-empty array' },
         { status: 400 },
       );
     }
+    const activeStoreIds = await loadActiveStoreIds();
+    const valid = new Set(activeStoreIds);
     const invalid = body.storeIds.find(
-      (s) => typeof s !== 'string' || !VALID_STORES.has(s),
+      (s) => typeof s !== 'string' || !valid.has(s),
     );
     if (invalid !== undefined) {
       return NextResponse.json(

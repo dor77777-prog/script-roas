@@ -45,19 +45,13 @@ import { NextResponse } from 'next/server';
 import { inngest } from '@/inngest/client';
 import { userFacingError } from '@/lib/apiErrors';
 import { captureRouteError } from '@/lib/sentry/capture';
+import { loadActiveStoreIds } from '@/lib/getStores';
 
 export const dynamic = 'force-dynamic';
 
 type Payload =
   | { scope: 'all' }
-  | { scope: 'store'; storeId: 'uzoshop' | 'zolplus' | 'usmile360' };
-
-// Source of truth for the storeId enum. Must match the eventSyncNow
-// handler's StoreId union (cronDaily.ts) and the eventBackfill payload
-// type. Keeping the literal here (rather than importing from cronDaily)
-// avoids dragging the Inngest function module into the route's bundle.
-const ALL_STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
-const VALID_STORES = new Set<string>(ALL_STORES);
+  | { scope: 'store'; storeId: string };
 
 // Phase E1.5 (2026-05-30) — 3-day rolling window for "Refresh All".
 // A manual click now refreshes today + yesterday + day-before so the
@@ -79,26 +73,31 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Payload;
 
+    // Phase 2 (self-serve stores): resolve the active store list from DB
+    // (falls back to hardcoded 3 on DB error — zero regression guarantee).
+    const activeStoreIds = await loadActiveStoreIds();
+    const valid = new Set(activeStoreIds);
+
     let events: Array<{ name: 'event/sync-now'; data: { storeId: string; dates?: string[] } }>;
     if (body.scope === 'all') {
       // Phase E1.5 — pass a 3-day window so the eventSyncNow handler
       // loops runDailyForStore for [today, yesterday, day-before].
       const dates = rolling3DaysJerusalem();
-      events = ALL_STORES.map((s) => ({
+      events = activeStoreIds.map((s) => ({
         name: 'event/sync-now',
         data: { storeId: s, dates },
       }));
     } else if (
       body.scope === 'store' &&
       typeof body.storeId === 'string' &&
-      VALID_STORES.has(body.storeId)
+      valid.has(body.storeId)
     ) {
       events = [{ name: 'event/sync-now', data: { storeId: body.storeId } }];
     } else {
       return NextResponse.json(
         {
           error:
-            "Invalid payload: scope must be 'all' or 'store' with valid storeId (uzoshop | zolplus | usmile360)",
+            "Invalid payload: scope must be 'all' or 'store' with valid storeId",
         },
         { status: 400 },
       );
