@@ -26,3 +26,33 @@ export function decryptSecret(ciphertext: string, iv: string, tag: string): stri
   decipher.setAuthTag(Buffer.from(tag, 'base64'));
   return Buffer.concat([decipher.update(Buffer.from(ciphertext, 'base64')), decipher.final()]).toString('utf8');
 }
+
+// ---------------------------------------------------------------------------
+// Forward guards for Phase 6 admin routes (self-serve stores Phase 5c).
+// ---------------------------------------------------------------------------
+
+/**
+ * Mask a secret for SAFE display/logging. Shows only the last 4 characters,
+ * everything else is replaced by a fixed dot run — the full value is NEVER
+ * returned. For values of length ≤ 4 (too short to reveal a suffix without
+ * exposing most of the secret) the entire value is masked.
+ *
+ *   maskSecret('shpat_abcd1234') === '••••1234'
+ *   maskSecret('abc')            === '••••'
+ *
+ * Use this anywhere a secret-shaped value would otherwise be echoed to a
+ * client, a log line, or an operator UI. There is no inverse.
+ */
+export function maskSecret(value: string): string {
+  return value.length > 4 ? '••••' + value.slice(-4) : '••••';
+}
+
+/**
+ * The ONLY store-secret value(s) intentionally returned to the client today.
+ * `TIKTOK_ADVERTISER_ID` is a semi-public advertiser id (it appears in TikTok
+ * ad URLs and the CampaignDrawer's store-mapping localStorage key), not a
+ * credential. Phase 6 admin routes that surface store secrets should consult
+ * this allowlist: a key NOT in here must be masked via maskSecret() before it
+ * ever crosses the network boundary.
+ */
+export const CLIENT_SAFE_SECRET_KEYS = ['TIKTOK_ADVERTISER_ID'] as const;
