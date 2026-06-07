@@ -1,21 +1,26 @@
 /**
- * Server-only Supabase client. Uses the anon key — Phase 05.5 only does
- * SELECT count(*) FROM stores (D-D2), which is allowed even with RLS off.
+ * Server-only Supabase client for server-side READS.
  *
- * Why anon and not service_role:
- *  - Lower blast-radius if the key ever leaks (anon can SELECT/INSERT/UPDATE/
- *    DELETE but is rate-limited by Supabase; service_role bypasses RLS entirely)
- *  - D-D2 locks the ping as `SELECT count(*) FROM stores` — read-only — so anon
- *    is sufficient
- *  - Phase 05.6 will introduce a SECOND client using service_role for the
- *    Inngest writer; that's the right place to add the elevated client
+ * Phase 5a: getSupabase() now returns a SERVICE-ROLE client so server-side
+ * reads bypass RLS (enabled in Phase 5b). Server-only — never imported by a
+ * client component (the key is non-NEXT_PUBLIC, so it cannot run client-side).
+ * The legacy anon key is unused by reads from here; full env cleanup is Phase 7.
+ *
+ * Why the cutover:
+ *  - Phase 5b will enable RLS on the read tables + revoke `anon` SELECT. Any
+ *    read still going through the anon key would then return 0 rows. Routing
+ *    every server-side read through service_role (which BYPASSES RLS) makes the
+ *    RLS lockdown safe. ZERO behavior change until 5b lands (both keys read the
+ *    same rows while grants/RLS are unchanged).
+ *  - All ~24 callers are reads (SELECT / maybeSingle / rpc-read); zero writes.
+ *    Writers already use getSupabaseAdmin() directly.
+ *
+ * SECURITY: this MUST NEVER be reachable client-side. There is no
+ * NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY and there never should be.
  *
  * Note on env-var names:
- *  - `SUPABASE_URL` and `SUPABASE_ANON_KEY` (server-side only — no NEXT_PUBLIC_
- *    prefix) are sufficient for Phase 05.5. If we later need browser-side
- *    queries (e.g., realtime), promote them to `NEXT_PUBLIC_SUPABASE_URL` and
- *    `NEXT_PUBLIC_SUPABASE_ANON_KEY` — but defer that to 05.6 when the read-
- *    path actually flips to Postgres.
+ *  - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (server-side only — no
+ *    NEXT_PUBLIC_ prefix).
  *
  * Pattern: lazy factory (NOT module-load throw). Mirrors sheets.ts:getAuth —
  * the throw happens inside the function so a missing env var manifests as a
@@ -31,10 +36,10 @@ export function getSupabase(): SupabaseClient {
   if (cached) return cached;
 
   const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !key) {
-    throw new Error('SUPABASE_URL or SUPABASE_ANON_KEY missing — check Vercel env vars');
+    throw new Error('SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing — check Vercel env vars');
   }
 
   cached = createClient(url, key, {

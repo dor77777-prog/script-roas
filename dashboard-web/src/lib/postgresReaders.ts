@@ -20,8 +20,10 @@
  *   9. upsertDashboardStateKeyPostgres — sheets.ts:upsertDashboardStateKey (WRITE, Phase 05.7)
  *
  * Notes:
- *   - All reads use getSupabase() (anon role). Phase 05.5-03 grants SELECT
- *     on every relevant table to anon — see migration 20260521075741.
+ *   - All reads use getSupabase(). Phase 5a repointed getSupabase() to the
+ *     SERVICE-ROLE client (bypasses RLS) ahead of the Phase 5b RLS lockdown +
+ *     anon-SELECT revoke; before that, Phase 05.5-03 granted SELECT to anon
+ *     (migration 20260521075741).
  *   - DB `platform` column is constrained to lowercase 'meta'|'google'
  *     (migration 20260521075741 CHECK constraint). The sheets.ts CampaignRow
  *     / AdRow shape uses 'Meta'|'Google' (capitalized). Each reader
