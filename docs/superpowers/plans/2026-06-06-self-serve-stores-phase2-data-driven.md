@@ -27,8 +27,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const db = vi.hoisted(() => ({ data: null as null | unknown[], error: null as null | { message: string } }));
 vi.mock('@/lib/supabase', () => ({ getSupabase: () => ({ from: () => ({ select: () => Promise.resolve({ data: db.data, error: db.error }) }) }) }));
 import { getStores } from '@/lib/getStores';
-import { STORE_ID_TO_NAME, STORES_WITH_TIKTOK_IDS } from '@/lib/platformsByStore';
+import { STORE_ID_TO_NAME } from '@/lib/platformsByStore';
 import { STORE_COLORS } from '@/lib/storeColors';
+import { TIKTOK_SHARED_STORES } from '@/lib/adState';
+// NOTE: hasTikTok = "advertises on TikTok incl. via the shared account"
+// (= TIKTOK_SHARED_STORES = ['uzoshop','usmile360']), which is DIFFERENT from
+// STORES_WITH_TIKTOK_IDS (uzoshop-only = "has its OWN TikTok cron fetch").
+// Anchor compares against the former; Phases 3/4 must NOT derive the own-fetch
+// set from has_tiktok.
 
 // The DB rows as seeded + backfilled by Phase 1 (migration 20260606170000).
 const SEEDED = [
@@ -45,8 +51,9 @@ describe('getStores — zero-regression equality anchor (DB == hardcoded for the
   it('brandColor matches STORE_COLORS (keyed by display name) for each of the 3', async () => {
     for (const s of await getStores()) expect(s.brandColor).toBe(STORE_COLORS[s.storeName]);
   });
-  it('hasTikTok matches STORES_WITH_TIKTOK_IDS for each of the 3', async () => {
-    for (const s of await getStores()) expect(s.hasTikTok).toBe(STORES_WITH_TIKTOK_IDS.has(s.storeId));
+  it('hasTikTok matches TIKTOK_SHARED_STORES (advertises-on-TikTok set) for each of the 3', async () => {
+    const shared = new Set<string>(TIKTOK_SHARED_STORES);
+    for (const s of await getStores()) expect(s.hasTikTok).toBe(shared.has(s.storeId));
   });
 });
 ```
