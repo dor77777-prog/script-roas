@@ -66,15 +66,19 @@
 // Function registration
 // =============================================================================
 //
-// 8 functions total, registered via the `functions` array:
+// Registered via the `functions` array. Self-serve stores Phase 4b (Task 9)
+// replaced the per-store factory crons with scheduler+worker pairs:
 //
-//   ...cronDailyFunctions   — 3 functions (one per store: uzoshop / zolplus
-//                              / usmile360). Cron: TZ=Asia/Jerusalem 5 0 * * *
-//                              = 00:05 Israel local time daily. Plan 08.
+//   cronDailyScheduler /    — scheduler keeps cron TZ=Asia/Jerusalem 5 0 * * *
+//   cronDailyWorker            (00:05 IL daily), loads the active store list at
+//                              runtime + fans out one cron/daily.store.requested
+//                              event per store; the event-driven worker runs
+//                              runDailyForStore (concurrency-keyed by store).
+//                              Replaces the old per-store cron-daily-{store}.
 //
-//   ...cronLiveFunctions    — 3 functions (one per store). Cron:
-//                              TZ=Asia/Jerusalem star-slash-15 * * * *
-//                              = every 15 minutes. Plan 09.
+//   cronLiveScheduler /     — scheduler keeps the every-15-min cron + fans out
+//   cronLiveWorker             per store; worker runs runLiveForStore. Replaces
+//                              the old per-store cron-live-{store}.
 //
 //   eventSyncNow            — 1 function. Trigger: event/sync-now. Fired
 //                              by the operator console "Sync now" button.
@@ -95,10 +99,24 @@
 
 import { serve } from 'inngest/next';
 import { inngest } from '@/inngest/client';
-import { cronDailyFunctions } from '@/inngest/functions/cronDaily';
-import { cronLiveFunctions } from '@/inngest/functions/cronLive';
+// Self-serve stores Phase 4b (Task 9) — atomic serve() cutover.
+// The per-store factory exports (cronDailyFunctions / cronLiveFunctions /
+// cronYesterdayRefreshFunctions) are KEPT on disk as a revert lever but are
+// NO LONGER registered here; the scheduler+worker pairs below replace them.
+// Revert = re-add the `cron*Functions` import + spread (2 lines each).
+import {
+  cronDailyScheduler,
+  cronDailyWorker,
+} from '@/inngest/functions/cronDaily';
+import {
+  cronLiveScheduler,
+  cronLiveWorker,
+} from '@/inngest/functions/cronLive';
 import { cronLiveHeavyFunctions } from '@/inngest/functions/cronLiveHeavy';
-import { cronYesterdayRefreshFunctions } from '@/inngest/functions/cronYesterdayRefresh';
+import {
+  cronYesterdayRefreshScheduler,
+  cronYesterdayRefreshWorker,
+} from '@/inngest/functions/cronYesterdayRefresh';
 import { cronTickOrchestrator } from '@/inngest/functions/cronTickOrchestrator';
 import { metaWorker } from '@/inngest/functions/metaWorker';
 import { googleWorker } from '@/inngest/functions/googleWorker';
@@ -136,22 +154,33 @@ if (process.env.VERCEL_ENV === 'production' && !process.env.INNGEST_SIGNING_KEY)
   );
 }
 
+// Exported (named const) so the registered-set guard test can assert the
+// EXACT function set without coupling to Inngest's internal serve() shape.
+// serve() consumes the same array — single source of truth.
+export const inngestFunctions = [
+  // Phase 4b cutover (2026-06-07): factory crons → scheduler+worker pairs.
+  // Each scheduler keeps the factory's EXACT cron and loads the active store
+  // list at runtime, so a store added via the DB joins the cron with no deploy.
+  cronDailyScheduler, // replaces ...cronDailyFunctions (cron-daily-{store}); cron 'TZ=Asia/Jerusalem 5 0 * * *'
+  cronDailyWorker, // event-driven worker (cron/daily.store.requested), concurrency-keyed by store
+  cronLiveScheduler, // replaces ...cronLiveFunctions (cron-live-{store})
+  cronLiveWorker, // event-driven worker (cron/live.store.requested), concurrency-keyed by store
+  ...cronLiveHeavyFunctions, // Phase E1 (2026-05-30) — DISABLED (empty array). cron-tick-orchestrator + hot_metrics workers cover today; cron-yesterday-refresh covers yesterday.
+  cronYesterdayRefreshScheduler, // replaces ...cronYesterdayRefreshFunctions (cron-yesterday-refresh-{store}); Phase E1.5 2h cadence catching cross-day refunds + late attribution
+  cronYesterdayRefreshWorker, // event-driven worker (cron/yesterday-refresh.store.requested), concurrency-keyed by store
+  cronTickOrchestrator, // Phase B — 1 function (Inngest tick orchestrator: scheduler + worker fan-out)
+  metaWorker, // Phase B — 1 function (Meta-platform worker invoked by orchestrator); Phase C extended with 'hot_metrics' scope
+  googleWorker, // Phase C — 1 function (Google-platform worker invoked by orchestrator; handles status + hot_metrics scopes)
+  tiktokWorker, // Phase C — 1 function (TikTok-platform worker invoked by orchestrator; handles status + hot_metrics scopes)
+  eventSyncNow, // 1 function (operator "Sync now" button)
+  eventBackfill, // 1 function (operator backfill range picker)
+  cronOauthCanary, // 1 function (Phase 13.4/14 — Google + Meta + TikTok token canary, 00:00 IL daily)
+  ...whatsappCronFunctions, // 3 functions (12:00, 18:00, 00:10 IL)
+  eventWhatsappSendNow, // 1 function (operator "send WhatsApp now")
+  ...cronCohortRefreshFunctions, // Wave 2 (2026-06-03) — weekly cohort/LTV re-aggregate (Mon 04:00 IL, Shopify Bulk full replace)
+];
+
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [
-    ...cronDailyFunctions, // 3 functions (uzoshop / zolplus / usmile360)
-    ...cronLiveFunctions, // 3 functions (uzoshop / zolplus / usmile360)
-    ...cronLiveHeavyFunctions, // Phase E1 (2026-05-30) — DISABLED (empty array). cron-tick-orchestrator + hot_metrics workers cover today; cron-yesterday-refresh covers yesterday.
-    ...cronYesterdayRefreshFunctions, // Phase E1.5 (2026-05-30) — 3 functions (per-store, 2h cadence) running runDailyForStore for yesterday — catches cross-day refunds + late attribution that cron-daily wouldn't process until 00:05.
-    cronTickOrchestrator, // Phase B — 1 function (Inngest tick orchestrator: scheduler + worker fan-out)
-    metaWorker, // Phase B — 1 function (Meta-platform worker invoked by orchestrator); Phase C extended with 'hot_metrics' scope
-    googleWorker, // Phase C — 1 function (Google-platform worker invoked by orchestrator; handles status + hot_metrics scopes)
-    tiktokWorker, // Phase C — 1 function (TikTok-platform worker invoked by orchestrator; handles status + hot_metrics scopes)
-    eventSyncNow, // 1 function (operator "Sync now" button)
-    eventBackfill, // 1 function (operator backfill range picker)
-    cronOauthCanary, // 1 function (Phase 13.4/14 — Google + Meta + TikTok token canary, 00:00 IL daily)
-    ...whatsappCronFunctions, // 3 functions (12:00, 18:00, 00:10 IL)
-    eventWhatsappSendNow, // 1 function (operator "send WhatsApp now")
-    ...cronCohortRefreshFunctions, // Wave 2 (2026-06-03) — weekly cohort/LTV re-aggregate (Mon 04:00 IL, Shopify Bulk full replace)
-  ],
+  functions: inngestFunctions,
 });
