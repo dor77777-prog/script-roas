@@ -12,7 +12,14 @@ import { TIKTOK_SHARED_STORES, type AdPlatform, type AdStateMap } from '@/lib/ad
 // build the Set once rather than per render.
 const TIKTOK_STORES = new Set<string>(TIKTOK_SHARED_STORES);
 
-export function AdStateTab() {
+export function AdStateTab(props: {
+  // Optional: forwarded to the panel's unconnected cells. When wired, the
+  // "חבר" link switches the operator console to the "חנויות" credential-matrix
+  // tab. The platform is passed through for future deep-focus; today the parent
+  // simply switches tabs (see OperatorTabs).
+  onConnect?: (storeId: string, platform: AdPlatform) => void;
+} = {}) {
+  const { onConnect } = props;
   const [map, setMap] = useState<AdStateMap>({});
   const [meta, setMeta] = useState<StoreMetaRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +75,7 @@ export function AdStateTab() {
   return (
     <div className="space-y-3">
       {error && <p className="text-status-redFg text-sm">{error}</p>}
-      <AdStatePanel storeMeta={meta} map={map} tiktokStores={TIKTOK_STORES} onToggle={onToggle} />
+      <AdStatePanel storeMeta={meta} map={map} tiktokStores={TIKTOK_STORES} onToggle={onToggle} onConnect={onConnect} />
     </div>
   );
 }

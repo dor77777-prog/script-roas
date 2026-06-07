@@ -3,28 +3,27 @@
 // ניהול (Management) — operator console. Per D-D1, this is a sibling
 // Next.js route (NOT a TabKey in the main dashboard's in-page tab nav).
 //
-// Task 23 (UI/UX Design-System Overhaul): restructured from a single long
-// page into 4 Radix sub-tabs for better navigation:
+// Task 23 (UI/UX Design-System Overhaul): restructured into Radix sub-tabs.
+// Self-serve stores Phase 6a: the tab strip moved into the <OperatorTabs>
+// client component so the active tab is CONTROLLED — that lets the ad-state
+// "חבר" link switch the console to the "חנויות" credential-matrix tab. This
+// page stays a server component so `metadata` + `dynamic` keep working.
 //
-//   - סנכרון  (Sync)     — SyncNowButtons, BackfillPicker, ManualOverridesCrud
 //   - בריאות  (Health)   — TokenFailuresTable, TikTok disclaimer, MetaBucPanel, FreshnessPanel
+//   - סנכרון  (Sync)     — SyncNowButtons, BackfillPicker, ManualOverridesCrud
 //   - פעילות  (Activity) — StatusEventsFeed, CronTickSnapshotsViewer, JobsTable
 //   - מסוכן   (Danger)   — WhatsappTestButtons, ResetData
+//   - מצב פרסום (Ads)    — AdStatePanel
+//   - חנויות  (Stores)   — StoreList + AddStoreWizard (credential matrix)
 //
 // Design tokens (`max-w-7xl`, `text-ink-secondary`, etc.) follow S-8 (RTL +
 // Hebrew) and D-D4 (match existing dashboard styling — no new tokens).
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { OperatorSecretBanner } from '@/components/operator/OperatorSecretBanner';
 import { Heading } from '@/components/ui/Typography';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { OperatorRefreshButton } from './OperatorRefreshButton';
-import { SyncTab } from './SyncTab';
-import { HealthTab } from './HealthTab';
-import { ActivityTab } from './ActivityTab';
-import { DangerTab } from './DangerTab';
-import { AdStateTab } from './AdStateTab';
-import { StoresTab } from './StoresTab';
+import { OperatorTabs } from './OperatorTabs';
 
 // Phase A (Task 15): MetaBucPanel + FreshnessPanel are async server components
 // that fetch at request time. force-dynamic ensures operator's hard-refresh
@@ -34,19 +33,6 @@ export const dynamic = 'force-dynamic';
 export const metadata = {
   title: 'ניהול — ROAS Dashboard',
 };
-
-// Task 5.1 (P1-21): "בריאות" is the new default tab. The first thing
-// the operator sees when opening /operator is the freshness lag matrix +
-// token failures, NOT the manual sync buttons. Sync remains immediately
-// reachable as the second tab.
-const TABS = [
-  ['health', 'בריאות'],
-  ['sync', 'סנכרון'],
-  ['activity', 'פעילות'],
-  ['danger', 'מסוכן'],
-  ['ads', 'מצב פרסום'],
-  ['stores', 'חנויות'],
-] as const;
 
 export default function OperatorPage() {
   return (
@@ -78,34 +64,7 @@ export default function OperatorPage() {
           secret even when the gate is not enforced. */}
       <OperatorSecretBanner />
 
-      <Tabs defaultValue="health" variant="underline" className="mt-6">
-        <TabsList className="mb-6">
-          {TABS.map(([value, label]) => (
-            <TabsTrigger key={value} value={value}>
-              {label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        <TabsContent value="sync">
-          <SyncTab />
-        </TabsContent>
-        <TabsContent value="health">
-          <HealthTab />
-        </TabsContent>
-        <TabsContent value="activity">
-          <ActivityTab />
-        </TabsContent>
-        <TabsContent value="danger">
-          <DangerTab />
-        </TabsContent>
-        <TabsContent value="ads">
-          <AdStateTab />
-        </TabsContent>
-        <TabsContent value="stores">
-          <StoresTab />
-        </TabsContent>
-      </Tabs>
+      <OperatorTabs />
     </main>
   );
 }
