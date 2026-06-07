@@ -167,7 +167,7 @@ export const inngestFunctions = [
   cronLiveWorker, // event-driven worker (cron/live.store.requested), concurrency-keyed by store
   ...cronLiveHeavyFunctions, // Phase E1 (2026-05-30) — DISABLED (empty array). cron-tick-orchestrator + hot_metrics workers cover today; cron-yesterday-refresh covers yesterday.
   cronYesterdayRefreshScheduler, // replaces ...cronYesterdayRefreshFunctions (cron-yesterday-refresh-{store}); Phase E1.5 2h cadence catching cross-day refunds + late attribution
-  cronYesterdayRefreshWorker, // event-driven worker (cron/yesterday-refresh.store.requested), concurrency-keyed by store
+  cronYesterdayRefreshWorker, // event-driven worker (cron/yesterday.store.requested), concurrency-keyed by store
   cronTickOrchestrator, // Phase B — 1 function (Inngest tick orchestrator: scheduler + worker fan-out)
   metaWorker, // Phase B — 1 function (Meta-platform worker invoked by orchestrator); Phase C extended with 'hot_metrics' scope
   googleWorker, // Phase C — 1 function (Google-platform worker invoked by orchestrator; handles status + hot_metrics scopes)
