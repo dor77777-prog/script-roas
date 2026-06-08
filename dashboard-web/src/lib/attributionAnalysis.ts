@@ -282,12 +282,18 @@ export function orderMatchesCampaign(
     // no Google rows).
     if (!campaign.campaignId) return false;
     const wantId = campaign.campaignId.trim();
-    return (!!order.utmId && order.utmId.trim() === wantId)
-        || (!!order.utmCampaign && order.utmCampaign.trim() === wantId);
+    // Last-click authoritative when present.
+    if (order.utmId || order.utmCampaign) {
+      return (!!order.utmId && order.utmId.trim() === wantId)
+          || (!!order.utmCampaign && order.utmCampaign.trim() === wantId);
+    }
+    // First-touch fallback (last-click carried no campaign signal).
+    return (!!order.firstUtmId && order.firstUtmId.trim() === wantId)
+        || (!!order.firstUtmCampaign && order.firstUtmCampaign.trim() === wantId);
   }
   if (campaign.platform !== 'Meta' && campaign.platform !== 'TikTok') return false;
 
-  // Tier 1 — utm_id is authoritative when present on the order.
+  // Tier 1 — last-click utm_id authoritative when present.
   // If campaignId is configured AND the IDs match, accept.
   // If campaignId mismatches or campaign.campaignId is undefined,
   // DO NOT fall through — utm_id is the trusted signal on this order,
@@ -299,12 +305,19 @@ export function orderMatchesCampaign(
       && order.utmId.trim() === campaign.campaignId.trim();
   }
 
-  // Tier 2 — utm_id absent → fall back to utm_campaign name match.
+  // Tier 2 — last-click utm_campaign name match.
   if (order.utmCampaign) {
     return order.utmCampaign.trim().toLowerCase()
          === campaign.campaignName.trim().toLowerCase();
   }
 
+  // Tier 3 — FIRST-TOUCH fallback (last-click carried no campaign signal at all).
+  if (order.firstUtmId) {
+    return !!campaign.campaignId && order.firstUtmId.trim() === campaign.campaignId.trim();
+  }
+  if (order.firstUtmCampaign) {
+    return order.firstUtmCampaign.trim().toLowerCase() === campaign.campaignName.trim().toLowerCase();
+  }
   return false;
 }
 
@@ -829,7 +842,9 @@ export function analyzeAttributionForAdSet(
     if (o.date < dateFrom || o.date > dateTo) return false;
     if (o.storeId !== adSet.storeId) return false;
     if (!Number.isFinite(o.totalCad)) return false; // WR-02 — guard NaN propagation
-    return o.utmTerm && o.utmTerm.trim() === adSet.adSetId.trim();
+    const lastTerm = o.utmTerm && o.utmTerm.trim();
+    if (lastTerm) return lastTerm === adSet.adSetId.trim();
+    return !!o.firstUtmTerm && o.firstUtmTerm.trim() === adSet.adSetId.trim();
   });
 
   // AUDIT attributionAnalysis ALG-01 (2026-05-24, Phase 12.2.2): thread
@@ -889,7 +904,9 @@ export function analyzeAttributionForAd(
     if (o.date < dateFrom || o.date > dateTo) return false;
     if (o.storeId !== ad.storeId) return false;
     if (!Number.isFinite(o.totalCad)) return false; // WR-02 — guard NaN propagation
-    return o.utmContent && o.utmContent.trim() === ad.adId.trim();
+    const lastContent = o.utmContent && o.utmContent.trim();
+    if (lastContent) return lastContent === ad.adId.trim();
+    return !!o.firstUtmContent && o.firstUtmContent.trim() === ad.adId.trim();
   });
 
   // AUDIT attributionAnalysis ALG-01 (2026-05-24, Phase 12.2.2): thread
