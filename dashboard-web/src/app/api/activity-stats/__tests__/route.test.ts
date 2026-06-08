@@ -275,6 +275,98 @@ describe('GET /api/activity-stats — per-product', () => {
     expect(body.perProduct[0].productTitle).toBe('Hair Dryer');
   });
 
+  it('merges an ATC carrying raw.product_id with a purchase of the SAME productId into ONE row, even when titles differ (PPJ-T2)', async () => {
+    // Catalog title differs from the ATC product_title — the join MUST be by id.
+    db.products = [{ product_id: '7654321', product_title: 'Catalog Title' }];
+    db.orders = [
+      // One purchase of product 7654321 via meta-paid.
+      {
+        source: 'meta-paid',
+        total_cad: 100,
+        line_items: JSON.stringify([{ p: '7654321', u: 1, r: 100 }]),
+      },
+    ];
+    db.events = [
+      // Two ATC events for the SAME product, but tagged with a DIFFERENT title.
+      { source: 'meta-paid', product_id: '7654321', product_title: 'Beacon Title', first_touch_source: null },
+      { source: 'direct', product_id: '7654321', product_title: 'Beacon Title', first_touch_source: null },
+    ];
+
+    const res = await GET(reqWith());
+    const body = (await res.json()) as ActivityStatsResponse;
+
+    // Exactly ONE per-product row for this id — not two split rows.
+    const rows = body.perProduct.filter((p) => p.productId === '7654321');
+    expect(rows.length).toBe(1);
+    const row = rows[0];
+    expect(row.atcCount).toBe(2);
+    expect(row.purchaseCount).toBe(1);
+    // conversionPct = 1/2 = 50 (only correct because the id-join merged them).
+    expect(row.conversionPct).toBeCloseTo(50, 5);
+    // Title comes from the catalog (products_daily), not the beacon title.
+    expect(row.productTitle).toBe('Catalog Title');
+    // There is NO separate ATC-only row titled by the beacon title.
+    expect(body.perProduct.some((p) => p.productTitle === 'Beacon Title')).toBe(false);
+  });
+
+  it('merges a historical ATC WITHOUT product_id via the title fallback (legacy) (PPJ-T2)', async () => {
+    db.products = [{ product_id: 'P9', product_title: 'Night Cream' }];
+    db.orders = [
+      { source: 'meta-paid', total_cad: 50, line_items: JSON.stringify([{ p: 'P9', u: 1, r: 50 }]) },
+    ];
+    db.events = [
+      // No product_id (historical event) but the title matches the catalog title.
+      { source: 'direct', product_title: 'Night Cream', first_touch_source: null },
+    ];
+
+    const res = await GET(reqWith());
+    const body = (await res.json()) as ActivityStatsResponse;
+
+    const rows = body.perProduct.filter((p) => p.productId === 'P9');
+    expect(rows.length).toBe(1);
+    expect(rows[0].atcCount).toBe(1);
+    expect(rows[0].purchaseCount).toBe(1);
+    expect(rows[0].conversionPct).toBeCloseTo(100, 5);
+    expect(rows[0].productTitle).toBe('Night Cream');
+  });
+
+  it('keeps a historical ATC WITHOUT product_id and no catalog title match as its own ATC-only row (PPJ-T2)', async () => {
+    db.products = [];
+    db.orders = [];
+    db.events = [
+      { source: 'direct', product_title: 'Mystery Widget', first_touch_source: null },
+    ];
+
+    const res = await GET(reqWith());
+    const body = (await res.json()) as ActivityStatsResponse;
+
+    const row = body.perProduct.find((p) => p.productTitle === 'Mystery Widget');
+    expect(row).toBeTruthy();
+    expect(row!.atcCount).toBe(1);
+    expect(row!.purchaseCount).toBe(0);
+    // No ATC denominator vs purchases that exist → conversionPct = 0/1 = 0.
+    expect(row!.conversionPct).toBeCloseTo(0, 5);
+    expect(row!.productId).toBeNull();
+  });
+
+  it('keeps a purchased product with NO ATC as a row with buy>0, atc=0 (PPJ-T2)', async () => {
+    db.products = [{ product_id: 'P5', product_title: 'Lone Product' }];
+    db.orders = [
+      { source: 'meta-paid', total_cad: 70, line_items: JSON.stringify([{ p: 'P5', u: 1, r: 70 }]) },
+    ];
+    db.events = [];
+
+    const res = await GET(reqWith());
+    const body = (await res.json()) as ActivityStatsResponse;
+
+    const row = body.perProduct.find((p) => p.productId === 'P5');
+    expect(row).toBeTruthy();
+    expect(row!.purchaseCount).toBe(1);
+    expect(row!.atcCount).toBe(0);
+    // No ATC → conversionPct null.
+    expect(row!.conversionPct).toBeNull();
+  });
+
   it('caps per-product to the top ~20 by purchaseCount', async () => {
     db.orders = [];
     for (let i = 0; i < 30; i++) {

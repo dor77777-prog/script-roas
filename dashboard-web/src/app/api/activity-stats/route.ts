@@ -10,8 +10,12 @@
  *      other-paid/direct) — by orders AND revenueCad; buckets sum to the total.
  *   3. ATC platform distribution from store_events (type = 'add_to_cart').
  *   4. per-product purchases (orders_attribution.line_items, keyed by productId,
- *      titled via products_daily) merged with per-product ATC (store_events,
- *      keyed by product_title) — each split by source bucket, plus conversionPct.
+ *      titled via products_daily) merged with per-product ATC (store_events).
+ *      The ATC↔purchase join prefers the EXACT productId carried in
+ *      store_events.raw.product_id (PPJ-T1 beacon, normalized to match
+ *      line_items productId), and falls back to normalized-title matching only
+ *      for HISTORICAL events that predate the product_id capture — each split by
+ *      source bucket, plus conversionPct.
  *   5. first-touch coverage — % of orders carrying a first_touch_source.
  *
  * Auth: a NORMAL dashboard data route (like /api/data). The dashboard-password
@@ -147,7 +151,7 @@ type OrderRow = {
   first_touch_source?: unknown;
   line_items?: unknown;
 };
-type EventRow = { source?: unknown; product_title?: unknown };
+type EventRow = { source?: unknown; product_title?: unknown; product_id?: unknown };
 type ProductRow = { product_id?: unknown; product_title?: unknown };
 
 /** Terminal PostgREST result shape after `.range()`. */
@@ -248,7 +252,10 @@ export async function GET(req: Request): Promise<NextResponse<ActivityStatsRespo
     const eventRows = await fetchAllRows<EventRow>(() => {
       let q = sb
         .from('store_events')
-        .select('source, product_title')
+        // PPJ-T2: read the beacon-captured numeric productId for an EXACT
+        // ATC↔purchase join. Only the `raw->>product_id` JSON path is read —
+        // never the raw blob wholesale (PII-free).
+        .select('source, product_title, product_id:raw->>product_id')
         .eq('type', 'add_to_cart')
         .gte('received_at', fromTs)
         .lte('received_at', toTs);
@@ -266,11 +273,19 @@ export async function GET(req: Request): Promise<NextResponse<ActivityStatsRespo
     });
 
     const titleByProductId = new Map<string, string>();
+    // Reverse bridge (normalized catalog title → productId): lets a HISTORICAL
+    // ATC event that lacks raw.product_id resolve to the same productId a
+    // purchase used, so the legacy title fallback still merges into one row.
+    const productIdByTitleKey = new Map<string, string>();
     for (const p of productRows) {
       const pid = String(p.product_id ?? '').trim();
       if (!pid) continue;
       const title = clampTitle(p.product_title);
       if (title && !titleByProductId.has(pid)) titleByProductId.set(pid, title);
+      if (title) {
+        const tk = titleKey(title);
+        if (!productIdByTitleKey.has(tk)) productIdByTitleKey.set(tk, pid);
+      }
     }
 
     // ── Aggregate orders: paid/organic, byPlatform, per-product purchases,
@@ -283,9 +298,13 @@ export async function GET(req: Request): Promise<NextResponse<ActivityStatsRespo
     const platformRevenue = zeroBuckets();
     let orderFt = 0;
 
-    // Per-product purchase accumulator, keyed by normalized title (the merge key
-    // shared with ATC). Each entry tracks its display title, a representative
-    // productId, total purchase count, and the per-bucket source split.
+    // Per-product accumulator. The merge key prefers the exact productId
+    // (`pid:<id>`) so an id-bearing ATC and a line_items purchase of the same
+    // product collapse into ONE row regardless of title drift; entries with no
+    // productId (a historical, title-only ATC that matches no catalog product)
+    // fall back to a normalized-title key (`title:<key>`). Each entry tracks its
+    // display title, its productId (if any), the purchase + ATC counts, and the
+    // per-bucket source splits.
     type ProductAcc = {
       productId: string | null;
       title: string;
@@ -294,9 +313,11 @@ export async function GET(req: Request): Promise<NextResponse<ActivityStatsRespo
       atcCount: number;
       atcBySource: Record<SourceBucket, number>;
     };
-    const byTitle = new Map<string, ProductAcc>();
+    const byKey = new Map<string, ProductAcc>();
+    const pidKey = (pid: string) => `pid:${pid}`;
+    const titleKeyed = (tk: string) => `title:${tk}`;
     function ensure(key: string, title: string, productId: string | null): ProductAcc {
-      let acc = byTitle.get(key);
+      let acc = byKey.get(key);
       if (!acc) {
         acc = {
           productId,
@@ -306,7 +327,7 @@ export async function GET(req: Request): Promise<NextResponse<ActivityStatsRespo
           atcCount: 0,
           atcBySource: zeroBuckets(),
         };
-        byTitle.set(key, acc);
+        byKey.set(key, acc);
       } else if (!acc.productId && productId) {
         acc.productId = productId;
       }
@@ -331,28 +352,56 @@ export async function GET(req: Request): Promise<NextResponse<ActivityStatsRespo
       if (String(r.first_touch_source ?? '').trim()) orderFt += 1;
 
       // per-product purchases — one count per line item × the order's source.
+      // Keyed by the exact productId so id-bearing ATC merges into the same row.
       const lineItems = parseLineItems(r.line_items);
       for (const li of lineItems) {
         const pid = li.productId; // guaranteed non-empty by parseLineItems
-        const title = titleByProductId.get(pid) ?? pid; // fall back to id when no title
-        const key = titleKey(title);
-        const acc = ensure(key, clampTitle(title), pid);
+        const title = titleByProductId.get(pid) ?? pid; // catalog title, id fallback
+        const acc = ensure(pidKey(pid), clampTitle(title), pid);
         acc.purchaseCount += 1;
         acc.purchaseBySource[bucket] += 1;
       }
     }
 
-    // ── Aggregate ATC: platform distribution + per-product (by title). ──────
+    // ── Aggregate ATC: platform distribution + per-product. Prefer the exact
+    //    productId (raw.product_id, PPJ-T1) so id-bearing carts merge with
+    //    purchases under one productId-keyed row; fall back to normalized-title
+    //    matching only for historical events that lack a product_id. ──────────
     const atcPlatform = zeroBuckets();
     for (const r of eventRows) {
       const source = String(r.source ?? '').trim();
       const bucket = sourceToBucket(source);
       atcPlatform[bucket] += 1;
 
+      const eventPid = String(r.product_id ?? '').trim();
       const rawTitle = clampTitle(r.product_title);
-      if (!rawTitle) continue; // can't attribute an ATC with no product to a row
-      const key = titleKey(rawTitle);
-      const acc = ensure(key, rawTitle, null);
+
+      let key: string;
+      let title: string;
+      let productId: string | null;
+      if (eventPid) {
+        // New event: exact id-join. Title from the catalog, id fallback.
+        productId = eventPid;
+        key = pidKey(eventPid);
+        title = clampTitle(titleByProductId.get(eventPid) ?? (rawTitle || eventPid));
+      } else {
+        // Historical event (no product_id): best-effort title match.
+        if (!rawTitle) continue; // can't attribute an ATC with no product to a row
+        const tk = titleKey(rawTitle);
+        const matchedPid = productIdByTitleKey.get(tk);
+        if (matchedPid) {
+          // Title matches a catalog product → merge into its id-keyed row.
+          productId = matchedPid;
+          key = pidKey(matchedPid);
+          title = clampTitle(titleByProductId.get(matchedPid) ?? rawTitle);
+        } else {
+          // No catalog match → its own best-effort, title-only row.
+          productId = null;
+          key = titleKeyed(tk);
+          title = rawTitle;
+        }
+      }
+      const acc = ensure(key, title, productId);
       acc.atcCount += 1;
       acc.atcBySource[bucket] += 1;
     }
@@ -380,7 +429,7 @@ export async function GET(req: Request): Promise<NextResponse<ActivityStatsRespo
     );
 
     // Top products by purchase count (ties broken by ATC, then title for stability).
-    const perProduct: PerProduct[] = Array.from(byTitle.values())
+    const perProduct: PerProduct[] = Array.from(byKey.values())
       .sort(
         (a, b) =>
           b.purchaseCount - a.purchaseCount ||
