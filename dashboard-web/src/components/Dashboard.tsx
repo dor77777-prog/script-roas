@@ -208,7 +208,14 @@ export function Dashboard() {
     // refreshInterval 0 — periodic refresh is driven by the single coordinated
     // useAutoRefresh(60s) above so this key re-renders TOGETHER with the others
     // (no offset per-hook timer). revalidateOnFocus stays for instant catch-up.
-    { refreshInterval: 0, revalidateOnFocus: true },
+    // keepPreviousData — a RANGE change rotates the SWR key; without this SWR
+    // drops `data` to undefined mid-fetch, which flips the `data && filtered`
+    // gate below false and UNMOUNTS the whole tab subtree (skeleton flash) →
+    // every tab's local UI state (e.g. the Activity סטטיסטיקות sub-tab, scroll,
+    // open drawers) is reset, bouncing the operator off their view. Keeping the
+    // previous data on screen during the refetch preserves the mount (same
+    // guarantee the auto-refresh path already gives — see useAutoRefresh above).
+    { refreshInterval: 0, revalidateOnFocus: true, keepPreviousData: true },
   );
   // Editable COGS % — recompute each row's cogs/netProfit from the operator's
   // effective % at the earliest read point so every downstream consumer
@@ -236,7 +243,10 @@ export function Dashboard() {
     // refreshInterval 0 — periodic refresh is driven by the single coordinated
     // useAutoRefresh(60s) above so this key re-renders TOGETHER with the others
     // (no offset per-hook timer). revalidateOnFocus stays for instant catch-up.
-    { refreshInterval: 0, revalidateOnFocus: true },
+    // keepPreviousData — same rationale as the /api/data SWR above: a range
+    // change rotates this key too, so hold the previous per-store orders on
+    // screen during the refetch instead of blipping them to undefined.
+    { refreshInterval: 0, revalidateOnFocus: true, keepPreviousData: true },
   );
 
   // DQ-3 (Wave 3 data-trust) — active manual-spend overrides for the visible
