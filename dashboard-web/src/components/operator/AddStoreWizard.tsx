@@ -838,7 +838,7 @@ function Step1({
 
       <div className="flex flex-wrap gap-2">
         <Button type="button" onClick={onNext}>
-          הבא →
+          הבא ←
         </Button>
         <Button type="button" variant="secondary" onClick={onCancel}>
           ביטול
@@ -1080,7 +1080,7 @@ function Step2({
           {isEdit ? 'שמור שינויים' : 'צור חנות'}
         </Button>
         <Button type="button" variant="secondary" onClick={onBack} disabled={submitting}>
-          ← חזרה
+          → חזרה
         </Button>
       </div>
     </form>

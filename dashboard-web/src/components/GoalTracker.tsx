@@ -227,24 +227,12 @@ export function GoalTracker({ data, range }: Props) {
     setViewMonth(addMonths(effectiveMonth, delta));
   }
 
-  // The ‹ month › stepper. In RTL, "‹" steps to the next (later) month and "›"
-  // to the previous (earlier) month — matching the mockup's visual order.
+  // The ‹ month › stepper. RTL convention: the RIGHT control (►/ChevronRight)
+  // goes to the PREVIOUS (earlier) month and the LEFT control (◄/ChevronLeft)
+  // to the NEXT (later) month — "back = right, forward = left" for Hebrew
+  // readers. The first DOM child renders on the right under dir="rtl".
   const monthNav = effectiveMonth ? (
     <span className="inline-flex items-center gap-0.5 bg-glass-2 border border-glass-edge rounded-lg p-0.5">
-      <HelpTooltip content="חודש הבא">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="!w-6 !h-6"
-          onClick={() => stepMonth(1)}
-          aria-label="חודש הבא"
-        >
-          <ChevronRight size={14} />
-        </Button>
-      </HelpTooltip>
-      <span className="font-semibold text-xs sm:text-[12.5px] text-ink min-w-[84px] text-center tabular-nums">
-        {monthLabelHebrew(effectiveMonth)}
-      </span>
       <HelpTooltip content="חודש קודם">
         <Button
           variant="ghost"
@@ -252,6 +240,20 @@ export function GoalTracker({ data, range }: Props) {
           className="!w-6 !h-6"
           onClick={() => stepMonth(-1)}
           aria-label="חודש קודם"
+        >
+          <ChevronRight size={14} />
+        </Button>
+      </HelpTooltip>
+      <span className="font-semibold text-xs sm:text-[12.5px] text-ink min-w-[84px] text-center tabular-nums">
+        {monthLabelHebrew(effectiveMonth)}
+      </span>
+      <HelpTooltip content="חודש הבא">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="!w-6 !h-6"
+          onClick={() => stepMonth(1)}
+          aria-label="חודש הבא"
         >
           <ChevronLeft size={14} />
         </Button>

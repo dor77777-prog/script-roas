@@ -457,7 +457,7 @@ export function ActivityEventsTab({ data, globalStore }: ActivityEventsTabProps)
           onClick={onPrev}
           className="h-auto px-3.5 py-2 text-[12px] font-bold min-h-[36px]"
         >
-          ‹ הקודם
+          › הקודם
         </Button>
         <span data-testid="activity-page-info" className="text-[12px] text-ink-muted tabular-nums">
           עמוד <bdi dir="ltr">{page}</bdi> מתוך <bdi dir="ltr">{totalPages}</bdi>
@@ -470,7 +470,7 @@ export function ActivityEventsTab({ data, globalStore }: ActivityEventsTabProps)
           onClick={onNext}
           className="h-auto px-3.5 py-2 text-[12px] font-bold min-h-[36px]"
         >
-          הבא ›
+          הבא ‹
         </Button>
       </div>
     </Card>
