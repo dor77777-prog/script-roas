@@ -752,7 +752,12 @@ export function Dashboard() {
                 </>
               )}
               {activeTab === 'activity' && (
-                <ActivityTab data={data} globalStore={filters.store} range={filters.range} />
+                <ActivityTab
+                  data={data}
+                  filters={filters}
+                  stores={data.stores}
+                  onChange={setFilters}
+                />
               )}
               {activeTab === 'customers' && (
                 <CustomerValueTab
