@@ -1006,17 +1006,21 @@ export async function fetchShopifyOrdersAttribution(
   // Failure-safe: fetchCustomerJourney never throws. If it returns an empty map
   // (disabled / unavailable / all batches failed), every entry lookup returns
   // undefined and mergeCustomerJourney returns the row unchanged.
-  if (out.length > 0) {
-    const orderGids = out.map(r => `gid://shopify/Order/${r.orderId}`);
-    const journeyResult = await fetchCustomerJourney(domain, token, orderGids);
-    if (!journeyResult.disabled && !journeyResult.unavailable && journeyResult.map.size > 0) {
-      for (let i = 0; i < out.length; i++) {
-        const entry = journeyResult.map.get(out[i].orderId);
-        if (entry) {
-          out[i] = mergeCustomerJourney(out[i], entry);
+  try {
+    if (out.length > 0) {
+      const orderGids = out.map(r => `gid://shopify/Order/${r.orderId}`);
+      const journeyResult = await fetchCustomerJourney(domain, token, orderGids);
+      if (!journeyResult.disabled && !journeyResult.unavailable && journeyResult.map.size > 0) {
+        for (let i = 0; i < out.length; i++) {
+          const entry = journeyResult.map.get(out[i].orderId);
+          if (entry) {
+            out[i] = mergeCustomerJourney(out[i], entry);
+          }
         }
       }
     }
+  } catch (e) {
+    console.warn('[shopify] customer-journey gap-fill skipped:', e instanceof Error ? e.message : String(e));
   }
 
   return out;
