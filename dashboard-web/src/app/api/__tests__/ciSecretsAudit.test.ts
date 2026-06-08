@@ -67,12 +67,16 @@ vi.mock('@/lib/supabaseAdmin', () => ({
           return Promise.resolve({ data: [{ display_order: 1 }], error: null });
         }
         // operator/stores/[id] GET: the store row read (id present + basics).
+        // operator/stores/[id] DELETE: reads .select('id, name, status') — so the
+        // row also carries status='archived' (GUARD A passes) and name='Audit
+        // Store' (GUARD B matches the confirmName the audit DELETE feeds), letting
+        // the wipe path actually run against the mock.
         if (table === 'stores' && cols.includes('name')) {
           return {
             eq: () => ({
               maybeSingle: () =>
                 Promise.resolve({
-                  data: { id: 'auditstore', name: 'Audit Store', brand_color: 'var(--store-uzo)', is_headless: false, has_tiktok: false, display_order: 1 },
+                  data: { id: 'auditstore', name: 'Audit Store', status: 'archived', brand_color: 'var(--store-uzo)', is_headless: false, has_tiktok: false, display_order: 1 },
                   error: null,
                 }),
             }),
@@ -166,7 +170,9 @@ import { POST as backfillSecretsPOST } from '../operator/backfill-secrets/route'
 import { GET as storeMetaGET } from '../store-meta/route';
 import { POST as storesPOST, GET as storesGET } from '../operator/stores/route';
 import { POST as verifyCredsPOST } from '../operator/stores/verify-creds/route';
-import { GET as storeByIdGET, PATCH as storeByIdPATCH } from '../operator/stores/[id]/route';
+import { GET as storeByIdGET, PATCH as storeByIdPATCH, DELETE as storeByIdDELETE } from '../operator/stores/[id]/route';
+import { POST as storeArchivePOST } from '../operator/stores/[id]/archive/route';
+import { POST as storeRestorePOST } from '../operator/stores/[id]/restore/route';
 
 // ---------------------------------------------------------------------------
 // Sentinels — every secret-shaped env var stubbed to a uniquely-grep-able token.
@@ -357,6 +363,48 @@ const COVERED: Array<{ label: string; run: () => Promise<string> }> = [
       return res.text();
     },
   },
+  {
+    // POST /api/operator/stores/[id]/archive — reversible status flip. It reads
+    // ONLY the lifecycle column and returns { ok, store:{storeId,status} }; it
+    // never touches a secret. Covered so a future regression that joins in a
+    // secret value is caught. (Phase 6b T1.)
+    label: 'POST /api/operator/stores/[id]/archive',
+    run: async () => {
+      const res = await storeArchivePOST(new Request('http://x/api/operator/stores/auditstore/archive', { method: 'POST' }), {
+        params: Promise.resolve({ id: 'auditstore' }),
+      });
+      return res.text();
+    },
+  },
+  {
+    // POST /api/operator/stores/[id]/restore — reversible status flip (sibling of
+    // archive). Same shape, same no-secret guarantee. (Phase 6b T1.)
+    label: 'POST /api/operator/stores/[id]/restore',
+    run: async () => {
+      const res = await storeRestorePOST(new Request('http://x/api/operator/stores/auditstore/restore', { method: 'POST' }), {
+        params: Promise.resolve({ id: 'auditstore' }),
+      });
+      return res.text();
+    },
+  },
+  {
+    // DELETE /api/operator/stores/[id] — the IRREVERSIBLE hard wipe (Phase 6b T2).
+    // We feed an ARCHIVED store (the mock's stores row has status='archived') with
+    // the EXACT confirmName ('Audit Store') so BOTH guards pass and the wipe path
+    // actually RUNS against the mock (every STORE_SCOPED_WIPE_TABLE is deleted).
+    // The response is only { ok, deleted, tablesWiped, failed } — ids + table
+    // names, never a secret. This exercises the most dangerous route end-to-end
+    // and proves its response carries no secret.
+    label: 'DELETE /api/operator/stores/[id]',
+    run: async () => {
+      const req = new Request('http://x/api/operator/stores/auditstore', {
+        method: 'DELETE',
+        body: JSON.stringify({ confirmName: 'Audit Store' }),
+      });
+      const res = await storeByIdDELETE(req, { params: Promise.resolve({ id: 'auditstore' }) });
+      return res.text();
+    },
+  },
 ];
 
 describe('CI secret-echo audit — no secret-touching route echoes a secret', () => {
@@ -386,6 +434,10 @@ describe('CI secret-echo audit — no secret-touching route echoes a secret', ()
     expect(labels).toContain('POST /api/operator/stores/verify-creds');
     expect(labels).toContain('GET /api/operator/stores/[id]');
     expect(labels).toContain('PATCH /api/operator/stores/[id]');
+    // Phase 6b — store lifecycle routes.
+    expect(labels).toContain('POST /api/operator/stores/[id]/archive');
+    expect(labels).toContain('POST /api/operator/stores/[id]/restore');
+    expect(labels).toContain('DELETE /api/operator/stores/[id]');
   });
 
   it('would CATCH a body-submitted secret echo (guard self-test for the stores/verify-creds routes)', () => {
