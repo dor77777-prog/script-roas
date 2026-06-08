@@ -113,6 +113,45 @@ analytics.subscribe("product_added_to_cart", async (event) => {
 });`;
 
 /**
+ * Themed THEME snippet (NOT the Custom Pixel — that's sandboxed and can't touch
+ * the cart). Persists first-touch UTM to localStorage and writes it as `_ft_*`
+ * Shopify cart attributes via the Cart AJAX API, so the order's note_attributes
+ * carry the first-click campaign/ad-set/ad ids (the dashboard reads `_ft_*`).
+ * Idempotent per session. CAPI-safe: NO pixel/track/CAPI calls — only
+ * localStorage + /cart/update.js. Paste in the theme (theme.liquid), NOT the
+ * Custom Pixel.
+ */
+const THEMED_CART_ATTR_TEMPLATE = `<script>
+(function () {
+  try {
+    // Writes canonical cart attributes: _ft_utm_source, _ft_utm_medium, _ft_utm_campaign,
+    // _ft_utm_content, _ft_utm_id, _ft_utm_term, _ft_fbclid, _ft_gclid, _ft_ttclid, _ft_set_at
+    var KEEP = ["utm_source","utm_medium","utm_campaign","utm_content","utm_id","utm_term","fbclid","gclid","ttclid"];
+    var sp = new URLSearchParams(location.search);
+    var got = {};
+    KEEP.forEach(function (k) { var v = sp.get(k); if (v) got[k] = v; });
+    var stored = localStorage.getItem("_ft_attr");
+    if (Object.keys(got).length && !stored) {
+      stored = "?" + Object.keys(got).map(function (k) { return k + "=" + encodeURIComponent(got[k]); }).join("&");
+      localStorage.setItem("_ft_attr", stored);
+    }
+    if (!stored) return;
+    if (sessionStorage.getItem("_ft_cart_written")) return;
+    var bag = new URLSearchParams(stored);
+    var attrs = {};
+    KEEP.forEach(function (k) { var v = bag.get(k); if (v) attrs["_ft_" + k] = v; });
+    if (!Object.keys(attrs).length) return;
+    attrs["_ft_set_at"] = new Date().toISOString();
+    fetch("/cart/update.js", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attributes: attrs })
+    }).then(function () { sessionStorage.setItem("_ft_cart_written", "1"); }).catch(function () {});
+  } catch (e) {}
+})();
+</script>`;
+
+/**
  * Headless Lovable CLIENT first-touch IIFE — VERBATIM from
  * docs/storefront-snippets/first-touch-attribution.md (Section 2, Part A). This
  * is TOKEN-FREE by design: it only captures first-touch UTM/click-id into
@@ -183,6 +222,10 @@ export function generateStoreSnippet(args: GenerateStoreSnippetArgs): StoreSnipp
     kind: 'themed',
     // The single transformation: substitute the placeholder with the real token.
     primary: THEMED_PIXEL_TEMPLATE.split(TOKEN_PLACEHOLDER).join(cartPublicToken),
-    note: 'Paste in Shopify admin → Settings → Customer events → Add custom pixel.',
+    secondary: THEMED_CART_ATTR_TEMPLATE,
+    note:
+      'primary → Shopify admin → Settings → Customer events → Add custom pixel. ' +
+      'secondary → paste in the THEME (theme.liquid, before </body>) — it writes _ft_* cart ' +
+      'attributes so orders carry the first-click campaign/ad ids. Do NOT put the secondary in the Custom Pixel (sandboxed).',
   };
 }

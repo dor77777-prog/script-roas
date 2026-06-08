@@ -92,8 +92,18 @@ describe('generateStoreSnippet — themed (Shopify Custom Pixel)', () => {
     expect(result.note).toContain('custom pixel');
   });
 
-  it('themed has no secondary snippet', () => {
-    expect(result.secondary).toBeUndefined();
+  it('note instructs pasting secondary in the THEME (not the Custom Pixel)', () => {
+    expect(result.note).toContain('theme.liquid');
+    expect(result.note).toContain('_ft_*');
+  });
+
+  it('themed snippet writes _ft_* cart attributes via /cart/update.js (no pixel calls)', () => {
+    const r = generateStoreSnippet({ storeId: 's', cartPublicToken: 'tok', allowedOrigins: [], isHeadless: false });
+    const all = [r.primary, r.secondary, r.note].filter(Boolean).join('\n');
+    expect(all).toContain('/cart/update.js');
+    expect(all).toContain('_ft_utm_id');
+    expect(all).toContain('_ft_set_at');
+    expect(all).not.toMatch(/\bfbq\(|\bgtag\(|\bttq\(|analytics\.track|dataLayer\.push/);
   });
 });
 

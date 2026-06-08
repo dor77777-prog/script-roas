@@ -101,6 +101,61 @@ analytics.subscribe("product_added_to_cart", async (event) => {
 
 ---
 
+## Section 1b — Theme snippet: `_ft_*` cart attributes
+
+**Where to paste:** Shopify theme editor → `theme.liquid`, immediately before `</body>`. **Do NOT paste this in the Custom Pixel** — Custom Pixels run in a sandboxed iframe and cannot write Shopify cart attributes.
+
+The Shopify Custom Pixel (Section 1) captures first-touch UTM/click-ids but cannot update the cart because of sandbox restrictions. This theme snippet fills that gap: it runs in the real page context, reads the same `localStorage._ft_attr` key the Custom Pixel writes, and syncs the first-touch data as `_ft_*` cart attributes via the Shopify Cart AJAX API (`/cart/update.js`). Those attributes flow into the order's `note_attributes`, which the dashboard's order writer (`classifyOrderSource`) already reads (it strips the leading `_` → `ft_*` keys) to populate `firstUtm*` fields for first-click campaign/ad attribution. The snippet is **idempotent per session** (guarded by `sessionStorage._ft_cart_written`). **CAPI-safe:** contains no pixel/track/CAPI calls — only `localStorage`, `sessionStorage`, and `/cart/update.js`.
+
+```html
+<script>
+(function () {
+  try {
+    // Writes canonical cart attributes: _ft_utm_source, _ft_utm_medium, _ft_utm_campaign,
+    // _ft_utm_content, _ft_utm_id, _ft_utm_term, _ft_fbclid, _ft_gclid, _ft_ttclid, _ft_set_at
+    var KEEP = ["utm_source","utm_medium","utm_campaign","utm_content","utm_id","utm_term","fbclid","gclid","ttclid"];
+    var sp = new URLSearchParams(location.search);
+    var got = {};
+    KEEP.forEach(function (k) { var v = sp.get(k); if (v) got[k] = v; });
+    var stored = localStorage.getItem("_ft_attr");
+    if (Object.keys(got).length && !stored) {
+      stored = "?" + Object.keys(got).map(function (k) { return k + "=" + encodeURIComponent(got[k]); }).join("&");
+      localStorage.setItem("_ft_attr", stored);
+    }
+    if (!stored) return;
+    if (sessionStorage.getItem("_ft_cart_written")) return;
+    var bag = new URLSearchParams(stored);
+    var attrs = {};
+    KEEP.forEach(function (k) { var v = bag.get(k); if (v) attrs["_ft_" + k] = v; });
+    if (!Object.keys(attrs).length) return;
+    attrs["_ft_set_at"] = new Date().toISOString();
+    fetch("/cart/update.js", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attributes: attrs })
+    }).then(function () { sessionStorage.setItem("_ft_cart_written", "1"); }).catch(function () {});
+  } catch (e) {}
+})();
+</script>
+```
+
+**Canonical cart attribute keys written by this snippet:**
+
+| Cart attribute key | Maps to order writer field |
+|---|---|
+| `_ft_utm_source` | `firstUtmSource` |
+| `_ft_utm_medium` | `firstUtmMedium` |
+| `_ft_utm_campaign` | `firstUtmCampaign` |
+| `_ft_utm_content` | `firstUtmContent` |
+| `_ft_utm_id` | `firstUtmId` |
+| `_ft_utm_term` | `firstUtmTerm` |
+| `_ft_fbclid` | `firstFbclid` |
+| `_ft_gclid` | `firstGclid` |
+| `_ft_ttclid` | `firstTtclid` |
+| `_ft_set_at` | (timestamp, for freshness audits) |
+
+---
+
 ## Section 2 — usmile360 (headless Lovable + edge function)
 
 usmile360 has a **headless Lovable frontend** — Shopify only handles checkout. Cart events are routed through the Lovable edge function `roas-cart-event`, which holds the store token server-side. **The token must never appear in the client bundle** (it was leaked and rotated 2026-06-06).
