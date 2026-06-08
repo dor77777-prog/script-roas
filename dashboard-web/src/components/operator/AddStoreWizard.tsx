@@ -103,6 +103,7 @@ interface Step1State {
   hasMeta: boolean;
   hasGoogle: boolean;
   hasTiktok: boolean;
+  enableCustomerJourney: boolean;
 }
 
 interface Step2State {
@@ -159,6 +160,7 @@ const EMPTY_STEP1: Step1State = {
   hasMeta: false,
   hasGoogle: false,
   hasTiktok: false,
+  enableCustomerJourney: false,
 };
 
 const EMPTY_STEP2: Step2State = {
@@ -237,6 +239,7 @@ export function AddStoreWizard({
           brandColor?: string | null;
           displayOrder?: number | null;
           hasTiktok?: boolean;
+          enableCustomerJourney?: boolean;
           platforms?: string[];
           hasWebhookSecret?: boolean;
         };
@@ -257,6 +260,7 @@ export function AddStoreWizard({
           hasMeta: platforms.includes('meta') || focusPlatform === 'meta',
           hasGoogle: platforms.includes('google') || focusPlatform === 'google',
           hasTiktok: body.hasTiktok === true || focusPlatform === 'tiktok',
+          enableCustomerJourney: body.enableCustomerJourney === true,
         }));
       } catch (e) {
         if (!cancelled) setPrefillError(e instanceof Error ? e.message : String(e));
@@ -443,6 +447,7 @@ export function AddStoreWizard({
             isHeadless: s1.isHeadless,
             brandColor: s1.brandColor,
             hasTiktok: s1.hasTiktok,
+            enableCustomerJourney: s1.enableCustomerJourney,
           }
         : {
             // ADD (POST): full creation payload (Shopify creds always required).
@@ -810,6 +815,25 @@ function Step1({
             onChange={(v) => setS1((s) => ({ ...s, hasTiktok: v }))}
           />
         </div>
+      </div>
+
+      {/* Advanced — Shopify customerJourneySummary gap-fill */}
+      <div className="mb-4">
+        <span className="mb-2 block text-xs font-medium text-ink-secondary">מתקדם</span>
+        <label className="flex items-start gap-3 rounded-lg border border-glass-edge bg-glass-2 p-3 text-sm text-ink">
+          <Switch
+            aria-label="שאיבת מסע-לקוח מ-Shopify (customerJourneySummary)"
+            checked={s1.enableCustomerJourney}
+            onCheckedChange={(v) => setS1((s) => ({ ...s, enableCustomerJourney: v }))}
+            className="mt-0.5 shrink-0"
+          />
+          <span>
+            <span className="block font-medium">שאיבת מסע-לקוח מ-Shopify (customerJourneySummary)</span>
+            <Text as="span" tone="muted" className="mt-0.5 block text-2xs">
+              ייחוס עשיר יותר לקמפיינים — הפעל רק אחרי אישור Protected Customer Data ב-Shopify
+            </Text>
+          </span>
+        </label>
       </div>
 
       <div className="flex flex-wrap gap-2">

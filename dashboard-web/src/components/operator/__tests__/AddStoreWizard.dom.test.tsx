@@ -422,6 +422,7 @@ describe('AddStoreWizard — EDIT mode (Phase 6a Task 8)', () => {
     brandColor: 'var(--store-uzo)',
     displayOrder: 2,
     hasTiktok: true,
+    enableCustomerJourney: false,
     platforms: ['shopify', 'meta'],
     hasWebhookSecret: false,
   };
@@ -616,6 +617,64 @@ describe('AddStoreWizard — EDIT mode (Phase 6a Task 8)', () => {
     await screen.findByDisplayValue('My Store');
     const tkSwitch = screen.getByRole('switch', { name: /TikTok/i }) as HTMLButtonElement;
     expect(tkSwitch.getAttribute('aria-checked')).toBe('true');
+  });
+
+  // -------------------------------------------------------------------------
+  // enableCustomerJourney Switch (edit mode).
+  // -------------------------------------------------------------------------
+  it('renders the customerJourneySummary Switch in step 1, off by default (prefill=false)', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" />);
+    await screen.findByDisplayValue('My Store');
+    const sw = screen.getByRole('switch', { name: /customerJourneySummary/i }) as HTMLButtonElement;
+    expect(sw).toBeDefined();
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('prefills the customerJourneySummary Switch as ON when enableCustomerJourney=true', async () => {
+    responder = (url, init) => {
+      if (url.includes('verify-creds')) {
+        return { status: 200, json: async () => ({ platform: 'meta', ok: true, message: 'תקין' }) };
+      }
+      if (url.endsWith('/api/operator/stores/mystore') && (init?.method ?? 'GET') === 'GET') {
+        return { status: 200, json: async () => ({ ...PREFILL, enableCustomerJourney: true }) };
+      }
+      return { status: 200, json: async () => ({}) };
+    };
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" />);
+    await screen.findByDisplayValue('My Store');
+    const sw = screen.getByRole('switch', { name: /customerJourneySummary/i }) as HTMLButtonElement;
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('toggling the Switch to ON sends enableCustomerJourney=true in the PATCH body', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" />);
+    await screen.findByDisplayValue('My Store');
+    // Toggle the switch on.
+    fireEvent.click(screen.getByRole('switch', { name: /customerJourneySummary/i }));
+    clickNext();
+    const save = screen.getByRole('button', { name: /שמור שינויים/ }) as HTMLButtonElement;
+    fireEvent.click(save);
+    await new Promise((r) => setTimeout(r, 0));
+    const patchCall = calls.find(
+      (c) => c.url.endsWith('/api/operator/stores/mystore') && c.init?.method === 'PATCH',
+    );
+    expect(patchCall).toBeDefined();
+    const body = jsonOf(patchCall!.init);
+    expect(body.enableCustomerJourney).toBe(true);
+  });
+
+  it('PATCH body always includes enableCustomerJourney (false when untouched)', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" />);
+    await screen.findByDisplayValue('My Store');
+    clickNext();
+    const save = screen.getByRole('button', { name: /שמור שינויים/ }) as HTMLButtonElement;
+    fireEvent.click(save);
+    await new Promise((r) => setTimeout(r, 0));
+    const patchCall = calls.find(
+      (c) => c.url.endsWith('/api/operator/stores/mystore') && c.init?.method === 'PATCH',
+    );
+    const body = jsonOf(patchCall!.init);
+    expect(body.enableCustomerJourney).toBe(false);
   });
 });
 

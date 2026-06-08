@@ -32,6 +32,9 @@ const db = vi.hoisted(() => ({
   // 'tiktok' platform from it — Fix B4 — since TikTok is a shared account with no
   // per-store secret).
   hasTiktok: false as boolean,
+  // the store's enable_customer_journey flag (stores row read; GET returns it as
+  // enableCustomerJourney; PATCH sets it when the body includes the field).
+  enableCustomerJourney: false as boolean,
   // store_secrets presence rows for the GET (no values)
   secretRows: [] as Array<{ store_id: string; secret_key: string }>,
   // make a write fail (write-error path → 500)
@@ -98,7 +101,7 @@ vi.mock('@/lib/supabaseAdmin', () => {
               if (table === 'stores' && col === 'id') {
                 return Promise.resolve({
                   data: db.existingStoreIds.includes(String(val))
-                    ? { id: val, name: String(val), brand_color: 'var(--store-uzo)', is_headless: db.isHeadless, has_tiktok: db.hasTiktok, display_order: 1, status: db.status }
+                    ? { id: val, name: String(val), brand_color: 'var(--store-uzo)', is_headless: db.isHeadless, has_tiktok: db.hasTiktok, display_order: 1, status: db.status, enable_customer_journey: db.enableCustomerJourney }
                     : null,
                   error: null,
                 });
@@ -223,6 +226,7 @@ beforeEach(() => {
   db.ownSigningSecret = null;
   db.isHeadless = false;
   db.hasTiktok = false;
+  db.enableCustomerJourney = false;
   db.secretRows = [];
   db.throwOn = null;
   db.status = 'active';
@@ -317,6 +321,22 @@ describe('GET /api/operator/stores/[id]', () => {
     const body = await res.json();
     expect(body.platforms).not.toContain('tiktok');
   });
+
+  it('returns enableCustomerJourney=false by default', async () => {
+    db.enableCustomerJourney = false;
+    const res = await getReq('mystore');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.enableCustomerJourney).toBe(false);
+  });
+
+  it('returns enableCustomerJourney=true when the column is true', async () => {
+    db.enableCustomerJourney = true;
+    const res = await getReq('mystore');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.enableCustomerJourney).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -346,6 +366,31 @@ describe('PATCH /api/operator/stores/[id] — basics only', () => {
     const res = await patch('mystore', {});
     expect(res.status).toBe(400);
     expect(noWrites()).toBe(true);
+  });
+
+  it('PATCH { enableCustomerJourney: true } sets enable_customer_journey in stores and is returned by GET', async () => {
+    const res = await patch('mystore', { enableCustomerJourney: true });
+    expect([200, 201]).toContain(res.status);
+    expect(verify.shopifyCalls).toBe(0);
+    expect(db.storesUpdates).toHaveLength(1);
+    expect(db.storesUpdates[0]).toMatchObject({ enable_customer_journey: true });
+    const body = await res.json();
+    expect(body.updated).toContain('enableCustomerJourney');
+  });
+
+  it('PATCH { enableCustomerJourney: false } sets enable_customer_journey=false (no verify, no creds)', async () => {
+    db.enableCustomerJourney = true;
+    const res = await patch('mystore', { enableCustomerJourney: false });
+    expect([200, 201]).toContain(res.status);
+    expect(db.storesUpdates).toHaveLength(1);
+    expect(db.storesUpdates[0]).toMatchObject({ enable_customer_journey: false });
+  });
+
+  it('GET returns enableCustomerJourney matching the stored value after a PATCH', async () => {
+    db.enableCustomerJourney = true;
+    const res = await getReq('mystore');
+    const body = await res.json();
+    expect(body.enableCustomerJourney).toBe(true);
   });
 
   it('404 when the store does not exist (no write)', async () => {

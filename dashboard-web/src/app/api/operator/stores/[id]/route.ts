@@ -60,6 +60,7 @@ interface PatchStoreBody {
   brandColor?: string;
   displayOrder?: number;
   hasTiktok?: boolean;
+  enableCustomerJourney?: boolean;
   shopify?: { clientId: string; clientSecret: string };
   meta?: { token: string; adAccountId: string };
   google?: { customerId: string; refreshToken: string };
@@ -204,7 +205,7 @@ export async function GET(_req: Request, ctx: RouteCtx): Promise<NextResponse> {
     const admin = getSupabaseAdmin();
     const { data: store, error: storeErr } = await admin
       .from('stores')
-      .select('id, name, brand_color, is_headless, has_tiktok, display_order')
+      .select('id, name, brand_color, is_headless, has_tiktok, display_order, enable_customer_journey')
       .eq('id', id)
       .maybeSingle();
     if (storeErr) throw new Error(storeErr.message);
@@ -233,6 +234,7 @@ export async function GET(_req: Request, ctx: RouteCtx): Promise<NextResponse> {
         brandColor: (store.brand_color as string | null) ?? null,
         displayOrder: store.display_order == null ? null : Number(store.display_order),
         hasTiktok: store.has_tiktok === true,
+        enableCustomerJourney: store.enable_customer_journey === true,
         platforms: platforms.sort(),
         hasWebhookSecret,
       },
@@ -270,6 +272,7 @@ export async function PATCH(req: Request, ctx: RouteCtx): Promise<NextResponse> 
   const brandColor = typeof body.brandColor === 'string' ? body.brandColor.trim() : undefined;
   const isHeadless = typeof body.isHeadless === 'boolean' ? body.isHeadless : undefined;
   const hasTiktok = typeof body.hasTiktok === 'boolean' ? body.hasTiktok : undefined;
+  const enableCustomerJourney = typeof body.enableCustomerJourney === 'boolean' ? body.enableCustomerJourney : undefined;
   const displayOrder = typeof body.displayOrder === 'number' && Number.isFinite(body.displayOrder)
     ? body.displayOrder
     : undefined;
@@ -298,7 +301,8 @@ export async function PATCH(req: Request, ctx: RouteCtx): Promise<NextResponse> 
   // Reject an empty body (nothing to do). webhookSecret counts as an updatable
   // field (Fix B1) — a webhookSecret-only PATCH must be accepted.
   const hasBasics = name !== undefined || shopDomain !== undefined || brandColor !== undefined
-    || isHeadless !== undefined || hasTiktok !== undefined || displayOrder !== undefined;
+    || isHeadless !== undefined || hasTiktok !== undefined || displayOrder !== undefined
+    || enableCustomerJourney !== undefined;
   const hasCreds = !!shopify || !!meta || !!google;
   if (!hasBasics && !hasCreds && webhookSecret === undefined) {
     return NextResponse.json({ error: 'empty body — nothing to update' }, { status: 400 });
@@ -448,6 +452,7 @@ export async function PATCH(req: Request, ctx: RouteCtx): Promise<NextResponse> 
     if (isHeadless !== undefined) storesPatch.is_headless = isHeadless;
     if (hasTiktok !== undefined) storesPatch.has_tiktok = hasTiktok;
     if (displayOrder !== undefined) storesPatch.display_order = displayOrder;
+    if (enableCustomerJourney !== undefined) storesPatch.enable_customer_journey = enableCustomerJourney;
     if (meta) storesPatch.meta_ad_account_id = meta.adAccountId;
     if (google) {
       storesPatch.google_ads_customer_id = google.customerId;
@@ -456,13 +461,14 @@ export async function PATCH(req: Request, ctx: RouteCtx): Promise<NextResponse> 
     if (Object.keys(storesPatch).length > 0) {
       const { error: storesErr } = await admin.from('stores').update(storesPatch).eq('id', id);
       if (storesErr) throw new Error(`stores update failed: ${storesErr.message}`);
-      for (const k of ['name', 'brandColor', 'isHeadless', 'hasTiktok', 'displayOrder'] as const) {
+      for (const k of ['name', 'brandColor', 'isHeadless', 'hasTiktok', 'displayOrder', 'enableCustomerJourney'] as const) {
         if (
           (k === 'name' && name !== undefined) ||
           (k === 'brandColor' && brandColor !== undefined) ||
           (k === 'isHeadless' && isHeadless !== undefined) ||
           (k === 'hasTiktok' && hasTiktok !== undefined) ||
-          (k === 'displayOrder' && displayOrder !== undefined)
+          (k === 'displayOrder' && displayOrder !== undefined) ||
+          (k === 'enableCustomerJourney' && enableCustomerJourney !== undefined)
         ) {
           updated.push(k);
         }
