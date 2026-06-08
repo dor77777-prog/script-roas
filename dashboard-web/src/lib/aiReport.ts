@@ -15,6 +15,7 @@ import type { Aggregated } from './campaignsAggregator';
 import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
 import { netAdjustFactor } from './home/revenueBasis';
 import { isAdsEnabled, isStoreFullyOff, type AdStateMap, type AdPlatform } from './adState';
+import { SOURCE_LABEL } from './sourceLabels';
 
 /**
  * Generates an AI-friendly markdown report for a store × date range.
@@ -664,24 +665,13 @@ export function generateAiReport({
   if (orders.length > 0) {
     // classify-v2 (2026-06): the canonical classifier emits tiktok-organic /
     // search-organic / app-referral in addition to the existing labels (see
-    // classifyOrderSource.ts). Every value needs a friendly Hebrew label here
-    // or the raw machine string leaks into the operator-facing table. NONE of
-    // the organic/referral labels are paid — this map is DISPLAY-only and does
-    // not feed any ROAS/paid-spend math.
-    const SOURCE_LABEL: Record<string, string> = {
-      'meta-paid':       'Meta (paid)',
-      'google-paid':     'Google (paid)',
-      'tiktok-paid':     'TikTok (paid)',
-      'meta-organic':    'Meta (organic)',
-      'google-organic':  'Google (organic)',
-      'tiktok-organic':  'טיקטוק אורגני',
-      'search-organic':  'חיפוש אורגני',
-      'app-referral':    'הפניה מאפליקציה',
-      email:             'אימייל',
-      'other-paid':      'אחר (paid)',
-      'other-referral':  'הפניה (לא מסווגת)',
-      direct:            'ישיר (no UTM)',
-    };
+    // classifyOrderSource.ts). Every value needs a friendly Hebrew label or the
+    // raw machine string leaks into the operator-facing table. The SOURCE_LABEL
+    // map is the SHARED vocabulary (lib/sourceLabels.ts) — the SAME source of
+    // truth the activity-feed <SourceBadge> uses (classify-v2 T3) so the report
+    // and the badge can never drift to different Hebrew words. NONE of the
+    // organic/referral labels are paid — this map is DISPLAY-only and does not
+    // feed any ROAS/paid-spend math.
     type Bucket = { count: number; revenue: number };
     const bySource: Record<string, Bucket> = {};
     let grandTotal = 0;
@@ -749,7 +739,11 @@ export function generateAiReport({
       (a, b) => b[1].revenue - a[1].revenue,
     );
     for (const [src, b] of sortedSources) {
-      const label = SOURCE_LABEL[src] ?? src;
+      // `src` is a raw string key; SOURCE_LABEL is keyed by the OrderSource
+      // union. Index via a permissive lookup and fall back to the raw string
+      // for any unknown/future label (same survive-don't-disappear philosophy
+      // as parseSource).
+      const label = (SOURCE_LABEL as Record<string, string>)[src] ?? src;
       const pct = grandTotal > 0 ? (b.revenue / grandTotal) * 100 : 0;
       const revenueNet = b.revenue * revenueNetAdj;
       const aovNet = b.count > 0 ? revenueNet / b.count : 0;

@@ -215,7 +215,13 @@ function EventRow({
         <span className="w-[7px] h-[7px] rounded-full" style={{ background: storeColor(display, 0, brandColor) }} aria-hidden />
         <bdi dir="ltr">{display}</bdi>
       </span>
-      {ev.type !== 'refund' && <SourceBadge source={ev.source} className="shrink-0" />}
+      {ev.type !== 'refund' && (
+        <SourceBadge
+          source={ev.source}
+          firstTouchSource={ev.first_touch_source}
+          className="shrink-0"
+        />
+      )}
 
       <span className="text-[11px] text-ink-subtle tabular-nums whitespace-nowrap shrink-0">
         <bdi dir="ltr">{ilTime(ev.received_at)}</bdi>

@@ -306,7 +306,9 @@ function EventRow({
             />
             <bdi dir="ltr">{display}</bdi>
           </span>
-          {ev.type !== 'refund' && <SourceBadge source={ev.source} />}
+          {ev.type !== 'refund' && (
+            <SourceBadge source={ev.source} firstTouchSource={ev.first_touch_source} />
+          )}
         </div>
       </div>
 

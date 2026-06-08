@@ -67,7 +67,7 @@ afterEach(() => {
 });
 
 describe('<ActivityFeed> — SourceBadge wiring', () => {
-  it('sale row with source="meta-paid" shows a Meta platform badge', () => {
+  it('sale row with source="meta-paid" shows a paid Meta badge (ממומן · מטא)', () => {
     swrReturn = {
       data: resp({
         lastReceivedAt: NOW,
@@ -76,13 +76,28 @@ describe('<ActivityFeed> — SourceBadge wiring', () => {
       error: undefined,
     };
     render(<ActivityFeed />);
-    // The SourceBadge renders a PlatformBadge for Meta, which contains the text "Meta".
-    expect(screen.getByText('Meta')).toBeInTheDocument();
-    // The source-badge wrapper testid is present.
-    expect(screen.getByTestId('source-badge')).toBeInTheDocument();
+    // The SourceBadge renders the platform identity (מטא) + the paid qualifier.
+    const badge = screen.getByTestId('source-badge');
+    expect(badge).toHaveTextContent('ממומן');
+    expect(badge).toHaveTextContent('מטא');
   });
 
-  it('add_to_cart row with source="google-paid" shows a Google platform badge', () => {
+  it('sale row with source="meta-organic" shows the organic qualifier (אורגני), distinct from paid', () => {
+    swrReturn = {
+      data: resp({
+        lastReceivedAt: NOW,
+        events: [row({ id: 's1o', type: 'sale', source: 'meta-organic' })],
+      }),
+      error: undefined,
+    };
+    render(<ActivityFeed />);
+    const badge = screen.getByTestId('source-badge');
+    expect(badge).toHaveTextContent('אורגני');
+    expect(badge).toHaveTextContent('מטא');
+    expect(badge).not.toHaveTextContent('ממומן');
+  });
+
+  it('add_to_cart row with source="google-paid" shows a Google paid badge', () => {
     swrReturn = {
       data: resp({
         lastReceivedAt: NOW,
@@ -91,8 +106,36 @@ describe('<ActivityFeed> — SourceBadge wiring', () => {
       error: undefined,
     };
     render(<ActivityFeed />);
-    expect(screen.getByText('Google')).toBeInTheDocument();
-    expect(screen.getByTestId('source-badge')).toBeInTheDocument();
+    const badge = screen.getByTestId('source-badge');
+    expect(badge).toHaveTextContent('ממומן');
+    expect(badge).toHaveTextContent('גוגל');
+  });
+
+  it('weak source (direct) + first_touch_source=meta-paid → first-click lens wired through', () => {
+    swrReturn = {
+      data: resp({
+        lastReceivedAt: NOW,
+        events: [row({ id: 'd1', type: 'sale', source: 'direct', first_touch_source: 'meta-paid' })],
+      }),
+      error: undefined,
+    };
+    render(<ActivityFeed />);
+    expect(screen.getByTestId('source-badge')).toHaveTextContent('ישיר');
+    expect(screen.getByTestId('first-click-lens')).toHaveTextContent('מטא');
+  });
+
+  it('email row renders its own distinct "אימייל" chip (not collapsed to ישיר)', () => {
+    swrReturn = {
+      data: resp({
+        lastReceivedAt: NOW,
+        events: [row({ id: 'e1', type: 'sale', source: 'email' })],
+      }),
+      error: undefined,
+    };
+    render(<ActivityFeed />);
+    const badge = screen.getByTestId('source-badge');
+    expect(badge).toHaveTextContent('אימייל');
+    expect(badge).not.toHaveTextContent('ישיר');
   });
 
   it('refund row does NOT show any source badge (even if source is set)', () => {
@@ -133,9 +176,9 @@ describe('<ActivityFeed> — SourceBadge wiring', () => {
       error: undefined,
     };
     render(<ActivityFeed />);
-    // 2 non-refund rows with sources → 2 badges (Meta + TikTok).
+    // 2 non-refund rows with sources → 2 badges (מטא + טיקטוק).
     expect(screen.getAllByTestId('source-badge').length).toBe(2);
-    expect(screen.getByText('Meta')).toBeInTheDocument();
-    expect(screen.getByText('TikTok')).toBeInTheDocument();
+    expect(screen.getByText('מטא')).toBeInTheDocument();
+    expect(screen.getByText('טיקטוק')).toBeInTheDocument();
   });
 });
