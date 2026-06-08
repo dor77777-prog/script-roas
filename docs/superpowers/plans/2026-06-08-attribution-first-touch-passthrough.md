@@ -330,8 +330,54 @@ describe('snippets are CAPI-safe (reporting-only) + carry _ft_* (new-store parit
 
 ---
 
-## Phase 2 (separate later plan — NOT in this plan)
-Shopify `customerJourneySummary` (GraphQL) for even richer first/last-visit UTM. Gated on Shopify **Protected Customer Data** approval (operator/app-review step). Write its own spec+plan when the scope is granted; ships behind a feature flag so it can't affect Phase 1.
+## Task 8: Shopify `customerJourneySummary` GraphQL reader (capability-gated)
+
+**Files:**
+- Create: `dashboard-web/src/lib/fetchers/shopifyCustomerJourney.ts`
+- Read first: `dashboard-web/src/lib/fetchers/shopifyBulkFirstOrder.ts` (the existing Admin GraphQL POST pattern: `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, header `X-Shopify-Access-Token`, userErrors handling) — reuse its request shape.
+- Test: `dashboard-web/src/lib/fetchers/__tests__/shopifyCustomerJourney.test.ts` (new)
+
+**What:** A reader that, given a store domain + token + a list of order GIDs (or a date filter), runs an Admin GraphQL query for `customerJourneySummary` and returns `Map<orderId, { first: VisitUtm; last: VisitUtm }>` where `VisitUtm = { landingPage, source, utmSource, utmMedium, utmCampaign, utmContent, utmTerm }`. Parse `utm_id` out of `landingPage` (Shopify's `UTMParameters` type has source/medium/campaign/content/term but NOT id, so `utm_id` must come from the landing URL query). **Capability-gated:** Protected Customer Data is required — on a GraphQL error whose code/message indicates access denied (e.g. `ACCESS_DENIED`, `not approved to access`, `Protected customer data`), return an empty map AND a `{ unavailable: true }` flag; never throw, never regress. Gated behind env `ENABLE_SHOPIFY_CUSTOMER_JOURNEY` (default off).
+
+GraphQL document (API 2026-04):
+```graphql
+query($ids: [ID!]!) {
+  nodes(ids: $ids) {
+    ... on Order {
+      id
+      customerJourneySummary {
+        firstVisit { landingPage source utmParameters { source medium campaign content term } }
+        lastVisit  { landingPage source utmParameters { source medium campaign content term } }
+      }
+    }
+  }
+}
+```
+
+- [ ] **Step 1: Failing tests** — mock `fetch`:
+  - returns parsed first/last UTM for an order whose `firstVisit.landingPage` is `/p?utm_id=c1&utm_campaign=Sale` → `first.utmCampaign === 'Sale'` AND parsed `utm_id` (expose it as `first.utmId === 'c1'`).
+  - a GraphQL response with `errors: [{ extensions: { code: 'ACCESS_DENIED' } }]` (or message containing "Protected customer data") → returns `{ map: empty, unavailable: true }`, no throw.
+  - `ENABLE_SHOPIFY_CUSTOMER_JOURNEY` unset → the reader returns empty + `disabled: true` without making a request.
+- [ ] **Step 2: Run → RED.** `npx vitest run src/lib/fetchers/__tests__/shopifyCustomerJourney.test.ts`
+- [ ] **Step 3: Implement** the reader (reuse `shopifyBulkFirstOrder.ts`'s POST pattern + `SHOPIFY_API_VERSION`). Parse `utm_id` from `landingPage` via `URLSearchParams(new URL(landingPage, 'https://x').search)`. Batch GIDs (≤250 per `nodes` call). Capability detection as above.
+- [ ] **Step 4: Run → GREEN;** `npx tsc --noEmit` → 0.
+- [ ] **Step 5: Commit** `feat(attribution): Shopify customerJourneySummary GraphQL reader (capability-gated, flag-off default)`
+
+## Task 9: Merge customerJourney UTM into orders_attribution (gap-fill only)
+
+**Files:**
+- Modify: `dashboard-web/src/lib/fetchers/shopify.ts` (the order-build path, after `classifyOrderAttribution(o)` ~952) — when the flag is on AND the reader returned data, FILL missing first-touch fields from the journey.
+- Test: `dashboard-web/src/lib/__tests__/shopifyCustomerJourneyMerge.test.ts` (new)
+
+**Rule (zero-regression, last-wins):** only FILL a field that is currently empty/null. Journey's `firstVisit` → `firstUtm*` (and `firstUtmId` from the parsed landing `utm_id`); journey's `lastVisit` → last-touch `utm*` ONLY when the order's REST `utm*` is empty. NEVER overwrite a present value; NEVER change `source` (platform-$ classification stays). When the flag is off or the reader is unavailable, the merge is a no-op → byte-identical to today.
+
+- [ ] **Step 1: Failing test** — an order with empty `utmId`/`firstUtmId` + a journey map entry `{ first: { utmId: 'c1', utmCampaign: 'Sale' } }` → after merge, `firstUtmId === 'c1'`. An order whose `utmId` is already `'c9'` + journey `first.utmId==='c1'` → `utmId` stays `'c9'` (no overwrite), `firstUtmId` filled from journey. Flag off → no change.
+- [ ] **Step 2: Run → RED.**
+- [ ] **Step 3: Implement** — extract a pure helper `mergeCustomerJourney(row, journeyEntry): OrderAttributionRow` (new small exported fn, easy to unit-test) and call it in `shopify.ts` after classification when the flag/data are present. The GraphQL fetch itself is wired into the order-sync flow (one `nodes` batch per page of orders).
+- [ ] **Step 4: Run → GREEN;** `npx tsc --noEmit` → 0; full attribution suite green.
+- [ ] **Step 5: Commit** `feat(attribution): gap-fill orders_attribution first-touch UTM from Shopify customerJourneySummary (flag-gated, never overwrites)`
+
+> **Operator dependency (Task 7 deploy guide must document):** `customerJourneySummary` needs Shopify **Protected Customer Data** approval per custom app (request data-protection access + the "Customer data" use in each app's API access page; analogous to the prior `read_customers` grant). Until approved the reader self-detects ACCESS_DENIED and stays a no-op. Flip `ENABLE_SHOPIFY_CUSTOMER_JOURNEY=1` once approved.
 
 ---
 

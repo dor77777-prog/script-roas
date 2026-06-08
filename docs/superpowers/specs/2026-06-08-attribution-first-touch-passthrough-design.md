@@ -107,7 +107,7 @@ Read Shopify's own `Order.customerJourneySummary` (firstVisit/lastVisit UTM + mo
 ## 6. Phasing
 
 - **Phase 1 (ships first, no Shopify scope):** Layer 1 (themed + headless snippets + generator + docs) · Layer 2 (analyzer first-touch fallback + wire ad-level) · Layer 4 (de-dup) · all guards.
-- **Phase 2 (flagged, gated on Protected Customer Data approval):** Layer 3 (`customerJourneySummary` GraphQL).
+- **Phase 2 (IN SCOPE per operator 2026-06-08; flag-gated, self-detecting):** Layer 3 (`customerJourneySummary` GraphQL reader + gap-fill merge). Built now, ships **flag-off** (`ENABLE_SHOPIFY_CUSTOMER_JOURNEY`) and auto-detects ACCESS_DENIED → no-op until the operator grants Shopify **Protected Customer Data** approval per custom app. `firstVisit.landingPage` carries `utm_id` (Shopify's `UTMParameters` lacks id) so the campaign id is parsed from the landing URL.
 - Operator deploy (after Phase 1 build): paste the theme snippet into uzoshop + zolplus themes; add the Lovable cart-attribute write to usmile360. Exact, store-by-store instructions provided at hand-off.
 
 ---
