@@ -502,8 +502,8 @@ export function CustomerValueCurve({
         />
       </svg>
 
-      {/* Hover/tap tooltip — shared rich-card chrome (bg-glass-1/95 +
-          backdrop-blur-sm + border-glass-edge + rounded-card + shadow-overlay),
+      {/* Hover/tap tooltip — shared rich-card chrome (bg-glass-1 (opaque) +
+          border-glass-edge + rounded-card + shadow-overlay),
           matching the RichPopover / Toggletip surfaces. Bespoke SVG anchoring
           is preserved (left/top % from the viewBox point). role="tooltip" +
           dir="rtl"; the bubble is non-interactive (pointer-events-none) so the
@@ -513,7 +513,7 @@ export function CustomerValueCurve({
           data-testid="cv-curve-tooltip"
           role="tooltip"
           dir="rtl"
-          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[118%] rounded-card border border-glass-edge bg-glass-1/95 px-2.5 py-1.5 text-xs leading-snug text-ink shadow-overlay backdrop-blur-sm"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[118%] rounded-card border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-xs leading-snug text-ink shadow-overlay"
           style={{ left: `${tipLeftPct}%`, top: `${tipTopPct}%` }}
         >
           <div className="text-[11px] font-semibold text-ink-muted">

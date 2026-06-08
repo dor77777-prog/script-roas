@@ -27,8 +27,8 @@ export function ChartTooltip({
     <div
       dir="rtl"
       className={cn(
-        'rounded-lg bg-glass-1/95 border border-glass-edge text-ink',
-        'px-3 py-2 text-xs shadow-overlay backdrop-blur-sm',
+        'rounded-lg bg-glass-1 border border-glass-edge text-ink',
+        'px-3 py-2 text-xs shadow-overlay',
         'min-w-[160px]',
         className,
       )}

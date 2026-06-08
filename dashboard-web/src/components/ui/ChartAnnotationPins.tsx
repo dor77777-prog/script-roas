@@ -184,7 +184,7 @@ export function ChartAnnotationPins({
                   // amber milestone accent border (ties the bubble to the pin
                   // glyph). Matches the hero chart's pin tooltip exactly.
                   'absolute z-10 w-max max-w-[14rem] text-ink px-3 py-2 rounded-card',
-                  'bg-glass-1/95 backdrop-blur-sm border border-status-warning shadow-overlay',
+                  'bg-glass-1 border border-status-warning shadow-overlay',
                   'animate-in fade-in-0 slide-in-from-bottom-1 duration-snap ease-out',
                 )}
                 style={{ transform: 'translateX(-50%)', top: -64 }}

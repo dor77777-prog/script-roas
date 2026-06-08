@@ -1,8 +1,9 @@
 /**
- * Tests for the 30-day first-touch freshness window.
+ * Tests for the 7-day first-touch freshness window.
  *
  * A first-touch older than FIRST_TOUCH_WINDOW_DAYS relative to the conversion
  * time is dropped — the customer is no longer credited to that paid platform.
+ * 7 days matches Meta's 7-day click-attribution window (conservative).
  * See classifyOrderAttribution `conversionAt` parameter.
  */
 import { describe, expect, it } from 'vitest';
@@ -33,8 +34,8 @@ const FT_ATTRS_META = {
 };
 
 describe('FIRST_TOUCH_WINDOW_DAYS constant', () => {
-  it('is exported and equals 30', () => {
-    expect(FIRST_TOUCH_WINDOW_DAYS).toBe(30);
+  it('is exported and equals 7', () => {
+    expect(FIRST_TOUCH_WINDOW_DAYS).toBe(7);
   });
 });
 
@@ -65,8 +66,8 @@ describe('first-touch freshness window gate', () => {
     expect(result.firstSeenAt).toBeNull();
   });
 
-  it('honors first-touch when set_at is 10 days before conversionAt (within window)', () => {
-    const setAt = daysBeforeIso(CONVERSION_AT, 10);
+  it('honors first-touch when set_at is 3 days before conversionAt (within window)', () => {
+    const setAt = daysBeforeIso(CONVERSION_AT, 3);
     const result = classifyOrderAttribution(
       {
         note_attributes: noteAttrs({
@@ -141,8 +142,8 @@ describe('first-touch freshness window gate', () => {
     expect(withoutGate.firstTouchSource).toBe('meta-paid'); // honored (no conversionAt)
   });
 
-  it('honors first-touch when set_at is exactly at boundary (30 days = within window)', () => {
-    const setAt = daysBeforeIso(CONVERSION_AT, 30);
+  it('honors first-touch when set_at is exactly at boundary (7 days = within window)', () => {
+    const setAt = daysBeforeIso(CONVERSION_AT, 7);
     const result = classifyOrderAttribution(
       {
         note_attributes: noteAttrs({
@@ -153,12 +154,12 @@ describe('first-touch freshness window gate', () => {
       { conversionAt: CONVERSION_AT },
     );
 
-    // 30 days exactly is <= window → honored.
+    // 7 days exactly is <= window → honored.
     expect(result.firstTouchSource).toBe('meta-paid');
   });
 
-  it('drops first-touch when set_at is 31 days before conversionAt (just outside window)', () => {
-    const setAt = daysBeforeIso(CONVERSION_AT, 31);
+  it('drops first-touch when set_at is 8 days before conversionAt (just outside window)', () => {
+    const setAt = daysBeforeIso(CONVERSION_AT, 8);
     const result = classifyOrderAttribution(
       {
         note_attributes: noteAttrs({

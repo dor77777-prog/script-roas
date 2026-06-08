@@ -54,11 +54,12 @@ export const FBC_CLICK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // Meta default 7-da
 /**
  * Standard first-touch credit window (in days). A first-touch older than this
  * relative to the conversion time is ignored — the customer is NOT credited to
- * the paid platform that acquired them long ago. Adjustable here without
- * touching any call-site (all callers pass `conversionAt`; back-compat is
- * preserved for callers that don't).
+ * the paid platform that acquired them long ago. 7 days matches Meta's 7-day
+ * click-attribution window (conservative). Adjustable here without touching any
+ * call-site (all callers pass `conversionAt`; back-compat is preserved for
+ * callers that don't).
  */
-export const FIRST_TOUCH_WINDOW_DAYS = 30;
+export const FIRST_TOUCH_WINDOW_DAYS = 7;
 
 export function fbcIsFreshClick(
   fbc: string | undefined | null,

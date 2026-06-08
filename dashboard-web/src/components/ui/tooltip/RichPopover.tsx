@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
  * outside click also close (Radix defaults).
  *
  * Chrome — existing tokens only, light + dark first-class (matches the approved
- * mockup `.pop` + `ChartTooltip`): `bg-glass-1/95 backdrop-blur-sm
+ * mockup `.pop` + `ChartTooltip`): `bg-glass-1 (opaque)
  * border-glass-edge rounded-card shadow-overlay`, `max-w-sm`, arrow
  * `fill-glass-1`. Optional `title` → `text-sm font-semibold text-ink`; body →
  * `text-xs text-ink-secondary whitespace-pre-line` (fixes the `\n` no-break
@@ -130,7 +130,7 @@ export function RichPopover({
           onOpenAutoFocus={(e) => e.preventDefault()}
           className={cn(
             withinDrawer ? 'z-[60]' : 'z-50',
-            'max-w-sm rounded-card border border-glass-edge bg-glass-1/95 backdrop-blur-sm shadow-overlay',
+            'max-w-sm rounded-card border border-glass-edge bg-glass-1 shadow-overlay',
             'px-3 py-2 text-start',
             'animate-in fade-in-0 zoom-in-95',
             className,

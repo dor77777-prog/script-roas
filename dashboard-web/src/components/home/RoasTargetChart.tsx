@@ -947,7 +947,7 @@ export function RoasTargetChart({
                   // pointer-events-none keeps it a passive crosshair readout, so
                   // role="tooltip" is correct (no focusable content inside).
                   'absolute z-10 -translate-x-1/2 w-max min-w-[9.5rem] px-3 py-2 rounded-card',
-                  'bg-glass-1/95 backdrop-blur-sm border border-glass-edge shadow-overlay',
+                  'bg-glass-1 border border-glass-edge shadow-overlay',
                   'text-[12px] text-ink pointer-events-none',
                 )}
                 style={{ transform: 'translateX(-50%)', top: -84 }}

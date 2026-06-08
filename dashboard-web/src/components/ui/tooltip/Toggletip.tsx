@@ -29,7 +29,7 @@ import { isNonPhrasingChild } from './phrasing';
  *     text/numbers; anything interactive would have been a Sheet/dialog).
  *
  * Chrome — existing tokens only, light + dark first-class (mirrors the approved
- * mockup `.mpop` + the desktop `RichPopover`): `bg-glass-1/95 backdrop-blur-sm
+ * mockup `.mpop` + the desktop `RichPopover`): `bg-glass-1 (opaque)
  * border-glass-edge rounded-card shadow-overlay`. Glyph `text-ink-muted` →
  * `text-accent` on hover/focus.
  */
@@ -106,7 +106,7 @@ export function Toggletip({
             className={cn(
               withinDrawer ? 'z-[60]' : 'z-50',
               'max-w-[min(15rem,calc(100vw-1.75rem))] rounded-card',
-              'border border-glass-edge bg-glass-1/95 backdrop-blur-sm shadow-overlay',
+              'border border-glass-edge bg-glass-1 shadow-overlay',
               'px-3 py-2 text-start text-xs text-ink-secondary whitespace-pre-line leading-relaxed',
               'animate-in fade-in-0 zoom-in-95',
               className,
