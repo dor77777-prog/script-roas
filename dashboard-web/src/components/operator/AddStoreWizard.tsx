@@ -1162,7 +1162,16 @@ function Step3({ created, onDone }: { created: CreatedStore; onDone: () => void 
       )}
 
       <CodeBlock label={`Snippet להטמעה (${snippet.kind})`} code={snippet.primary} />
-      {snippet.secondary && <CodeBlock label="Edge function" code={snippet.secondary} />}
+      {snippet.secondary && (
+        <CodeBlock
+          label={
+            snippet.kind === 'headless'
+              ? 'Edge function'
+              : 'Theme snippet — _ft_* cart attributes (הדבק ב-theme.liquid)'
+          }
+          code={snippet.secondary}
+        />
+      )}
       {snippet.note && (
         <Text as="p" tone="muted" className="mb-4 text-xs">
           {snippet.note}
@@ -1181,11 +1190,17 @@ function Step3({ created, onDone }: { created: CreatedStore; onDone: () => void 
           רשום webhook הזמנות/החזרים → <span dir="ltr">/api/webhooks/shopify</span>. הדבק כאן
           את ה-signing secret ש-Shopify הציג כשרשמת את ה-webhook (לא ה-Client Secret).
         </li>
-        <li>
-          {created.isHeadless
-            ? 'עדכן את ה-env של ה-edge-fn (ROAS_STORE_TOKEN) לפי ה-snippet'
-            : 'הדבק את ה-Custom Pixel ב-Shopify לפי ה-snippet'}
-        </li>
+        {created.isHeadless ? (
+          <li>עדכן את ה-env של ה-edge-fn (ROAS_STORE_TOKEN) לפי ה-snippet</li>
+        ) : (
+          <>
+            <li>הדבק את ה-Custom Pixel (primary) ב-Shopify → Settings → Customer events</li>
+            <li>
+              הדבק את ה-Theme snippet (secondary) ב-theme.liquid — כותב _ft_* cart attributes
+              כך שההזמנות נושאות את מזהי הקמפיין/מודעה
+            </li>
+          </>
+        )}
         <li>מיפוי TikTok נעשה ידנית מאוחר יותר ב-drawer של הקמפיין (חשבון משותף)</li>
       </ul>
 

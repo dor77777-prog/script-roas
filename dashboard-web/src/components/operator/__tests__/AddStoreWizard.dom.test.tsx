@@ -282,6 +282,32 @@ describe('AddStoreWizard — ADD mode (Phase 6a Task 5)', () => {
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
+  it('step 3 THEMED: secondary CodeBlock is labelled as a theme/cart-attr snippet (not "Edge function"), and checklist covers both snippets', async () => {
+    // Default responder returns isHeadless=false (themed store).
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    fillValidStep1();
+    clickNext();
+    fill(/Shopify client_id/i, 'cid_123');
+    fill(/Shopify.*secret/i, 'shpss_secret');
+    fireEvent.click(screen.getByLabelText(/שמור בכל זאת/));
+    fireEvent.click(screen.getByRole('button', { name: /צור חנות/ }));
+
+    // Wait for Step 3 to render.
+    await screen.findByText(/ct_TESTTOKEN_123/);
+
+    // The secondary CodeBlock label must NOT say "Edge function" for a themed store.
+    expect(screen.queryByText('Edge function')).toBeNull();
+
+    // The secondary CodeBlock label must mention theme / cart attrs / _ft_.
+    expect(screen.getAllByText(/theme|תבנית|cart\.attr|_ft_/i).length).toBeGreaterThan(0);
+
+    // Checklist must include instructions to paste the Custom Pixel (primary).
+    expect(screen.getAllByText(/Custom Pixel/i).length).toBeGreaterThan(0);
+
+    // Checklist must also include instructions to paste the Theme snippet (secondary).
+    expect(screen.getAllByText(/[Tt]heme snippet|theme\.liquid/i).length).toBeGreaterThan(0);
+  });
+
   it('surfaces the server 409 error on Create (duplicate store id)', async () => {
     responder = (url) => {
       if (url.includes('verify-creds')) {
