@@ -28,6 +28,7 @@ import { ActivityTab } from './ActivityTab';
 import { DangerTab } from './DangerTab';
 import { AdStateTab } from './AdStateTab';
 import { StoresTab } from './StoresTab';
+import { AttributionDiagTab } from './AttributionDiagTab';
 
 // Task 5.1 (P1-21): "בריאות" is the default tab. Kept in sync with page.tsx's
 // previous TABS array; "חנויות" is the credential-matrix tab the ad-state
@@ -39,6 +40,7 @@ const TABS = [
   ['danger', 'מסוכן'],
   ['ads', 'מצב פרסום'],
   ['stores', 'חנויות'],
+  ['attribution-diag', 'אבחון סיווג'],
 ] as const;
 
 export function OperatorTabs() {
@@ -78,6 +80,9 @@ export function OperatorTabs() {
       </TabsContent>
       <TabsContent value="stores">
         <StoresTab />
+      </TabsContent>
+      <TabsContent value="attribution-diag">
+        <AttributionDiagTab />
       </TabsContent>
     </Tabs>
   );
