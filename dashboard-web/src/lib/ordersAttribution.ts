@@ -147,31 +147,42 @@ export function parseSource(v: unknown): OrderSource {
  */
 export function parseLineItems(v: unknown): OrderLineItem[] {
   if (v === null || v === undefined || v === '') return [];
-  const raw = typeof v === 'string' ? v : String(v);
-  if (!raw.trim()) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      // Require it.p to be a non-empty string (WR-08). Without this,
-      // String(it.p ?? '') would happily accept e.g. {p: [1,2,3]} and
-      // emit productId="1,2,3" — a synthetic ID that never appears in
-      // the catalog.
-      .filter((it): it is { p: string; u: unknown; r: unknown } =>
-        it !== null && typeof it === 'object' &&
-        typeof (it as { p?: unknown }).p === 'string' &&
-        (it as { p: string }).p.trim().length > 0,
-      )
-      .map(it => ({
-        productId: String(it.p ?? '').trim(),
-        units: Number(it.u ?? 0),
-        revenueCad: Number(it.r ?? 0),
-      }))
-      .filter(li =>
-        Number.isFinite(li.units) &&
-        Number.isFinite(li.revenueCad),
-      );
-  } catch {
-    return [];
+  // supabase-js decodes the jsonb `line_items` column to a JS array BEFORE
+  // our code sees it — that's the live /api/activity-stats path. The old
+  // code assumed a string and did `JSON.parse(String(array))` →
+  // `JSON.parse('[object Object],…')` → throw → caught → []. So branch:
+  //   - already-parsed array (supabase jsonb) → use as-is
+  //   - JSON string (legacy/text/Sheets-era) → JSON.parse
+  let parsed: unknown;
+  if (Array.isArray(v)) {
+    parsed = v;
+  } else {
+    const raw = typeof v === 'string' ? v : String(v);
+    if (!raw.trim()) return [];
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return [];
+    }
   }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    // Require it.p to be a non-empty string (WR-08). Without this,
+    // String(it.p ?? '') would happily accept e.g. {p: [1,2,3]} and
+    // emit productId="1,2,3" — a synthetic ID that never appears in
+    // the catalog.
+    .filter((it): it is { p: string; u: unknown; r: unknown } =>
+      it !== null && typeof it === 'object' &&
+      typeof (it as { p?: unknown }).p === 'string' &&
+      (it as { p: string }).p.trim().length > 0,
+    )
+    .map(it => ({
+      productId: String(it.p ?? '').trim(),
+      units: Number(it.u ?? 0),
+      revenueCad: Number(it.r ?? 0),
+    }))
+    .filter(li =>
+      Number.isFinite(li.units) &&
+      Number.isFinite(li.revenueCad),
+    );
 }

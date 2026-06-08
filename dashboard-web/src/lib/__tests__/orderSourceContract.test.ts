@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSource } from '@/lib/ordersAttribution';
+import { parseSource, parseLineItems } from '@/lib/ordersAttribution';
 import type { OrderSource } from '@/lib/ordersAttribution';
 
 /**
@@ -60,5 +60,59 @@ describe('OrderSource writer↔reader contract', () => {
   it('trims surrounding whitespace before classification', () => {
     expect(parseSource('  meta-paid  ')).toBe('meta-paid');
     expect(parseSource('\tgoogle-organic\n')).toBe('google-organic');
+  });
+});
+
+/**
+ * parseLineItems must handle BOTH storage formats that reach it:
+ *   - an already-PARSED array (supabase-js decodes the jsonb `line_items`
+ *     column to a JS array before our code sees it) — this is the LIVE path
+ *     for the /api/activity-stats per-product table.
+ *   - a JSON STRING (legacy/text fixtures, the Sheets-era writer).
+ *
+ * The live bug: the function assumed a string and did
+ * `JSON.parse(String(array))` → `JSON.parse('[object Object],[object Object]')`
+ * → throws → caught → `[]`. Every product showed 0 purchases. The array
+ * test below bites on the broken implementation and is the regression pin.
+ */
+describe('parseLineItems — supabase jsonb array + legacy JSON string', () => {
+  it('parses an already-parsed ARRAY (supabase jsonb — the live path)', () => {
+    const out = parseLineItems([
+      { p: '123', u: 2, r: 31.1 },
+      { p: '456', u: 1, r: 15 },
+    ]);
+    expect(out).toEqual([
+      { productId: '123', units: 2, revenueCad: 31.1 },
+      { productId: '456', units: 1, revenueCad: 15 },
+    ]);
+  });
+
+  it('still parses a JSON STRING (legacy/text — must not regress)', () => {
+    const out = parseLineItems(
+      JSON.stringify([{ p: '123', u: 2, r: 31.1 }, { p: '456', u: 1, r: 15 }]),
+    );
+    expect(out).toEqual([
+      { productId: '123', units: 2, revenueCad: 31.1 },
+      { productId: '456', units: 1, revenueCad: 15 },
+    ]);
+  });
+
+  it('drops elements with empty/non-string productId in BOTH formats', () => {
+    expect(parseLineItems([{ p: '', u: 1, r: 1 }, { p: 'A', u: 1, r: 1 }])).toEqual([
+      { productId: 'A', units: 1, revenueCad: 1 },
+    ]);
+    expect(
+      parseLineItems(JSON.stringify([{ p: '', u: 1, r: 1 }, { p: 'A', u: 1, r: 1 }])),
+    ).toEqual([{ productId: 'A', units: 1, revenueCad: 1 }]);
+  });
+
+  it('returns [] for empty / null / undefined / non-array / malformed', () => {
+    expect(parseLineItems(null)).toEqual([]);
+    expect(parseLineItems(undefined)).toEqual([]);
+    expect(parseLineItems('')).toEqual([]);
+    expect(parseLineItems('   ')).toEqual([]);
+    expect(parseLineItems('not json')).toEqual([]);
+    expect(parseLineItems({ p: '1', u: 1, r: 1 })).toEqual([]); // object, not array
+    expect(parseLineItems(42)).toEqual([]);
   });
 });
