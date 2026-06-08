@@ -7,7 +7,7 @@
  * - env='1' + ACCESS_DENIED errors → unavailable:true, no throw.
  * - env='1' + throwing fetch → degrades to empty result, no throw.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { fetchCustomerJourney } from '../shopifyCustomerJourney';
 
 const DOMAIN = 'test-store.myshopify.com';
@@ -228,7 +228,7 @@ describe('fetchCustomerJourney', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network failure')));
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const result = await expect(
+    await expect(
       fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID]),
     ).resolves.toMatchObject({ disabled: false, unavailable: false });
 

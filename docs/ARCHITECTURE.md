@@ -3569,3 +3569,71 @@ Phase 6b is the operator-facing **lifecycle half** of self-serve store managemen
 **Removed-area + the Radix typed-name delete modal (T3).** `StoresTab.tsx` owns the lifecycle handlers (`handleArchive`/`handleRestore` POST the routes + re-fetch; `handleDelete` DELETEs with `{confirmName}` + re-fetches on success, surfacing the server's Hebrew error text — e.g. the 409 — back to the modal). `StoreRow.tsx` renders an **"העבר לארכיון"** action on each active row. `RemovedStores.tsx` (presentational) renders ONLY archived rows (`status==='archived'`) as a muted **"חנויות שהוסרו"** list BELOW the active `StoreList` (NO info loss — active + removed both visible; renders nothing when there are no archived stores), each tagged **"הוסרה"** with a **"שחזר"** action and (when `onDelete` is wired) a destructive **"מחק לצמיתות"** button. Clicking delete opens `DeleteConfirmModal` — a **Radix dialog routed through the shared `Sheet` primitive (`variant="modal"`)**, NEVER a hand-rolled fixed-overlay div (the modal-over-Sheet inertness rule, [[modal-over-sheet-must-be-radix]]): it is focus-trapped, Esc-closable, has a real `role=dialog` + accessible Title/Description, and lists exactly what gets wiped. The confirm button is **DISABLED until the typed value EXACTLY equals the store name** (client gate; the server re-checks both `confirmName===name` AND `status==='archived'`, so a stale UI can't force a wrongful wipe). On ok → close + parent re-fetches (store disappears); on error → modal STAYS open + shows the server message inline. Delete is OPTIONAL (omitting `onDelete` renders restore-only — back-compat). Build-to-standard: token-only colours, shared primitives (Card/Button/Badge/Input/Sheet/Typography), light+dark, RTL Hebrew, mobile-first, destructive emphasis via `status-red` tokens.
 
 **Audit + gate.** `ciSecretsAudit.test.ts` was extended to COVER all three lifecycle routes (archive POST / restore POST / DELETE) — each is invoked with every secret-env stubbed to a sentinel and the response scanned for any sentinel/secret-shaped value; the DELETE is fed an ARCHIVED store with the matching `confirmName` so BOTH guards pass and the **full wipe path actually runs** against the mock, proving even the most dangerous response carries no secret. The full gate (unit + jsdom + tsc + lint) is green and the prior no-regression anchors remain green — the lifecycle surface is purely additive. **Phase 7** (remove the hardcoded fallback store lists + per-store Vercel env vars, after 1+ week stable) follows.
+
+## 52. First-touch attribution passthrough: `_ft_*` cart-attributes + analyzer last-click/first-touch merge + Shopify customer-journey gap-fill (2026-06-08)
+
+This section covers the full end-to-end chain that carries a visitor's first UTM signal from the storefront all the way into per-campaign/ad analysis. Three independent sub-systems cooperate; all are additive and backward-compatible.
+
+---
+
+### 52.1 `_ft_*` cart-attribute capture path
+
+**Why not the Custom Pixel alone.** The Shopify Custom Pixel (§ in `docs/storefront-snippets/first-touch-attribution.md`, Section 1) runs inside a **sandboxed iframe** with no access to the real `document`, `window`, or Shopify's Cart API. It can persist first-touch UTM into `browser.localStorage` (Shopify's async Standard API) and send the `first_touch` bag to `/api/events/cart`, which populates `first_touch_source` on `store_events`. But it **cannot write Shopify cart attributes** — that API is unavailable in the sandbox. Cart attributes are the channel that flows first-touch data into **order** `note_attributes`, which is what the nightly Shopify fetcher reads when it populates `orders_attribution.first_utm_*`.
+
+**Themed stores (uzoshop, Zol Plus) — theme snippet (Section 1b).** A `<script>` block pasted into `theme.liquid` (before `</body>`) runs in the **real page context** with full access to `localStorage` and the Cart AJAX API. On every page load it:
+1. Reads `localStorage._ft_attr` — the same key the Custom Pixel writes on `page_viewed`.
+2. If a first-touch bag is present and the session flag `sessionStorage._ft_cart_written` is not set, it decodes the bag and writes one cart attribute per UTM/click-id key, prefixed `_ft_` (`_ft_utm_source`, `_ft_utm_medium`, `_ft_utm_campaign`, `_ft_utm_content`, `_ft_utm_id`, `_ft_utm_term`, `_ft_fbclid`, `_ft_gclid`, `_ft_ttclid`, `_ft_set_at`).
+3. On success, sets `sessionStorage._ft_cart_written = '1'` — the write is **idempotent per session** (no thundering writes on SPA navigation).
+
+The attributes flow: `_ft_*` cart attributes → order `note_attributes` → `classifyOrderSource` in the Shopify fetcher strips the leading `_` and maps each to a `firstUtm*` field on the `orders_attribution` row.
+
+**Headless store (usmile360 — Lovable + Storefront API).** The Lovable frontend has no theme.liquid and no Cart AJAX API. Instead, the Lovable client reads `localStorage._ft_attr` at checkout / cart-creation and writes the same `_ft_*` attribute bag via the Storefront API `cartCreate(input: { attributes })` or `cartAttributesUpdate(cartId, attributes)` call. The order writer reads those attributes identically — same keys, same mapping — so the downstream path is byte-for-byte the same as the themed path. The store token must remain server-side (edge function `roas-cart-event`); see Section 2 of the deploy doc.
+
+**New stores.** `AddStoreWizard.tsx` Step 3 (post-create screen) surfaces **both** the Custom Pixel (primary) and the theme snippet (secondary) with the correct kind-aware label ("Theme snippet — `_ft_*` cart attributes") so a newly-added store is fully wired from day one without consulting external docs.
+
+**Snippet source of truth + generated code.** `lib/storeSnippets.ts` generates both `primary` (Custom Pixel) and `secondary` (theme snippet) snippets at runtime (with the correct `STORE_CART_TOKEN` injected). The source-of-truth reference snippets live in `docs/storefront-snippets/first-touch-attribution.md`.
+
+---
+
+### 52.2 Analyzer last-click-wins / first-touch-fills-gaps rule (`lib/attributionAnalysis.ts`)
+
+Per-campaign, ad-set, and ad matching in `attributionAnalysis.ts` now applies a **tiered resolution strategy**:
+
+| Tier | Signal checked | Win condition |
+|---|---|---|
+| 1 (authoritative) | `order.utmId` (last-click) | Exact match against `campaign.campaignId` |
+| 2 | `order.utmCampaign` (last-click) | Case-insensitive name match (Meta/TikTok) or id match (Google ValueTrack) |
+| 3 (fallback) | `order.firstUtmId` / `order.firstUtmCampaign` (first-touch) | Same rules as Tiers 1–2 but applied to first-touch fields |
+
+**Last-click wins when present.** If `order.utmId` or `order.utmCampaign` is non-empty, the tier-3 block is never reached — the last-click signal is used exclusively. The first-touch fields are consulted **only when the last-click fields are absent** (both null/empty). This prevents a stale first-touch signal from shadowing a definitive last-click.
+
+**Ad grain.** The same three-tier pattern applies at ad-set grain (`firstUtmTerm` → `adSetId`) and at ad grain (`firstUtmContent` → `adId`). Google ads are excluded from ad-grain first-touch because Google Ads does not propagate ad ids through ValueTrack `utm_content` in a reliably parseable form.
+
+**Effect.** Orders that previously fell into the unattributed bucket because their final click carried no UTM (e.g. direct-revisit from a bookmarked URL, cross-device revisit) can now be attributed when their first-touch fields carry the campaign signal. This raises per-campaign `deterministicRevenue` and `coverage` without changing the attribution model for orders that already had last-click data.
+
+---
+
+### 52.3 CAPI-safe invariant + guard test
+
+The operator runs server-side Conversion API (CAPI) apps in all three stores. Any accidental client-side `fbq()`/`gtag()`/`ttq()` call in dashboard-generated or dashboard-surfaced snippets would **double-count conversion events** and corrupt CAPI deduplication. The project therefore has a **hermetic CI guard**:
+
+**`src/lib/__tests__/snippetCapiSafety.test.ts`** asserts:
+1. No generated snippet (`generateStoreSnippet` output — both themed and headless variants, including `primary`, `secondary`, and `note` fields) matches the forbidden pattern `/fbq\s*\(|\bgtag\s*\(|\bttq\s*\(|analytics\.track|dataLayer\.push|\/capi\/|conversions_api/i`.
+2. The source-of-truth doc (`docs/storefront-snippets/first-touch-attribution.md`) passes the same pattern check.
+3. Every generated snippet writes `_ft_utm_id` (new-store parity check — confirms the theme snippet path is included).
+
+This test runs in the normal `npm test` (Vitest) suite and blocks the gate if any generated or documented snippet ever introduces a pixel/CAPI call.
+
+---
+
+### 52.4 Shopify `customerJourneySummary` GraphQL gap-fill (capability-gated)
+
+**What it does.** `lib/fetchers/shopifyCustomerJourney.ts` reads Shopify Admin GraphQL `Order.customerJourneySummary` to extract `firstVisit` and `lastVisit` UTM parameters (including `utm_id` parsed from `landingPage`'s query string, because Shopify's `UtmParameters` type does not expose an `id` field directly). The reader returns a `Map<orderId, CustomerJourneyEntry>` with `{ first: VisitUtm | null, last: VisitUtm | null }` per order. `lib/attribution/mergeCustomerJourney.ts` then applies the map to `ShopifyOrderRow` objects — **gap-fill only**: it fills any field that is currently `null` with the corresponding journey value, and **never overwrites a non-null field**. `source` is explicitly excluded from the merge — deterministic attribution is set only by `classifyOrderAttribution` and must not be influenced by Shopify's self-reported journey data.
+
+**Capability gate.** The feature requires Shopify **Protected Customer Data** approval in each store's custom app. Because this approval may not exist, the feature is double-gated:
+- **Env flag**: `ENABLE_SHOPIFY_CUSTOMER_JOURNEY=1` must be set (Vercel env var). Default: absent / off.
+- **Runtime self-check**: if the GraphQL response contains an `access_denied` / `UNAUTHORIZED` / `403` signal (Protected Customer Data not approved), the reader returns `{ map: empty, unavailable: true }` and logs a single `console.warn`. It never throws, never retries, and never regresses other attribution paths.
+
+**Flag-off is a verified no-op.** When the flag is absent, `fetchCustomerJourney` returns `{ map: empty, disabled: true }` without making any network request. The `mergeCustomerJourney` function returns the original row unchanged when its `entry` argument is `undefined` (which it is for every order when the map is empty). This is verified in the test suite — the Shopify fetcher produces identical `orders_attribution` rows whether the flag is on+unavailable, on+empty-response, or off.
+
+**Data flow position.** The gap-fill is applied AFTER `classifyOrderSource` (which populates `utmId`, `utmCampaign`, `firstUtm*` from `note_attributes`) and BEFORE the row is inserted into `orders_attribution`. The order of precedence is therefore: (1) Shopify `note_attributes` / `_ft_*` cart-attributes (most trusted — came from the real browser session); (2) Shopify `customerJourneySummary` (gap-fill, only touches null fields); (3) any existing value is never overwritten.
