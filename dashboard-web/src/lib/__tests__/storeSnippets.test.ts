@@ -167,6 +167,14 @@ describe('generateStoreSnippet — headless (Lovable client + edge function)', (
     expect(result.secondary).not.toContain(TOKEN);
     expect(result.secondary).toContain('Deno.env.get');
   });
+
+  it('headless snippet documents setting _ft_* cart attributes via Storefront API', () => {
+    const r = generateStoreSnippet({ storeId: 's', cartPublicToken: 'tok', allowedOrigins: [], isHeadless: true });
+    const all = [r.primary, r.secondary, r.note].filter(Boolean).join('\n');
+    expect(all).toContain('_ft_utm_id');
+    expect(all).toMatch(/cartAttributesUpdate|attributes:/);
+    expect(all).not.toMatch(/\bfbq\(|\bgtag\(|\bttq\(|analytics\.track/);
+  });
 });
 
 describe('generateStoreSnippet — purity / determinism', () => {

@@ -173,7 +173,22 @@ const HEADLESS_CLIENT_TEMPLATE = `// on app load (first-touch capture)
 // when reporting an add-to-cart, include in the POST body sent to the edge function:
 //   landing_site: localStorage.getItem("_ft_attr") || "/",
 //   first_touch:  localStorage.getItem("_ft_attr") || undefined, // first-click bag (best-effort; omit if absent)
-//   product_id:   cartLine.productId || undefined                // numeric Shopify product id (best-effort; omit if absent) — enables per-product join by id`;
+//   product_id:   cartLine.productId || undefined                // numeric Shopify product id (best-effort; omit if absent) — enables per-product join by id
+
+// On checkout / cart creation, also persist the first-touch UTM as Shopify CART
+// ATTRIBUTES so the order's note_attributes carry the first-click campaign/ad ids
+// (the dashboard reads \`_ft_*\`). CAPI-safe: cart metadata only — NO pixel events.
+// Build the attribute bag from the stored _ft_attr and set it via the Storefront API:
+//
+//   var ft = new URLSearchParams(localStorage.getItem("_ft_attr") || "");
+//   var KEEP = ["utm_source","utm_medium","utm_campaign","utm_content","utm_id","utm_term","fbclid","gclid","ttclid"];
+//   var attributes = [];
+//   KEEP.forEach(function (k) { var v = ft.get(k); if (v) attributes.push({ key: "_ft_" + k, value: v }); });
+//   if (attributes.length) attributes.push({ key: "_ft_set_at", value: new Date().toISOString() });
+//   // Canonical keys written: _ft_utm_source, _ft_utm_medium, _ft_utm_campaign,
+//   //   _ft_utm_content, _ft_utm_id, _ft_utm_term, _ft_fbclid, _ft_gclid, _ft_ttclid, _ft_set_at
+//   // → pass \`attributes\` to your Storefront API cartCreate(input:{attributes})
+//   //   or cartAttributesUpdate(cartId, attributes) call at checkout.`;
 
 /**
  * Headless edge-function forwarder — VERBATIM from

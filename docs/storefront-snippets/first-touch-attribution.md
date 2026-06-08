@@ -183,7 +183,39 @@ Add this block on app load (e.g. at the top of your root `main.ts` / `App.tsx` e
 //   landing_site: localStorage.getItem("_ft_attr") || "/",
 //   first_touch:  localStorage.getItem("_ft_attr") || undefined, // first-click bag (best-effort; omit if absent)
 //   product_id:   cartLine.productId || undefined                // numeric Shopify product id (best-effort; omit if absent) — enables per-product join by id
+
+// On checkout / cart creation, also persist the first-touch UTM as Shopify CART
+// ATTRIBUTES so the order's note_attributes carry the first-click campaign/ad ids
+// (the dashboard reads `_ft_*`). CAPI-safe: cart metadata only — NO pixel events.
+// Build the attribute bag from the stored _ft_attr and set it via the Storefront API:
+//
+//   var ft = new URLSearchParams(localStorage.getItem("_ft_attr") || "");
+//   var KEEP = ["utm_source","utm_medium","utm_campaign","utm_content","utm_id","utm_term","fbclid","gclid","ttclid"];
+//   var attributes = [];
+//   KEEP.forEach(function (k) { var v = ft.get(k); if (v) attributes.push({ key: "_ft_" + k, value: v }); });
+//   if (attributes.length) attributes.push({ key: "_ft_set_at", value: new Date().toISOString() });
+//   // Canonical keys written: _ft_utm_source, _ft_utm_medium, _ft_utm_campaign,
+//   //   _ft_utm_content, _ft_utm_id, _ft_utm_term, _ft_fbclid, _ft_gclid, _ft_ttclid, _ft_set_at
+//   // → pass `attributes` to your Storefront API cartCreate(input:{attributes})
+//   //   or cartAttributesUpdate(cartId, attributes) call at checkout.
 ```
+
+**Canonical cart attribute keys written by this block:**
+
+| Cart attribute key | Maps to order writer field |
+|---|---|
+| `_ft_utm_source` | `firstUtmSource` |
+| `_ft_utm_medium` | `firstUtmMedium` |
+| `_ft_utm_campaign` | `firstUtmCampaign` |
+| `_ft_utm_content` | `firstUtmContent` |
+| `_ft_utm_id` | `firstUtmId` |
+| `_ft_utm_term` | `firstUtmTerm` |
+| `_ft_fbclid` | `firstFbclid` |
+| `_ft_gclid` | `firstGclid` |
+| `_ft_ttclid` | `firstTtclid` |
+| `_ft_set_at` | (timestamp, for freshness audits) |
+
+These are the same keys written by the themed store's `/cart/update.js` snippet (Section 1b), so the order writer (`classifyOrderSource`) reads them identically. The key difference is the mechanism: themed stores use the Shopify Cart AJAX API (`/cart/update.js`), while headless stores use the Storefront API (`cartCreate`/`cartAttributesUpdate`) since Lovable owns the cart.
 
 ### Part B — Edge function `roas-cart-event` (forward `landing_site`, keep token server-side)
 
