@@ -335,4 +335,71 @@ describe('StoresTab — archive / restore (Phase 6b Task 3)', () => {
     // A Hebrew error surfaces (mirrors the load-error pattern).
     expect(await screen.findByText(/נכשל/)).toBeDefined();
   });
+
+  // -------------------------------------------------------------------------
+  // Phase 6b T3-delete — the IRREVERSIBLE delete wiring. RemovedStores owns the
+  // typed-name confirm modal; StoresTab supplies onDelete, which DELETEs to
+  // .../[id] with {confirmName} and re-fetches on success. On a server error
+  // (409/400) the modal stays open + shows the message (RemovedStores handles
+  // the UI; StoresTab just returns {ok:false,error}).
+  // -------------------------------------------------------------------------
+  function deleteCalls(suffix: string): Array<{ url: string; init?: RequestInit }> {
+    return calls.filter(
+      (c) => c.url.endsWith(suffix) && (c.init?.method ?? 'GET') === 'DELETE',
+    );
+  }
+
+  it('confirming delete DELETEs to .../[id] with {confirmName} and re-fetches', async () => {
+    responder = (url, init) => {
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/api/operator/stores') && method === 'GET') return okStores(MIXED);
+      if (url.endsWith('/api/operator/stores/oldstore') && method === 'DELETE') {
+        return { ok: true, status: 200, json: async () => ({ ok: true, deleted: 'oldstore', tablesWiped: [], failed: [] }) };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+    render(<StoresTab />);
+    await screen.findByTestId('removed-store-row-oldstore');
+    const beforeGet = countGetCalls();
+
+    // Open the modal, type the exact name, confirm.
+    const row = screen.getByTestId('removed-store-row-oldstore');
+    fireEvent.click(within(row).getByRole('button', { name: /מחק לצמיתות.*Old Store/ }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/הקלד את שם החנות/), { target: { value: 'Old Store' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /מחק לצמיתות/ }));
+
+    // A DELETE to the [id] route fired with the typed confirmName.
+    await waitFor(() => expect(deleteCalls('/api/operator/stores/oldstore').length).toBe(1));
+    const call = deleteCalls('/api/operator/stores/oldstore')[0];
+    expect(JSON.parse(String(call.init?.body))).toEqual({ confirmName: 'Old Store' });
+    // And the list was re-fetched so the wiped store disappears.
+    await waitFor(() => expect(countGetCalls()).toBeGreaterThan(beforeGet));
+    // The modal closed.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('a failed delete (409) keeps the modal open and shows the server error', async () => {
+    responder = (url, init) => {
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/api/operator/stores') && method === 'GET') return okStores(MIXED);
+      if (url.endsWith('/api/operator/stores/oldstore') && method === 'DELETE') {
+        return { ok: false, status: 409, json: async () => ({ error: 'archive the store before deleting it' }) };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+    render(<StoresTab />);
+    await screen.findByTestId('removed-store-row-oldstore');
+
+    const row = screen.getByTestId('removed-store-row-oldstore');
+    fireEvent.click(within(row).getByRole('button', { name: /מחק לצמיתות.*Old Store/ }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/הקלד את שם החנות/), { target: { value: 'Old Store' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /מחק לצמיתות/ }));
+
+    await waitFor(() => expect(deleteCalls('/api/operator/stores/oldstore').length).toBe(1));
+    // The modal STAYS open and surfaces the server message.
+    expect(await screen.findByText(/archive the store before deleting it/)).toBeDefined();
+    expect(screen.getByRole('dialog')).toBeDefined();
+  });
 });

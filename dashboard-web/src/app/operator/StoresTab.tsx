@@ -125,6 +125,35 @@ export function StoresTab() {
     [lifecycle],
   );
 
+  // Phase 6b T3-delete — IRREVERSIBLE hard delete (DELETE /api/operator/stores/[id]
+  // with {confirmName}). The typed-name confirm modal lives in RemovedStores; this
+  // handler just performs the request and reports the outcome back so the modal can
+  // close (ok) or stay open + show the message (error). On success we re-fetch so
+  // the wiped store disappears from the removed-area. The server double-gates
+  // (status==='archived' AND confirmName === name), so a stale UI can't force a
+  // wrongful wipe. We surface the server's error text when present (e.g. 409
+  // "archive the store before deleting it") so the operator sees exactly why.
+  const handleDelete = useCallback(
+    async (storeId: string, confirmName: string): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const res = await operatorFetch(`/api/operator/stores/${storeId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confirmName }),
+        });
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          return { ok: false, error: body?.error || 'מחיקת החנות נכשלה. נסה שוב.' };
+        }
+        await load(); // re-fetch → the wiped store drops out of the removed-area
+        return { ok: true };
+      } catch {
+        return { ok: false, error: 'מחיקת החנות נכשלה. נסה שוב.' };
+      }
+    },
+    [load],
+  );
+
   // ---------------------------------------------------------------------------
   // Wizard view — replaces the list while open (inline, no overlay).
   // ---------------------------------------------------------------------------
@@ -176,9 +205,10 @@ export function StoresTab() {
           <StoreList stores={stores} onManage={openManage} onArchive={handleArchive} />
           {/* "חנויות שהוסרו" — the removed-area below the active list. Renders
               nothing when there are no archived stores. NO info loss: active list
-              + removed-area are both visible. DELETE is DEFERRED (a later task);
-              its spot is marked inside RemovedStores. */}
-          <RemovedStores stores={stores} onRestore={handleRestore} />
+              + removed-area are both visible. DELETE (T3-delete) is the
+              IRREVERSIBLE hard wipe — RemovedStores owns the typed-name confirm
+              modal; handleDelete performs the DELETE + re-fetches on success. */}
+          <RemovedStores stores={stores} onRestore={handleRestore} onDelete={handleDelete} />
         </>
       )}
     </div>

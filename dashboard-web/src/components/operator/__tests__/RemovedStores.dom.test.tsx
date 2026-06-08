@@ -14,7 +14,7 @@
 // text / test-ids, fire events.
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, within, waitFor } from '@testing-library/react';
 
 import { RemovedStores } from '../RemovedStores';
 import type { StoreRowData } from '../StoreList';
@@ -93,10 +93,10 @@ describe('RemovedStores — חנויות שהוסרו area (Phase 6b Task 3)', (
     expect(within(row).getByRole('button', { name: /שחזר.*Gone Store/ })).toBeDefined();
   });
 
-  it('does NOT render a delete affordance yet (delete is deferred)', () => {
-    render(<RemovedStores stores={STORES} onRestore={vi.fn()} />);
+  it('renders a "מחק לצמיתות" destructive affordance per removed store when onDelete is wired (Phase 6b T3-delete)', () => {
+    render(<RemovedStores stores={STORES} onRestore={vi.fn()} onDelete={vi.fn()} />);
     const row = screen.getByTestId('removed-store-row-oldstore');
-    expect(within(row).queryByRole('button', { name: /מחק/ })).toBeNull();
+    expect(within(row).getByRole('button', { name: /מחק לצמיתות.*Old Store/ })).toBeDefined();
   });
 
   it('renders NOTHING when there are no archived stores (empty removed-area)', () => {
@@ -116,5 +116,101 @@ describe('RemovedStores — חנויות שהוסרו area (Phase 6b Task 3)', (
   it('shows the removed-area heading when there is at least one archived store', () => {
     render(<RemovedStores stores={STORES} onRestore={vi.fn()} />);
     expect(screen.getByText(/חנויות שהוסרו/)).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 6b T3-delete — the IRREVERSIBLE delete-confirm modal.
+//
+// Clicking "מחק לצמיתות" on an archived row opens a Radix Dialog (role=dialog,
+// per the modal-over-Sheet rule — a hand-rolled overlay would be inert). The
+// modal makes the irreversibility unmistakable, lists what gets wiped, and the
+// confirm button is DISABLED until the operator types the EXACT store name. On
+// confirm it calls onDelete(storeId, confirmName); on the returned ok it closes,
+// on a returned error it stays open + shows the message.
+// ---------------------------------------------------------------------------
+describe('RemovedStores — delete-confirm modal (Phase 6b T3-delete)', () => {
+  function openDeleteModal(name = 'Old Store') {
+    const row = screen.getByTestId('removed-store-row-oldstore');
+    fireEvent.click(within(row).getByRole('button', { name: new RegExp(`מחק לצמיתות.*${name}`) }));
+  }
+
+  it('opens a REAL dialog (role=dialog) when "מחק לצמיתות" is clicked', async () => {
+    render(<RemovedStores stores={STORES} onRestore={vi.fn()} onDelete={vi.fn()} />);
+    openDeleteModal();
+    // A real Radix dialog — NOT a hand-rolled inert overlay div.
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toBeDefined();
+    // The destructive, irreversible copy is present.
+    expect(within(dialog).getByText(/מחיקת חנות לצמיתות/)).toBeDefined();
+    expect(within(dialog).getByText(/בלתי-הפיכה/)).toBeDefined();
+  });
+
+  it('keeps the confirm DISABLED until the typed name EXACTLY matches', async () => {
+    render(<RemovedStores stores={STORES} onRestore={vi.fn()} onDelete={vi.fn()} />);
+    openDeleteModal();
+    const dialog = await screen.findByRole('dialog');
+    const confirm = within(dialog).getByRole('button', { name: /מחק לצמיתות/ }) as HTMLButtonElement;
+    const input = within(dialog).getByLabelText(/הקלד את שם החנות/) as HTMLInputElement;
+
+    // Empty → disabled.
+    expect(confirm.disabled).toBe(true);
+    // Wrong → still disabled.
+    fireEvent.change(input, { target: { value: 'Old Stor' } });
+    expect(confirm.disabled).toBe(true);
+    // A leading/trailing mismatch → still disabled (exact === only).
+    fireEvent.change(input, { target: { value: 'old store' } });
+    expect(confirm.disabled).toBe(true);
+    // Exact → enabled.
+    fireEvent.change(input, { target: { value: 'Old Store' } });
+    expect(confirm.disabled).toBe(false);
+  });
+
+  it('on confirm calls onDelete with the id + {confirmName}, then closes on ok', async () => {
+    const onDelete = vi.fn(async () => ({ ok: true as const }));
+    render(<RemovedStores stores={STORES} onRestore={vi.fn()} onDelete={onDelete} />);
+    openDeleteModal();
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/הקלד את שם החנות/), {
+      target: { value: 'Old Store' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /מחק לצמיתות/ }));
+
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith('oldstore', 'Old Store'));
+    // On success the dialog closes.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('keeps the modal OPEN and shows the server error when onDelete reports a failure (e.g. 409)', async () => {
+    const onDelete = vi.fn(async () => ({ ok: false as const, error: 'archive the store before deleting it' }));
+    render(<RemovedStores stores={STORES} onRestore={vi.fn()} onDelete={onDelete} />);
+    openDeleteModal();
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/הקלד את שם החנות/), {
+      target: { value: 'Old Store' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /מחק לצמיתות/ }));
+
+    await waitFor(() => expect(onDelete).toHaveBeenCalled());
+    // Dialog stays open and surfaces the server error (role=alert).
+    expect(await screen.findByRole('alert')).toBeDefined();
+    expect(screen.getByText(/archive the store before deleting it/)).toBeDefined();
+    expect(screen.getByRole('dialog')).toBeDefined();
+  });
+
+  it('cancel ("ביטול") closes the modal without calling onDelete', async () => {
+    const onDelete = vi.fn();
+    render(<RemovedStores stores={STORES} onRestore={vi.fn()} onDelete={onDelete} />);
+    openDeleteModal();
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /ביטול/ }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(onDelete).not.toHaveBeenCalled();
+  });
+
+  it('no delete affordance is rendered when onDelete is omitted (back-compat)', () => {
+    render(<RemovedStores stores={STORES} onRestore={vi.fn()} />);
+    const row = screen.getByTestId('removed-store-row-oldstore');
+    expect(within(row).queryByRole('button', { name: /מחק לצמיתות/ })).toBeNull();
   });
 });
