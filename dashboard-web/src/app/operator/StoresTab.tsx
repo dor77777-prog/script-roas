@@ -167,6 +167,13 @@ export function StoresTab() {
           onDone={handleDone}
           editStoreId={wizard.mode === 'edit' ? wizard.storeId : undefined}
           focusPlatform={wizard.mode === 'edit' ? wizard.focus : undefined}
+          // Brand colours already used by OTHER stores (exclude the one being
+          // edited so its own colour never reads as taken) → the wizard defaults
+          // a NEW store to a free hue and marks the used ones "(בשימוש)".
+          takenColors={stores
+            .filter((s) => !(wizard.mode === 'edit' && s.storeId === wizard.storeId))
+            .map((s) => s.brandColor)
+            .filter((c): c is string => typeof c === 'string' && c.length > 0)}
         />
       </div>
     );

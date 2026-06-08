@@ -38,7 +38,7 @@
 //   - PATCH /api/operator/stores/{id} — edit (route lands in T8). The edit path
 //       here is a lightweight scaffold; T8 completes prefill + its DOM test.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, X, Copy, Loader2 } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
 import { generateStoreSnippet } from '@/lib/storeSnippets';
@@ -67,9 +67,28 @@ const BRAND_COLORS: Array<{ value: string; label: string }> = [
   { value: 'var(--store-uzo)', label: 'תכלת' },
   { value: 'var(--store-usm)', label: 'ורוד' },
   { value: 'var(--store-3)', label: 'ירוק' },
-  { value: 'var(--band-blue)', label: 'כחול' },
-  { value: 'var(--band-orange)', label: 'כתום' },
+  { value: 'var(--store-4)', label: 'סגול' },
+  { value: 'var(--store-5)', label: 'ענבר' },
+  { value: 'var(--store-6)', label: 'אינדיגו' },
+  { value: 'var(--store-7)', label: 'אלמוג' },
+  { value: 'var(--store-8)', label: 'טורקיז' },
 ];
+
+/** Normalise a brand-colour string for set membership (trim + collapse ws). */
+function normColor(c: string | null | undefined): string {
+  return (c ?? '').replace(/\s+/g, '').toLowerCase();
+}
+
+/**
+ * Pick the default brand colour for a NEW store: the first palette colour NOT
+ * already used by an existing store, so each store lands on a distinct hue. If
+ * every palette colour is taken (more stores than swatches) we fall back to the
+ * first — the operator can still override, and "(בשימוש)" marks the clash.
+ */
+function firstFreeColor(taken: readonly string[]): string {
+  const used = new Set(taken.map(normColor));
+  return (BRAND_COLORS.find((c) => !used.has(normColor(c.value))) ?? BRAND_COLORS[0]).value;
+}
 
 type Platform = 'shopify' | 'meta' | 'google';
 type VerifyState = { ok: boolean; message: string } | null;
@@ -121,6 +140,13 @@ export interface AddStoreWizardProps {
    * Ignored in ADD mode.
    */
   focusPlatform?: FocusPlatform;
+  /**
+   * Brand colours already used by OTHER stores. In ADD mode the wizard defaults
+   * to the first palette colour NOT in this list (so each new store gets a
+   * distinct hue) and marks the used ones "(בשימוש)". Excludes the store being
+   * edited so its own colour never reads as taken. Defaults to [] (no clashes).
+   */
+  takenColors?: readonly string[];
 }
 
 const EMPTY_STEP1: Step1State = {
@@ -145,12 +171,23 @@ const EMPTY_STEP2: Step2State = {
   googleRefreshToken: '',
 };
 
-export function AddStoreWizard({ onDone, editStoreId, focusPlatform }: AddStoreWizardProps) {
+export function AddStoreWizard({
+  onDone,
+  editStoreId,
+  focusPlatform,
+  takenColors = [],
+}: AddStoreWizardProps) {
   const isEdit = typeof editStoreId === 'string' && editStoreId.length > 0;
+
+  // Colours already used by other stores → mark "(בשימוש)" + steer the default
+  // off them. Frozen at mount (taken set doesn't change while the wizard is open).
+  const usedColors = useMemo(() => new Set(takenColors.map(normColor)), [takenColors]);
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [s1, setS1] = useState<Step1State>(() =>
-    isEdit ? { ...EMPTY_STEP1, storeId: editStoreId! } : EMPTY_STEP1,
+    isEdit
+      ? { ...EMPTY_STEP1, storeId: editStoreId! }
+      : { ...EMPTY_STEP1, brandColor: firstFreeColor(takenColors) },
   );
   const [s2, setS2] = useState<Step2State>(EMPTY_STEP2);
 
@@ -517,6 +554,7 @@ export function AddStoreWizard({ onDone, editStoreId, focusPlatform }: AddStoreW
           nameError={nameError}
           domainError={domainError}
           isEdit={isEdit}
+          usedColors={usedColors}
           onNext={goToStep2}
           onCancel={onDone}
         />
@@ -628,6 +666,7 @@ function Step1({
   nameError,
   domainError,
   isEdit,
+  usedColors,
   onNext,
   onCancel,
 }: {
@@ -640,6 +679,8 @@ function Step1({
   nameError: string | null;
   domainError: string | null;
   isEdit: boolean;
+  /** Normalised brand colours used by OTHER stores → mark "(בשימוש)". */
+  usedColors: Set<string>;
   onNext: () => void;
   onCancel: () => void;
 }) {
@@ -693,30 +734,42 @@ function Step1({
         </div>
       </div>
 
-      {/* Brand color */}
-      <Field id="store-brand" label="צבע-מותג">
+      {/* Brand color — each store gets a distinct hue. Colours already used by
+          other stores are marked "· בשימוש" and the default lands on a free one. */}
+      <Field
+        id="store-brand"
+        label="צבע-מותג"
+        hint="כל חנות בצבע משלה — הצבעים שכבר בשימוש מסומנים «בשימוש»."
+      >
         <NativeSelect
           id="store-brand"
           value={s1.brandColor}
           onChange={(e) => setS1((s) => ({ ...s, brandColor: e.target.value }))}
         >
-          {BRAND_COLORS.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
-          ))}
+          {BRAND_COLORS.map((c) => {
+            const taken = usedColors.has(normColor(c.value));
+            return (
+              <option key={c.value} value={c.value}>
+                {taken ? `${c.label} · בשימוש` : c.label}
+              </option>
+            );
+          })}
         </NativeSelect>
         <div className="mt-2 flex items-center gap-2" aria-hidden="true">
-          {BRAND_COLORS.map((c) => (
-            <span
-              key={c.value}
-              className={
-                'h-5 w-5 rounded-md border border-glass-edge ' +
-                (c.value === s1.brandColor ? 'ring-2 ring-accent' : '')
-              }
-              style={{ background: c.value }}
-            />
-          ))}
+          {BRAND_COLORS.map((c) => {
+            const taken = usedColors.has(normColor(c.value));
+            return (
+              <span
+                key={c.value}
+                className={
+                  'h-5 w-5 rounded-md border border-glass-edge ' +
+                  (c.value === s1.brandColor ? 'ring-2 ring-accent ' : '') +
+                  (taken && c.value !== s1.brandColor ? 'opacity-40' : '')
+                }
+                style={{ background: c.value }}
+              />
+            );
+          })}
         </div>
       </Field>
 

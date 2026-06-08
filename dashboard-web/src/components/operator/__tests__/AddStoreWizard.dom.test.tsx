@@ -592,3 +592,33 @@ describe('AddStoreWizard — EDIT mode (Phase 6a Task 8)', () => {
     expect(tkSwitch.getAttribute('aria-checked')).toBe('true');
   });
 });
+
+describe('AddStoreWizard — distinct brand colour for new stores', () => {
+  it('defaults a NEW store to the first palette colour NOT already used', () => {
+    // The 3 live stores hold the first three palette hues → the wizard should
+    // land on the 4th (var(--store-4)) so the new store is visually distinct.
+    render(
+      <AddStoreWizard
+        onDone={vi.fn()}
+        takenColors={['var(--store-uzo)', 'var(--store-usm)', 'var(--store-3)']}
+      />,
+    );
+    const select = screen.getByLabelText(/צבע-מותג/) as HTMLSelectElement;
+    expect(select.value).toBe('var(--store-4)');
+  });
+
+  it('marks already-used colours "(בשימוש)" in the picker', () => {
+    render(<AddStoreWizard onDone={vi.fn()} takenColors={['var(--store-uzo)']} />);
+    const select = screen.getByLabelText(/צבע-מותג/) as HTMLSelectElement;
+    const usedOption = Array.from(select.options).find((o) => o.value === 'var(--store-uzo)');
+    const freeOption = Array.from(select.options).find((o) => o.value === 'var(--store-4)');
+    expect(usedOption?.textContent).toMatch(/בשימוש/);
+    expect(freeOption?.textContent).not.toMatch(/בשימוש/);
+  });
+
+  it('with no takenColors (first store) defaults to the first palette colour', () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    const select = screen.getByLabelText(/צבע-מותג/) as HTMLSelectElement;
+    expect(select.value).toBe('var(--store-uzo)');
+  });
+});

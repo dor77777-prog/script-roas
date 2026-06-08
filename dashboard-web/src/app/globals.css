@@ -33,10 +33,19 @@
   --chart-platform-organic: #14b8a6;  /* teal — mockup has no explicit organic; clear teal */
   --chart-platform-shopify: #0fb37a;  /* shopify = e-commerce green */
 
-  /* Stores — per-store hues for Per-Store row, store badges. */
+  /* Stores — per-store hues for Per-Store row, store badges. The first three
+     are the live stores (uzo=cyan, usm=pink, 3=green); store-4..8 are spare
+     hues for NEW stores so each store gets a distinct colour (the add-store
+     wizard offers the free ones first). All on one OKLCH lightness/chroma
+     ramp so the per-store pipeline renders any of them identically. */
   --store-uzo: oklch(72% 0.16 210);
   --store-usm: oklch(72% 0.18 330);
   --store-3:   oklch(70% 0.16 100);
+  --store-4:   oklch(72% 0.16 285); /* violet  */
+  --store-5:   oklch(74% 0.16 50);  /* amber   */
+  --store-6:   oklch(72% 0.16 255); /* indigo  */
+  --store-7:   oklch(70% 0.17 20);  /* coral   */
+  --store-8:   oklch(72% 0.14 165); /* teal    */
 
   /* Brand accent — violet on dark (mockup --accent / --accent-ink).
      --accent-deep used for buttons/logo gradients, --accent-fg for
@@ -425,10 +434,16 @@
   --chart-platform-organic: #14b8a6;  /* teal — mockup has no explicit organic; clear teal */
   --chart-platform-shopify: #0fb37a;  /* shopify = e-commerce green */
 
-  /* Stores — same hues; mid-tone for legible badges on light. */
+  /* Stores — same hues; mid-tone for legible badges on light. store-4..8 are
+     the spare per-store hues offered to NEW stores (see the dark block above). */
   --store-uzo: oklch(58% 0.16 210);
   --store-usm: oklch(58% 0.18 330);
   --store-3:   oklch(58% 0.16 100);
+  --store-4:   oklch(58% 0.16 285); /* violet  */
+  --store-5:   oklch(60% 0.16 50);  /* amber   */
+  --store-6:   oklch(58% 0.16 255); /* indigo  */
+  --store-7:   oklch(57% 0.17 20);  /* coral   */
+  --store-8:   oklch(58% 0.14 165); /* teal    */
 
   /* Brand accent — TEAL on light (mesh accent; dark uses violet). --accent-deep
      is a darker teal so the primary-button gradient deepens toward the bottom. */
