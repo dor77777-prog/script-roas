@@ -312,13 +312,20 @@ export async function POST(req: Request): Promise<NextResponse> {
   // landingLen / firstTouch are numbers/labels. Do NOT remove.
   let diag: Record<string, unknown> = { landingLen: landingStr.length };
   try {
-    const attr = classifyOrderAttribution({
-      landing_site: landingStr || undefined,
-      referring_site: referrerStr || undefined,
-      // First-touch ft_* signals ride in as note_attributes — they DON'T affect
-      // the last-touch `source` (that chain ignores _ft_*), only firstTouchSource.
-      note_attributes: firstTouchAttrs.length > 0 ? firstTouchAttrs : undefined,
-    });
+    const attr = classifyOrderAttribution(
+      {
+        landing_site: landingStr || undefined,
+        referring_site: referrerStr || undefined,
+        // First-touch ft_* signals ride in as note_attributes — they DON'T affect
+        // the last-touch `source` (that chain ignores _ft_*), only firstTouchSource.
+        note_attributes: firstTouchAttrs.length > 0 ? firstTouchAttrs : undefined,
+      },
+      {
+        // ATC conversion time — used by the first-touch freshness gate to drop
+        // stale first-touches (> FIRST_TOUCH_WINDOW_DAYS old).
+        conversionAt: safeIso(body.occurred_at) ?? undefined,
+      },
+    );
     source = attr.source;
     firstTouchSource = attr.firstTouchSource;
     diag = {

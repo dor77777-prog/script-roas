@@ -952,7 +952,9 @@ export async function fetchShopifyOrdersAttribution(
       if (o.financial_status === 'voided') continue;
 
       const totalCad = parseFloat(String(o.total_price ?? '0')) || 0;
-      const classified = classifyOrderAttribution(o);
+      const classified = classifyOrderAttribution(o, {
+        conversionAt: o.created_at ? String(o.created_at) : undefined,
+      });
 
       out.push({
         storeId,

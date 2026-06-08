@@ -51,6 +51,15 @@ function safeDecode(s: string): string {
  */
 export const FBC_CLICK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // Meta default 7-day click
 
+/**
+ * Standard first-touch credit window (in days). A first-touch older than this
+ * relative to the conversion time is ignored — the customer is NOT credited to
+ * the paid platform that acquired them long ago. Adjustable here without
+ * touching any call-site (all callers pass `conversionAt`; back-compat is
+ * preserved for callers that don't).
+ */
+export const FIRST_TOUCH_WINDOW_DAYS = 30;
+
 export function fbcIsFreshClick(
   fbc: string | undefined | null,
   orderCreatedAt: string | null | undefined,
@@ -169,7 +178,21 @@ function isSelfReferral(
   return refHost !== '' && landHost !== '' && refHost === landHost;
 }
 
-export function classifyOrderAttribution(order: ShopifyOrderPayload): {
+export function classifyOrderAttribution(
+  order: ShopifyOrderPayload,
+  opts?: {
+    /**
+     * ISO-8601 timestamp of the conversion event (order `created_at` or ATC
+     * `occurred_at`). When provided together with a parseable `_ft_set_at`, the
+     * freshness gate fires: a first-touch older than FIRST_TOUCH_WINDOW_DAYS is
+     * dropped and the order is treated as if no first-touch was present.
+     *
+     * Back-compat: callers that omit this (or pass an unparseable string) always
+     * honor the first-touch regardless of age — existing data is unaffected.
+     */
+    conversionAt?: string;
+  },
+): {
   source: string;
   utmSource: string;
   utmMedium: string;
@@ -243,6 +266,26 @@ export function classifyOrderAttribution(order: ShopifyOrderPayload): {
   const firstUtmIdRaw = ftGet('utm_id');
   const firstUtmTermRaw = ftGet('utm_term');
   const firstSeenAtRaw = ftGet('set_at');
+
+  // ---- First-touch freshness gate ----
+  // When BOTH firstSeenAtRaw (_ft_set_at) AND opts.conversionAt are present
+  // and parseable, drop the entire first-touch if the click is older than
+  // FIRST_TOUCH_WINDOW_DAYS. This prevents a Meta/Google/TikTok first-touch
+  // from months ago from crediting a paid platform on a conversion that is
+  // effectively direct or last-touch-driven.
+  //
+  // Back-compat: if either timestamp is missing or unparseable the gate does
+  // NOT fire — callers that omit conversionAt behave exactly as before.
+  let firstTouchDropped = false;
+  if (firstSeenAtRaw && opts?.conversionAt) {
+    const seenMs = Date.parse(firstSeenAtRaw);
+    const convMs = Date.parse(opts.conversionAt);
+    if (Number.isFinite(seenMs) && Number.isFinite(convMs)) {
+      const ageMs = convMs - seenMs;
+      const windowMs = FIRST_TOUCH_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+      if (ageMs > windowMs) firstTouchDropped = true;
+    }
+  }
 
   const hasFirstSignal =
     firstFbclid || firstGclid || firstTtclid ||
@@ -395,17 +438,18 @@ export function classifyOrderAttribution(order: ShopifyOrderPayload): {
     fbclidPresent: fbclid,
     gclidPresent: gclid,
     referrer: refTrimmed,
-    firstTouchSource,
-    firstFbclidPresent: firstFbclid,
-    firstGclidPresent: firstGclid,
-    firstTtclidPresent: firstTtclid,
-    firstUtmSource: firstUtmSourceRaw || null,
-    firstUtmMedium: firstUtmMediumRaw || null,
-    firstUtmCampaign: firstUtmCampaignRaw || null,
-    firstUtmContent: firstUtmContentRaw || null,
-    firstUtmId: firstUtmIdRaw || null,
-    firstUtmTerm: firstUtmTermRaw || null,
-    firstSeenAt: firstSeenAtRaw || null,
+    // First-touch fields: zeroed out when the freshness gate fires.
+    firstTouchSource:      firstTouchDropped ? null : firstTouchSource,
+    firstFbclidPresent:    firstTouchDropped ? false : firstFbclid,
+    firstGclidPresent:     firstTouchDropped ? false : firstGclid,
+    firstTtclidPresent:    firstTouchDropped ? false : firstTtclid,
+    firstUtmSource:        firstTouchDropped ? null : (firstUtmSourceRaw || null),
+    firstUtmMedium:        firstTouchDropped ? null : (firstUtmMediumRaw || null),
+    firstUtmCampaign:      firstTouchDropped ? null : (firstUtmCampaignRaw || null),
+    firstUtmContent:       firstTouchDropped ? null : (firstUtmContentRaw || null),
+    firstUtmId:            firstTouchDropped ? null : (firstUtmIdRaw || null),
+    firstUtmTerm:          firstTouchDropped ? null : (firstUtmTermRaw || null),
+    firstSeenAt:           firstTouchDropped ? null : (firstSeenAtRaw || null),
   };
 }
 
