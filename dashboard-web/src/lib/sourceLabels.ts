@@ -134,6 +134,79 @@ export function describeSource(source: string | null | undefined): SourceDescrip
 }
 
 /**
+ * Platform/channel BUCKET — the coarse grouping the activity-stats donuts +
+ * per-product table use (one source of truth so every surface buckets a
+ * `source` identically). Mapping:
+ *   meta-paid    | meta-organic                       → 'meta'
+ *   google-paid  | google-organic                     → 'google'
+ *   tiktok-paid  | tiktok-organic                     → 'tiktok'
+ *   email                                             → 'email'
+ *   other-referral | app-referral | search-organic    → 'referral'
+ *   other-paid                                        → 'other-paid'
+ *   direct | ''  | anything unrecognised              → 'direct'
+ *
+ * EXHAUSTIVE by construction: every input maps to exactly one bucket, so the
+ * per-bucket counts always sum to the row total (no order silently dropped).
+ */
+export type SourceBucket =
+  | 'meta'
+  | 'google'
+  | 'tiktok'
+  | 'email'
+  | 'referral'
+  | 'other-paid'
+  | 'direct';
+
+/** Stable bucket order for distribution rendering (donut legend). */
+export const SOURCE_BUCKETS = [
+  'meta',
+  'google',
+  'tiktok',
+  'email',
+  'referral',
+  'other-paid',
+  'direct',
+] as const satisfies readonly SourceBucket[];
+
+/** Hebrew label for each bucket (matches the activity-stats mockup legend). */
+export const SOURCE_BUCKET_LABEL: Record<SourceBucket, string> = {
+  meta: 'Meta',
+  google: 'Google',
+  tiktok: 'TikTok',
+  email: 'אימייל',
+  referral: 'הפניות',
+  'other-paid': 'ממומן אחר',
+  direct: 'ישיר',
+};
+
+/**
+ * Map any `source` value to its coarse platform/channel bucket. Single source
+ * of truth shared by the activity-stats donuts + per-product table. Unknown /
+ * '' / null collapse into 'direct' so the mapping is total (sum == row total).
+ */
+export function sourceToBucket(source: string | null | undefined): SourceBucket {
+  const s = String(source ?? '').trim();
+  if (s.startsWith('meta-')) return 'meta';
+  if (s.startsWith('google-')) return 'google';
+  if (s.startsWith('tiktok-')) return 'tiktok';
+  if (s === 'email') return 'email';
+  if (s === 'other-referral' || s === 'app-referral' || s === 'search-organic') return 'referral';
+  if (s === 'other-paid') return 'other-paid';
+  // 'direct', '', and any unrecognised future label → the catch-all bucket.
+  return 'direct';
+}
+
+/**
+ * Paid vs organic split used by the activity-stats donut. PAID = any source
+ * whose label ends in '-paid' (meta/google/tiktok/other-paid). ORGANIC =
+ * everything else (direct / email / referral / *-organic / unknown). Mirrors
+ * the classifier's label — DISPLAY only, asserts no spend.
+ */
+export function sourceIsPaid(source: string | null | undefined): boolean {
+  return String(source ?? '').trim().endsWith('-paid');
+}
+
+/**
  * Whether a last-touch `source` is WEAK enough that the first-click lens is
  * worth showing alongside it: direct / other-referral / other-paid. A confident
  * platform/organic attribution does not need the lens (it would be redundant).
