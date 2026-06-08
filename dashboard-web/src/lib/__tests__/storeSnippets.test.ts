@@ -76,6 +76,16 @@ describe('generateStoreSnippet — themed (Shopify Custom Pixel)', () => {
     expect(result.primary).toMatch(/getItem\(["']_ft_attr["']\)/);
   });
 
+  it('reads the product id from the ATC event and SENDS it as a product_id field (PPJ-T1)', () => {
+    // The themed pixel must read the product id from the cart line's merchandise
+    // (the Product GID, e.g. gid://shopify/Product/123) and include it as a
+    // `product_id` in the POST body so the route can normalize it to the numeric
+    // id and join ATC↔purchases by id (not by fragile title).
+    expect(result.primary).toContain('product_id');
+    expect(result.primary).toContain('merchandise');
+    expect(result.primary).toMatch(/merchandise[\s\S]*?product[\s\S]*?\.id/);
+  });
+
   it('note points the operator to the Shopify Custom Pixel screen', () => {
     expect(result.note).toBeDefined();
     expect(result.note).toContain('Customer events');
@@ -115,8 +125,18 @@ describe('generateStoreSnippet — headless (Lovable client + edge function)', (
     expect(result.primary).toContain('_ft_attr');
   });
 
+  it('primary (client) documents sending the cart line product id as a product_id field (PPJ-T1)', () => {
+    // The headless client must forward the cart line's numeric Shopify product id
+    // to the edge function as a `product_id` field so the route can join by id.
+    expect(result.primary).toContain('product_id');
+  });
+
   it('secondary edge function forwards first_touch to /api/events/cart', () => {
     expect(result.secondary).toContain('first_touch');
+  });
+
+  it('secondary edge function forwards product_id to /api/events/cart (PPJ-T1)', () => {
+    expect(result.secondary).toContain('product_id');
   });
 
   it('note instructs setting ROAS_STORE_TOKEN to the token in the edge function env', () => {

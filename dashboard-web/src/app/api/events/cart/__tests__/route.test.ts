@@ -124,6 +124,8 @@ describe('POST /api/events/cart', () => {
       quantity: 2,
       event_id: 'evt-pii',
       first_touch_source: null,
+      // PPJ-T1: no product_id sent → normalized to null (still keyed in raw).
+      product_id: null,
       diag: {
         utmSource: null,
         utmMedium: null,

@@ -47,6 +47,13 @@ analytics.subscribe("product_added_to_cart", async (event) => {
       (line.merchandise && line.merchandise.product && line.merchandise.product.title) ||
       (d.productVariant && d.productVariant.product && d.productVariant.product.title) ||
       null;
+    // Product id (the Product GID, e.g. gid://shopify/Product/7654321). Best-effort:
+    // missing → omitted. The dashboard normalizes the GID to the numeric Shopify
+    // Product id so per-product ATC↔purchase joins match by id (not by title).
+    var productId =
+      (line.merchandise && line.merchandise.product && line.merchandise.product.id) ||
+      (d.productVariant && d.productVariant.product && d.productVariant.product.id) ||
+      null;
     var qty = line.quantity || 1;
     var payload = {
       store_token: CART_TOKEN,
@@ -59,6 +66,9 @@ analytics.subscribe("product_added_to_cart", async (event) => {
     // Send the stored first-touch bag so the dashboard can compute first-click
     // attribution (boosts first-touch coverage). Omitted when absent.
     if (firstTouch) payload.first_touch = firstTouch;
+    // Send the product id (GID) so the dashboard can join ATC↔purchases by id.
+    // Omitted when absent — never blocks add-to-cart.
+    if (productId) payload.product_id = productId;
     fetch("https://roas-dashboard-smoky.vercel.app/api/events/cart", {
       method: "POST",
       keepalive: true,
@@ -75,6 +85,17 @@ analytics.subscribe("product_added_to_cart", async (event) => {
 > first-click lens). **Existing stores must RE-PASTE this updated Custom Pixel**
 > for the first-touch field to start flowing — newly-added stores get it
 > automatically from the wizard's generated snippet.
+
+> **Product id (2026-06-08, PPJ-T1):** the beacon now ALSO sends the cart line's
+> product id (the Product **GID**, e.g. `gid://shopify/Product/7654321`) as a
+> `product_id` field. The cart route NORMALIZES it to the bare numeric Shopify
+> Product id (`7654321`) and stores it in `raw.product_id`, so the per-product
+> table can join add-to-cart events to purchases EXACTLY by id (matching
+> `orders_attribution.line_items` productId and `products_daily.product_id`)
+> instead of by fragile title-matching (which split Hebrew/variant names into two
+> rows). Best-effort: a missing/unparseable id is omitted, never blocking
+> add-to-cart. **Existing stores must RE-PASTE this updated Custom Pixel** for the
+> product_id field to start flowing — newly-added stores get it automatically.
 
 > **If you already pasted the earlier `localStorage` version into uzoshop / Zol Plus, REPLACE it with the snippet above** — the old one throws in the sandbox and stops all cart events from those stores.
 
@@ -105,7 +126,8 @@ Add this block on app load (e.g. at the top of your root `main.ts` / `App.tsx` e
 
 // when reporting an add-to-cart, include in the POST body sent to the edge function:
 //   landing_site: localStorage.getItem("_ft_attr") || "/",
-//   first_touch:  localStorage.getItem("_ft_attr") || undefined  // first-click bag (best-effort; omit if absent)
+//   first_touch:  localStorage.getItem("_ft_attr") || undefined, // first-click bag (best-effort; omit if absent)
+//   product_id:   cartLine.productId || undefined                // numeric Shopify product id (best-effort; omit if absent) — enables per-product join by id
 ```
 
 ### Part B — Edge function `roas-cart-event` (forward `landing_site`, keep token server-side)
@@ -122,10 +144,11 @@ body: JSON.stringify({
   occurred_at: payload.occurred_at,
   landing_site: payload.landing_site || "/",        // forwarded last-touch landing from client
   first_touch: payload.first_touch || undefined,    // forwarded first-click bag (best-effort; omit if absent)
+  product_id: payload.product_id || undefined,      // forwarded numeric Shopify product id (best-effort) — per-product join by id
 })
 ```
 
-Adapt the surrounding code to your edge function's actual runtime and SDK (the example uses Deno env). The critical invariants are: forward `landing_site` AND `first_touch`; read the token from a server-side env var only.
+Adapt the surrounding code to your edge function's actual runtime and SDK (the example uses Deno env). The critical invariants are: forward `landing_site` AND `first_touch` AND `product_id`; read the token from a server-side env var only.
 
 ---
 
@@ -136,6 +159,7 @@ Adapt the surrounding code to your edge function's actual runtime and SDK (the e
 1. **uzoshop / Zol Plus:** replace `<STORE_CART_TOKEN>` in the Custom Pixel with each store's `cart_public_token` (from the `store_webhooks` row for that store).
 2. **usmile360:** confirm that `ROAS_STORE_TOKEN` is set in the Lovable edge function's environment variables and reflects the rotated token (rotated 2026-06-06).
 3. **First-touch re-paste (2026-06-07):** the beacon now sends a `first_touch` field (the stored `_ft_attr` bag) so the dashboard can compute first-click attribution. The **3 existing stores (uzoshop, Zol Plus, usmile360) must RE-PASTE the updated snippet** for the field to start flowing — the previous version sent only `landing_site`. New stores added via the wizard get the enriched snippet automatically.
+4. **Product-id re-paste (2026-06-08, PPJ-T1):** the beacon now also sends a `product_id` field (the cart line's Product GID; the route normalizes it to the numeric Shopify Product id) so the per-product table can join ATC↔purchases by id. The **3 existing stores (uzoshop, Zol Plus, usmile360) must RE-PASTE the updated snippet** for the field to start flowing. New stores added via the wizard get it automatically.
 
 ### Smoke test after deploy
 

@@ -81,6 +81,13 @@ analytics.subscribe("product_added_to_cart", async (event) => {
       (line.merchandise && line.merchandise.product && line.merchandise.product.title) ||
       (d.productVariant && d.productVariant.product && d.productVariant.product.title) ||
       null;
+    // Product id (the Product GID, e.g. gid://shopify/Product/7654321). Best-effort:
+    // missing → omitted. The dashboard normalizes the GID to the numeric Shopify
+    // Product id so per-product ATC↔purchase joins match by id (not by title).
+    var productId =
+      (line.merchandise && line.merchandise.product && line.merchandise.product.id) ||
+      (d.productVariant && d.productVariant.product && d.productVariant.product.id) ||
+      null;
     var qty = line.quantity || 1;
     var payload = {
       store_token: CART_TOKEN,
@@ -93,6 +100,9 @@ analytics.subscribe("product_added_to_cart", async (event) => {
     // Send the stored first-touch bag so the dashboard can compute first-click
     // attribution (boosts first-touch coverage). Omitted when absent.
     if (firstTouch) payload.first_touch = firstTouch;
+    // Send the product id (GID) so the dashboard can join ATC↔purchases by id.
+    // Omitted when absent — never blocks add-to-cart.
+    if (productId) payload.product_id = productId;
     fetch("https://roas-dashboard-smoky.vercel.app/api/events/cart", {
       method: "POST",
       keepalive: true,
@@ -123,7 +133,8 @@ const HEADLESS_CLIENT_TEMPLATE = `// on app load (first-touch capture)
 
 // when reporting an add-to-cart, include in the POST body sent to the edge function:
 //   landing_site: localStorage.getItem("_ft_attr") || "/",
-//   first_touch:  localStorage.getItem("_ft_attr") || undefined  // first-click bag (best-effort; omit if absent)`;
+//   first_touch:  localStorage.getItem("_ft_attr") || undefined, // first-click bag (best-effort; omit if absent)
+//   product_id:   cartLine.productId || undefined                // numeric Shopify product id (best-effort; omit if absent) — enables per-product join by id`;
 
 /**
  * Headless edge-function forwarder — VERBATIM from
@@ -141,6 +152,7 @@ body: JSON.stringify({
   occurred_at: payload.occurred_at,
   landing_site: payload.landing_site || "/",        // forwarded last-touch landing from client
   first_touch: payload.first_touch || undefined,    // forwarded first-click bag (best-effort; omit if absent)
+  product_id: payload.product_id || undefined,      // forwarded numeric Shopify product id (best-effort) — per-product join by id
 })`;
 
 /**

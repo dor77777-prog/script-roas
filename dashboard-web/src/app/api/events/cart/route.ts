@@ -99,6 +99,32 @@ function safeQuantity(value: unknown): number | null {
 }
 
 /**
+ * Normalize an incoming ATC product id (PPJ-T1) to the bare NUMERIC Shopify
+ * Product id so it matches the join targets exactly:
+ *   - `orders_attribution.line_items` productId = `String(li.product_id)` (the
+ *     REST orders numeric product id — pure digits, e.g. `7654321`), and
+ *   - `products_daily.product_id` = `String(p.id)` (the products numeric id —
+ *     also pure digits).
+ *
+ * The Shopify Custom Pixel exposes the product id as a GID
+ * (`gid://shopify/Product/7654321`); the headless cart may send the bare numeric
+ * id (string or number). Either way we take the TRAILING run of digits — for a
+ * GID that's the numeric Product id after the last slash; for a plain numeric id
+ * it's the id itself. Anything with no trailing digits (junk / variant-only with
+ * a non-numeric shape) → null (the field is then omitted; the event is still
+ * recorded). Best-effort: never throws.
+ */
+function safeProductId(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  // Trailing numeric run: for `gid://shopify/Product/7654321` → `7654321`; for a
+  // bare `7654321` (string or number) → `7654321`. A GID with no numeric tail or
+  // any non-numeric junk yields no match → null.
+  const m = String(value).match(/(\d+)\s*$/);
+  return m ? m[1] : null;
+}
+
+/**
  * Fold the beacon's best-effort first-touch bag (the storefront's `_ft_attr`
  * localStorage value, written by the page_view snippet) into `note_attributes`
  * named `_ft_<key>` — the exact namespace `classifyOrderAttribution`'s
@@ -210,6 +236,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   let body: {
     store_token?: unknown;
     product_title?: unknown;
+    product_id?: unknown;
     quantity?: unknown;
     event_id?: unknown;
     occurred_at?: unknown;
@@ -257,6 +284,11 @@ export async function POST(req: Request): Promise<NextResponse> {
   //    Wrapped so a transient DB error never 5xxes → never blocks the storefront.
   const productTitle = safeProductTitle(body.product_title);
   const quantity = safeQuantity(body.quantity);
+  // PPJ-T1: normalize the ATC product id (GID or numeric) to the bare numeric
+  // Shopify Product id so it matches orders_attribution.line_items productId and
+  // products_daily.product_id, enabling an exact per-product ATC↔purchase join by
+  // id. Best-effort — a missing/unparseable id is omitted from `raw` below.
+  const productId = safeProductId(body.product_id);
   // Classify source from the first-touch landing_site the storefront snippet
   // sends. landing_site is NOT stored in raw (keep raw PII-free as-is).
   // Defensive wrapper: a future change to the classifier must never 500 the
@@ -323,11 +355,15 @@ export async function POST(req: Request): Promise<NextResponse> {
       // raw carries NO PII — display-safe fields + the PII-free `diag` probe above.
       // first_touch_source is a non-secret platform label (null = no signal) that
       // T3's first-click lens reads back via /api/store-events (no new column).
+      // product_id (PPJ-T1) is the bare numeric Shopify Product id (or null when
+      // absent/unparseable) — matches line_items / products_daily for an exact
+      // per-product ATC↔purchase join by id; stored in raw (no new column).
       raw: {
         product_title: productTitle,
         quantity,
         event_id: eventId,
         first_touch_source: firstTouchSource,
+        product_id: productId,
         diag,
       },
     });
