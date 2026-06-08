@@ -12,6 +12,33 @@ describe('sourceToChannel', () => {
     expect(sourceToChannel(null)).toBeNull();
     expect(sourceToChannel(undefined)).toBeNull();
   });
+
+  // classify-v2 T2 INVARIANT: the new organic/referral source values must
+  // NEVER resolve to a paid channel — the paid-spend/ROAS/NC-ROAS path
+  // depends on this returning null so organic revenue never enters paid math.
+  it('classify-v2 organic/referral values are NOT a paid channel (null)', () => {
+    expect(sourceToChannel('tiktok-organic')).toBeNull();
+    expect(sourceToChannel('search-organic')).toBeNull();
+    expect(sourceToChannel('app-referral')).toBeNull();
+    expect(sourceToChannel('email')).toBeNull();
+    // Sanity: existing organics stay null too.
+    expect(sourceToChannel('meta-organic')).toBeNull();
+    expect(sourceToChannel('google-organic')).toBeNull();
+  });
+
+  it('tiktok-organic first-orders do NOT count toward tiktok NC-ROAS (paid math excludes organic)', () => {
+    // A tiktok-organic first order must NOT add to the tiktok channel's
+    // ncRevenue/ncOrders — only tiktok-paid does.
+    const rows: FirstOrderInput[] = [
+      { storeName: 'uzoshop', totalCad: 200, isFirstOrder: true, source: 'tiktok-organic' },
+      { storeName: 'uzoshop', totalCad: 100, isFirstOrder: true, source: 'tiktok-paid' },
+    ];
+    const out = computeChannelTruth(rows, { meta: 0, google: 0, tiktok: 50 });
+    const tk = out.find((c) => c.channel === 'tiktok')!;
+    expect(tk.ncRevenue).toBe(100);   // tiktok-paid only; organic excluded
+    expect(tk.ncOrders).toBe(1);
+    expect(tk.ncRoas).toBeCloseTo(2.0, 5); // 100 / 50 — organic 200 did NOT inflate it
+  });
 });
 
 function r(over: Partial<FirstOrderInput>): FirstOrderInput {

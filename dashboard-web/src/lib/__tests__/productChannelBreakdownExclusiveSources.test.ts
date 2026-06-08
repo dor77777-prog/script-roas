@@ -144,7 +144,10 @@ function computeSegments(breakdown: ReturnType<typeof analyzeProductChannel>) {
            + (breakdown.bySource['meta-organic']?.orders ?? 0);
   const google = (breakdown.bySource['google-paid']?.orders ?? 0)
               + (breakdown.bySource['google-organic']?.orders ?? 0);
-  const tiktok = breakdown.bySource['tiktok-paid']?.orders ?? 0;
+  // classify-v2 T2: TikTok segment is symmetric with Meta/Google —
+  // tiktok-paid + tiktok-organic (was paid-only). Mirrors the component.
+  const tiktok = (breakdown.bySource['tiktok-paid']?.orders ?? 0)
+              + (breakdown.bySource['tiktok-organic']?.orders ?? 0);
   const direct = breakdown.bySource['direct']?.orders ?? 0;
   const knownExplicit = fb + google + tiktok + direct;
   const other = Math.max(0, total - knownExplicit);
@@ -232,6 +235,34 @@ describe('ProductChannelBreakdown — CRIT-2 exclusive source attribution', () =
     const preFixOther = Math.max(0, 110 - (breakdown.facebookOrders + seg.google + seg.tiktok + seg.direct));
     expect(preFixOther).toBe(0); // <-- the bug
     expect(seg.other).not.toBe(preFixOther);
+  });
+
+  it('tiktok-organic lands in the TikTok segment (not "other"); segments still sum to total', () => {
+    // classify-v2 T2: tiktok-organic moves OUT of "other" and INTO the
+    // TikTok segment, symmetric with how meta-organic lands in Meta and
+    // google-organic lands in Google. Sums-to-total must still hold.
+    const orders = [
+      makeOrder({ orderId: 'tt-paid', source: 'tiktok-paid', lineItems: [makeLineItem({ productId: 'p-1' })], date: '2026-05-10' }),
+      makeOrder({ orderId: 'tt-org', source: 'tiktok-organic', lineItems: [makeLineItem({ productId: 'p-1' })], date: '2026-05-11' }),
+      makeOrder({ orderId: 'me-org', source: 'meta-organic', fbclidPresent: false, lineItems: [makeLineItem({ productId: 'p-1' })], date: '2026-05-12' }),
+      makeOrder({ orderId: 'go-org', source: 'google-organic', lineItems: [makeLineItem({ productId: 'p-1' })], date: '2026-05-13' }),
+      makeOrder({ orderId: 'dir', source: 'direct', fbclidPresent: false, lineItems: [makeLineItem({ productId: 'p-1' })], date: '2026-05-14' }),
+      // search-organic + app-referral are NOT a paid platform → stay in "other".
+      makeOrder({ orderId: 'srch', source: 'search-organic', lineItems: [makeLineItem({ productId: 'p-1' })], date: '2026-05-15' }),
+      makeOrder({ orderId: 'app', source: 'app-referral', lineItems: [makeLineItem({ productId: 'p-1' })], date: '2026-05-16' }),
+    ];
+    const breakdown = analyzeProductChannel({ ...BASE, productIds: ['p-1'], orders });
+    const seg = computeSegments(breakdown);
+
+    expect(seg.total).toBe(7);
+    expect(seg.tiktok).toBe(2);  // paid + organic — the T2 fix
+    expect(seg.fb).toBe(1);      // meta-organic
+    expect(seg.google).toBe(1);  // google-organic
+    expect(seg.direct).toBe(1);
+    expect(seg.other).toBe(2);   // search-organic + app-referral
+
+    // Sums-to-total property preserved (tiktok-organic moved from other → TikTok).
+    expect(seg.fb + seg.google + seg.tiktok + seg.direct + seg.other).toBe(7);
   });
 
   it('all-source-unknown orders go to "other" bucket (not silently dropped)', () => {

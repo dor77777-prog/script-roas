@@ -59,11 +59,14 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
            + (breakdown.bySource['meta-organic']?.orders ?? 0);
   const google = (breakdown.bySource['google-paid']?.orders ?? 0)
               + (breakdown.bySource['google-organic']?.orders ?? 0);
-  // Phase 05.7.9 — TikTok bucket. tiktok-paid is currently the only TikTok
-  // source classification (organic TikTok referrers fall through to
-  // 'other-referral' per shopify.ts:classifyOrderAttribution line 900-906).
-  // Read from bySource so the math stays exclusive with all other segments.
-  const tiktok = breakdown.bySource['tiktok-paid']?.orders ?? 0;
+  // TikTok bucket — symmetric with Meta (meta-paid + meta-organic) and Google
+  // (google-paid + google-organic). classify-v2 (2026-06) added a distinct
+  // 'tiktok-organic' source (referrer tiktok.com, no UTM), so it now joins the
+  // TikTok segment instead of falling into 'other'. Read from bySource so the
+  // math stays exclusive (tiktok-organic moves from "other" → TikTok; segments
+  // still sum to total). DISPLAY-only — organic never enters paid/ROAS math.
+  const tiktok = (breakdown.bySource['tiktok-paid']?.orders ?? 0)
+              + (breakdown.bySource['tiktok-organic']?.orders ?? 0);
   const direct = breakdown.bySource['direct']?.orders ?? 0;
   const knownExplicit = fb + google + tiktok + direct;
   // `other` now naturally sums-to-total because the explicit buckets are

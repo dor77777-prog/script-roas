@@ -1296,10 +1296,14 @@ export type ProductChannelBreakdown = {
    * field — so the residual "other" bucket is not silently clamped.
    */
   facebookShare: number;
-  /** Phase 05.7.9 — TikTok bucket. Counts orders with source === 'tiktok-paid'
-   *  (set when ttclid is in the landing URL or source_name === 'tiktok').
-   *  Mirrors facebookOrders/Revenue/Share so the UI can render TikTok as a
-   *  first-class platform alongside Meta + Google. */
+  /** TikTok bucket. Counts orders with source ∈ {tiktok-paid, tiktok-organic}
+   *  — symmetric with the Meta (meta-paid + meta-organic) and Google
+   *  (google-paid + google-organic) buckets. tiktok-paid is set when ttclid is
+   *  in the landing URL / source_name === 'tiktok'; tiktok-organic is a
+   *  referrer-tiktok.com no-UTM order (classify-v2, 2026-06). Mirrors
+   *  facebookOrders/Revenue/Share so the UI can render TikTok as a first-class
+   *  platform alongside Meta + Google. DISPLAY-only — tiktok-organic is NOT
+   *  paid and never enters paid-spend/ROAS math. */
   tiktokOrders: number;
   tiktokRevenue: number;
   tiktokShare: number;
@@ -1390,11 +1394,14 @@ export function analyzeProductChannel(opts: {
       facebookRevenue += orderMappedRevenue;
     }
 
-    // Phase 05.7.9 — TikTok bucket. Mirrors the Facebook predicate but
-    // narrower: only paid (no ttclidPresent on the row + no organic
-    // bucket because tiktok-paid is the only TikTok classification today,
-    // see shopify.ts:classifyOrderAttribution priority chain).
-    if (o.source === 'tiktok-paid') {
+    // TikTok bucket — symmetric with the Meta (meta-paid + meta-organic)
+    // and Google (google-paid + google-organic) display buckets. classify-v2
+    // (2026-06) added a distinct `tiktok-organic` source (referrer tiktok.com,
+    // no UTM) — see classifyOrderSource.ts. There is no `ttclidPresent`
+    // boolean on the row, so the TikTok predicate is source-only (no OR-clid
+    // leg like Facebook's). NOT-paid: tiktok-organic never enters paid spend /
+    // ROAS math — this is a DISPLAY bucket only.
+    if (o.source === 'tiktok-paid' || o.source === 'tiktok-organic') {
       tiktokOrders++;
       tiktokRevenue += orderMappedRevenue;
     }

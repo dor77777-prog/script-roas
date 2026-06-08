@@ -99,6 +99,45 @@ describe('analyzeProductChannel', () => {
     expect(result.facebookOrders).toBe(1);
   });
 
+  // ----------------------------------------------------------------
+  // TikTok predicate — symmetric with Meta/Google (classify-v2 T2).
+  // Meta counts meta-paid + meta-organic; Google counts google-paid +
+  // google-organic; TikTok must count tiktok-paid + tiktok-organic.
+  // ----------------------------------------------------------------
+
+  it('counts tiktok-paid source as TikTok', () => {
+    const order = makeOrder({
+      source: 'tiktok-paid',
+      fbclidPresent: false,
+      lineItems: [makeLineItem({ productId: 'p-1' })],
+      date: '2026-05-10',
+    });
+    const result = analyzeProductChannel({
+      ...BASE_OPTS,
+      productIds: ['p-1'],
+      orders: [order],
+    });
+    expect(result.tiktokOrders).toBe(1);
+  });
+
+  it('counts tiktok-organic source as TikTok (symmetric with meta-organic)', () => {
+    const order = makeOrder({
+      source: 'tiktok-organic',
+      fbclidPresent: false,
+      lineItems: [makeLineItem({ productId: 'p-1' })],
+      date: '2026-05-10',
+    });
+    const result = analyzeProductChannel({
+      ...BASE_OPTS,
+      productIds: ['p-1'],
+      orders: [order],
+    });
+    expect(result.tiktokOrders).toBe(1);
+    expect(result.tiktokRevenue).toBeGreaterThan(0);
+    // bySource still buckets the raw label distinctly.
+    expect(result.bySource['tiktok-organic']?.orders).toBe(1);
+  });
+
   it('does not count direct source as Facebook', () => {
     const order = makeOrder({
       source: 'direct',
@@ -260,6 +299,30 @@ describe('analyzeProductChannel', () => {
       });
       expect(result.bySource['google-organic']?.orders).toBe(1);
       expect(result.bySource['google-organic']?.revenue).toBeGreaterThan(0);
+    });
+
+    it('TikTok count includes tiktok-paid + tiktok-organic (symmetric with Meta/Google), excludes other organics', () => {
+      // classify-v2 T2: TikTok bucket is symmetric with Meta (meta-paid +
+      // meta-organic) and Google (google-paid + google-organic). New organic
+      // values (search-organic, app-referral) are NOT TikTok and must stay out.
+      const orders = [
+        makeOrder({ source: 'tiktok-paid', orderId: 'tt-paid', lineItems: [makeLineItem({ productId: 'p-1' })], date: '2026-05-10' }),
+        makeOrder({ source: 'tiktok-organic', orderId: 'tt-org', lineItems: [makeLineItem({ productId: 'p-1' })], date: '2026-05-11' }),
+        makeOrder({ source: 'search-organic', orderId: 'srch', lineItems: [makeLineItem({ productId: 'p-1' })], date: '2026-05-12' }),
+        makeOrder({ source: 'app-referral', orderId: 'app', lineItems: [makeLineItem({ productId: 'p-1' })], date: '2026-05-13' }),
+      ];
+      const result = analyzeProductChannel({
+        ...BASE_OPTS,
+        productIds: ['p-1'],
+        orders,
+      });
+      expect(result.totalOrders).toBe(4);
+      expect(result.tiktokOrders).toBe(2); // paid + organic, NOT search/app
+      expect(result.tiktokRevenue).toBeGreaterThan(0);
+      // New organic values bucket distinctly by raw source label.
+      expect(result.bySource['tiktok-organic']?.orders).toBe(1);
+      expect(result.bySource['search-organic']?.orders).toBe(1);
+      expect(result.bySource['app-referral']?.orders).toBe(1);
     });
 
     it('Facebook count includes meta-paid + meta-organic + fbclidPresent (3 paths)', () => {

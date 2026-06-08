@@ -662,13 +662,22 @@ export function generateAiReport({
   // organic/direct. AOV per source surfaces which channel attracts
   // higher-spending customers — a signal Meta/Google ROAS doesn't carry.
   if (orders.length > 0) {
+    // classify-v2 (2026-06): the canonical classifier emits tiktok-organic /
+    // search-organic / app-referral in addition to the existing labels (see
+    // classifyOrderSource.ts). Every value needs a friendly Hebrew label here
+    // or the raw machine string leaks into the operator-facing table. NONE of
+    // the organic/referral labels are paid — this map is DISPLAY-only and does
+    // not feed any ROAS/paid-spend math.
     const SOURCE_LABEL: Record<string, string> = {
       'meta-paid':       'Meta (paid)',
       'google-paid':     'Google (paid)',
       'tiktok-paid':     'TikTok (paid)',
       'meta-organic':    'Meta (organic)',
       'google-organic':  'Google (organic)',
-      email:             'אימייל / Klaviyo',
+      'tiktok-organic':  'טיקטוק אורגני',
+      'search-organic':  'חיפוש אורגני',
+      'app-referral':    'הפניה מאפליקציה',
+      email:             'אימייל',
       'other-paid':      'אחר (paid)',
       'other-referral':  'הפניה (לא מסווגת)',
       direct:            'ישיר (no UTM)',
