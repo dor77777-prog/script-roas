@@ -13,9 +13,9 @@
  *      `analysis.trust` that `AttributionAnalysisPanel` reads — never
  *      recomputed from raw totals) · ציון בריאות (the grade/early-state
  *      from the existing `health` prop).
- *   2. KPI grid (ROAS/הוצאה/ערך/המרות) + CPA/CPC/CTR strip — always
- *      visible, exactly as before. ROAS/value intentionally repeat the
- *      scorecard (operator-approved).
+ *   2. KPI grid (operational metrics only) — always visible, de-duplicated:
+ *      הוצאה · המרות · CTR · CPC · CPA. ROAS and ערך-המרות live exclusively
+ *      in the scorecard (no duplication).
  *   3. Collapsible accordions (`<details>`, the existing `details.acc`
  *      token pattern copied from `CustomerValueTab` / `PnLBreakdown`):
  *      the FULL HealthScorePanel, mapped-products block,
@@ -252,24 +252,10 @@ export function CampaignDrawerOverview({
         />
       </div>
 
-      {/* ── 2. KPI grid + secondary strip — always visible ───────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-        <Stat
-          label="ROAS"
-          value={summary.roas > 0 ? formatNumber(summary.roas) : '—'}
-          chip={<Badge tone={roasInfo.tone as BadgeTone}>{roasInfo.text}</Badge>}
-        />
+      {/* ── 2. KPI grid — operational metrics only (no ROAS/ערך dup) ─── */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
         <Stat label="הוצאה" value={formatCurrency(summary.spend)} prefix="CAD" />
-        <Stat
-          label="ערך המרות"
-          value={formatCurrency(summary.value)}
-          prefix="CAD"
-          accent={summary.value > summary.spend ? 'positive' : 'neutral'}
-        />
         <Stat label="המרות" value={formatNumber(summary.conversions, 0)} />
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <Stat
           density="compact"
           label="CTR"

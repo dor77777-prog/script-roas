@@ -8,8 +8,9 @@
 // Coverage:
 //   1. Scorecard surfaces the attribution trust score (/100) + the health
 //      grade, ALWAYS visible (no expand needed).
-//   2. The KPI grid + CPA/CPC/CTR strip stay always-visible (ROAS repeats —
-//      operator-approved).
+//   2. The KPI grid (הוצאה/המרות/CTR/CPC/CPA) stays always-visible.
+//      ROAS and ערך-המרות live ONLY in the scorecard — no duplicate cards
+//      (Task 6 de-dup).
 //   3. The deep panels (Health / mapped-products / cohort / attribution /
 //      product-channel / reconciliation) live inside <details> accordions.
 //   4. The attribution accordion is OPEN by default; the rest are collapsed.
@@ -105,7 +106,7 @@ function makeProps(
 describe('CampaignDrawerOverview — scorecard + collapsible accordions', () => {
   it('scorecard surfaces the attribution trust score (/100) + health grade, always visible', () => {
     render(<CampaignDrawerOverview {...makeProps()} />);
-    // ROAS label appears (scorecard + KPI grid both carry it).
+    // ROAS label appears in the scorecard (exactly once after de-dup).
     expect(screen.getAllByText(/ROAS/).length).toBeGreaterThan(0);
     // Attribution trust score surfaced at the top WITHOUT expanding anything.
     expect(screen.getByTestId('overview-scorecard')).toBeInTheDocument();
@@ -114,13 +115,12 @@ describe('CampaignDrawerOverview — scorecard + collapsible accordions', () => 
     expect(screen.getByTestId('overview-sc-health')).toHaveTextContent('A');
   });
 
-  it('KPI grid + CPA/CPC/CTR strip stay always-visible (ROAS/value repeat)', () => {
+  it('KPI grid (operational) stays always-visible: הוצאה/המרות/CTR/CPC/CPA', () => {
     render(<CampaignDrawerOverview {...makeProps()} />);
-    // The secondary strip labels are always visible (not behind an accordion).
+    // All operational labels always visible (not behind an accordion).
     expect(screen.getByText('CPA')).toBeInTheDocument();
     expect(screen.getByText('CPC')).toBeInTheDocument();
     expect(screen.getByText('CTR')).toBeInTheDocument();
-    // The KPI grid labels too.
     expect(screen.getByText('הוצאה')).toBeInTheDocument();
     expect(screen.getByText('המרות')).toBeInTheDocument();
   });
@@ -177,6 +177,14 @@ describe('CampaignDrawerOverview — scorecard + collapsible accordions', () => 
     // Esc closes it.
     fireEvent.keyDown(dialog, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('renders ROAS and ערך המרות exactly once (no duplicate cards)', () => {
+    render(<CampaignDrawerOverview {...makeProps()} />);
+    // After de-dup: ROAS appears only in the scorecard (not also in KPI grid).
+    expect(screen.getAllByText('ROAS')).toHaveLength(1);
+    // ערך המרות appears only in the scorecard (not also in KPI grid).
+    expect(screen.getAllByText('ערך המרות')).toHaveLength(1);
   });
 
   it('renders the reconciliation accordion only when reconciliation is present', () => {
