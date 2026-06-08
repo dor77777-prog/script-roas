@@ -228,3 +228,111 @@ describe('StoresTab — חנויות operator tab (Phase 6a Task 7)', () => {
     expect(await screen.findByText('360usmile')).toBeDefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 6b Task 3 — archive / restore wiring + the "חנויות שהוסרו" removed-area.
+// Archiving an active store POSTs to .../[id]/archive and re-fetches (the store
+// moves active→removed-area); restoring POSTs to .../[id]/restore and re-fetches
+// (it moves back). NO info loss — active list AND removed-area both visible.
+// ---------------------------------------------------------------------------
+describe('StoresTab — archive / restore (Phase 6b Task 3)', () => {
+  // A mix: one active + one archived store.
+  const MIXED: StoreRowData[] = [
+    {
+      storeId: 'uzoshop',
+      name: 'uzoshop',
+      brandColor: 'var(--store-uzo)',
+      isHeadless: false,
+      hasTikTok: true,
+      status: 'active',
+      displayOrder: 1,
+      platforms: ['google', 'meta', 'shopify', 'tiktok'],
+      hasWebhookSecret: true,
+    },
+    {
+      storeId: 'oldstore',
+      name: 'Old Store',
+      brandColor: 'var(--store-3)',
+      isHeadless: false,
+      hasTikTok: false,
+      status: 'archived',
+      displayOrder: 9,
+      platforms: ['shopify'],
+      hasWebhookSecret: false,
+    },
+  ];
+
+  function postCalls(suffix: string): number {
+    return calls.filter(
+      (c) => c.url.endsWith(suffix) && (c.init?.method ?? 'GET') === 'POST',
+    ).length;
+  }
+
+  it('renders BOTH the active list and the removed-area (no info loss)', async () => {
+    responder = (url, init) => {
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/api/operator/stores') && method === 'GET') return okStores(MIXED);
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+    render(<StoresTab />);
+    // Active store in the active list.
+    expect(await screen.findByTestId('store-row-uzoshop')).toBeDefined();
+    // Archived store in the removed-area.
+    expect(screen.getByTestId('removed-store-row-oldstore')).toBeDefined();
+    // The archived store is NOT in the active list, and vice versa.
+    expect(screen.queryByTestId('store-row-oldstore')).toBeNull();
+    expect(screen.queryByTestId('removed-store-row-uzoshop')).toBeNull();
+  });
+
+  it('archiving an active store POSTs to /archive and re-fetches', async () => {
+    responder = (url, init) => {
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/api/operator/stores') && method === 'GET') return okStores(MIXED);
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    };
+    render(<StoresTab />);
+    await screen.findByTestId('store-row-uzoshop');
+    const beforeGet = countGetCalls();
+
+    const row = screen.getByTestId('store-row-uzoshop');
+    fireEvent.click(within(row).getByRole('button', { name: /העבר לארכיון/ }));
+
+    // POST to the archive endpoint fired.
+    await waitFor(() => expect(postCalls('/api/operator/stores/uzoshop/archive')).toBe(1));
+    // And the list was re-fetched so the store moves to the removed-area.
+    await waitFor(() => expect(countGetCalls()).toBeGreaterThan(beforeGet));
+  });
+
+  it('restoring an archived store POSTs to /restore and re-fetches', async () => {
+    responder = (url, init) => {
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/api/operator/stores') && method === 'GET') return okStores(MIXED);
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    };
+    render(<StoresTab />);
+    await screen.findByTestId('removed-store-row-oldstore');
+    const beforeGet = countGetCalls();
+
+    const row = screen.getByTestId('removed-store-row-oldstore');
+    fireEvent.click(within(row).getByRole('button', { name: /שחזר/ }));
+
+    await waitFor(() => expect(postCalls('/api/operator/stores/oldstore/restore')).toBe(1));
+    await waitFor(() => expect(countGetCalls()).toBeGreaterThan(beforeGet));
+  });
+
+  it('surfaces a Hebrew error when archive POST fails (and does not crash)', async () => {
+    responder = (url, init) => {
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/api/operator/stores') && method === 'GET') return okStores(MIXED);
+      if (url.endsWith('/archive') && method === 'POST') {
+        return { ok: false, status: 500, json: async () => ({ error: 'boom' }) };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+    render(<StoresTab />);
+    await screen.findByTestId('store-row-uzoshop');
+    fireEvent.click(within(screen.getByTestId('store-row-uzoshop')).getByRole('button', { name: /העבר לארכיון/ }));
+    // A Hebrew error surfaces (mirrors the load-error pattern).
+    expect(await screen.findByText(/נכשל/)).toBeDefined();
+  });
+});

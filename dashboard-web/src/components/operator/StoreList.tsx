@@ -8,9 +8,12 @@
 // passes the rows + an onManage(storeId, focus) callback down; this component
 // does NO data fetching. It renders only the ACTIVE stores (status === 'active')
 // as a list of StoreRow (each carrying the per-store credential-status matrix),
-// with a friendly Hebrew empty state when there are none. Archived
-// stores + the "חנויות שהוסרו" removed-area (archive/restore/delete) are Phase
-// 6b and are intentionally not rendered here.
+// with a friendly Hebrew empty state when there are none.
+//
+// Phase 6b Task 3 — each active StoreRow now also exposes an archive action
+// (onArchive passed straight through). The ARCHIVED stores + the "חנויות שהוסרו"
+// removed-area (restore) live in the sibling RemovedStores component, rendered
+// below this list by StoresTab. DELETE remains DEFERRED to a later task.
 //
 // `StoreRowData` is typed to the EXACT shape of one row returned by the GET
 // handler (src/app/api/operator/stores/route.ts → GET): storeId / name /
@@ -67,10 +70,17 @@ export type ManageFocus = 'shopify' | 'meta' | 'google' | 'tiktok' | 'webhook';
 export function StoreList({
   stores,
   onManage,
+  onArchive,
 }: {
   stores: StoreRowData[];
   /** Open the edit wizard for a store, focused on a platform / the webhook. */
   onManage: (storeId: string, focus: ManageFocus) => void;
+  /**
+   * Phase 6b Task 3 — archive a store (reversible). Passed straight through to
+   * each active StoreRow's "העבר לארכיון" action. Optional so presentational-only
+   * callers/tests still work.
+   */
+  onArchive?: (storeId: string) => void;
 }) {
   const active = stores.filter((s) => s.status === 'active');
 
@@ -91,7 +101,7 @@ export function StoreList({
         <ul className="space-y-2">
           {active.map((store) => (
             <li key={store.storeId}>
-              <StoreRow store={store} onManage={onManage} />
+              <StoreRow store={store} onManage={onManage} onArchive={onArchive} />
             </li>
           ))}
         </ul>

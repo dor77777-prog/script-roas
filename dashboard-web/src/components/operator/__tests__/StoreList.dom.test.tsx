@@ -268,3 +268,49 @@ describe('StoreRow — connect / edit per-platform actions (Phase 6a D2)', () =>
     expect(onManage).toHaveBeenCalledWith('zolplus', 'google');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 6b Task 3 — ARCHIVE action on an active row. Each active StoreRow gets
+// an "העבר לארכיון" affordance that calls up via onArchive(storeId). (Reversible;
+// the store then moves to the "חנויות שהוסרו" removed-area. NO delete here.)
+// ---------------------------------------------------------------------------
+describe('StoreRow — archive action (Phase 6b Task 3)', () => {
+  const ACTIVE: StoreRowData = {
+    storeId: 'uzoshop',
+    name: 'uzoshop',
+    brandColor: 'var(--store-uzo)',
+    isHeadless: false,
+    hasTikTok: true,
+    status: 'active',
+    displayOrder: 1,
+    platforms: ['google', 'meta', 'shopify', 'tiktok'],
+    hasWebhookSecret: true,
+  };
+
+  it('renders an "העבר לארכיון" action on each active row', () => {
+    render(<StoreList stores={[ACTIVE]} onManage={vi.fn()} onArchive={vi.fn()} />);
+    const row = screen.getByTestId('store-row-uzoshop');
+    expect(within(row).getByRole('button', { name: /העבר לארכיון/ })).toBeDefined();
+  });
+
+  it('clicking "העבר לארכיון" calls onArchive(storeId)', () => {
+    const onArchive = vi.fn();
+    render(<StoreList stores={[ACTIVE]} onManage={vi.fn()} onArchive={onArchive} />);
+    const row = screen.getByTestId('store-row-uzoshop');
+    fireEvent.click(within(row).getByRole('button', { name: /העבר לארכיון/ }));
+    expect(onArchive).toHaveBeenCalledWith('uzoshop');
+  });
+
+  it('does NOT render a delete affordance on the active row (delete is deferred)', () => {
+    render(<StoreList stores={[ACTIVE]} onManage={vi.fn()} onArchive={vi.fn()} />);
+    const row = screen.getByTestId('store-row-uzoshop');
+    expect(within(row).queryByRole('button', { name: /מחק/ })).toBeNull();
+  });
+
+  it('the archive action carries an accessible name scoped to the store', () => {
+    render(<StoreList stores={[ACTIVE]} onManage={vi.fn()} onArchive={vi.fn()} />);
+    const row = screen.getByTestId('store-row-uzoshop');
+    // Accessible name includes both the action and the store name.
+    expect(within(row).getByRole('button', { name: /העבר לארכיון.*uzoshop/ })).toBeDefined();
+  });
+});

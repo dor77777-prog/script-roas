@@ -34,6 +34,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
 import { StoreList, type StoreRowData, type ManageFocus } from '@/components/operator/StoreList';
+import { RemovedStores } from '@/components/operator/RemovedStores';
 import { AddStoreWizard } from '@/components/operator/AddStoreWizard';
 import { Button } from '@/components/ui/Button';
 import { Heading, Text } from '@/components/ui/Typography';
@@ -90,6 +91,40 @@ export function StoresTab() {
     [],
   );
 
+  // Phase 6b Task 3 — lifecycle: archive / restore. Both are reversible
+  // status-only flips on the server (no data row touched). On success we re-fetch
+  // so the store moves between the active list and the "חנויות שהוסרו" area; on
+  // failure we surface a Hebrew error (mirrors the load-error pattern). DELETE is
+  // DEFERRED (a later task) — no delete handler here yet.
+  const lifecycle = useCallback(
+    async (storeId: string, action: 'archive' | 'restore'): Promise<void> => {
+      try {
+        const res = await operatorFetch(`/api/operator/stores/${storeId}/${action}`, {
+          method: 'POST',
+        });
+        if (!res.ok) throw new Error(`${action} HTTP ${res.status}`);
+        setError(null);
+        await load(); // re-fetch → the store moves between active / removed-area
+      } catch {
+        setError(
+          action === 'archive'
+            ? 'העברת החנות לארכיון נכשלה. נסה שוב.'
+            : 'שחזור החנות נכשל. נסה שוב.',
+        );
+      }
+    },
+    [load],
+  );
+
+  const handleArchive = useCallback(
+    (storeId: string) => void lifecycle(storeId, 'archive'),
+    [lifecycle],
+  );
+  const handleRestore = useCallback(
+    (storeId: string) => void lifecycle(storeId, 'restore'),
+    [lifecycle],
+  );
+
   // ---------------------------------------------------------------------------
   // Wizard view — replaces the list while open (inline, no overlay).
   // ---------------------------------------------------------------------------
@@ -137,7 +172,14 @@ export function StoresTab() {
           טוען חנויות…
         </Text>
       ) : error ? null : (
-        <StoreList stores={stores} onManage={openManage} />
+        <>
+          <StoreList stores={stores} onManage={openManage} onArchive={handleArchive} />
+          {/* "חנויות שהוסרו" — the removed-area below the active list. Renders
+              nothing when there are no archived stores. NO info loss: active list
+              + removed-area are both visible. DELETE is DEFERRED (a later task);
+              its spot is marked inside RemovedStores. */}
+          <RemovedStores stores={stores} onRestore={handleRestore} />
+        </>
       )}
     </div>
   );

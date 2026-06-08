@@ -12,7 +12,12 @@
 // shows whether the store HAS or is MISSING that credential and exposes a
 // connect ("חבר") / rotate ("החלף") action that calls up via
 // `onManage(storeId, focus)` — T7 (StoresTab) opens the edit wizard focused on
-// that platform. There is NO archive/restore/delete here — that is Phase 6b.
+// that platform.
+//
+// Phase 6b Task 3 adds the row-level archive action -> calls up via
+// onArchive(storeId) (reversible; the store then moves to the removed-area,
+// rendered by RemovedStores). DELETE is DEFERRED to a later task — there is
+// intentionally NO delete button here yet.
 //
 // Design-system contract (build-to-standard-from-start):
 //   - Token-driven only — the brand swatch background is a CSS var (e.g.
@@ -30,7 +35,7 @@
 //   - a11y: every action button has an accessible name scoped to the store +
 //     platform; the swatch is decorative (aria-hidden).
 
-import { Check, AlertTriangle, ShoppingBag } from 'lucide-react';
+import { Check, AlertTriangle, ShoppingBag, Archive } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -105,10 +110,17 @@ const CELL_HEBREW: Record<ManageFocus, string> = {
 export function StoreRow({
   store,
   onManage,
+  onArchive,
 }: {
   store: StoreRowData;
   /** Open the edit wizard for this store, focused on a platform / the webhook. */
   onManage: (storeId: string, focus: ManageFocus) => void;
+  /**
+   * Phase 6b Task 3 — archive this store (reversible). Optional so existing
+   * presentational callers (and tests) that don't wire lifecycle still work; when
+   * provided, an "העבר לארכיון" action renders in the row header.
+   */
+  onArchive?: (storeId: string) => void;
 }) {
   const cells = buildMatrix(store);
 
@@ -152,6 +164,22 @@ export function StoreRow({
           >
             #{store.displayOrder}
           </Text>
+          {/* Phase 6b Task 3 — archive (reversible). Ghost/secondary, never the
+              primary affordance. DELETE is DEFERRED (a later task): a destructive
+              "מחק לצמיתות" action will live beside this in the removed-area, NOT
+              here on the active row. */}
+          {onArchive && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => onArchive(store.storeId)}
+              aria-label={`העבר לארכיון את ${store.name}`}
+            >
+              <Archive className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              העבר לארכיון
+            </Button>
+          )}
         </div>
       </div>
 
