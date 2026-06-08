@@ -72,6 +72,8 @@ import {
   classifyOrderAttribution,
   type ShopifyOrderPayload,
 } from '@/lib/attribution/classifyOrderSource';
+import { fetchCustomerJourney } from '@/lib/fetchers/shopifyCustomerJourney';
+import { mergeCustomerJourney } from '@/lib/attribution/mergeCustomerJourney';
 
 // =============================================================================
 // Constants
@@ -994,6 +996,27 @@ export async function fetchShopifyOrdersAttribution(
         `of ${PAGINATION_CAP} pages (${out.length} orders collected); data ` +
         `beyond may be missing.`,
     );
+  }
+
+  // Task 9 — gap-fill UTM fields from Shopify customerJourneySummary.
+  // Flag-gated: when ENABLE_SHOPIFY_CUSTOMER_JOURNEY is off (default), the
+  // reader returns { disabled:true, map:empty } and every mergeCustomerJourney
+  // call is a no-op → byte-identical to the pre-task-9 path.
+  //
+  // Failure-safe: fetchCustomerJourney never throws. If it returns an empty map
+  // (disabled / unavailable / all batches failed), every entry lookup returns
+  // undefined and mergeCustomerJourney returns the row unchanged.
+  if (out.length > 0) {
+    const orderGids = out.map(r => `gid://shopify/Order/${r.orderId}`);
+    const journeyResult = await fetchCustomerJourney(domain, token, orderGids);
+    if (!journeyResult.disabled && !journeyResult.unavailable && journeyResult.map.size > 0) {
+      for (let i = 0; i < out.length; i++) {
+        const entry = journeyResult.map.get(out[i].orderId);
+        if (entry) {
+          out[i] = mergeCustomerJourney(out[i], entry);
+        }
+      }
+    }
   }
 
   return out;
