@@ -234,11 +234,13 @@ describe('GET /api/activity-stats — per-product', () => {
     ];
     db.orders = [
       // P1 purchased via meta-paid (2 lines across 2 orders) + google-paid (1).
-      { source: 'meta-paid', total_cad: 100, line_items: JSON.stringify([{ p: 'P1', u: 1, r: 100 }]) },
-      { source: 'meta-paid', total_cad: 90, line_items: JSON.stringify([{ p: 'P1', u: 1, r: 90 }]) },
-      { source: 'google-paid', total_cad: 80, line_items: JSON.stringify([{ p: 'P1', u: 1, r: 80 }]) },
+      // line_items is a real ARRAY (the jsonb shape supabase-js decodes to),
+      // NOT a JSON string — this exercises the live parseLineItems array path.
+      { source: 'meta-paid', total_cad: 100, line_items: [{ p: 'P1', u: 1, r: 100 }] },
+      { source: 'meta-paid', total_cad: 90, line_items: [{ p: 'P1', u: 1, r: 90 }] },
+      { source: 'google-paid', total_cad: 80, line_items: [{ p: 'P1', u: 1, r: 80 }] },
       // P2 purchased once via direct.
-      { source: 'direct', total_cad: 50, line_items: JSON.stringify([{ p: 'P2', u: 1, r: 50 }]) },
+      { source: 'direct', total_cad: 50, line_items: [{ p: 'P2', u: 1, r: 50 }] },
     ];
     db.events = [
       // Hair Dryer ATC: 4 carts (meta-paid x3, direct x1) — title-matched to P1.
@@ -258,6 +260,9 @@ describe('GET /api/activity-stats — per-product', () => {
     const hd = byProduct['Hair Dryer'];
     expect(hd).toBeTruthy();
     expect(hd.productId).toBe('P1');
+    // Purchases ARE counted from the array-shaped line_items (the live path).
+    // If parseLineItems regressed to returning [] for arrays this would be 0.
+    expect(hd.purchaseCount).toBeGreaterThan(0);
     expect(hd.purchaseCount).toBe(3);
     expect(hd.atcCount).toBe(4);
     // conversionPct = purchases / atc * 100 = 3/4 = 75
@@ -275,6 +280,37 @@ describe('GET /api/activity-stats — per-product', () => {
     expect(body.perProduct[0].productTitle).toBe('Hair Dryer');
   });
 
+  it('counts a purchase from array-shaped line_items AND joins it to an id-bearing ATC (the live supabase jsonb path)', async () => {
+    // End-to-end guard for the parseLineItems bug: the orders row's line_items
+    // is the REAL supabase shape — an already-decoded ARRAY of {p,u,r}, NOT a
+    // JSON string. The ATC carries a raw scalar product_id ('999', the value
+    // supabase returns for the `raw->>product_id` JSON-path SELECT alias). The
+    // route must (a) count the purchase from the array, and (b) merge it with
+    // the ATC under one productId row. Before the fix parseLineItems threw on
+    // the array → purchaseCount 0 → this test fails.
+    db.products = [{ product_id: '999', product_title: 'Vitamin C' }];
+    db.orders = [
+      { source: 'meta-paid', total_cad: 60, line_items: [{ p: '999', u: 2, r: 60 }] },
+    ];
+    db.events = [
+      { source: 'meta-paid', product_id: '999', product_title: 'Vitamin C', first_touch_source: null },
+    ];
+
+    const res = await GET(reqWith());
+    const body = (await res.json()) as ActivityStatsResponse;
+
+    const row = body.perProduct.find((p) => p.productId === '999');
+    expect(row).toBeTruthy();
+    // Purchase counted off the array path (would be 0 on the regressed parser).
+    expect(row!.purchaseCount).toBeGreaterThanOrEqual(1);
+    // ATC joined to the same row via the raw scalar product_id.
+    expect(row!.atcCount).toBeGreaterThanOrEqual(1);
+    // The id-join produced exactly ONE merged row (purchase + ATC together).
+    expect(row!.purchaseCount).toBe(1);
+    expect(row!.atcCount).toBe(1);
+    expect(row!.conversionPct).toBeCloseTo(100, 5);
+  });
+
   it('merges an ATC carrying raw.product_id with a purchase of the SAME productId into ONE row, even when titles differ (PPJ-T2)', async () => {
     // Catalog title differs from the ATC product_title — the join MUST be by id.
     db.products = [{ product_id: '7654321', product_title: 'Catalog Title' }];
@@ -283,7 +319,8 @@ describe('GET /api/activity-stats — per-product', () => {
       {
         source: 'meta-paid',
         total_cad: 100,
-        line_items: JSON.stringify([{ p: '7654321', u: 1, r: 100 }]),
+        // Real ARRAY (supabase jsonb shape), not a JSON string.
+        line_items: [{ p: '7654321', u: 1, r: 100 }],
       },
     ];
     db.events = [
@@ -312,7 +349,7 @@ describe('GET /api/activity-stats — per-product', () => {
   it('merges a historical ATC WITHOUT product_id via the title fallback (legacy) (PPJ-T2)', async () => {
     db.products = [{ product_id: 'P9', product_title: 'Night Cream' }];
     db.orders = [
-      { source: 'meta-paid', total_cad: 50, line_items: JSON.stringify([{ p: 'P9', u: 1, r: 50 }]) },
+      { source: 'meta-paid', total_cad: 50, line_items: [{ p: 'P9', u: 1, r: 50 }] },
     ];
     db.events = [
       // No product_id (historical event) but the title matches the catalog title.
@@ -352,7 +389,7 @@ describe('GET /api/activity-stats — per-product', () => {
   it('keeps a purchased product with NO ATC as a row with buy>0, atc=0 (PPJ-T2)', async () => {
     db.products = [{ product_id: 'P5', product_title: 'Lone Product' }];
     db.orders = [
-      { source: 'meta-paid', total_cad: 70, line_items: JSON.stringify([{ p: 'P5', u: 1, r: 70 }]) },
+      { source: 'meta-paid', total_cad: 70, line_items: [{ p: 'P5', u: 1, r: 70 }] },
     ];
     db.events = [];
 
@@ -376,7 +413,7 @@ describe('GET /api/activity-stats — per-product', () => {
         db.orders.push({
           source: 'meta-paid',
           total_cad: 10,
-          line_items: JSON.stringify([{ p: pid, u: 1, r: 10 }]),
+          line_items: [{ p: pid, u: 1, r: 10 }],
         });
       }
       db.products.push({ product_id: pid, product_title: `Title ${i}` });
@@ -450,7 +487,7 @@ describe('GET /api/activity-stats — safety', () => {
         source: 'meta-paid',
         total_cad: 100,
         first_touch_source: 'meta-paid',
-        line_items: JSON.stringify([{ p: 'P1', u: 1, r: 100 }]),
+        line_items: [{ p: 'P1', u: 1, r: 100 }],
         order_id: 'SECRET-ORDER-99',
         customer_id: 'CUST-123',
       },
