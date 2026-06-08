@@ -173,6 +173,7 @@ import { POST as verifyCredsPOST } from '../operator/stores/verify-creds/route';
 import { GET as storeByIdGET, PATCH as storeByIdPATCH, DELETE as storeByIdDELETE } from '../operator/stores/[id]/route';
 import { POST as storeArchivePOST } from '../operator/stores/[id]/archive/route';
 import { POST as storeRestorePOST } from '../operator/stores/[id]/restore/route';
+import { GET as journeyProbeGET } from '../operator/journey-probe/route';
 
 // ---------------------------------------------------------------------------
 // Sentinels — every secret-shaped env var stubbed to a uniquely-grep-able token.
@@ -405,6 +406,20 @@ const COVERED: Array<{ label: string; run: () => Promise<string> }> = [
       return res.text();
     },
   },
+  {
+    // GET /api/operator/journey-probe — probes Shopify customerJourneySummary access.
+    // The getStoreSecret mock returns null for SHOPIFY_DOMAIN, so the route short-
+    // circuits with { store, error: 'missing shopify creds' } — no token is ever
+    // fetched or emitted. Covered so a future regression that leaks the Shopify
+    // token or domain into the response is caught.
+    label: 'GET /api/operator/journey-probe',
+    run: async () => {
+      const res = await journeyProbeGET(
+        new Request('http://x/api/operator/journey-probe?store=uzoshop'),
+      );
+      return res.text();
+    },
+  },
 ];
 
 describe('CI secret-echo audit — no secret-touching route echoes a secret', () => {
@@ -438,6 +453,8 @@ describe('CI secret-echo audit — no secret-touching route echoes a secret', ()
     expect(labels).toContain('POST /api/operator/stores/[id]/archive');
     expect(labels).toContain('POST /api/operator/stores/[id]/restore');
     expect(labels).toContain('DELETE /api/operator/stores/[id]');
+    // Journey probe — Shopify customerJourneySummary access diagnostic.
+    expect(labels).toContain('GET /api/operator/journey-probe');
   });
 
   it('would CATCH a body-submitted secret echo (guard self-test for the stores/verify-creds routes)', () => {
