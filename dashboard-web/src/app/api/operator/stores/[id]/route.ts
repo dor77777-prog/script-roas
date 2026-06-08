@@ -73,6 +73,57 @@ interface PatchStoreBody {
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
+// =============================================================================
+// DELETE wipe list (Phase 6b T2) — the EXHAUSTIVE, FK-safe set of tables a hard
+// store delete must clear, derived from the schema: EVERY table that has a
+// `store_id` column (grep `store_id` over supabase/migrations), plus `stores`
+// itself LAST (it is the FK parent, keyed by `id` — not `store_id`).
+//
+// ORDER MATTERS: children/data → config → `stores` LAST. The 7 *_daily/per-store
+// data tables FK store_id → stores(id) with ON DELETE RESTRICT (migration
+// 20260521075741), and store_webhooks/store_events REFERENCE stores(id) with the
+// default RESTRICT, so the parent `stores` row can only be removed AFTER every
+// child row is gone. Deleting `stores` last also means a mid-wipe failure leaves
+// the store row intact (operator can retry) instead of orphaning data.
+//
+// keyCol: every store-scoped table is keyed by `store_id`; `stores` by `id`.
+//
+// EXHAUSTIVENESS is guarded by a test that re-derives the store_id table set from
+// the migrations and asserts it EQUALS this list — so a future store_id table
+// can't be silently missed. Update this list when a new store_id table lands; the
+// test will fail loudly until you do.
+//
+// NOTE on token_failures: its store_id has a CHECK constraint pinning it to the
+// live 3 stores + 'global', so a NEW self-serve store's id can never appear there
+// — but deleting by store_id is harmless (matches zero rows) and keeps the wipe
+// uniform + future-proof, so it stays in the list.
+export const STORE_SCOPED_WIPE_TABLES: ReadonlyArray<{ table: string; keyCol: 'store_id' | 'id' }> = [
+  // ---- store-scoped DATA tables (delete FIRST — children) ----
+  { table: 'data_daily', keyCol: 'store_id' },
+  { table: 'products_daily', keyCol: 'store_id' },
+  { table: 'campaigns_daily', keyCol: 'store_id' },
+  { table: 'ads_daily', keyCol: 'store_id' },
+  { table: 'orders_attribution', keyCol: 'store_id' },
+  { table: 'product_catalog', keyCol: 'store_id' },
+  { table: 'manual_overrides', keyCol: 'store_id' },
+  { table: 'token_failures', keyCol: 'store_id' },
+  { table: 'meta_buc_usage', keyCol: 'store_id' },
+  { table: 'data_freshness', keyCol: 'store_id' },
+  { table: 'campaign_registry', keyCol: 'store_id' },
+  { table: 'adset_registry', keyCol: 'store_id' },
+  { table: 'ad_registry', keyCol: 'store_id' },
+  { table: 'campaign_status_events', keyCol: 'store_id' },
+  { table: 'store_events', keyCol: 'store_id' },
+  { table: 'customer_first_order', keyCol: 'store_id' },
+  { table: 'customer_cohort_monthly', keyCol: 'store_id' },
+  // ---- config tables (delete NEXT) ----
+  { table: 'store_ad_state', keyCol: 'store_id' },
+  { table: 'store_webhooks', keyCol: 'store_id' },
+  { table: 'store_secrets', keyCol: 'store_id' },
+  // ---- the FK parent — delete LAST, keyed by `id` ----
+  { table: 'stores', keyCol: 'id' },
+];
+
 // Encrypt + upsert one secret; roundtrip-verify WITHOUT echoing plaintext (a
 // secret that can't be decrypted back is as bad as a failed write — it would
 // silently break the live fetcher). Throws on a DB error or a failed roundtrip.
@@ -466,6 +517,118 @@ export async function PATCH(req: Request, ctx: RouteCtx): Promise<NextResponse> 
     console.error(`/api/operator/stores/${id} PATCH failed:`, message);
     return NextResponse.json(
       { error: 'עדכון החנות נכשל', code: 'store_update_failed' },
+      { status: 500 },
+    );
+  }
+}
+
+// =============================================================================
+// DELETE — hard, irreversible store wipe (Phase 6b T2).
+//
+// THE MOST DANGEROUS ROUTE IN THE PROJECT. It permanently removes a store and
+// EVERY store-scoped row across the schema — there is no undo, no backup, no
+// rollback. It is therefore DOUBLE-GATED and the wipe only runs once BOTH guards
+// pass:
+//
+//   GUARD A (archived-only): the store MUST already be status='archived'. A live
+//     store → 409 'archive the store before deleting it'. The 3 production stores
+//     are 'active', so they are un-deletable until an operator explicitly
+//     archives them first (the deliberate two-step: archive → delete).
+//
+//   GUARD B (typed-name confirm): the body's confirmName MUST EXACTLY equal the
+//     store's name → else 400 'confirmation name does not match'. This mirrors the
+//     reset route's typed-confirmation friction: a destructive call must be
+//     deliberate (the operator hand-types the store name). Not a secret, so a
+//     plain exact === is enough.
+//
+// Only after BOTH pass do we WIPE — FK-safe (children → config → `stores` LAST),
+// every table from STORE_SCOPED_WIPE_TABLES. Best-effort per table: a delete that
+// errors is logged + pushed to failed[] and we CONTINUE (the intent is "remove
+// everything"; a single failed table is reported, not a rollback). `stores` is
+// deleted LAST so a mid-wipe failure leaves the store row (operator retries)
+// rather than orphaned data with no store.
+//
+// SECURITY: the response NEVER contains a secret — only ids and table names.
+// =============================================================================
+export async function DELETE(req: Request, ctx: RouteCtx): Promise<NextResponse> {
+  const { id } = await ctx.params;
+
+  let body: { confirmName?: unknown };
+  try {
+    body = (await req.json()) as { confirmName?: unknown };
+  } catch {
+    return NextResponse.json({ error: 'bad json' }, { status: 400 });
+  }
+  const confirmName = typeof body.confirmName === 'string' ? body.confirmName : null;
+
+  // ----- 1. VALIDATE (delete nothing on failure) -----
+  if ((RESERVED_STORE_IDS as readonly string[]).includes(id)) {
+    return NextResponse.json({ error: 'storeId is reserved' }, { status: 400 });
+  }
+
+  const admin = getSupabaseAdmin();
+
+  try {
+    const { data: store, error: storeErr } = await admin
+      .from('stores')
+      .select('id, name, status')
+      .eq('id', id)
+      .maybeSingle();
+    if (storeErr) throw new Error(storeErr.message);
+    if (!store) {
+      return NextResponse.json({ error: 'store not found' }, { status: 404 });
+    }
+
+    // ----- GUARD A: archived-only (409). The live 3 (active) are un-deletable
+    // until explicitly archived. Checked BEFORE the name guard so an active store
+    // is consistently told to archive first regardless of confirmName. -----
+    if (store.status !== 'archived') {
+      return NextResponse.json(
+        { error: 'archive the store before deleting it', code: 'must_archive_first' },
+        { status: 409 },
+      );
+    }
+
+    // ----- GUARD B: typed-name confirm (400). Exact match — no write unless it
+    // passes. -----
+    if (confirmName !== String(store.name)) {
+      return NextResponse.json(
+        { error: 'confirmation name does not match', code: 'confirm_mismatch' },
+        { status: 400 },
+      );
+    }
+
+    // ===== 2. WIPE — both guards passed. FK-safe, children → parents, best-effort
+    // per table (log + collect failures, continue). `stores` deleted LAST. =====
+    const tablesWiped: string[] = [];
+    const failed: string[] = [];
+    for (const { table, keyCol } of STORE_SCOPED_WIPE_TABLES) {
+      try {
+        const { error } = await admin.from(table).delete().eq(keyCol, id);
+        if (error) {
+          console.error(`/api/operator/stores/${id} DELETE wipe ${table} failed:`, error.message);
+          failed.push(table);
+          continue;
+        }
+        tablesWiped.push(table);
+      } catch (wipeErr) {
+        const message = wipeErr instanceof Error ? wipeErr.message : String(wipeErr);
+        console.error(`/api/operator/stores/${id} DELETE wipe ${table} threw:`, message);
+        failed.push(table);
+      }
+    }
+
+    // ----- 3. RETURN (ids + table names only — NEVER a secret). -----
+    return NextResponse.json(
+      { ok: true, deleted: id, tablesWiped, failed },
+      { status: 200 },
+    );
+  } catch (err) {
+    captureRouteError('operator/stores/[id]', err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`/api/operator/stores/${id} DELETE failed:`, message);
+    return NextResponse.json(
+      { error: 'מחיקת החנות נכשלה', code: 'store_delete_failed' },
       { status: 500 },
     );
   }

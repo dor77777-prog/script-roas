@@ -36,6 +36,13 @@ const db = vi.hoisted(() => ({
   secretRows: [] as Array<{ store_id: string; secret_key: string }>,
   // make a write fail (write-error path → 500)
   throwOn: null as null | 'stores' | 'store_webhooks' | 'store_ad_state' | 'store_secrets',
+  // ---- DELETE-route state (Phase 6b T2) ----
+  // the store's status ('active' | 'archived') for the stores-row read.
+  status: 'active' as string,
+  // ordered record of every .delete().eq(col,val) call: { table, col, val }
+  deletes: [] as Array<{ table: string; col: string; val: unknown }>,
+  // tables whose .delete() should return an error (best-effort: logged + failed[])
+  deleteErrorOn: [] as string[],
 }));
 
 vi.mock('@/lib/supabaseAdmin', () => {
@@ -64,6 +71,19 @@ vi.mock('@/lib/supabaseAdmin', () => {
           return Promise.resolve({ error: null });
         },
       }),
+      // DELETE-route (Phase 6b T2): record each .delete().eq(col,val) in order so
+      // tests can assert the full table coverage + that `stores` is last. A table
+      // listed in deleteErrorOn returns an error (best-effort: route logs + pushes
+      // to failed[] and continues).
+      delete: () => ({
+        eq: (col: string, val: unknown) => {
+          db.deletes.push({ table, col, val });
+          if (db.deleteErrorOn.includes(table)) {
+            return Promise.resolve({ error: { message: `boom ${table}` } });
+          }
+          return Promise.resolve({ error: null });
+        },
+      }),
       select: (_cols: string) => {
         // GET: grouped secrets presence read for the [id] store.
         if (table === 'store_secrets') {
@@ -78,7 +98,7 @@ vi.mock('@/lib/supabaseAdmin', () => {
               if (table === 'stores' && col === 'id') {
                 return Promise.resolve({
                   data: db.existingStoreIds.includes(String(val))
-                    ? { id: val, name: String(val), brand_color: 'var(--store-uzo)', is_headless: db.isHeadless, has_tiktok: db.hasTiktok, display_order: 1 }
+                    ? { id: val, name: String(val), brand_color: 'var(--store-uzo)', is_headless: db.isHeadless, has_tiktok: db.hasTiktok, display_order: 1, status: db.status }
                     : null,
                   error: null,
                 });
@@ -157,7 +177,11 @@ vi.mock('@/lib/storeSecretsReader', async () => {
 
 vi.mock('@/lib/sentry/capture', () => ({ captureRouteError: () => {} }));
 
-import { GET, PATCH } from '../route';
+import { GET, PATCH, DELETE, STORE_SCOPED_WIPE_TABLES } from '../route';
+
+// the ordered table NAMES the route wipes (source of truth = the {table,keyCol}
+// array). `stores` (the FK parent) is last.
+const WIPE_TABLE_NAMES = STORE_SCOPED_WIPE_TABLES.map((t) => t.table);
 
 function ctx(id: string) {
   return { params: Promise.resolve({ id }) };
@@ -165,6 +189,12 @@ function ctx(id: string) {
 function patch(id: string, body: unknown) {
   return PATCH(
     new Request(`http://x/api/operator/stores/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    ctx(id),
+  );
+}
+function del(id: string, body: unknown) {
+  return DELETE(
+    new Request(`http://x/api/operator/stores/${id}`, { method: 'DELETE', body: JSON.stringify(body) }),
     ctx(id),
   );
 }
@@ -195,6 +225,9 @@ beforeEach(() => {
   db.hasTiktok = false;
   db.secretRows = [];
   db.throwOn = null;
+  db.status = 'active';
+  db.deletes = [];
+  db.deleteErrorOn = [];
   verify.shopify = { ok: true, message: 'ok', currency: 'CAD' };
   verify.meta = { ok: true, message: 'ok', currency: 'ILS' };
   verify.google = { ok: true, message: 'ok', currency: 'CAD' };
@@ -626,5 +659,185 @@ describe('PATCH /api/operator/stores/[id] — never echoes a raw secret', () => 
     expect(text).not.toContain('RAW-SHOP-SECRET');
     expect(text).not.toContain('RAW-META-TOKEN');
     expect(text).not.toContain('RAW-GOOGLE-REFRESH');
+  });
+});
+
+// ===========================================================================
+// DELETE — hard, irreversible store wipe (Phase 6b T2). The MOST dangerous
+// route in the project: double-gated (archived-only 409 + exact typed-name
+// 400). NOTHING is deleted unless BOTH guards pass. Then an exhaustive,
+// FK-safe wipe (children → config → `stores` LAST) of every store_id table.
+// ===========================================================================
+describe('DELETE /api/operator/stores/[id] — validation guards', () => {
+  it('400 for a reserved id (no delete)', async () => {
+    db.existingStoreIds = ['__global__'];
+    const res = await del('__global__', { confirmName: '__global__' });
+    expect(res.status).toBe(400);
+    expect(db.deletes).toHaveLength(0);
+  });
+
+  it('404 when the store does not exist (no delete)', async () => {
+    const res = await del('ghost', { confirmName: 'ghost' });
+    expect(res.status).toBe(404);
+    expect(db.deletes).toHaveLength(0);
+  });
+
+  it('GUARD A: an ACTIVE store with the correct confirmName → 409 must_archive_first, NOTHING deleted', async () => {
+    db.status = 'active';
+    const res = await del('mystore', { confirmName: 'mystore' });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe('must_archive_first');
+    expect(db.deletes).toHaveLength(0);
+  });
+
+  it('GUARD B: an ARCHIVED store with the WRONG confirmName → 400 confirm_mismatch, NOTHING deleted', async () => {
+    db.status = 'archived';
+    const res = await del('mystore', { confirmName: 'WRONG-NAME' });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.code).toBe('confirm_mismatch');
+    expect(db.deletes).toHaveLength(0);
+  });
+
+  it('GUARD B: an ARCHIVED store with a MISSING confirmName → 400 confirm_mismatch, NOTHING deleted', async () => {
+    db.status = 'archived';
+    const res = await del('mystore', {});
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.code).toBe('confirm_mismatch');
+    expect(db.deletes).toHaveLength(0);
+  });
+
+  it('GUARD ORDER: an ACTIVE store with the WRONG confirmName → 409 (archive-first checked first), NOTHING deleted', async () => {
+    db.status = 'active';
+    const res = await del('mystore', { confirmName: 'WRONG-NAME' });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe('must_archive_first');
+    expect(db.deletes).toHaveLength(0);
+  });
+});
+
+describe('DELETE /api/operator/stores/[id] — wipe (both guards passed)', () => {
+  it('archived + correct confirmName → wipes EVERY store-scoped table by store_id + stores LAST by id; 200', async () => {
+    db.status = 'archived';
+    const res = await del('mystore', { confirmName: 'mystore' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.deleted).toBe('mystore');
+    expect(body.failed).toEqual([]);
+
+    // every store-scoped data/config table was deleted by store_id='mystore'.
+    const storeScoped = db.deletes.filter((d) => d.table !== 'stores');
+    for (const d of storeScoped) {
+      expect(d.col).toBe('store_id');
+      expect(d.val).toBe('mystore');
+    }
+    // the deleted-tables list EQUALS the route's exported wipe list, IN ORDER
+    // (no extras, no omissions) — including `stores`.
+    const deletedTables = db.deletes.map((d) => d.table);
+    expect(deletedTables).toEqual(WIPE_TABLE_NAMES);
+    expect(deletedTables).toHaveLength(WIPE_TABLE_NAMES.length);
+
+    // `stores` is the VERY LAST delete (FK parent — deleted after all children).
+    expect(deletedTables[deletedTables.length - 1]).toBe('stores');
+    // and `stores` is deleted by `id`, NOT store_id.
+    const storesDelete = db.deletes.find((d) => d.table === 'stores');
+    expect(storesDelete?.col).toBe('id');
+    expect(storesDelete?.val).toBe('mystore');
+
+    // tablesWiped reflects the successful tables (all of them here), in order.
+    expect(body.tablesWiped).toEqual(WIPE_TABLE_NAMES);
+  });
+
+  it('best-effort: a mid-wipe table error is logged + pushed to failed[], the rest CONTINUE, 200', async () => {
+    db.status = 'archived';
+    // make two child-data tables fail — the wipe must not abort.
+    db.deleteErrorOn = ['ads_daily', 'campaign_registry'];
+    const res = await del('mystore', { confirmName: 'mystore' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    // the failures are reported.
+    expect(body.failed.sort()).toEqual(['ads_daily', 'campaign_registry']);
+    // EVERY table was still attempted (best-effort continue, not abort).
+    expect(db.deletes.map((d) => d.table)).toEqual(WIPE_TABLE_NAMES);
+    // `stores` (the parent) was still deleted last even though children failed.
+    expect(db.deletes[db.deletes.length - 1].table).toBe('stores');
+    // tablesWiped excludes the failed tables.
+    expect(body.tablesWiped).not.toContain('ads_daily');
+    expect(body.tablesWiped).not.toContain('campaign_registry');
+  });
+
+  it('NEVER returns a secret/value in any DELETE response', async () => {
+    db.status = 'archived';
+    db.secretRows = [{ store_id: 'mystore', secret_key: 'SHOPIFY_CLIENT_SECRET' }];
+    const res = await del('mystore', { confirmName: 'mystore' });
+    const text = await res.text();
+    expect(text).not.toContain('ciphertext');
+    expect(text).not.toContain('"iv"');
+    expect(text).not.toContain('"tag"');
+    expect(text).not.toContain('signing_secret');
+  });
+
+  it('rejects bad JSON with 400 and no delete', async () => {
+    db.status = 'archived';
+    const res = await DELETE(
+      new Request('http://x/api/operator/stores/mystore', { method: 'DELETE', body: '{not json' }),
+      ctx('mystore'),
+    );
+    expect(res.status).toBe(400);
+    expect(db.deletes).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EXHAUSTIVENESS GUARD — the route's wipe list MUST equal the set of every
+// table that has a `store_id` column in the schema (+ `stores` itself, keyed
+// by id). Derived live from supabase/migrations so a future store_id table
+// can't be silently missed from the wipe.
+// ---------------------------------------------------------------------------
+describe('DELETE wipe-list exhaustiveness vs the schema', () => {
+  it('STORE_SCOPED_WIPE_TABLES == {every CREATE TABLE with a store_id column} ∪ {stores}', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const url = await import('node:url');
+    // .../src/app/api/operator/stores/[id]/__tests__ → repo's supabase/migrations
+    const here = path.dirname(url.fileURLToPath(import.meta.url));
+    const migrationsDir = path.resolve(here, '../../../../../../../../supabase/migrations');
+    const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql'));
+
+    const storeIdTables = new Set<string>();
+    for (const f of files) {
+      const sql = fs.readFileSync(path.join(migrationsDir, f), 'utf8');
+      // Split each CREATE TABLE [IF NOT EXISTS] [schema.]<name> ( ... ); body and
+      // record the table name iff its body contains a `store_id` column.
+      const re = /CREATE TABLE(?:\s+IF NOT EXISTS)?\s+(?:public\.)?([a-z_][a-z0-9_]*)\s*\(([\s\S]*?)\n\)/gi;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(sql)) !== null) {
+        const name = m[1];
+        const body = m[2];
+        // a real `store_id` COLUMN definition (line starting with store_id), not a
+        // PK/index/comment mention.
+        if (/(^|\n)\s*store_id\b/i.test(body)) storeIdTables.add(name);
+      }
+    }
+
+    expect(storeIdTables.size).toBeGreaterThan(0);
+
+    // The route wipes every store_id table + `stores` itself (the FK parent).
+    const expected = new Set<string>(storeIdTables);
+    expected.add('stores');
+
+    const actual = new Set<string>(WIPE_TABLE_NAMES);
+
+    // Symmetric diff must be empty: no store_id table missing from the wipe, and
+    // nothing in the wipe that isn't a real store_id table (or `stores`).
+    const missingFromWipe = [...expected].filter((t) => !actual.has(t));
+    const extraInWipe = [...actual].filter((t) => !expected.has(t));
+    expect(missingFromWipe).toEqual([]);
+    expect(extraInWipe).toEqual([]);
   });
 });
