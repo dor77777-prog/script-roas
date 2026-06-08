@@ -13,20 +13,21 @@ export interface StoreInfo {
   hasTikTok: boolean;
   status: StoreStatus;
   displayOrder: number;
+  enableCustomerJourney: boolean;
 }
 
 /** Canonical fallback — matches the seeded DB rows exactly (zero-regression). */
 const HARDCODED: StoreInfo[] = [
-  { storeId: 'uzoshop',   storeName: 'uzoshop',   brandColor: 'var(--store-uzo)', isHeadless: false, hasTikTok: true,  status: 'active', displayOrder: 1 },
-  { storeId: 'zolplus',   storeName: 'Zol Plus',  brandColor: 'var(--store-3)',   isHeadless: false, hasTikTok: false, status: 'active', displayOrder: 2 },
-  { storeId: 'usmile360', storeName: '360usmile', brandColor: 'var(--store-usm)', isHeadless: true,  hasTikTok: true,  status: 'active', displayOrder: 3 },
+  { storeId: 'uzoshop',   storeName: 'uzoshop',   brandColor: 'var(--store-uzo)', isHeadless: false, hasTikTok: true,  status: 'active', displayOrder: 1, enableCustomerJourney: false },
+  { storeId: 'zolplus',   storeName: 'Zol Plus',  brandColor: 'var(--store-3)',   isHeadless: false, hasTikTok: false, status: 'active', displayOrder: 2, enableCustomerJourney: false },
+  { storeId: 'usmile360', storeName: '360usmile', brandColor: 'var(--store-usm)', isHeadless: true,  hasTikTok: true,  status: 'active', displayOrder: 3, enableCustomerJourney: false },
 ];
 
 export async function getStores(opts?: { includeArchived?: boolean }): Promise<StoreInfo[]> {
   try {
     const { data, error } = await getSupabase()
       .from('stores')
-      .select('id, name, brand_color, is_headless, has_tiktok, status, display_order');
+      .select('id, name, brand_color, is_headless, has_tiktok, status, display_order, enable_customer_journey');
     if (error) throw new Error(error.message);
     if (data && data.length) {
       const rows: StoreInfo[] = (data as Record<string, unknown>[]).map((r) => ({
@@ -37,6 +38,7 @@ export async function getStores(opts?: { includeArchived?: boolean }): Promise<S
         hasTikTok: r.has_tiktok === true,
         status: (r.status === 'archived' ? 'archived' : 'active') as StoreStatus,
         displayOrder: Number(r.display_order ?? 999),
+        enableCustomerJourney: r.enable_customer_journey === true,
       })).sort((a, b) => a.displayOrder - b.displayOrder || a.storeId.localeCompare(b.storeId));
       // The DB returned rows → it is authoritative. Return the filtered set even
       // if it is empty (e.g. an all-archived business) — do NOT resurrect the

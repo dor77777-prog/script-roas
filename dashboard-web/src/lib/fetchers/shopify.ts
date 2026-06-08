@@ -74,6 +74,7 @@ import {
 } from '@/lib/attribution/classifyOrderSource';
 import { fetchCustomerJourney } from '@/lib/fetchers/shopifyCustomerJourney';
 import { mergeCustomerJourney } from '@/lib/attribution/mergeCustomerJourney';
+import { getStores } from '@/lib/getStores';
 
 // =============================================================================
 // Constants
@@ -999,7 +1000,7 @@ export async function fetchShopifyOrdersAttribution(
   }
 
   // Task 9 — gap-fill UTM fields from Shopify customerJourneySummary.
-  // Flag-gated: when ENABLE_SHOPIFY_CUSTOMER_JOURNEY is off (default), the
+  // Flag-gated: when stores.enable_customer_journey is false (default), the
   // reader returns { disabled:true, map:empty } and every mergeCustomerJourney
   // call is a no-op → byte-identical to the pre-task-9 path.
   //
@@ -1009,7 +1010,9 @@ export async function fetchShopifyOrdersAttribution(
   try {
     if (out.length > 0) {
       const orderGids = out.map(r => `gid://shopify/Order/${r.orderId}`);
-      const journeyResult = await fetchCustomerJourney(domain, token, orderGids);
+      const cfg = (await getStores()).find(s => s.storeId === storeId);
+      const journeyEnabled = cfg?.enableCustomerJourney === true;
+      const journeyResult = await fetchCustomerJourney(domain, token, orderGids, journeyEnabled);
       if (!journeyResult.disabled && !journeyResult.unavailable && journeyResult.map.size > 0) {
         for (let i = 0; i < out.length; i++) {
           const entry = journeyResult.map.get(out[i].orderId);

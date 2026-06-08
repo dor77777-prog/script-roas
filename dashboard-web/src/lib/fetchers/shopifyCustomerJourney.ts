@@ -7,8 +7,9 @@
  * This field requires **Protected Customer Data** approval which the operator
  * may not have yet, so the reader is CAPABILITY-GATED:
  *
- *   1. Behind the env flag `ENABLE_SHOPIFY_CUSTOMER_JOURNEY='1'` (default off).
- *      When off, returns `{ map: empty, disabled: true }` WITHOUT making a request.
+ *   1. Behind the per-store DB flag `stores.enable_customer_journey` (default false).
+ *      When false, returns `{ map: empty, disabled: true }` WITHOUT making a request.
+ *      Enable per-store from /operator once the Shopify custom app has the required scope.
  *
  *   2. Self-detects access-denied → returns `{ map: empty, unavailable: true }`,
  *      never throws, never regresses. Only logs a single console.warn.
@@ -180,15 +181,16 @@ const BATCH_SIZE = 250;
  * @param domain  Shopify store domain, e.g. "my-store.myshopify.com"
  * @param token   Shopify Admin API access token
  * @param orderGids  Array of order GIDs, e.g. ["gid://shopify/Order/123", ...]
+ * @param enabled  Per-store DB flag (`stores.enable_customer_journey`). When false,
+ *                 returns `{ map: empty, disabled: true }` without making a request.
  */
 export async function fetchCustomerJourney(
   domain: string,
   token: string,
   orderGids: string[],
+  enabled: boolean,
 ): Promise<CustomerJourneyResult> {
-  // Gate 1: env flag must be '1' or 'true'
-  const flag = process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY;
-  const enabled = flag === '1' || flag === 'true';
+  // Gate 1: per-store DB flag must be true
   if (!enabled) {
     return { map: new Map(), disabled: true, unavailable: false };
   }
@@ -238,8 +240,8 @@ export async function fetchCustomerJourney(
       if (isAccessDenied(body.errors)) {
         console.warn(
           '[shopifyCustomerJourney] Protected Customer Data access denied. ' +
-            'Grant the required approval in the Shopify Partner Dashboard, then set ' +
-            'ENABLE_SHOPIFY_CUSTOMER_JOURNEY=1.',
+            'Grant the required approval in the Shopify Partner Dashboard, then enable ' +
+            'enable_customer_journey for this store via /operator.',
         );
         return { map: new Map(), disabled: false, unavailable: true };
       }

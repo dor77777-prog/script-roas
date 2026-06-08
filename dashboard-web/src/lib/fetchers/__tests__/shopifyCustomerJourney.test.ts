@@ -1,11 +1,11 @@
 /**
  * Task 8 — shopifyCustomerJourney.ts reader tests.
  *
- * Capability-gated: behind ENABLE_SHOPIFY_CUSTOMER_JOURNEY='1'.
- * - env unset → returns disabled:true, no fetch call.
- * - env='1' + OK response → parses UTM + utmId from landingPage.
- * - env='1' + ACCESS_DENIED errors → unavailable:true, no throw.
- * - env='1' + throwing fetch → degrades to empty result, no throw.
+ * Capability-gated: behind the per-store DB flag `stores.enable_customer_journey`.
+ * - enabled:false → returns disabled:true, no fetch call.
+ * - enabled:true + OK response → parses UTM + utmId from landingPage.
+ * - enabled:true + ACCESS_DENIED errors → unavailable:true, no throw.
+ * - enabled:true + throwing fetch → degrades to empty result, no throw.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { fetchCustomerJourney } from '../shopifyCustomerJourney';
@@ -66,26 +66,17 @@ function mockFetchSuccess(body: unknown) {
 }
 
 describe('fetchCustomerJourney', () => {
-  const originalEnv = process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY;
-
   afterEach(() => {
-    // Restore env
-    if (originalEnv === undefined) {
-      delete process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY;
-    } else {
-      process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY = originalEnv;
-    }
     vi.restoreAllMocks();
   });
 
   // ---------------------------------------------------------------------------
-  // Test 1: env unset → disabled, no fetch
+  // Test 1: enabled:false → disabled, no fetch
   // ---------------------------------------------------------------------------
-  it('returns disabled:true and empty map when ENABLE_SHOPIFY_CUSTOMER_JOURNEY is not set', async () => {
-    delete process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY;
+  it('returns disabled:true and empty map when enabled is false', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
-    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID]);
+    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID], false);
 
     expect(result.disabled).toBe(true);
     expect(result.unavailable).toBe(false);
@@ -93,29 +84,26 @@ describe('fetchCustomerJourney', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('returns disabled:true when ENABLE_SHOPIFY_CUSTOMER_JOURNEY is empty string', async () => {
-    process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY = '';
+  it('returns disabled:true when enabled is false (even with orderGids provided)', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
-    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID]);
+    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID], false);
 
     expect(result.disabled).toBe(true);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   // ---------------------------------------------------------------------------
-  // Test 2: env='1' + successful response → parses UTM + utmId from landingPage
+  // Test 2: enabled:true + successful response → parses UTM + utmId from landingPage
   // ---------------------------------------------------------------------------
   it('parses utmId from landingPage and utmCampaign from utmParameters', async () => {
-    process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY = '1';
-
     const landingPage = '/products/toothbrush?utm_id=c1&utm_campaign=Sale&utm_source=google&utm_medium=cpc';
     const node = makeOrderNode(ORDER_GID, landingPage, 'Sale');
     const body = makeNodesResponse([node]);
 
     vi.stubGlobal('fetch', mockFetchSuccess(body));
 
-    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID]);
+    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID], true);
 
     expect(result.disabled).toBe(false);
     expect(result.unavailable).toBe(false);
@@ -131,36 +119,30 @@ describe('fetchCustomerJourney', () => {
   });
 
   it('returns map keyed by numeric order id (last GID segment)', async () => {
-    process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY = '1';
-
     const node = makeOrderNode('gid://shopify/Order/11112222', '/p?utm_id=abc', 'Test');
     vi.stubGlobal('fetch', mockFetchSuccess(makeNodesResponse([node])));
 
-    const result = await fetchCustomerJourney(DOMAIN, TOKEN, ['gid://shopify/Order/11112222']);
+    const result = await fetchCustomerJourney(DOMAIN, TOKEN, ['gid://shopify/Order/11112222'], true);
 
     expect(result.map.has('11112222')).toBe(true);
     expect(result.map.has('gid://shopify/Order/11112222')).toBe(false);
   });
 
   it('sets utmId to null when landingPage has no utm_id param', async () => {
-    process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY = '1';
-
     const node = makeOrderNode(ORDER_GID, '/products/brush?utm_campaign=Spring', 'Spring');
     vi.stubGlobal('fetch', mockFetchSuccess(makeNodesResponse([node])));
 
-    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID]);
+    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID], true);
     const entry = result.map.get(NUMERIC_ID);
     expect(entry!.first!.utmId).toBeNull();
     expect(entry!.first!.utmCampaign).toBe('Spring');
   });
 
   it('sets utmId to null when landingPage is null', async () => {
-    process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY = '1';
-
     const node = makeOrderNode(ORDER_GID, null, null);
     vi.stubGlobal('fetch', mockFetchSuccess(makeNodesResponse([node])));
 
-    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID]);
+    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID], true);
     const entry = result.map.get(NUMERIC_ID);
     expect(entry!.first).toBeNull();
   });
@@ -169,8 +151,6 @@ describe('fetchCustomerJourney', () => {
   // Test 3: ACCESS_DENIED → unavailable:true, no throw
   // ---------------------------------------------------------------------------
   it('returns unavailable:true and empty map on ACCESS_DENIED errors', async () => {
-    process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY = '1';
-
     const errorBody = {
       errors: [
         {
@@ -182,7 +162,7 @@ describe('fetchCustomerJourney', () => {
     vi.stubGlobal('fetch', mockFetchSuccess(errorBody));
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID]);
+    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID], true);
 
     expect(result.unavailable).toBe(true);
     expect(result.disabled).toBe(false);
@@ -191,30 +171,26 @@ describe('fetchCustomerJourney', () => {
   });
 
   it('returns unavailable:true on "protected customer data" error message', async () => {
-    process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY = '1';
-
     const errorBody = {
       errors: [{ message: 'Field requires protected customer data approval' }],
     };
     vi.stubGlobal('fetch', mockFetchSuccess(errorBody));
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID]);
+    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID], true);
 
     expect(result.unavailable).toBe(true);
     expect(result.map.size).toBe(0);
   });
 
   it('returns unavailable:true on "not approved" error message', async () => {
-    process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY = '1';
-
     const errorBody = {
       errors: [{ message: 'This app is not approved to access this data' }],
     };
     vi.stubGlobal('fetch', mockFetchSuccess(errorBody));
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID]);
+    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID], true);
 
     expect(result.unavailable).toBe(true);
   });
@@ -223,29 +199,25 @@ describe('fetchCustomerJourney', () => {
   // Test 4: fetch throws → degrades gracefully, no throw
   // ---------------------------------------------------------------------------
   it('degrades gracefully (empty map, no throw) when fetch throws', async () => {
-    process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY = '1';
-
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network failure')));
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await expect(
-      fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID]),
+      fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID], true),
     ).resolves.toMatchObject({ disabled: false, unavailable: false });
 
-    const r = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID]);
+    const r = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID], true);
     expect(r.map.size).toBe(0);
   });
 
   it('degrades gracefully when fetch returns non-ok status', async () => {
-    process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY = '1';
-
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(new Response('Server Error', { status: 500 })),
     );
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID]);
+    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [ORDER_GID], true);
     expect(result.map.size).toBe(0);
     expect(result.disabled).toBe(false);
     expect(result.unavailable).toBe(false);
@@ -255,10 +227,9 @@ describe('fetchCustomerJourney', () => {
   // Additional: empty orderGids → returns empty map without fetching
   // ---------------------------------------------------------------------------
   it('returns empty map without fetching when orderGids is empty', async () => {
-    process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY = '1';
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
-    const result = await fetchCustomerJourney(DOMAIN, TOKEN, []);
+    const result = await fetchCustomerJourney(DOMAIN, TOKEN, [], true);
 
     expect(result.map.size).toBe(0);
     expect(result.disabled).toBe(false);
@@ -269,8 +240,6 @@ describe('fetchCustomerJourney', () => {
   // Batching: >250 ids → multiple fetch calls
   // ---------------------------------------------------------------------------
   it('batches requests when more than 250 orderGids provided', async () => {
-    process.env.ENABLE_SHOPIFY_CUSTOMER_JOURNEY = '1';
-
     // Generate 300 order GIDs
     const gids = Array.from({ length: 300 }, (_, i) => `gid://shopify/Order/${1000 + i}`);
     const nodes = gids.map((gid) => ({ id: gid, customerJourneySummary: null }));
@@ -290,7 +259,7 @@ describe('fetchCustomerJourney', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchCustomerJourney(DOMAIN, TOKEN, gids);
+    const result = await fetchCustomerJourney(DOMAIN, TOKEN, gids, true);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(result.disabled).toBe(false);

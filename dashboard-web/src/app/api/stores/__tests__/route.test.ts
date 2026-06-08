@@ -9,8 +9,8 @@ vi.mock('@/lib/getStores', () => ({ getStores: () => Promise.resolve(mock.stores
 import { GET } from '../route';
 
 const SAMPLE: StoreInfo[] = [
-  { storeId: 'uzoshop', storeName: 'uzoshop', brandColor: 'var(--store-uzo)', isHeadless: false, hasTikTok: true, status: 'active', displayOrder: 1 },
-  { storeId: 'newstore', storeName: 'New Store', brandColor: 'var(--store-4)', isHeadless: true, hasTikTok: false, status: 'active', displayOrder: 4 },
+  { storeId: 'uzoshop', storeName: 'uzoshop', brandColor: 'var(--store-uzo)', isHeadless: false, hasTikTok: true, status: 'active', displayOrder: 1, enableCustomerJourney: false },
+  { storeId: 'newstore', storeName: 'New Store', brandColor: 'var(--store-4)', isHeadless: true, hasTikTok: false, status: 'active', displayOrder: 4, enableCustomerJourney: false },
 ];
 
 beforeEach(() => { mock.stores = SAMPLE; });

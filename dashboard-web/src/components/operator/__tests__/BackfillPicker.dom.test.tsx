@@ -19,14 +19,14 @@ import type { StoreInfo } from '@/lib/getStores';
 // ---------------------------------------------------------------------------
 
 const THREE_STORES: StoreInfo[] = [
-  { storeId: 'uzoshop',   storeName: 'uzoshop',   brandColor: null, isHeadless: false, hasTikTok: true,  status: 'active', displayOrder: 1 },
-  { storeId: 'zolplus',   storeName: 'Zol Plus',  brandColor: null, isHeadless: false, hasTikTok: false, status: 'active', displayOrder: 2 },
-  { storeId: 'usmile360', storeName: '360usmile', brandColor: null, isHeadless: true,  hasTikTok: true,  status: 'active', displayOrder: 3 },
+  { storeId: 'uzoshop',   storeName: 'uzoshop',   brandColor: null, isHeadless: false, hasTikTok: true,  status: 'active', displayOrder: 1, enableCustomerJourney: false },
+  { storeId: 'zolplus',   storeName: 'Zol Plus',  brandColor: null, isHeadless: false, hasTikTok: false, status: 'active', displayOrder: 2, enableCustomerJourney: false },
+  { storeId: 'usmile360', storeName: '360usmile', brandColor: null, isHeadless: true,  hasTikTok: true,  status: 'active', displayOrder: 3, enableCustomerJourney: false },
 ];
 
 const FOUR_STORES: StoreInfo[] = [
   ...THREE_STORES,
-  { storeId: 'newshop', storeName: 'New Shop', brandColor: null, isHeadless: false, hasTikTok: false, status: 'active', displayOrder: 4 },
+  { storeId: 'newshop', storeName: 'New Shop', brandColor: null, isHeadless: false, hasTikTok: false, status: 'active', displayOrder: 4, enableCustomerJourney: false },
 ];
 
 let mockStores: StoreInfo[] = THREE_STORES;
