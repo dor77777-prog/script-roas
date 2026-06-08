@@ -1557,8 +1557,14 @@ function HomeTab({
         }}
       />
 
-      {/* 5. Bottom 2-up — Insights board + Activity feed -------------------- */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* 5. Bottom 2-up — Insights board + Activity feed --------------------
+          items-start: the two columns have very different natural heights (the
+          insights/action board is tall, the live feed is a short snapshot). The
+          grid default (align-items: stretch) forced the SHORT feed card to the
+          tall column's height → its content stacked at the top and the leftover
+          stretched height showed as dead white space. Top-aligning lets each
+          card take its own content height (no forced equal-height, no gap). */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <InsightsBoard data={data} />
         <ActivityFeed
           store={filters.store === 'All' ? undefined : filters.store}
