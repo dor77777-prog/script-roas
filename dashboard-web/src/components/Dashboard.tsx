@@ -78,7 +78,7 @@ import {
   type RoasChartRangeKey,
 } from '@/components/home/RoasTargetChart';
 import { ActivityFeed } from '@/components/home/ActivityFeed';
-import { ActivityEventsTab } from '@/components/activity/ActivityEventsTab';
+import { ActivityTab } from '@/components/activity/ActivityTab';
 import { CustomerValueTab } from '@/components/CustomerValueTab';
 import { PaymentMethodsTab } from '@/components/PaymentMethodsTab';
 import { StoreDetailModal } from '@/components/home/StoreDetailModal';
@@ -752,7 +752,7 @@ export function Dashboard() {
                 </>
               )}
               {activeTab === 'activity' && (
-                <ActivityEventsTab data={data} globalStore={filters.store} />
+                <ActivityTab data={data} globalStore={filters.store} range={filters.range} />
               )}
               {activeTab === 'customers' && (
                 <CustomerValueTab
