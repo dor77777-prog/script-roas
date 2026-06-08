@@ -67,8 +67,12 @@ analytics.subscribe("product_added_to_cart", async (event) => {
   try {
     var loc = (event.context && event.context.document && event.context.document.location) || {};
     var landing = loc.search || "";
+    // First-touch bag (entry UTM/click-id persisted on page_viewed). Best-effort:
+    // a missing/invalid _ft_attr is simply omitted — never blocks add-to-cart.
+    var firstTouch = null;
+    try { firstTouch = await browser.localStorage.getItem("_ft_attr"); } catch (_) {}
     if (!/(utm_|fbclid|gclid|ttclid)/i.test(landing)) {
-      try { var ft = await browser.localStorage.getItem("_ft_attr"); if (ft) landing = ft; } catch (_) {}
+      if (firstTouch) landing = firstTouch;
     }
     if (!landing) landing = "/";
     var d = event.data || {};
@@ -78,18 +82,22 @@ analytics.subscribe("product_added_to_cart", async (event) => {
       (d.productVariant && d.productVariant.product && d.productVariant.product.title) ||
       null;
     var qty = line.quantity || 1;
+    var payload = {
+      store_token: CART_TOKEN,
+      event_id: event.id || String(event.timestamp || Date.now()),
+      product_title: title,
+      quantity: qty,
+      occurred_at: event.timestamp || new Date().toISOString(),
+      landing_site: landing
+    };
+    // Send the stored first-touch bag so the dashboard can compute first-click
+    // attribution (boosts first-touch coverage). Omitted when absent.
+    if (firstTouch) payload.first_touch = firstTouch;
     fetch("https://roas-dashboard-smoky.vercel.app/api/events/cart", {
       method: "POST",
       keepalive: true,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        store_token: CART_TOKEN,
-        event_id: event.id || String(event.timestamp || Date.now()),
-        product_title: title,
-        quantity: qty,
-        occurred_at: event.timestamp || new Date().toISOString(),
-        landing_site: landing
-      })
+      body: JSON.stringify(payload)
     }).catch(function () {});
   } catch (e) {}
 });`;
@@ -114,7 +122,8 @@ const HEADLESS_CLIENT_TEMPLATE = `// on app load (first-touch capture)
 })();
 
 // when reporting an add-to-cart, include in the POST body sent to the edge function:
-//   landing_site: localStorage.getItem("_ft_attr") || "/"`;
+//   landing_site: localStorage.getItem("_ft_attr") || "/",
+//   first_touch:  localStorage.getItem("_ft_attr") || undefined  // first-click bag (best-effort; omit if absent)`;
 
 /**
  * Headless edge-function forwarder — VERBATIM from
@@ -130,7 +139,8 @@ body: JSON.stringify({
   product_title: payload.product_title,
   quantity: payload.quantity,
   occurred_at: payload.occurred_at,
-  landing_site: payload.landing_site || "/",        // forwarded first-touch from client
+  landing_site: payload.landing_site || "/",        // forwarded last-touch landing from client
+  first_touch: payload.first_touch || undefined,    // forwarded first-click bag (best-effort; omit if absent)
 })`;
 
 /**

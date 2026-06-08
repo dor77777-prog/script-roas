@@ -22,6 +22,7 @@ const sampleRows: StoreEventRow[] = [
     quantity: 2,
     customer_label: 'A׳ C׳',
     source: null,
+    first_touch_source: 'meta-paid',
     occurred_at: '2026-06-01T10:00:00Z',
     received_at: '2026-06-01T10:00:05Z',
   },
@@ -36,6 +37,7 @@ const sampleRows: StoreEventRow[] = [
     quantity: 1,
     customer_label: null,
     source: null,
+    first_touch_source: null,
     occurred_at: '2026-06-01T09:00:00Z',
     received_at: '2026-06-01T09:00:02Z',
   },
@@ -69,6 +71,9 @@ describe('GET /api/store-events', () => {
       lastReceivedAt: string | null;
     };
     expect(body.events).toEqual(sampleRows);
+    // first_touch_source is surfaced for T3's first-click lens (presence/label).
+    expect(body.events[0].first_touch_source).toBe('meta-paid');
+    expect(body.events[1].first_touch_source).toBeNull();
     // serverNow is a valid ISO timestamp.
     expect(Number.isNaN(Date.parse(body.serverNow))).toBe(false);
     // lastReceivedAt is the newest row's received_at (rows are newest-first).

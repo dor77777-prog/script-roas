@@ -39,6 +39,7 @@ function row(
     quantity: 2,
     customer_label: null,
     source: null,
+    first_touch_source: null,
     occurred_at: NOW,
     received_at: NOW,
     ...over,

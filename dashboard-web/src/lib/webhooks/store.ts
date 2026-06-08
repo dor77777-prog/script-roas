@@ -91,17 +91,24 @@ export interface StoreEventRow {
   quantity: number | null;
   customer_label: string | null;
   source: string | null;
+  // First-click lens (classify-v2 T3): the non-secret first-touch platform label
+  // (e.g. 'meta-paid') or null ("no first-click signal"). Stored inside the `raw`
+  // JSON (NO dedicated column) and surfaced here via a PostgREST `raw->>` path so
+  // the feed never has to ship the whole bulky `raw` blob. See STORE_EVENT_FEED_COLUMNS.
+  first_touch_source: string | null;
   occurred_at: string;
   received_at: string;
 }
 
 /**
- * Columns selected for the feed read. Excludes `raw` (bulky audit JSON) and
- * `dedupe_key` (internal). Kept as a constant so the SELECT and the row type
- * can't silently drift.
+ * Columns selected for the feed read. Excludes the bulky `raw` blob and
+ * `dedupe_key` (internal), but DOES pull the single `raw->>first_touch_source`
+ * JSON path (aliased to `first_touch_source`) so T3's first-click lens has the
+ * label without shipping all of `raw`. Kept as a constant so the SELECT and the
+ * row type can't silently drift.
  */
 const STORE_EVENT_FEED_COLUMNS =
-  'id, store_id, type, amount_cad, currency, amount_original, product_title, quantity, customer_label, source, occurred_at, received_at';
+  'id, store_id, type, amount_cad, currency, amount_original, product_title, quantity, customer_label, source, first_touch_source:raw->>first_touch_source, occurred_at, received_at';
 
 /**
  * Read the most-recent store events, newest-first (received_at DESC), capped at

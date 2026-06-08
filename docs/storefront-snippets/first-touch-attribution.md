@@ -33,8 +33,12 @@ analytics.subscribe("product_added_to_cart", async (event) => {
   try {
     var loc = (event.context && event.context.document && event.context.document.location) || {};
     var landing = loc.search || "";
+    // First-touch bag (entry UTM/click-id persisted on page_viewed). Best-effort:
+    // a missing/invalid _ft_attr is simply omitted — never blocks add-to-cart.
+    var firstTouch = null;
+    try { firstTouch = await browser.localStorage.getItem("_ft_attr"); } catch (_) {}
     if (!/(utm_|fbclid|gclid|ttclid)/i.test(landing)) {
-      try { var ft = await browser.localStorage.getItem("_ft_attr"); if (ft) landing = ft; } catch (_) {}
+      if (firstTouch) landing = firstTouch;
     }
     if (!landing) landing = "/";
     var d = event.data || {};
@@ -44,22 +48,33 @@ analytics.subscribe("product_added_to_cart", async (event) => {
       (d.productVariant && d.productVariant.product && d.productVariant.product.title) ||
       null;
     var qty = line.quantity || 1;
+    var payload = {
+      store_token: CART_TOKEN,
+      event_id: event.id || String(event.timestamp || Date.now()),
+      product_title: title,
+      quantity: qty,
+      occurred_at: event.timestamp || new Date().toISOString(),
+      landing_site: landing
+    };
+    // Send the stored first-touch bag so the dashboard can compute first-click
+    // attribution (boosts first-touch coverage). Omitted when absent.
+    if (firstTouch) payload.first_touch = firstTouch;
     fetch("https://roas-dashboard-smoky.vercel.app/api/events/cart", {
       method: "POST",
       keepalive: true,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        store_token: CART_TOKEN,
-        event_id: event.id || String(event.timestamp || Date.now()),
-        product_title: title,
-        quantity: qty,
-        occurred_at: event.timestamp || new Date().toISOString(),
-        landing_site: landing
-      })
+      body: JSON.stringify(payload)
     }).catch(function () {});
   } catch (e) {}
 });
 ```
+
+> **First-touch (2026-06-07):** the beacon now ALSO sends the stored `_ft_attr`
+> bag as a `first_touch` field. The cart route folds it into the attribution
+> classifier and records a `firstTouchSource` label on the event (powers the
+> first-click lens). **Existing stores must RE-PASTE this updated Custom Pixel**
+> for the first-touch field to start flowing — newly-added stores get it
+> automatically from the wizard's generated snippet.
 
 > **If you already pasted the earlier `localStorage` version into uzoshop / Zol Plus, REPLACE it with the snippet above** — the old one throws in the sandbox and stops all cart events from those stores.
 
@@ -89,7 +104,8 @@ Add this block on app load (e.g. at the top of your root `main.ts` / `App.tsx` e
 })();
 
 // when reporting an add-to-cart, include in the POST body sent to the edge function:
-//   landing_site: localStorage.getItem("_ft_attr") || "/"
+//   landing_site: localStorage.getItem("_ft_attr") || "/",
+//   first_touch:  localStorage.getItem("_ft_attr") || undefined  // first-click bag (best-effort; omit if absent)
 ```
 
 ### Part B — Edge function `roas-cart-event` (forward `landing_site`, keep token server-side)
@@ -104,11 +120,12 @@ body: JSON.stringify({
   product_title: payload.product_title,
   quantity: payload.quantity,
   occurred_at: payload.occurred_at,
-  landing_site: payload.landing_site || "/",        // forwarded first-touch from client
+  landing_site: payload.landing_site || "/",        // forwarded last-touch landing from client
+  first_touch: payload.first_touch || undefined,    // forwarded first-click bag (best-effort; omit if absent)
 })
 ```
 
-Adapt the surrounding code to your edge function's actual runtime and SDK (the example uses Deno env). The critical invariants are: forward `landing_site`; read the token from a server-side env var only.
+Adapt the surrounding code to your edge function's actual runtime and SDK (the example uses Deno env). The critical invariants are: forward `landing_site` AND `first_touch`; read the token from a server-side env var only.
 
 ---
 
@@ -118,6 +135,7 @@ Adapt the surrounding code to your edge function's actual runtime and SDK (the e
 
 1. **uzoshop / Zol Plus:** replace `<STORE_CART_TOKEN>` in the Custom Pixel with each store's `cart_public_token` (from the `store_webhooks` row for that store).
 2. **usmile360:** confirm that `ROAS_STORE_TOKEN` is set in the Lovable edge function's environment variables and reflects the rotated token (rotated 2026-06-06).
+3. **First-touch re-paste (2026-06-07):** the beacon now sends a `first_touch` field (the stored `_ft_attr` bag) so the dashboard can compute first-click attribution. The **3 existing stores (uzoshop, Zol Plus, usmile360) must RE-PASTE the updated snippet** for the field to start flowing — the previous version sent only `landing_site`. New stores added via the wizard get the enriched snippet automatically.
 
 ### Smoke test after deploy
 

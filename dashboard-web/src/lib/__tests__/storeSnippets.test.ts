@@ -67,6 +67,15 @@ describe('generateStoreSnippet — themed (Shopify Custom Pixel)', () => {
     expect(result.primary).toContain('product_added_to_cart');
   });
 
+  it('reads the stored _ft_attr bag and SENDS it as a first_touch field in the POST body', () => {
+    // The beacon must READ the first-touch bag (the same _ft_attr key the
+    // page_viewed handler persists) AND include it in the cart POST body so the
+    // route can compute firstTouchSource (classify-v2 T4b).
+    expect(result.primary).toContain('first_touch');
+    // It reads from the persisted store, not just re-reads the current URL.
+    expect(result.primary).toMatch(/getItem\(["']_ft_attr["']\)/);
+  });
+
   it('note points the operator to the Shopify Custom Pixel screen', () => {
     expect(result.note).toBeDefined();
     expect(result.note).toContain('Customer events');
@@ -97,6 +106,17 @@ describe('generateStoreSnippet — headless (Lovable client + edge function)', (
   it('primary captures first-touch into localStorage _ft_attr', () => {
     expect(result.primary).toContain('_ft_attr');
     expect(result.primary).toContain('localStorage');
+  });
+
+  it('primary (client) documents sending the _ft_attr bag as a first_touch field', () => {
+    // The headless client must forward the stored first-touch bag to the edge
+    // function as a `first_touch` field (classify-v2 T4b).
+    expect(result.primary).toContain('first_touch');
+    expect(result.primary).toContain('_ft_attr');
+  });
+
+  it('secondary edge function forwards first_touch to /api/events/cart', () => {
+    expect(result.secondary).toContain('first_touch');
   });
 
   it('note instructs setting ROAS_STORE_TOKEN to the token in the edge function env', () => {

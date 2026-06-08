@@ -116,13 +116,25 @@ describe('POST /api/events/cart', () => {
       }),
     );
     const arg = insertSpy.mock.calls[0][0];
-    // No landing_site sent → diag is all-empty (PII-free: marketing labels +
-    // length only; TEMP diagnostic, see route.ts). No raw landing/referrer/PII.
+    // No landing_site / first_touch sent → diag is all-empty (PII-free: marketing
+    // labels + length + first-click booleans only; permanent diagnostic, see
+    // route.ts). No raw landing/referrer/PII. first_touch_source null (no signal).
     expect(arg.raw).toEqual({
       product_title: 'Blue Widget',
       quantity: 2,
       event_id: 'evt-pii',
-      diag: { utmSource: null, utmMedium: null, fbclid: false, gclid: false, landingLen: 0 },
+      first_touch_source: null,
+      diag: {
+        utmSource: null,
+        utmMedium: null,
+        fbclid: false,
+        gclid: false,
+        landingLen: 0,
+        firstTouch: null,
+        firstFbclid: false,
+        firstGclid: false,
+        firstTtclid: false,
+      },
     });
   });
 
