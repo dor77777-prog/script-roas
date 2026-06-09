@@ -545,9 +545,13 @@ Open /operator for details: https://roas-dashboard-smoky.vercel.app/operator
 
 **Throughline integration (v3):**
 - Campaign Health Score per top campaign (4 components + status)
-- Per-campaign Pixel ↔ Shopify deterministic comparison (match by `utm_id`/`utm_campaign`)
+- Per-campaign Pixel ↔ Shopify deterministic comparison (matched via the **canonical** `orderMatchesCampaign` — Google ValueTrack id-in-`utm_campaign` + first-touch fallback included; ראה note למטה)
 - Currently-off campaigns (real `effective_status`)
 - TikTok deep-dive (only when `ttSpend > 0`)
+
+**True P&L + MER honesty (2026-06-09):**
+- Summary KPI table: store ROAS row labeled **"ROAS משוקלל (MER — כולל אורגני)"** + a MER caveat in the top disclaimer (the numerator is *total* Shopify revenue incl. organic/direct/returning over paid spend → overstates pure ad efficiency).
+- Optional `costs` Param renders **true net profit** rows (operating profit − transaction fees − fixed costs − salaries) after the operating-profit row; `AiReportButton` computes it via the SAME `aggregate(...)` call the dashboard hero uses, so the figure matches the hero exactly. Omitted ⇒ legacy operating-profit-only summary (back-compat).
 
 **Creative-level (v4 — 2026-05-22):**
 - Per-campaign creative drill-down for top-5-spend campaigns (top 8 ads each, with CTR/CPA/ROAS)
@@ -555,7 +559,11 @@ Open /operator for details: https://roas-dashboard-smoky.vercel.app/operator
 - 💸 Creative drainers — cross-campaign top-5 by waste (≥$25 spend + ROAS < 1.5, or 0 conv with ≥$100 spend)
 
 ### 10.5 Prompt
-פרסונה של **Senior E-commerce Performance Strategist** ברמה של Common Thread Collective / Tier 11 / Disruptive Advertising. 8 numbered sections. Anti-platitudes: כל המלצה חייבת לכלול שם קמפיין / מוצר ומספר מהדוח.
+פרסונה של **Senior E-commerce Performance Strategist** ברמה של Common Thread Collective / Tier 11 / Disruptive Advertising. 8 numbered sections. Anti-platitudes: כל המלצה חייבת לכלול שם קמפיין / מוצר ומספר מהדוח. כשמסופק `costs` — שורת פרסונה נוספת מורה ל-AI לבסס רווחיות על **הרווח הנקי האמיתי**, ולהתייחס ל-ROAS-החנות כ-MER (כולל אורגני).
+
+> **Deterministic-matcher alignment (2026-06-09).** הדוח חישב deterministic-revenue פר-קמפיין דרך באקטים inline (`utm_id`→campaignId, `utm_campaign`→**שם** הקמפיין). זה **החמיץ את Google ValueTrack**: ה-`{campaignid}` הנומרי של Google זורם ל-`utm_campaign` (לא לשם), כך שקמפיין PMax הראה `Shopify det. = 0` ("אין click-id") והמליץ בטעות "תקן Enhanced Conversions / gclid / מעקב URL" — גם כשה-URL Parameters היו תקינים. **תיקון:** helper יחיד `deterministicByCampaign(orders, campaignsList)` קורא ל-`orderMatchesCampaign` הקנוני (מקור-אמת משותף עם פאנלי הדשבורד) ומוזן לשני אתרי-החישוב (טבלת Pixel↔Shopify **וגם** קלט ה-Campaign Health Score) — מתואם ל-Google ValueTrack + first-touch, שומר על ALG-05 (storeId-scoping) ו-ALG-07 (coverage לא-חתוך). נוסף: עמודת **הזמנות** (מספר הזמנות תואמות) + סף-מדגם `DET_MIN_ORDERS=3` ("מדגם קטן (n=…) — לא להכריע" במקום "מאוזן (אמין)" על הזמנה בודדת) + **תווית-פלטפורמה דינמית** באבחנה (לא עוד "Meta" קשיח לשורות Google/TikTok). בדיקות: `lib/__tests__/aiReportGoogleValueTrack.test.ts` + `aiReportTruePnlMer.test.ts`.
+>
+> **Google PMax ב-ROAS Shopify בטבלת הקמפיינים (2026-06-09).** אותו פער התקיים גם ב-**UI**: `useCampaignTrueRevenue` קצר-מעגל כל קמפיין ללא מיפוי-מוצרים (`mappedIds.length === 0 → continue`), ו-Google PMax לעולם לא ממופה (ה-picker הוא Meta/TikTok בלבד) — אז העמודה "ROAS Shopify" הראתה "—" ל-Google, למרות ש-`analyzeAttribution` כבר מתאים את הזמנותיו (T0). **המגירה** (CampaignDrawer) כבר הציגה זאת; רק הטבלה לא. **תיקון:** helper טהור מיוצא `buildUnmappedAttributionInfo(a, attribution)` פולט `TrueRevenueInfo` מבוסס-attribution (trueRevenue = `deterministicRevenue`, mappedCount: 0) לקמפיין **לא-ממופה** עם התאמה דטרמיניסטית — **מוגבל ל-Google** (החלטת מפעיל; שורות Meta/TikTok לא-ממופות נשארות byte-identical "—" + נדנוד מיפוי). הקריאה ל-`analyzeAttribution` הוזזה מעל שער-המיפוי עם guard `mappedIds.length > 0 || platform === 'Google'` כדי לשמר את ה-short-circuit המהיר לשורות Meta/TikTok לא-ממופות. תא הטבלה (`CampaignsTableRow` roasShopify) כמעט ללא שינוי — מסלול ה-`useAttr` הקיים מציג את ה-ROAS הדטרמיניסטי + צ'יפ ה-trust (תוקנו רק שתי בועיות-tooltip: שורת "(מיפוי)" מדכאת כש-`mappedCount===0`, ו-`ROAS לפי Meta` עם guard ל-spend>0; ה-helper דורש `spend>0` כדי לא להציג ROAS חסר-משמעות). **תוצאת-לוואי מכוונת:** ל-Google PMax לא-ממופה יש עכשיו `TrueRevenueInfo` אמיתי, ולכן **ציון הבריאות** (`campaignHealthScore`) שלו נגזר מ-ROAS-Shopify הדטרמיניסטי + trust-coverage אמיתי במקום מ-platform-fallback (`PLATFORM_FALLBACK_TRUST.Google=0.7` על ה-conversion_value המדווח) — שיפור-דיוק (דטרמיניסטי > דיווח-עצמי). נשאר מוחרג (מוצדק): ad/adset grain ל-Google ופירוק per-product. בדיקה: `lib/__tests__/buildUnmappedAttributionInfo.test.ts`.
 
 ---
 

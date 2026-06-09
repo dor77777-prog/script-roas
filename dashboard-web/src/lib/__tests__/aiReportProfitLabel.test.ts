@@ -75,8 +75,9 @@ describe('aiReport profit label — P0-1', () => {
       campaignRows: [],
     });
 
-    // The bold table row must be labeled "רווח תפעולי"
-    expect(md).toMatch(/\|\s*\*\*רווח תפעולי\*\*\s*\|/);
+    // The bold table row must be labeled "רווח תפעולי" (a clarifying
+    // formula parenthetical may follow the bold label — 2026-06-09).
+    expect(md).toMatch(/\|\s*\*\*רווח תפעולי\*\*[^|]*\|/);
 
     // And must NOT contain a bold "רווח נטו" row in the summary table
     expect(md).not.toMatch(/\|\s*\*\*רווח נטו\*\*\s*\|/);

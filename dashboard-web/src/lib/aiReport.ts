@@ -16,6 +16,71 @@ import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
 import { netAdjustFactor } from './home/revenueBasis';
 import { isAdsEnabled, isStoreFullyOff, type AdStateMap, type AdPlatform } from './adState';
 import { SOURCE_LABEL } from './sourceLabels';
+import { orderMatchesCampaign } from './attributionAnalysis';
+
+/**
+ * Minimum matched-order count before a per-campaign deterministic ROAS is
+ * presented as a trustworthy "balanced/reliable" verdict. Mirrors the
+ * canonical `attributionAnalysis` posture (it refuses degenerate n<2
+ * samples / zero-variance CIs); the report can't compute a CI inline, so it
+ * caps confidence by sample count instead. Below this floor the verdict says
+ * "small sample — don't decide" no matter how small the |gap| looks.
+ */
+const DET_MIN_ORDERS = 3;
+
+/**
+ * Deterministic Shopify revenue + matched-order count per campaign, computed
+ * via the canonical `orderMatchesCampaign` — the SAME matcher the dashboard's
+ * attribution panels use. This is the single source of truth shared with
+ * `attributionAnalysis`, replacing the report's older inline id/name bucket
+ * lookup which:
+ *   - matched any platform by `utm_id === campaignId` only, and
+ *   - matched Meta/TikTok by `utm_campaign === NAME` (lowercased) only,
+ * thereby MISSING Google's ValueTrack tagging (the numeric `campaign_id`
+ * rides in `utm_campaign`/`utm_id`, NOT the human-readable name) and the
+ * first-touch (Tier 3) fallback. The bug surfaced as Google PMax showing
+ * Shopify-deterministic ROAS = 0 ("אין click-id") even when the campaign's
+ * URL parameters were correctly configured.
+ *
+ * Keyed by `${storeId}::${platform}::${campaignId}` so two stores (or two
+ * platforms) sharing a campaign id never merge — preserving the ALG-05
+ * storeId-scoping fix.
+ */
+function deterministicByCampaign(
+  orders: OrderAttributionRow[],
+  campaignsList: Array<{ storeId: string; platform: string; campaignId: string; name: string }>,
+): Map<string, { revenue: number; orderCount: number }> {
+  // Group orders by store first so each campaign only scans its own store's
+  // orders (orderMatchesCampaign also short-circuits on a storeId mismatch,
+  // but pre-grouping keeps the cross-product cost to Σ per-store sizes).
+  const ordersByStore = new Map<string, OrderAttributionRow[]>();
+  for (const o of orders) {
+    const arr = ordersByStore.get(o.storeId);
+    if (arr) arr.push(o);
+    else ordersByStore.set(o.storeId, [o]);
+  }
+  const out = new Map<string, { revenue: number; orderCount: number }>();
+  for (const c of campaignsList) {
+    const storeOrders = ordersByStore.get(c.storeId) ?? [];
+    let revenue = 0;
+    let orderCount = 0;
+    for (const o of storeOrders) {
+      if (
+        orderMatchesCampaign(o, {
+          campaignName: c.name,
+          storeId: c.storeId,
+          platform: c.platform,
+          campaignId: c.campaignId,
+        })
+      ) {
+        revenue += o.totalCad;
+        orderCount += 1;
+      }
+    }
+    out.set(`${c.storeId}::${c.platform}::${c.campaignId}`, { revenue, orderCount });
+  }
+  return out;
+}
 
 /**
  * Generates an AI-friendly markdown report for a store × date range.
@@ -101,6 +166,21 @@ type Params = {
    * turned off). Optional; when absent, per-store reframing is skipped.
    */
   storeApplicablePlatforms?: Record<string, AdPlatform[]>;
+  /**
+   * 2026-06-09 — full-P&L cost breakdown for the report's store × range,
+   * computed by the caller via `aggregate()` (the SAME path the dashboard
+   * hero uses, so the figures match exactly). When supplied, the summary
+   * adds the true-net-profit rows (operating profit MINUS transaction fees,
+   * fixed costs, salaries) so the AI reasons from real bottom-line profit,
+   * not just `revenue − spend − cogs`. Optional — omitted by legacy callers
+   * and tests, which keep the operating-profit-only summary unchanged.
+   */
+  costs?: {
+    transactionFees: number;
+    fixedCosts: number;
+    salaries: number;
+    trueNetProfit: number;
+  };
 };
 
 const fmtNum = (n: number, d = 0) =>
@@ -135,6 +215,7 @@ export function generateAiReport({
   productMap,
   adStateMap = {},
   storeApplicablePlatforms = {},
+  costs,
 }: Params): string {
   const out: string[] = [];
 
@@ -196,7 +277,7 @@ export function generateAiReport({
   out.push('- modeled conversions — Meta "ממציא" המרות חסרות באלגוריתם');
   out.push('- view-through attribution — מכירה משויכת רק כי המשתמש ראה מודעה, אפילו בלי קליק');
   out.push('');
-  out.push('**מסקנה לניתוח**: ה-ROAS *ברמת חנות* (מקור: Shopify revenue / Meta+Google spend) הוא המקור האמין. ROAS *ברמת קמפיין* (מקור: conversion_value מ-Meta / spend מ-Meta) הוא אינדיקציה כללית בלבד. אל תקבל החלטות "להפסיק קמפיין" רק על בסיס ROAS ברמת קמפיין — שווה לבדוק גם את ה-Shopify revenue בימים הסמוכים.');
+  out.push('**מסקנה לניתוח**: ה-ROAS *ברמת חנות* (מקור: Shopify revenue / Meta+Google spend) הוא המקור האמין למצב העסק הכולל. אבל שים לב — זהו **MER (ROAS משוקלל), לא ROAS פרסומי טהור**: המונה הוא *כל* הכנסת Shopify (נטו, כולל אורגני, ישיר, מייל, לקוחות חוזרים) מחולק בהוצאת הפרסום בלבד, ולכן הוא **מעריך ביתר** את יעילות המודעות. החלק שמגיע *באמת* מפרסום בתשלום יכול להיות פחות מ-50% מההכנסה — לכן ה-MER טוב למדידת רווחיות העסק, לא לשאלה "כמה כל שקל פרסום מחזיר". ROAS *ברמת קמפיין* (מקור: conversion_value מ-Meta / spend מ-Meta) הוא אינדיקציה כללית בלבד. אל תקבל החלטות "להפסיק קמפיין" רק על בסיס ROAS ברמת קמפיין — שווה לבדוק גם את ה-Shopify revenue בימים הסמוכים.');
   out.push('');
   out.push('**Google Ads attribution**: בדרך כלל מדויק יותר מ-Meta, במיוחד לקמפייני Search ו-Shopping (purchase event ישיר). PMax יכול לסבול מאותן בעיות כמו Meta.');
   out.push('');
@@ -284,11 +365,26 @@ export function generateAiReport({
   if (hasTikTok) {
     out.push(`| הוצאות TikTok | ${fmtCad(ttSpend)} |`);
   }
-  out.push(`| ROAS משוקלל | ${roas > 0 ? fmtNum(roas, 2) : '—'} |`);
+  out.push(`| ROAS משוקלל (MER — כולל אורגני) | ${roas > 0 ? fmtNum(roas, 2) : '—'} |`);
   out.push(`| רווח גולמי (Revenue − Spend) | ${fmtCad(grossProfit)} |`);
   const cogsRatePct = revenue > 0 ? (cogs / revenue * 100).toFixed(1) : '—';
   out.push(`| COGS (${cogsRatePct}% מההכנסה) | ${fmtCad(cogs)} |`);
-  out.push(`| **רווח תפעולי** | **${fmtCad(netProfit)}** |`);
+  out.push(`| **רווח תפעולי** (הכנסות − פרסום − COGS) | **${fmtCad(netProfit)}** |`);
+  // True net profit (full P&L) — when the caller threads the cost breakdown
+  // (transaction fees + fixed costs + salaries) we render the bottom-line
+  // figure the dashboard's hero shows, so the AI reasons from REAL profit and
+  // a real break-even, not just operating profit. Omitted (no rows) when the
+  // caller doesn't supply costs, so legacy callers/tests are unaffected.
+  if (costs) {
+    out.push(`| עמלות סליקה | ${fmtCad(costs.transactionFees)} |`);
+    out.push(`| עלויות קבועות | ${fmtCad(costs.fixedCosts)} |`);
+    out.push(`| שכר | ${fmtCad(costs.salaries)} |`);
+    out.push(
+      `| **רווח נקי אמיתי** (אחרי עמלות+קבועות+שכר) | **${fmtCad(costs.trueNetProfit)}** |`,
+    );
+    const truePnlMarginPct = revenue > 0 ? (costs.trueNetProfit / revenue * 100).toFixed(1) : '—';
+    out.push(`| מרג'ין נקי אמיתי | ${truePnlMarginPct}% |`);
+  }
   if (hasOrdersData) {
     out.push(`| מספר הזמנות (לפי מוצר) | ${fmtNum(totalOrders)} |`);
     if (aov > 0) {
@@ -845,7 +941,7 @@ export function generateAiReport({
   out.push('');
   // AUDIT ALG-04 + ALG-05 + ALG-06 (2026-05-24, Phase 12.1.2): surface
   // storeId on the aggregated value shape so every downstream key
-  // construction (statusByCampaign, ordersByCampaignId, detById,
+  // construction (statusByCampaign, detByCampaign,
   // adsetsByCampaign drill-down, adAgg drill-down) is storeId-scoped.
   // Pre-fix the value object dropped storeId, forcing downstream
   // consumers to use suffix-scan find() / `${platform}::${campaignId}`
@@ -907,6 +1003,13 @@ export function generateAiReport({
     .filter(c => c.spend >= 50) // hide trivial dust to keep the list focused
     .sort((a, b) => b.roas - a.roas);
 
+  // Deterministic Shopify revenue + matched-order count per campaign, via the
+  // canonical orderMatchesCampaign (single source of truth shared with the
+  // dashboard). Computed ONCE here and reused by the Pixel↔Shopify comparison
+  // AND the Campaign Health Score below — both previously rebuilt the older
+  // inline id/name buckets that missed Google ValueTrack + first-touch.
+  const detByCampaign = deterministicByCampaign(orders, campaignsList);
+
   if (campaignsList.length === 0) {
     out.push('_אין קמפיינים עם הוצאה משמעותית (≥ CAD 50) בטווח זה._');
   } else {
@@ -944,24 +1047,10 @@ export function generateAiReport({
     // trust and Health Score deterministic coverage. Evidence:
     // .planning/phases/12-codebase-audit-baseline/raw-returns/lib_algorithm_aiReport.json (ALG-05)
     //
-    // Pre-bucket orders by their utmId / utmCampaign so the per-campaign
-    // lookup is O(1). utmId wins when present (immutable platform ID);
-    // utmCampaign by name is the legacy fallback.
-    const ordersByCampaignId = new Map<string, number>();
-    const ordersByCampaignName = new Map<string, number>();
-    for (const o of orders) {
-      const id = (o.utmId ?? '').trim();
-      const name = (o.utmCampaign ?? '').trim();
-      if (id) {
-        const k = `${o.storeId}::${id}`;
-        ordersByCampaignId.set(k, (ordersByCampaignId.get(k) ?? 0) + o.totalCad);
-      }
-      if (name) {
-        const k = `${o.storeId}::${name.toLowerCase()}`;
-        ordersByCampaignName.set(k, (ordersByCampaignName.get(k) ?? 0) + o.totalCad);
-      }
-    }
-
+    // Deterministic revenue is now read from the shared `detByCampaign` map
+    // (canonical orderMatchesCampaign) keyed by storeId+platform+campaignId —
+    // this fixes Google ValueTrack (numeric id in utm_campaign) + first-touch
+    // and keeps the ALG-05 storeId scoping.
     type CompareRow = {
       name: string;
       platform: string;
@@ -969,6 +1058,7 @@ export function generateAiReport({
       spend: number;
       platformValue: number;
       detRevenue: number;
+      detOrders: number;
       platformRoas: number;
       detRoas: number;
       gap: number;
@@ -976,26 +1066,39 @@ export function generateAiReport({
     };
     const rows: CompareRow[] = [];
     for (const c of campaignsList) {
-      // AUDIT ALG-05 (2026-05-24, Phase 12.1.2): lookup keyed by storeId
-      // so each campaign's det revenue is its OWN store's matched orders
-      // only — not the merged cross-store sum.
-      const det =
-        ordersByCampaignId.get(`${c.storeId}::${c.campaignId}`) ??
-        ordersByCampaignName.get(`${c.storeId}::${c.name.toLowerCase()}`) ??
-        0;
+      const detHit = detByCampaign.get(`${c.storeId}::${c.platform}::${c.campaignId}`);
+      const det = detHit?.revenue ?? 0;
+      const detOrders = detHit?.orderCount ?? 0;
       const detRoas = c.spend > 0 ? det / c.spend : 0;
       const platformRoas = c.spend > 0 ? c.value / c.spend : 0;
       // Gap is positive when Shopify > platform (under-reporting).
       const gap = c.value > 0 ? (det - c.value) / c.value : det > 0 ? 1 : 0;
+      // Platform-aware label — never hardcode "Meta" (a Google/TikTok row
+      // saying "Meta over-reports" both misdirects and ascribes Meta-specific
+      // inflation to platforms whose attribution differs).
+      const platformLabel = c.platform;
       let verdict: string;
-      if (det === 0 && c.value > 0) {
-        verdict = 'אין click-id (חוסר שיוך)';
+      if (det === 0 && c.value === 0) {
+        // Nothing on EITHER side (no platform-claimed conversions AND no
+        // matched Shopify orders) — e.g. an awareness/reach campaign. Mirror
+        // the canonical analyzer's 'unknown / no conversions' branch instead
+        // of falling through to "balanced (reliable)" on a |gap| of 0.
+        verdict = 'אין המרות בשני הצדדים — אין מה לנתח';
+      } else if (det === 0 && c.value > 0) {
+        // After the matcher fix this means genuinely zero matched orders in
+        // the window (low conversion volume OR tagging truly absent) — NOT a
+        // blanket "your URL parameters are broken" claim.
+        verdict = 'אין הזמנות תואמות בטווח';
+      } else if (detOrders > 0 && detOrders < DET_MIN_ORDERS) {
+        // Sample too small to trust the det ROAS regardless of |gap| — the
+        // canonical analyzer refuses degenerate n<2 samples; we cap at n<3.
+        verdict = `מדגם קטן (n=${detOrders}) — לא להכריע`;
       } else if (Math.abs(gap) < 0.15) {
         verdict = 'מאוזן (אמין)';
       } else if (gap > 0.15) {
-        verdict = `Shopify רואה ${(gap * 100).toFixed(0)}%+ יותר (Meta מדווח חסר)`;
+        verdict = `Shopify רואה ${(gap * 100).toFixed(0)}%+ יותר (${platformLabel} מדווח חסר)`;
       } else {
-        verdict = `Meta מדווח ${Math.abs(gap * 100).toFixed(0)}% יותר (modeled / view-through)`;
+        verdict = `${platformLabel} מדווח ${Math.abs(gap * 100).toFixed(0)}% יותר (המרות modeled / view-through)`;
       }
       rows.push({
         name: c.name,
@@ -1004,6 +1107,7 @@ export function generateAiReport({
         spend: c.spend,
         platformValue: c.value,
         detRevenue: det,
+        detOrders,
         platformRoas,
         detRoas,
         gap,
@@ -1015,14 +1119,14 @@ export function generateAiReport({
     out.push('## השוואת ROAS לקמפיין — Pixel ↔ Shopify (deterministic)');
     out.push('');
     out.push(
-      '**מה זה אומר**: לכל קמפיין — ROAS לפי הפלטפורמה (conversion_value מ-Meta/Google/TikTok ÷ הוצאה) מול ROAS לפי Shopify (הזמנות שתויגו דטרמיניסטית לקמפיין הזה דרך `utm_id` / `utm_campaign` ÷ הוצאה). הפער הוא ההפרש בכסף: חיובי = Meta מדווח חסר (iOS 14 ATT), שלילי = Meta מדווח עודף (modeled / view-through / double-count). **שיקול קבלת החלטות**: אם פער > ±20% — אל תקבל החלטה על בסיס ה-ROAS של הפלטפורמה לבד.',
+      '**מה זה אומר**: לכל קמפיין — ROAS לפי הפלטפורמה (conversion_value מ-Meta/Google/TikTok ÷ הוצאה) מול ROAS לפי Shopify (הזמנות שתויגו דטרמיניסטית לקמפיין הזה דרך `utm_id` / `utm_campaign`, כולל מזהה הקמפיין של Google ב-ValueTrack ו-first-touch ÷ הוצאה). הפער הוא ההפרש בכסף: חיובי = הפלטפורמה מדווחת חסר (iOS 14 ATT), שלילי = הפלטפורמה מדווחת עודף (modeled / view-through / double-count). העמודה **הזמנות** היא מספר ההזמנות התואמות — n קטן (פחות מ-' + DET_MIN_ORDERS + ') = ה-ROAS הדטרמיניסטי רועש, אל תכריע לפיו. **שיקול קבלת החלטות**: אם פער > ±20% (ו-n מספיק) — אל תקבל החלטה על בסיס ה-ROAS של הפלטפורמה לבד.',
     );
     out.push('');
     out.push(
-      `| קמפיין | פלטפ׳ | חנות | הוצאה | Pixel value | Shopify det. | ROAS Pixel | ROAS Det. | פער | אבחנה |`,
+      `| קמפיין | פלטפ׳ | חנות | הוצאה | Pixel value | Shopify det. | הזמנות | ROAS Pixel | ROAS Det. | פער | אבחנה |`,
     );
     out.push(
-      `|---|---|---|---|---|---|---|---|---|---|`,
+      `|---|---|---|---|---|---|---|---|---|---|---|`,
     );
     for (const r of rows.slice(0, 25)) {
       const gapStr =
@@ -1034,7 +1138,10 @@ export function generateAiReport({
       out.push(
         `| ${escapeMd(r.name)} | ${r.platform} | ${r.store} | ${fmtCad(
           r.spend,
-        )} | ${fmtCad(r.platformValue)} | ${fmtCad(r.detRevenue)} | ${
+        )} | ${fmtCad(r.platformValue)} | ${fmtCad(r.detRevenue)} | ${fmtNum(
+          r.detOrders,
+          0,
+        )} | ${
           r.platformRoas > 0 ? fmtNum(r.platformRoas, 2) : '—'
         } | ${r.detRoas > 0 ? fmtNum(r.detRoas, 2) : '—'} | ${gapStr} | ${r.verdict} |`,
       );
@@ -1045,11 +1152,13 @@ export function generateAiReport({
     }
     out.push('');
     out.push(
-      '**איך לקרוא**: "Shopify רואה X%+ יותר" → ROAS האמיתי גבוה ממה ש-Meta מציג, ' +
-        'אל תעצור על בסיס ROAS נמוך מ-Meta. "Meta מדווח Y% יותר" → ROAS האמיתי ' +
-        'נמוך, התקרבת לדיווח מנופח (תקין בעיקר אם יש view-through רחב). "אין ' +
-        'click-id" → ה-URL Parameters של הקמפיין לא מוגדרים נכון — אם תתקן, ' +
-        'תקבל deterministic attribution בעתיד.',
+      '**איך לקרוא**: "Shopify רואה X%+ יותר" → ה-ROAS האמיתי גבוה ממה שהפלטפורמה מציגה, ' +
+        'אל תעצור על בסיס ROAS נמוך מהפלטפורמה. "<פלטפורמה> מדווחת Y% יותר" → ה-ROAS ' +
+        'האמיתי נמוך, התקרבת לדיווח מנופח (תקין בעיקר אם יש view-through רחב). ' +
+        '"מדגם קטן (n=…)" → יש שיוך אבל מעט מדי הזמנות כדי לסמוך עליו. "אין הזמנות ' +
+        'תואמות בטווח" → לא נמצאו הזמנות ששויכו דטרמיניסטית לקמפיין זה בטווח — בדרך כלל ' +
+        'מעט המרות בתקופה, או שתיוג ה-URL חסר (המתאם כבר מזהה גם מזהה-קמפיין של Google ' +
+        'ו-first-touch, כך שאם הקמפיין מתייג נכון הוא יופיע כאן).',
     );
     out.push('');
   }
@@ -1189,32 +1298,13 @@ export function generateAiReport({
       e.value += c.conversionValue;
       m.set(c.date, e);
     }
-    // AUDIT ALG-05 (2026-05-24, Phase 12.1.2): parallel det maps —
-    // same storeId-scoped composite key as ordersByCampaignId above
-    // so the synthetic trueRevenueInfo passed into computeCampaignHealth
-    // gets each store's OWN deterministic revenue, not the merged
-    // cross-store sum. Pre-fix this drove Pixel↔Shopify trust scores
-    // and Health Score attribution clarity to the same inflated value
-    // across both stores. Evidence: same raw-returns file as the
-    // ordersByCampaignId fix above (ALG-05 cites BOTH 842-853 AND
-    // 1083-1092).
-    //
-    // Order-matching for deterministic revenue (reuse the buckets from
-    // the Pixel↔Shopify comparison if orders are present).
-    const detById = new Map<string, number>();
-    const detByName = new Map<string, number>();
-    for (const o of orders) {
-      const id = (o.utmId ?? '').trim();
-      const name = (o.utmCampaign ?? '').trim();
-      if (id) {
-        const k = `${o.storeId}::${id}`;
-        detById.set(k, (detById.get(k) ?? 0) + o.totalCad);
-      }
-      if (name) {
-        const k = `${o.storeId}::${name.toLowerCase()}`;
-        detByName.set(k, (detByName.get(k) ?? 0) + o.totalCad);
-      }
-    }
+    // Deterministic revenue per campaign for the Health Score feed is read
+    // from the SAME shared `detByCampaign` map the Pixel↔Shopify comparison
+    // uses (canonical orderMatchesCampaign, keyed by
+    // `${storeId}::${platform}::${campaignId}`). This preserves the ALG-05
+    // storeId scoping AND fixes Google ValueTrack + first-touch so a Google
+    // campaign's coverage/trust no longer collapses to 0 → "untrusted" when
+    // its id rides in utm_campaign rather than utm_id.
 
     // Effective-status lookup — latest non-null per campaign.
     const statusByKey = new Map<string, string>();
@@ -1282,11 +1372,8 @@ export function generateAiReport({
 
       // AUDIT ALG-05 (2026-05-24, Phase 12.1.2): lookup keyed by storeId
       // so each Health Score row's deterministic revenue input is its
-      // OWN store's matched orders only.
-      const det =
-        detById.get(`${c.storeId}::${c.campaignId}`) ??
-        detByName.get(`${c.storeId}::${c.name.toLowerCase()}`) ??
-        0;
+      // OWN store's matched orders only. Read from the shared canonical map.
+      const det = detByCampaign.get(`${c.storeId}::${c.platform}::${c.campaignId}`)?.revenue ?? 0;
       // AUDIT ALG-07 (2026-05-24, Phase 12.2.1): raw coverage — no upper
       // clamp. Mirrors `attributionAnalysis.computeCoverage`'s post-AUDIT
       // U-05 semantic (commit b846ae7): halo (det >> claim) is an
@@ -2366,6 +2453,11 @@ export function generateAiReport({
       ' מתחת ל-2.0 = הפסד.',
   );
   out.push('- **COGS משוער**: לפי שיעור לכל חנות (השיעור המוגדר לכל חנות). רווח תפעולי = הכנסות − פרסום − COGS.');
+  if (costs) {
+    out.push(
+      '- **רווח נקי אמיתי** (השורה התחתונה האמיתית) = רווח תפעולי − עמלות סליקה − עלויות קבועות − שכר. כשהוא מופיע בתקציר — בסס עליו את שיקולי הרווחיות, לא על הרווח התפעולי לבדו. שים לב: ROAS משוקלל הוא MER (כולל הכנסה אורגנית) ולכן מעריך ביתר את תרומת הפרסום.',
+    );
+  }
   // Explicit per-store COGS rate disclosure (2026-06-02): names the ACTUAL
   // rate getCogsRateForStore returns for each in-scope store rather than a
   // generic "per store" — keeps the report honest about the inputs. The rate
@@ -2399,8 +2491,10 @@ export function generateAiReport({
       'CPA שלו זינקה מ-$40 ל-$67."',
   );
   out.push(
-    '**1.2 רווחיות**: רווח תפעולי (הכנסות − פרסום − COGS). אם שלילי — דגל אדום ראשון. אם חיובי אבל ' +
-      'נמוך (<10% מההכנסות) — דגל צהוב.',
+    costs
+      ? '**1.2 רווחיות**: בסס את האבחון על **הרווח הנקי האמיתי** (אחרי עמלות סליקה, עלויות קבועות ושכר) — לא על הרווח התפעולי לבדו. אם הרווח הנקי האמיתי שלילי — דגל אדום ראשון. אם חיובי אבל נמוך (<10% מההכנסות) — דגל צהוב. הרווח התפעולי (הכנסות − פרסום − COGS) הוא תקרה עליונה בלבד.'
+      : '**1.2 רווחיות**: רווח תפעולי (הכנסות − פרסום − COGS). אם שלילי — דגל אדום ראשון. אם חיובי אבל ' +
+        'נמוך (<10% מההכנסות) — דגל צהוב.',
   );
   out.push(
     '**1.3 כיול אמינות**: התבונן בטבלת "פער Pixel ↔ Shopify". אם הפער > 20% ' +

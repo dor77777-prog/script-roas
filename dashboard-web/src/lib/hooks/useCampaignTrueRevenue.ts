@@ -186,6 +186,53 @@ function computeConfidence(
  * same reference, the memo would not invalidate, and the allocation
  * would keep returning numbers from the stale range — silently.
  */
+/**
+ * For an UNMAPPED campaign, decide whether to surface an attribution-only
+ * `TrueRevenueInfo` (deterministic click-id revenue, no product allocation).
+ *
+ * Why this exists: the main `useCampaignTrueRevenue` loop short-circuits every
+ * campaign with no product mapping (`mappedIds.length === 0 → continue`), so
+ * its row shows "—" in the Campaigns table. Google PMax can NEVER be
+ * product-mapped (the picker is Meta/TikTok-only), yet `analyzeAttribution`
+ * has matched its ValueTrack-tagged orders deterministically since T0
+ * (2026-06-02) — and the CampaignDrawer + AI report already surface that
+ * number. This helper lets the TABLE surface it too, by emitting an
+ * attribution-only info whose `trueRevenue` IS the deterministic revenue
+ * (mappedCount: 0). The row cell already prefers the `attribution` (useAttr)
+ * path, so it renders the deterministic ROAS + trust with no row-component
+ * change.
+ *
+ * Scope: GOOGLE ONLY (operator decision 2026-06-09) — unmapped Meta/TikTok
+ * rows stay byte-identical ("—" + the map-products nudge), so the load-bearing
+ * product-allocation contract for those platforms is untouched. Requires a
+ * real deterministic match (`deterministicRevenue > 0`) so we never show a row
+ * for a campaign with zero proven orders. Pure → unit-testable in the node
+ * suite (the hook itself needs JSDOM).
+ */
+export function buildUnmappedAttributionInfo(
+  a: { platform: string; conversionValue: number; spend: number },
+  attribution: AttributionAnalysis | null,
+): TrueRevenueInfo | null {
+  if (a.platform !== 'Google') return null;
+  if (!attribution || attribution.deterministicRevenue <= 0) return null;
+  // No spend → no meaningful ROAS to surface (and the row's ROAS cell would
+  // be 0.00x / the tooltip would divide by zero). Keep showing "—" instead.
+  if (a.spend <= 0) return null;
+  return {
+    trueRevenue: attribution.deterministicRevenue,
+    trueUnits: 0,
+    metaClaim: a.conversionValue,
+    spend: a.spend,
+    mappedCount: 0,
+    sharedCampaigns: 0,
+    confidence: computeConfidence(attribution.deterministicRevenue, a.conversionValue, a.spend, 0, 0),
+    attribution,
+    productTotals: { revenue: 0, units: 0, orders: 0 },
+    deterministicRevenue: attribution.deterministicRevenue,
+    deterministicUnits: 0,
+  };
+}
+
 export function useCampaignTrueRevenue(opts: {
   mode: 'campaign' | 'adset';
   data: CampaignsResponse | undefined;
@@ -203,10 +250,14 @@ export function useCampaignTrueRevenue(opts: {
   // consistency with the cross-platform allocation basis.
   //
   // IN-06 (5.2.2.1): only includes platforms analyzeAttribution can process.
-  // Phase 05.7.9c — TikTok added (analyzer extended). Google still excluded
-  // (PMax/Shopping utm flow unreliable). The name is a misnomer at this point
-  // — kept to avoid a large rename — but semantically it's "daily conv-value
-  // series per campaign for any platform we analyze".
+  // Phase 05.7.9c — TikTok added (analyzer extended). Google is intentionally
+  // omitted from THIS OPTIONAL daily series ONLY (outlier-day + window-
+  // stability tooltips) — analyzeAttribution treats the series as optional
+  // (`?? []`), so a Google campaign still gets a full, non-null deterministic
+  // analysis; it just loses the daily outlier/stability annotations. This is
+  // NOT a Google attribution exclusion (that was lifted at T0, 2026-06-02).
+  // The name is a misnomer — kept to avoid a large rename — but semantically
+  // it's "daily conv-value series per campaign for any platform we annotate".
   const dailyMetaByCampaign = useMemo(() => {
     const out = new Map<string, Map<string, number>>();
     for (const r of allCampaignRows) {
@@ -380,7 +431,53 @@ export function useCampaignTrueRevenue(opts: {
     for (const a of aggregated) {
       const k = campaignKey(a.storeId, a.platform, a.campaignId);
       const mappedIds = productMap[k] ?? [];
-      if (mappedIds.length === 0) continue; // no mapping → no true-ROAS row
+
+      // Daily conv-value series for this campaign (optional outlier/window
+      // input; populated for Meta/TikTok only — Google gets [] and still
+      // returns a full analysis). Hoisted ABOVE the mapping gate so an
+      // unmapped Google (PMax) campaign can still compute its deterministic
+      // attribution.
+      const dailyMeta = (() => {
+        const byDate = dailyMetaByCampaign.get(campaignKey(a.storeId, a.platform, a.campaignId));
+        return Array.from(byDate ?? [], ([date, value]) => ({ date, value }));
+      })();
+
+      // Deterministic per-order attribution (canonical matcher — Meta/TikTok
+      // + Google ValueTrack since T0 2026-06-02). Computed when the result
+      // will actually be used: any MAPPED campaign (mapped path needs it) OR
+      // an unmapped GOOGLE campaign (so the table can surface PMax's
+      // deterministic ROAS even though Google can't be product-mapped). An
+      // unmapped Meta/TikTok campaign keeps the old fast short-circuit — its
+      // attribution would be discarded by buildUnmappedAttributionInfo anyway,
+      // so we skip the O(orders) scan. `let` because the trust-upgrade block
+      // below may rewrite it.
+      let attribution =
+        mappedIds.length > 0 || a.platform === 'Google'
+          ? analyzeAttribution(
+              {
+                campaignName: a.campaignName,
+                campaignId: a.campaignId,
+                storeId: a.storeId,
+                platform: a.platform,
+                metaClaim: a.conversionValue,
+                spend: a.spend,
+              },
+              ordersAttrResp?.rows ?? [],
+              localRange.from,
+              localRange.to,
+              dailyMeta,
+            )
+          : null;
+
+      if (mappedIds.length === 0) {
+        // No product mapping → the spend-proportional allocation path can't
+        // run. But an unmapped Google campaign with a real deterministic match
+        // should still surface its click-id ROAS + trust (Google-only scope;
+        // Meta/TikTok unmapped rows stay "—" + the map-products nudge).
+        const unmapped = buildUnmappedAttributionInfo(a, attribution);
+        if (unmapped) out.set(k, unmapped);
+        continue;
+      }
       const alloc = allocations.get(k) ?? {
         revenue: 0,
         units: 0,
@@ -410,34 +507,6 @@ export function useCampaignTrueRevenue(opts: {
         }
       }
       const shared = sharedKeys.size;
-      // Daily Meta conv-value series for this specific campaign — used by
-      // attribution analysis for outlier detection + window stability.
-      // We pull from the raw rows (already filtered to range by aggregate)
-      // and bucket by date.
-      const dailyMeta = (() => {
-        const byDate = dailyMetaByCampaign.get(campaignKey(a.storeId, a.platform, a.campaignId));
-        return Array.from(byDate ?? [], ([date, value]) => ({ date, value }));
-      })();
-
-      // Deterministic per-order attribution. Uses utm_id (campaignId) for
-      // primary matching when present, falls back to utm_campaign by name.
-      // Returns null for non-Meta campaigns or when the attribution tab is
-      // empty (first deploy). Daily series enables Bayesian / window /
-      // outlier analysis.
-      let attribution = analyzeAttribution(
-        {
-          campaignName: a.campaignName,
-          campaignId: a.campaignId,
-          storeId: a.storeId,
-          platform: a.platform,
-          metaClaim: a.conversionValue,
-          spend: a.spend,
-        },
-        ordersAttrResp?.rows ?? [],
-        localRange.from,
-        localRange.to,
-        dailyMeta,
-      );
 
       // Phase 05.7.9c — Two-method-agreement trust upgrade.
       //

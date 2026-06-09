@@ -16,6 +16,9 @@ import type { AdsResponse } from '@/app/api/ads/route';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { readProductMap } from '@/lib/campaignProductMap';
 import { fetchJsonOrNull } from '@/lib/fetchJson';
+import { aggregate, filterRows } from '@/lib/analytics';
+import { useSalarySettings } from '@/lib/hooks/useSalarySettings';
+import { salariesForRange } from '@/lib/salarySettings';
 
 type Props = {
   data: DashboardData;
@@ -42,6 +45,9 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
   const [report, setReport] = useState<string>('');
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Business-level salary settings — fed into `aggregate()` so the report's
+  // true-net-profit rows match the dashboard hero exactly (same inputs).
+  const [salarySettings] = useSalarySettings();
 
   // External trigger: when openSignal changes (and is > 0), open the modal.
   useEffect(() => {
@@ -113,6 +119,18 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
         filters.store === 'All'
           ? null
           : (data.rows.find(r => r.storeName === filters.store)?.storeId ?? null);
+      // Full-P&L cost breakdown for the report's store × range — replicate
+      // the dashboard hero's exact aggregate() call (cogs already applied to
+      // data.rows upstream; salaries via salariesForRange) so the report's
+      // "רווח נקי אמיתי" equals the hero's true net profit by construction.
+      const curRows = filterRows(data.rows, filters.range, filters.store);
+      const agg = aggregate(
+        curRows,
+        filters.range,
+        undefined,
+        undefined,
+        salariesForRange(salarySettings, curRows, filters.range),
+      );
       const md = generateAiReport({
         storeName: filters.store,
         storeId: resolvedStoreId,
@@ -125,6 +143,12 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
         productMap: readProductMap(),
         adStateMap: data.adStateMap,
         storeApplicablePlatforms: data.storeApplicablePlatforms,
+        costs: {
+          transactionFees: agg.transactionFees,
+          fixedCosts: agg.fixedCosts,
+          salaries: agg.salaries,
+          trueNetProfit: agg.trueNetProfit,
+        },
       });
       setReport(md);
     } finally {

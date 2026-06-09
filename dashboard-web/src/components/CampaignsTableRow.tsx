@@ -517,12 +517,18 @@ export function CampaignsTableRow({
 
           // Mapping comparison line, reused in both tooltip
           // branches so the operator always sees what the other
-          // signal would have said.
+          // signal would have said. Suppressed for an attribution-only
+          // (unmapped) row — e.g. Google PMax — where there is no product
+          // mapping, so trueRevenue IS the deterministic revenue and a
+          // "(מיפוי)" label would both mislabel it and duplicate the
+          // "מתויג click-id" line above.
           const mappingLine =
-            `Shopify מוקצה (מיפוי): ${fmtMoneyString(info.trueRevenue)}` +
-            (info.metaClaim > 0
-              ? ` (פער ${(gap * 100).toFixed(0)}% מול Meta)`
-              : '');
+            info.mappedCount > 0
+              ? `Shopify מוקצה (מיפוי): ${fmtMoneyString(info.trueRevenue)}` +
+                (info.metaClaim > 0
+                  ? ` (פער ${(gap * 100).toFixed(0)}% מול Meta)`
+                  : '')
+              : '';
 
           // Column-audit 2026-06-01 (FIX 1) — spell out the numerator so the
           // operator can reconcile this ROAS on screen:
@@ -541,15 +547,16 @@ export function CampaignsTableRow({
           if (useAttr) {
             const at = info.attribution!;
             const detRoas = a.spend > 0 ? at.deterministicRevenue / a.spend : 0;
+            const metaRoas = a.spend > 0 ? info.metaClaim / a.spend : 0;
             tooltip =
               `ROAS Shopify מוקצה · ${at.trust.label} (${at.trust.score.toFixed(0)}/100)\n` +
               numeratorBreakdown + `\n\n` +
               `Meta דיווח:           ${fmtMoneyString(info.metaClaim)}\n` +
               `מתויג click-id:       ${fmtMoneyString(at.deterministicRevenue)} (${at.deterministicOrders} הזמנות)\n` +
-              `${mappingLine}\n` +
+              (mappingLine ? `${mappingLine}\n` : '') +
               `Modeled / view-through: ${fmtMoneyString(at.modeledRevenue)}\n` +
               `coverage: ${(at.coverage * 100).toFixed(0)}%\n` +
-              `ROAS דטרמיניסטי: ${detRoas.toFixed(2)}x  |  ROAS לפי Meta: ${(info.metaClaim / a.spend).toFixed(2)}x\n\n` +
+              `ROAS דטרמיניסטי: ${detRoas.toFixed(2)}x  |  ROAS לפי Meta: ${metaRoas.toFixed(2)}x\n\n` +
               at.reasons.map(r => `• ${r}`).join('\n') +
               `\n\n💡 ${at.recommendation}`;
           } else {
