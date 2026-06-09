@@ -136,6 +136,68 @@ export type AttributionTrust = {
   score: number;
 };
 
+export type PlatformTaggingGuide = {
+  /** Where the operator sets the URL parameters (e.g. "Google Ads (Final URL
+   *  suffix)"). NOT always "Ads Manager" — Google's product is "Google Ads". */
+  surface: string;
+  /** The exact, platform-correct UTM/ValueTrack example to add. */
+  template: string;
+  /** Short name of the tag most likely missing — for the "X לא מוגדר" reason. */
+  missingTag: string;
+  /** Whether the platform has a Pixel/CAPI to reference in troubleshooting
+   *  copy. Google has no Pixel/CAPI (it uses gtag/conversion tags), so the
+   *  "check your Pixel/CAPI" bullet must NOT show for a Google campaign. */
+  hasPixel: boolean;
+};
+
+/**
+ * Per-platform URL-tagging guidance — the SINGLE SOURCE OF TRUTH for the
+ * "add these parameters" copy the operator acts on. `analyzeAttribution`
+ * renders this into `recommendation` / `reasons`, and every UI surface (the
+ * drawer attribution panel, the campaigns-table ROAS-Shopify tooltip, the
+ * AdsDrawer) shows that string verbatim — so getting it right HERE fixes all
+ * of them and stops the "Meta example shown for a Google/TikTok campaign" bug
+ * from recurring.
+ *
+ * - Meta: dynamic URL params `{{campaign.id}}` etc. — id-first (utm_id ===
+ *   campaign.id is the Tier-1 match, rename-proof).
+ * - Google: ValueTrack `{campaignid}` (single braces) on the Final URL suffix;
+ *   matched by the numeric campaign_id, NOT the name. No Pixel/CAPI.
+ * - TikTok: tracking macro `__CAMPAIGN_ID__` in utm_id — id-first, matching
+ *   the Tier-1 `utm_id === campaignId` path (utm_campaign matches the NAME for
+ *   TikTok, so the id must NOT go there). Campaign-grain guidance omits the
+ *   ad-group term to avoid mis-tagging granularity.
+ */
+export function platformTaggingGuide(platform: string): PlatformTaggingGuide {
+  switch (platform) {
+    case 'Google':
+      return {
+        surface: 'Google Ads (Final URL suffix)',
+        template: 'utm_source=google&utm_medium=cpc&utm_id={campaignid}',
+        missingTag: 'ValueTrack utm_id={campaignid}',
+        hasPixel: false,
+      };
+    case 'TikTok':
+      return {
+        surface: 'TikTok Ads Manager',
+        // id-first: utm_id matches the Tier-1 path. NOT utm_campaign=__CAMPAIGN_ID__
+        // — TikTok's utm_campaign is matched against the campaign NAME, so the
+        // numeric id there would never match.
+        template: 'utm_source=tiktok&utm_medium=cpc&utm_id=__CAMPAIGN_ID__',
+        missingTag: 'utm_id=__CAMPAIGN_ID__',
+        hasPixel: true,
+      };
+    case 'Meta':
+    default:
+      return {
+        surface: 'Meta Ads Manager',
+        template: 'utm_source=facebook&utm_medium=cpc&utm_id={{campaign.id}}',
+        missingTag: 'utm_id / utm_campaign',
+        hasPixel: true,
+      };
+  }
+}
+
 /**
  * Coverage = deterministic-revenue / metaClaim, with signed-input
  * guards (TEST-03). Extracted helper so the formula has ONE source
@@ -486,6 +548,10 @@ export function analyzeAttribution(
   // grep-friendly and easy to extend (e.g. when Google PMax is added).
   // Evidence: raw-returns/lib_algorithm_attributionAnalysis.json (ALG-01).
   const platformLabel = campaign.platform;
+  // Per-platform tagging guidance (single source of truth) — drives the
+  // "add these URL parameters" copy so a Google/TikTok campaign never gets a
+  // Meta-only example. See platformTaggingGuide.
+  const tag = platformTaggingGuide(campaign.platform);
 
   if (campaign.metaClaim === 0 && deterministicOrders === 0) {
     // No conversions on either side — common for brand-awareness / reach
@@ -496,9 +562,13 @@ export function analyzeAttribution(
     trust = { level: 'unknown', label: 'אין המרות', score: 0 };
     if (campaign.spend > 0) {
       reasons.push(`הוצאה ${fmtMoneyString(campaign.spend)} ללא המרות מ-${platformLabel} או מ-Shopify`);
+      // Platform-aware: Google has no Pixel/CAPI — point it at the conversion
+      // tag / ValueTrack instead. Mirrors the low-coverage branch's hasPixel guard.
+      const conversionCheck = tag.hasPixel
+        ? 'אחרת בדוק שה-Pixel/CAPI עובדים והקמפיין מכוון להמרות.'
+        : 'אחרת בדוק שתגית-ההמרות / ValueTrack מוגדרת והקמפיין מכוון להמרות.';
       recommendation =
-        'אין המרות לניתוח. אם זה קמפיין brand-awareness/reach — סבבה. ' +
-        'אחרת בדוק שה-Pixel/CAPI עובדים והקמפיין מכוון להמרות.';
+        'אין המרות לניתוח. אם זה קמפיין brand-awareness/reach — סבבה. ' + conversionCheck;
     } else {
       reasons.push('אין הוצאה ואין המרות בטווח הזה');
       recommendation = 'הקמפיין לא רץ בטווח הזה — אין מה לנתח.';
@@ -506,13 +576,13 @@ export function analyzeAttribution(
   } else if (deterministicOrders === 0 && campaign.metaClaim > 0) {
     trust = { level: 'unknown', label: 'לא ניתן לקבוע', score: 30 };
     reasons.push(
-      `אף הזמנה לא תויגה לקמפיין הזה — סביר ש-utm_campaign לא מוגדר ב-URL Parameters ב-${platformLabel} Ads Manager`,
+      `אף הזמנה לא תויגה לקמפיין הזה — סביר ש-${tag.missingTag} לא מוגדר ב-${tag.surface}`,
     );
     reasons.push(
       `${platformLabel} דיווח על ${fmtMoneyString(campaign.metaClaim)} המרות בלי שום click-id מתאים`,
     );
     recommendation =
-      `הוסף URL Parameters לקמפיין ב-${platformLabel}: utm_source=facebook&utm_medium=cpc&utm_campaign={{campaign.name}}. ` +
+      `הוסף URL Parameters לקמפיין ב-${tag.surface}: ${tag.template}. ` +
       'תוך 24 שעות מההשמעה הבאה תראה כאן את ההזמנות האמיתיות.';
   } else if (coverage >= 0.8) {
     const pct = Math.round(coverage * 100);
@@ -577,10 +647,14 @@ export function analyzeAttribution(
     reasons.push(
       `${platformLabel} מייחס ${fmtMoneyString(campaign.metaClaim)} אבל רק ${fmtMoneyString(deterministicRevenue)} בפועל יש להם click-id`,
     );
+    // Troubleshoot bullets are platform-tailored: reference the platform's own
+    // missing tag, and only mention Pixel/CAPI for platforms that have one
+    // (Google uses gtag/conversion tags — no Pixel/CAPI).
+    const pixelBullet = tag.hasPixel ? 'האם ה-Pixel/CAPI מתוקנים, ' : '';
     recommendation =
       `${platformLabel} מנפח דיווחים לקמפיין הזה. ` +
       'אל תקבל החלטות "להגדיל" על בסיס ה-ROAS שלו. ' +
-      'בדוק: (1) האם utm_campaign מוגדר נכון, (2) האם CAPI/Pixel מתוקנים, (3) האם הקמפיין באמת מביא מכירות.';
+      `בדוק: האם ${tag.missingTag} מוגדר נכון, ${pixelBullet}והאם הקמפיין באמת מביא מכירות.`;
   }
 
   // Augment reasons + recommendation with the new signals.
@@ -1106,7 +1180,9 @@ function buildAnalysis(opts: {
   };
 }): AttributionAnalysis {
   const { metaClaim, spend, matchedOrders: rawMatched, dailyMeta, dateFrom, dateTo, advice } = opts;
-  const platformLabel = opts.platform ?? 'Meta';
+  // Neutral fallback (never the literal 'Meta') so a missing platform can't
+  // mislabel a non-Meta campaign's copy. All current callers pass platform.
+  const platformLabel = opts.platform ?? 'הפלטפורמה';
 
   // Defensive guard: even though analyzeAttributionForAdSet / *ForAd filter
   // non-finite totalCad upstream, a future caller of buildAnalysis might not.

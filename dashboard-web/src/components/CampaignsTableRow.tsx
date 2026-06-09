@@ -185,8 +185,9 @@ export function CampaignsTableRow({
   const roas = a.spend > 0 ? a.conversionValue / a.spend : 0;
   const ctr = a.impressions > 0 ? a.clicks / a.impressions : 0;
   const cpc = a.clicks > 0 ? a.spend / a.clicks : 0;
-  // CPM = cost per 1000 impressions. Meta's standard auction metric — what
-  // you pay on average to be seen by 1000 people. spend / impressions * 1000.
+  // CPM = cost per 1000 impressions. A standard auction metric across every
+  // ad platform — what you pay on average to be seen by 1000 people.
+  // spend / impressions * 1000.
   const cpm = a.impressions > 0 ? (a.spend / a.impressions) * 1000 : 0;
   const cpa = a.conversions > 0 ? a.spend / a.conversions : 0;
   const info = roasLabel(roas);
@@ -526,7 +527,7 @@ export function CampaignsTableRow({
             info.mappedCount > 0
               ? `Shopify מוקצה (מיפוי): ${fmtMoneyString(info.trueRevenue)}` +
                 (info.metaClaim > 0
-                  ? ` (פער ${(gap * 100).toFixed(0)}% מול Meta)`
+                  ? ` (פער ${(gap * 100).toFixed(0)}% מול ${a.platform})`
                   : '')
               : '';
 
@@ -551,12 +552,12 @@ export function CampaignsTableRow({
             tooltip =
               `ROAS Shopify מוקצה · ${at.trust.label} (${at.trust.score.toFixed(0)}/100)\n` +
               numeratorBreakdown + `\n\n` +
-              `Meta דיווח:           ${fmtMoneyString(info.metaClaim)}\n` +
+              `${a.platform} דיווח:        ${fmtMoneyString(info.metaClaim)}\n` +
               `מתויג click-id:       ${fmtMoneyString(at.deterministicRevenue)} (${at.deterministicOrders} הזמנות)\n` +
               (mappingLine ? `${mappingLine}\n` : '') +
               `Modeled / view-through: ${fmtMoneyString(at.modeledRevenue)}\n` +
               `coverage: ${(at.coverage * 100).toFixed(0)}%\n` +
-              `ROAS דטרמיניסטי: ${detRoas.toFixed(2)}x  |  ROAS לפי Meta: ${metaRoas.toFixed(2)}x\n\n` +
+              `ROAS דטרמיניסטי: ${detRoas.toFixed(2)}x  |  ROAS לפי ${a.platform}: ${metaRoas.toFixed(2)}x\n\n` +
               at.reasons.map(r => `• ${r}`).join('\n') +
               `\n\n💡 ${at.recommendation}`;
           } else {
@@ -569,7 +570,7 @@ export function CampaignsTableRow({
             tooltip =
               `ROAS Shopify מוקצה · מבוסס מיפוי מוצרים · ${info.confidence.label}${clickIdNote}\n` +
               numeratorBreakdown + `\n\n` +
-              `Meta דיווח: ${fmtMoneyString(info.metaClaim)}\n` +
+              `${a.platform} דיווח: ${fmtMoneyString(info.metaClaim)}\n` +
               `${mappingLine}\n\n` +
               info.confidence.reasons.map(r => `• ${r}`).join('\n');
           }

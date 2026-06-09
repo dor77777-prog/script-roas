@@ -431,7 +431,7 @@ export function CampaignDrawerOverview({
         )}
 
         {reconciliation && (
-          <OverviewAccordion title="התאמת Meta↔Shopify">
+          <OverviewAccordion title="התאמת ערוצים↔Shopify">
             <MetaShopifyReconciliation reconciliation={reconciliation} />
           </OverviewAccordion>
         )}

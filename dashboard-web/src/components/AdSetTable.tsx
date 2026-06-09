@@ -220,7 +220,7 @@ export function AdSetTable({
                       :                                       'bg-status-redBg text-status-redFg';
                       const tooltip =
                         `ROAS אמיתי · ${adsetAttr.trust.label} (${adsetAttr.trust.score.toFixed(0)}/100)\n\n` +
-                        `Meta דיווח: ${fmtMoneyString(a.value)}\n` +
+                        `${a.platform} דיווח: ${fmtMoneyString(a.value)}\n` +
                         `click-id מתויג: ${fmtMoneyString(adsetAttr.deterministicRevenue)} (${adsetAttr.deterministicOrders} הזמנות)\n` +
                         `modeled: ${fmtMoneyString(adsetAttr.modeledRevenue)}\n\n` +
                         adsetAttr.reasons.map(r => `• ${r}`).join('\n') +

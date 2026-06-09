@@ -35,7 +35,12 @@ describe('analyzeAttribution', () => {
     expect(result).not.toBeNull();
     expect(result!.trust.level).toBe('unknown');
     expect(result!.trust.score).toBe(30);
-    expect(result!.recommendation).toContain('utm_campaign');
+    // Recommends adding URL tagging. The Meta example is now id-first
+    // (utm_id={{campaign.id}}) — the Tier-1, rename-proof match — replacing
+    // the older utm_campaign={{campaign.name}} (2026-06-09 platform-aware
+    // tagging guide). Assert the actionable instruction, not the exact param.
+    expect(result!.recommendation).toContain('URL Parameters');
+    expect(result!.recommendation).toContain('utm_id={{campaign.id}}');
   });
 
   // ----------------------------------------------------------------

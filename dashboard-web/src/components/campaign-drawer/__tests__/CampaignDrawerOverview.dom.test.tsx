@@ -210,14 +210,14 @@ describe('CampaignDrawerOverview — scorecard + collapsible accordions', () => 
     // No accordion whose summary is the reconciliation title.
     expect(
       Array.from(document.querySelectorAll('details')).find((d) =>
-        summaryText(d).includes('התאמת Meta'),
+        summaryText(d).includes('התאמת ערוצים'),
       ),
     ).toBeUndefined();
 
     rerender(<CampaignDrawerOverview {...makeProps({ reconciliation })} />);
     // The reconciliation accordion now renders (its <details> is present).
     const recon = Array.from(document.querySelectorAll('details')).find((d) =>
-      summaryText(d).includes('התאמת Meta'),
+      summaryText(d).includes('התאמת ערוצים'),
     );
     expect(recon).toBeTruthy();
   });

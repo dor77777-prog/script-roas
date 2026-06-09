@@ -656,7 +656,7 @@ export function AdsDrawer({
                               :                                    'bg-status-redBg text-status-redFg';
                               const tooltip =
                                 `ROAS אמיתי · ${adAttr.trust.label} (${adAttr.trust.score.toFixed(0)}/100)\n\n` +
-                                `Meta דיווח: ${fmtMoneyString(a.value)}\n` +
+                                `${a.platform} דיווח: ${fmtMoneyString(a.value)}\n` +
                                 `click-id מתויג: ${fmtMoneyString(adAttr.deterministicRevenue)} (${adAttr.deterministicOrders} הזמנות)\n` +
                                 `modeled: ${fmtMoneyString(adAttr.modeledRevenue)}\n\n` +
                                 adAttr.reasons.map(r => `• ${r}`).join('\n') +

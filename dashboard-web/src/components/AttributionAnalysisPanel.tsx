@@ -48,10 +48,13 @@ export function AttributionAnalysisPanel({
   : analysis.trust.level === 'unknown' ? 'bg-glass-2 border-glass-edge text-ink-secondary'
   :                                      'bg-status-redBg border-status-red text-status-redFg';
 
+  // Always label by the campaign's REAL platform — never hardcode "Meta".
+  // Neutral fallback keeps the copy honest when platform is undefined.
+  const platformLabel = platform ?? 'הפלטפורמה';
   const detRoas = spend > 0
     ? analysis.deterministicRevenue / spend
     : 0;
-  const metaRoas = spend > 0
+  const platformRoas = spend > 0
     ? value / spend
     : 0;
 
@@ -78,9 +81,9 @@ export function AttributionAnalysisPanel({
             <div>
               <strong className="block font-semibold">הילה חריגה ({(analysis.coverage * 100).toFixed(0)}%) — בדוק את הפיקסל</strong>
               <span className="opacity-80">
-                Shopify רואה יותר מפי-2 הזמנות ממה ש-Meta דיווחה — סימן לפיקסל
-                שבור / חסום, לדריפט של חלון הייחוס, או לקמפיינים אחרים שמושכים
-                הזמנות לתוך המיפוי.
+                Shopify רואה יותר מפי-2 הזמנות ממה ש-{platformLabel} דיווח — סימן
+                למעקב-המרות שבור / חסום, לדריפט של חלון הייחוס, או לקמפיינים אחרים
+                שמושכים הזמנות לתוך המיפוי.
               </span>
             </div>
           </div>
@@ -110,9 +113,9 @@ export function AttributionAnalysisPanel({
                 )}
               </div>
               <div>
-                <div className="text-[11px] sm:text-[10px] uppercase opacity-60">ROAS לפי Meta</div>
+                <div className="text-[11px] sm:text-[10px] uppercase opacity-60">ROAS לפי {platformLabel}</div>
                 <div className="text-base font-semibold tabular-nums">
-                  {metaRoas > 0 ? `${metaRoas.toFixed(2)}x` : '—'}
+                  {platformRoas > 0 ? `${platformRoas.toFixed(2)}x` : '—'}
                 </div>
                 <div className="text-[10px] opacity-60 tabular-nums">
                   {fmtMoney(value)} מדווח
@@ -174,7 +177,7 @@ export function AttributionAnalysisPanel({
             )}
             {analysis.outlierDays.length > 0 && (
               <span className="opacity-70">
-                • <strong>{analysis.outlierDays.length}</strong> ימי spike מ-Meta (modeled)
+                • <strong>{analysis.outlierDays.length}</strong> ימי spike מ-{platformLabel} (modeled)
               </span>
             )}
           </div>

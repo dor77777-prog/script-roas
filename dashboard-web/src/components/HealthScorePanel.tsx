@@ -121,7 +121,7 @@ function buildRecommendations(health: CampaignHealth): string[] {
       break;
     case 'attributionClarity':
       out.push(
-        'כיסוי click-ID חלש (utm_source / fbclid / gclid / ttclid לא נתפסים מספיק). בדוק את ה-URL Parameters בפלטפורמה ואת מצב Pixel/Conversion API.',
+        'כיסוי click-ID חלש (utm_source / fbclid / gclid / ttclid לא נתפסים מספיק). בדוק את ה-URL Parameters בפלטפורמה ואת מצב מעקב-ההמרות שלה (Pixel/CAPI ב-Meta/TikTok, תגית-המרות / ValueTrack ב-Google).',
       );
       break;
   }
