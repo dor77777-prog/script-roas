@@ -93,7 +93,7 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
         {!chipHidden && (
           <HelpTooltip content="current state, not date-versioned">
             <div className="rounded-md bg-glass-2 border border-glass-edge px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5">
-              <Info size={12} className="shrink-0 text-ink-subtle" />
+              <Info size={12} className="shrink-0 text-ink-muted" />
               <span className="leading-relaxed">
                 ה-product↔campaign mapping מבוסס על המיפוי הנוכחי שלך. שינוי המיפוי משפיע על נתונים היסטוריים בדיעבד.
               </span>

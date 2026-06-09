@@ -798,9 +798,9 @@ function ColHelp({
           variant="ghost"
           onClick={(e) => e.stopPropagation()}
           aria-label={`הסבר על ${label}`}
-          className="w-3.5 h-3.5 rounded-full text-ink-subtle hover:text-ink-secondary opacity-60 hover:opacity-100"
+          className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-glass-edge bg-glass-2 text-ink-secondary hover:text-accent hover:bg-glass-3 transition-colors"
         >
-          <Info size={10} aria-hidden="true" />
+          <Info size={11} aria-hidden="true" />
         </Button>
       </HelpTooltip>
     </span>
