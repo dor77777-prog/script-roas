@@ -50,7 +50,7 @@ import { PlatformBadge, type Platform } from '@/components/ui/PlatformBadge';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import {
   useRoasBandGradient,
-  type RoasBand,
+  BAND_TAG_LABEL,
 } from '@/lib/format/useRoasBandGradient';
 import { aovEmphasis } from '@/lib/format/aovEmphasis';
 import { useStaleness } from '@/lib/freshness/useStaleness';
@@ -138,14 +138,8 @@ export interface PerStoreRowProps {
  * per-card vocabulary.
  * -------------------------------------------------------------------------- */
 
-const BAND_TAG_LABEL: Record<RoasBand, string> = {
-  red:         'דורש בחינה',
-  'red-alarm': '0 מכירות',
-  orange:      'סביר',
-  green:       'טוב',
-  blue:        'מעולה',
-  gray:        'אין נתונים',
-};
+// BAND_TAG_LABEL moved to lib/format/useRoasBandGradient.ts (2026-06-09, Task 10)
+// so the RoasTargetChart KPI chip shares the SAME wording — imported below.
 
 /* --------------------------------------------------------------------------
  * Number formatters — local thin wrappers so cell content is a string

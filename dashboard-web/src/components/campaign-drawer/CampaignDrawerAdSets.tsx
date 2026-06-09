@@ -46,6 +46,8 @@ export interface CampaignDrawerAdSetsProps {
   optimized: Set<string>;
   onToggleOptimized: (key: string) => void;
   onDrillAds: (set: { storeId: string; campaignId: string; adSetId: string; adSetName: string }) => void;
+  /** 2026-06-09 (Task 7) — gates the "מתעדכן…/ממתין…" pending state. Spread to AdSetTable. */
+  rangeIncludesToday: boolean;
 }
 
 export function CampaignDrawerAdSets(props: CampaignDrawerAdSetsProps) {

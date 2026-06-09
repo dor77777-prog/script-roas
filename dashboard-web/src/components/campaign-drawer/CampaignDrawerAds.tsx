@@ -23,6 +23,7 @@ import { fmtMoney } from '@/lib/format';
 import { cn, formatNumber } from '@/lib/utils';
 import { ROAS_TONE_BG, ROAS_BADGE_SHAPE } from '@/lib/format/roasCell';
 import { roasLabel } from '@/lib/analytics';
+import { pendingRoasLabel } from '@/lib/campaignPendingState';
 
 interface AdSetItem {
   id: string;
@@ -43,9 +44,11 @@ export interface CampaignDrawerAdsProps {
   adSets: AdSetItem[];
   platform: string;
   onDrillAds: (set: { storeId: string; campaignId: string; adSetId: string; adSetName: string }) => void;
+  /** 2026-06-09 (Task 7) — gates the "מתעדכן…/ממתין…" pending state. */
+  rangeIncludesToday: boolean;
 }
 
-export function CampaignDrawerAds({ adSets, platform, onDrillAds }: CampaignDrawerAdsProps) {
+export function CampaignDrawerAds({ adSets, platform, onDrillAds, rangeIncludesToday }: CampaignDrawerAdsProps) {
   // Google PMax does not surface ad-level rows in the API; calling the
   // drill renderer in that case would mount an empty <AdsDrawer>. Hide
   // the drill buttons + show a hint so the operator isn't sent into a
@@ -93,14 +96,26 @@ export function CampaignDrawerAds({ adSets, platform, onDrillAds }: CampaignDraw
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <HelpTooltip content={`ROAS — ${info.text}`}>
-                    <span
-                      className={cn(ROAS_BADGE_SHAPE, ROAS_TONE_BG[info.tone], 'text-[11px]')}
-                      aria-label={`ROAS ${set.roas > 0 ? formatNumber(set.roas) : '—'}`}
-                    >
-                      {set.roas > 0 ? formatNumber(set.roas) : '—'}
-                    </span>
-                  </HelpTooltip>
+                  {(() => {
+                    // 2026-06-09 (Task 7): "מתעדכן…/ממתין…" for today's spend=0
+                    // rows, rendered plain (not the alarming tone badge).
+                    const pend = set.roas > 0
+                      ? null
+                      : pendingRoasLabel({ spend: set.spend, conversionValue: set.value, conversions: set.conversions, impressions: set.impressions }, rangeIncludesToday);
+                    if (pend) {
+                      return <span className="text-[11px] text-ink-muted" aria-label={`ROAS ${pend}`}>{pend}</span>;
+                    }
+                    return (
+                      <HelpTooltip content={`ROAS — ${info.text}`}>
+                        <span
+                          className={cn(ROAS_BADGE_SHAPE, ROAS_TONE_BG[info.tone], 'text-[11px]')}
+                          aria-label={`ROAS ${set.roas > 0 ? formatNumber(set.roas) : '—'}`}
+                        >
+                          {set.roas > 0 ? formatNumber(set.roas) : '—'}
+                        </span>
+                      </HelpTooltip>
+                    );
+                  })()}
                   {adDrillSupported && (
                     <Button
                       type="button"

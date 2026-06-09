@@ -17,6 +17,7 @@ import { netAdjustFactor } from './home/revenueBasis';
 import { isAdsEnabled, isStoreFullyOff, type AdStateMap, type AdPlatform } from './adState';
 import { SOURCE_LABEL } from './sourceLabels';
 import { orderMatchesCampaign } from './attributionAnalysis';
+import { getTodayInIsraelTz } from './dateRange';
 
 /**
  * Minimum matched-order count before a per-campaign deterministic ROAS is
@@ -352,7 +353,16 @@ export function generateAiReport({
   const blendedCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
   const blendedCpc = totalClicks > 0 ? totalSpend / totalClicks : 0;
   const blendedCpa = totalConversions > 0 ? totalSpend / totalConversions : 0;
-  const aov = totalOrders > 0 ? revenue / totalOrders : 0;
+  // AOV on the SAME basis as every dashboard surface (Task 4, 2026-06-09):
+  // GROSS revenue ÷ DISTINCT orders. The old `revenue / totalOrders` was wrong
+  // on BOTH axes — `revenue` is NET, and `totalOrders` is Σ products_daily.orders
+  // which double-counts a multi-product order (products.ts: orders = "distinct
+  // orders that contained THIS product"). `orders` (one row per order from
+  // orders-attribution) gives the true distinct count; fall back to the
+  // product-summed count only when the attribution pipeline has no rows in range.
+  const distinctOrders = orders.length;
+  const aovDenom = distinctOrders > 0 ? distinctOrders : totalOrders;
+  const aov = aovDenom > 0 ? grossRevenue / aovDenom : 0;
 
   out.push('## תקציר ביצועים');
   out.push('');
@@ -567,8 +577,17 @@ export function generateAiReport({
     out.push(`|---|---|---|---|---|---|`);
   }
   const sortedDaily = [...daily].sort((a, b) => a.date.localeCompare(b.date) || a.storeName.localeCompare(b.storeName));
+  const reportToday = getTodayInIsraelTz();
   for (const r of sortedDaily) {
-    const dr = r.roas > 0 ? fmtNum(r.roas, 2) : (r.revenue === 0 && r.totalSpend > 0 ? '0 (FAILED)' : '—');
+    // 2026-06-09 (Task 13): a TODAY row with spend but revenue=0 is the
+    // intraday Meta/Google reporting lag (conversions finalize before billed
+    // spend / revenue posts) — label it "מתעדכן", not the alarming "0 (FAILED)"
+    // which is reserved for a genuinely failed PAST day.
+    const dr = r.roas > 0
+      ? fmtNum(r.roas, 2)
+      : r.revenue === 0 && r.totalSpend > 0
+        ? (r.date === reportToday ? 'מתעדכן' : '0 (FAILED)')
+        : '—';
     if (hasTikTok) {
       out.push(
         `| ${fmtDate(r.date)} | ${r.storeName} | ${fmtCad(r.fbSpend)} | ${fmtCad(r.gaSpend)} | ${fmtCad(r.ttSpend ?? 0)} | ${fmtCad(r.revenue)} | ${dr} |`,

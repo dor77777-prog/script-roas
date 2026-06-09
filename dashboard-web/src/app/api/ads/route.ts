@@ -16,6 +16,11 @@ export type AdsResponse = {
   lastUpdated: string;
   /** Phase 05.7.6 — most-recent ads_daily updated_at in the range. */
   dataLastWriteAt: string | null;
+  /** Present ONLY on the failure path: the route returns HTTP 200 with a
+   *  user-facing error string (so the client can show a message). The fetcher
+   *  MUST throw on this so a real DB failure doesn't masquerade as "no ads in
+   *  range" (Task 2, 2026-06-09). */
+  error?: string;
 };
 
 export async function GET(req: Request) {

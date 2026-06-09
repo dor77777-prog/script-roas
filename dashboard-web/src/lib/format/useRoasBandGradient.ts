@@ -20,8 +20,8 @@
  *                                      real ad spend, ZERO revenue)
  *   roas < 2.0          → red
  *   2.0 ≤ roas < 2.7    → orange
- *   2.7 ≤ roas < 3.0    → green
- *   roas ≥ 3.0          → blue
+ *   2.7 ≤ roas ≤ 3.0    → green  (3.0 = at target)
+ *   roas > 3.0          → blue   (above target)
  *   roas null/undefined → gray
  *
  * The `red-alarm` band is the operator-locked "spent money, made zero sales"
@@ -35,6 +35,22 @@
  * upstream where a 0/0 divide produced NaN instead of null).
  */
 export type RoasBand = 'red' | 'red-alarm' | 'orange' | 'green' | 'blue' | 'gray';
+
+/**
+ * Canonical Hebrew band-tag wording — ONE source of truth so every ROAS-band
+ * surface (per-store pills, the RoasTargetChart KPI chip, etc.) reads the same
+ * word for the same band. Matches analytics.ts roasLabel's text. Moved here
+ * from PerStoreRow on 2026-06-09 (Task 10) so the chart can share it instead of
+ * its own bespoke vocabulary ("מתחת ליעד/דורש מעקב/סביב היעד/מעל יעד").
+ */
+export const BAND_TAG_LABEL: Record<RoasBand, string> = {
+  red:         'דורש בחינה',
+  'red-alarm': '0 מכירות',
+  orange:      'סביר',
+  green:       'טוב',
+  blue:        'מעולה',
+  gray:        'אין נתונים',
+};
 
 export interface BandResult {
   band: RoasBand;
@@ -54,6 +70,11 @@ export function useRoasBandGradient(
   }
   if (roas < 2.0) return { band: 'red', desaturate: isStale };
   if (roas < 2.7) return { band: 'orange', desaturate: isStale };
-  if (roas < 3.0) return { band: 'green', desaturate: isStale };
+  // 2026-06-09 (Task 11): exactly 3.0 = "at target" = green, in lock-step with
+  // analytics.ts roasLabel (`roas <= 3 → green`). The business target is 3.0×;
+  // a value sitting exactly on target must read the same band everywhere
+  // (a StoreDetailModal badge used roasLabel = green while the gradient said
+  // blue at 3.00). >3.0 is "above target" = blue.
+  if (roas <= 3.0) return { band: 'green', desaturate: isStale };
   return { band: 'blue', desaturate: isStale };
 }

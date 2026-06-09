@@ -12,8 +12,8 @@ import { useRoasBandGradient } from '../format/useRoasBandGradient';
  *   zeroSalesWithSpend  → red-alarm   (TOP priority — wins over null→gray)
  *   roas < 2.0          → red
  *   2.0 ≤ roas < 2.7    → orange
- *   2.7 ≤ roas < 3.0    → green
- *   roas ≥ 3.0          → blue
+ *   2.7 ≤ roas ≤ 3.0    → green  (3.0 = at target)
+ *   roas > 3.0          → blue
  *   roas null/undefined → gray
  *
  * `isStale === true` propagates a `desaturate: true` flag downstream
@@ -33,14 +33,15 @@ describe('useRoasBandGradient — band thresholds', () => {
     expect(useRoasBandGradient(2.69)).toEqual({ band: 'orange', desaturate: false });
   });
 
-  it('returns green when 2.7 ≤ roas < 3.0', () => {
+  it('returns green when 2.7 ≤ roas ≤ 3.0 (3.0 = at target, lock-step with roasLabel)', () => {
     expect(useRoasBandGradient(2.7)).toEqual({ band: 'green', desaturate: false });
     expect(useRoasBandGradient(2.85)).toEqual({ band: 'green', desaturate: false });
     expect(useRoasBandGradient(2.99)).toEqual({ band: 'green', desaturate: false });
+    expect(useRoasBandGradient(3.0)).toEqual({ band: 'green', desaturate: false });
   });
 
-  it('returns blue when roas ≥ 3.0', () => {
-    expect(useRoasBandGradient(3.0)).toEqual({ band: 'blue', desaturate: false });
+  it('returns blue when roas > 3.0 (above target)', () => {
+    expect(useRoasBandGradient(3.01)).toEqual({ band: 'blue', desaturate: false });
     expect(useRoasBandGradient(5.4)).toEqual({ band: 'blue', desaturate: false });
     expect(useRoasBandGradient(1000)).toEqual({ band: 'blue', desaturate: false });
   });

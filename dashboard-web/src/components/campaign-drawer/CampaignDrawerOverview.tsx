@@ -217,7 +217,7 @@ export function CampaignDrawerOverview({
         className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3"
       >
         <Stat
-          label="ROAS"
+          label="ROAS (פלטפורמה)"
           value={summary.roas > 0 ? formatNumber(summary.roas) : '—'}
           chip={<Badge tone={roasInfo.tone as BadgeTone}>{roasInfo.text}</Badge>}
         />

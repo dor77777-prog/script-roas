@@ -8,7 +8,7 @@
  * ONLY when the selected range includes today (a historical spend=0 is final).
  */
 import { describe, expect, it } from 'vitest';
-import { campaignPendingState } from '@/lib/campaignPendingState';
+import { campaignPendingState, pendingRoasLabel } from '@/lib/campaignPendingState';
 
 const TODAY = true;
 
@@ -40,5 +40,19 @@ describe('campaignPendingState (historical range — NOT today)', () => {
   });
   it('historical spend=0 with impressions>0 → null (not "ממתין")', () => {
     expect(campaignPendingState({ spend: 0, conversionValue: 0, conversions: 0, impressions: 1200 }, false)).toBeNull();
+  });
+});
+
+describe('pendingRoasLabel (shared muted label for drill-down ROAS cells)', () => {
+  it('updating → "מתעדכן…"', () => {
+    expect(pendingRoasLabel({ spend: 0, conversionValue: 210, conversions: 1, impressions: 4000 }, true)).toBe('מתעדכן…');
+  });
+  it('awaiting → "ממתין…"', () => {
+    expect(pendingRoasLabel({ spend: 0, conversionValue: 0, conversions: 0, impressions: 1200 }, true)).toBe('ממתין…');
+  });
+  it('normal / idle / historical → null (cell shows its ROAS or "—")', () => {
+    expect(pendingRoasLabel({ spend: 100, conversionValue: 200, conversions: 2, impressions: 5000 }, true)).toBeNull();
+    expect(pendingRoasLabel({ spend: 0, conversionValue: 0, conversions: 0, impressions: 0 }, true)).toBeNull();
+    expect(pendingRoasLabel({ spend: 0, conversionValue: 210, conversions: 1, impressions: 4000 }, false)).toBeNull();
   });
 });

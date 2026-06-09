@@ -624,14 +624,14 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                               {bucket.hasNet && (
                                 <td className="metric-cell px-3 py-2 text-end tabular-nums">
                                   {p.netRevenue !== null ? (
-                                    <span
-                                      className={cn(
-                                        'font-medium',
-                                        p.netRevenue < p.revenue
-                                          ? 'text-status-greenFg'
-                                          : 'text-ink',
-                                      )}
-                                    >
+                                    // 2026-06-09 (Task 8): neutral ink. Pre-fix
+                                    // this turned GREEN whenever netRevenue <
+                                    // revenue — i.e. on ANY discount/refund —
+                                    // contradicting the adjacent Margin cell
+                                    // which goes red/orange on the same haircut.
+                                    // The margin column carries the discount
+                                    // signal; the net value stays neutral.
+                                    <span className="font-medium text-ink">
                                       <Money value={p.netRevenue} prefix="none" locale="he-IL" compactAbove={100_000} />
                                     </span>
                                   ) : (
@@ -774,7 +774,10 @@ function SummaryCard({
         <Stat
           label="נטו"
           value={summary.net !== null ? fmtMoney(summary.net) : '—'}
-          accent={summary.net !== null && summary.net < summary.gross ? 'positive' : 'neutral'}
+          // 2026-06-09 (Task 8): neutral — was 'positive' (green) whenever net <
+          // gross, i.e. on ANY haircut. The subtitle already discloses the
+          // discount/refund %; the value itself shouldn't read as "good".
+          accent="neutral"
           subtitle={
             haircut !== null && haircut > 0.005
               ? `−${(haircut * 100).toFixed(1)}% הנחות/החזרים`

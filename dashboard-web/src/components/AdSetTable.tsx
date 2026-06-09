@@ -15,6 +15,7 @@ import { TableBase } from '@/components/ui/TableBase';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Heading } from '@/components/ui/Typography';
 import { roasLabel } from '@/lib/analytics';
+import { pendingRoasLabel } from '@/lib/campaignPendingState';
 import { ROAS_TONE_BG, ROAS_BADGE_SHAPE } from '@/lib/format/roasCell';
 import type { AttributionAnalysis } from '@/lib/attributionAnalysis';
 
@@ -65,6 +66,8 @@ type Props = {
   optimized: Set<string>;
   onToggleOptimized: (key: string) => void;
   onDrillAds: (set: { storeId: string; campaignId: string; adSetId: string; adSetName: string }) => void;
+  /** 2026-06-09 (Task 7) — gates the "מתעדכן…/ממתין…" pending state. */
+  rangeIncludesToday: boolean;
 };
 
 export function AdSetTable({
@@ -76,6 +79,7 @@ export function AdSetTable({
   optimized,
   onToggleOptimized,
   onDrillAds,
+  rangeIncludesToday,
 }: Props) {
   return (
     <section>
@@ -195,10 +199,20 @@ export function AdSetTable({
                   </td>
                   <td className="px-3 py-2 text-center font-semibold tabular-nums">
                     {/* OPERATOR FIX (2026-06-01): solid rounded badge (mirrors
-                        HealthScoreBadge + mockup) instead of pale full-cell tint. */}
-                    <span className={cn(ROAS_BADGE_SHAPE, ROAS_TONE_BG[info.tone])}>
-                      {a.roas > 0 ? formatNumber(a.roas) : '—'}
-                    </span>
+                        HealthScoreBadge + mockup) instead of pale full-cell tint.
+                        2026-06-09 (Task 7): "מתעדכן…/ממתין…" for today's spend=0
+                        rows, rendered plain (not the alarming tone badge). */}
+                    {(() => {
+                      const pend = a.roas > 0
+                        ? null
+                        : pendingRoasLabel({ spend: a.spend, conversionValue: a.value, conversions: a.conversions, impressions: a.impressions }, rangeIncludesToday);
+                      if (pend) return <span className="text-xs text-ink-muted">{pend}</span>;
+                      return (
+                        <span className={cn(ROAS_BADGE_SHAPE, ROAS_TONE_BG[info.tone])}>
+                          {a.roas > 0 ? formatNumber(a.roas) : '—'}
+                        </span>
+                      );
+                    })()}
                   </td>
                   {/* Deterministic ROAS per ad-set via utm_term. */}
                   <td className="px-3 py-2 text-center">

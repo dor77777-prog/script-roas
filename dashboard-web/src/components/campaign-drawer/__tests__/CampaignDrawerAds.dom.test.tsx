@@ -40,6 +40,7 @@ describe('CampaignDrawerAds — per-ad-set ROAS chip', () => {
         adSets={[makeSet({ roas: 3.5 })]}
         platform="Meta"
         onDrillAds={() => {}}
+        rangeIncludesToday={false}
       />,
     );
     // formatNumber(3.5) === '3.50'
@@ -52,6 +53,7 @@ describe('CampaignDrawerAds — per-ad-set ROAS chip', () => {
         adSets={[makeSet({ roas: 0 })]}
         platform="Meta"
         onDrillAds={() => {}}
+        rangeIncludesToday={false}
       />,
     );
     expect(screen.getByText('—')).toBeTruthy();
@@ -63,6 +65,7 @@ describe('CampaignDrawerAds — per-ad-set ROAS chip', () => {
         adSets={[makeSet({ roas: 2.4, platform: 'Google' })]}
         platform="Google"
         onDrillAds={() => {}}
+        rangeIncludesToday={false}
       />,
     );
     // Chip present (formatNumber(2.4) === '2.40')…

@@ -32,6 +32,7 @@ import { readProductMap, type ProductMap } from '@/lib/campaignProductMap';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { ProductsResponse } from '@/app/api/products/route';
+import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 
 type Props = {
   storeId: string; // 'All' rendered as a hint to pick a store
@@ -231,6 +232,15 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
+  // 2026-06-09 (Task 5): orders-attribution with line items, so this view runs
+  // the SAME deterministic-first allocator the CampaignDrawer cohort uses
+  // (click-id-credited revenue first, spend-proportional remainder) instead of
+  // the simplified spend-split. `&lineItems=true` mirrors the drawer fetch.
+  const { data: ordersAttrData } = useSWR<OrdersAttributionResponse | null>(
+    !isAllStores ? `${buildDateRangeKey('/api/orders-attribution', range)}&lineItems=true` : null,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
+  );
 
   // Phase 13.10 (2026-05-27) — also pull the catalog so the title fallback
   // works for products that haven't sold yet. products_daily only contains
@@ -261,12 +271,28 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
   }, [campaignsData, storeId, range, isAllStores]);
 
   // Sum net revenue per product (across days) + collect titles.
+  // 2026-06-09 (Task 6): null net_revenue falls back to GROSS revenue, matching
+  // the CampaignDrawer cohort allocator (`p.netRevenue ?? p.revenue`). Pre-fix
+  // this view used `?? 0`, so a legacy null-net row contributed 0 here but gross
+  // in the drawer — two different net totals from the same products_daily rows.
   const productNetRevenue = useMemo(() => {
     const out = new Map<string, number>();
     if (isAllStores || !productsData?.rows) return out;
     for (const r of productsData.rows) {
       if (r.storeName !== storeId) continue;
-      out.set(r.productId, (out.get(r.productId) ?? 0) + (r.netRevenue ?? 0));
+      out.set(r.productId, (out.get(r.productId) ?? 0) + (r.netRevenue ?? r.revenue));
+    }
+    return out;
+  }, [productsData, storeId, isAllStores]);
+
+  // Per-product units sold (2026-06-09, Task 5) — fed to the allocator alongside
+  // orders so the deterministic-first split can run (matches the drawer).
+  const productUnits = useMemo(() => {
+    const out = new Map<string, number>();
+    if (isAllStores || !productsData?.rows) return out;
+    for (const r of productsData.rows) {
+      if (r.storeName !== storeId) continue;
+      out.set(r.productId, (out.get(r.productId) ?? 0) + r.units);
     }
     return out;
   }, [productsData, storeId, isAllStores]);
@@ -308,6 +334,23 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
   const [showSolo, setShowSolo] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
+  // Map orders to the allocator's order shape (same as the drawer), scoped to
+  // this store's internal id + the visible range (2026-06-09, Task 5).
+  const ordersForAllocator = useMemo(
+    () =>
+      (ordersAttrData?.rows ?? [])
+        .filter(o => o.storeId === internalStoreId)
+        .filter(o => o.date >= range.from && o.date <= range.to)
+        .map(o => ({
+          storeId: o.storeId,
+          source: o.source,
+          fbclidPresent: o.fbclidPresent,
+          gclidPresent: o.gclidPresent,
+          lineItems: o.lineItems ?? [],
+        })),
+    [ordersAttrData, internalStoreId, range.from, range.to],
+  );
+
   const allRows = useMemo(
     () =>
       buildProductCentricView({
@@ -316,8 +359,10 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
         aggregated,
         productNetRevenue,
         productTitles,
+        productUnits,
+        orders: ordersForAllocator,
       }),
-    [internalStoreId, productMap, aggregated, productNetRevenue, productTitles],
+    [internalStoreId, productMap, aggregated, productNetRevenue, productTitles, productUnits, ordersForAllocator],
   );
 
   const rows = useMemo(

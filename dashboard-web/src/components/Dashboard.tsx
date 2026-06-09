@@ -1047,6 +1047,27 @@ function HomeTab({
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
 
+  // ---- Chart "previous period" — the window immediately BEFORE the chart's
+  // own picker range (Task 3, 2026-06-09 consistency audit). Previously the
+  // chart footer's "ROAS תקופה קודמת" reused `prevAggFromPrevData`, which is the
+  // PAGE filter's previous range — so a chart set to 30d compared against the
+  // page filter's prior window (e.g. yesterday) and mislabeled it as the chart's
+  // prior period. Fetch + aggregate the chart range's OWN previous window so the
+  // comparison is same-length and same-frame. Only roas/revenue are read by
+  // toChartData, so no salaries arg is needed (mirrors chartScope.agg).
+  const chartPrevRange = useMemo(() => previousRange(chartFromTo), [chartFromTo]);
+  const { data: rawChartPrevDataResp } = useSWR<DashboardData>(
+    buildDateRangeKey('/api/data', chartPrevRange),
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+  const chartPrevAgg = useMemo(() => {
+    if (!rawChartPrevDataResp) return null;
+    const rows = applyCogsToRows(rawChartPrevDataResp.rows, cogsSettings);
+    const cur = filterRows(rows, chartPrevRange, filters.store);
+    return aggregate(cur, chartPrevRange);
+  }, [rawChartPrevDataResp, cogsSettings, chartPrevRange, filters.store]);
+
   // ---- Hero — current + previous + spark ---------------------------------
   const heroCpm = useMemo(
     () =>
@@ -1415,10 +1436,10 @@ function HomeTab({
         chartScope.series,
         chartScope.agg,
         chartScope.cpm,
-        prevAggFromPrevData,
+        chartPrevAgg,
         chartAnnotations,
       ),
-    [chartScope, prevAggFromPrevData, chartAnnotations],
+    [chartScope, chartPrevAgg, chartAnnotations],
   );
 
   // Clicking a store card now OPENS the drill MODAL (was: drill straight to
@@ -1605,7 +1626,7 @@ function PnLTab({
       <SectionIntro
         icon={<Receipt size={20} />}
         title="הרווח שלך לתקופה"
-        description="כל ההכנסות פחות כל ההוצאות — ad spend, COGS (25%), עמלות עיבוד (6.5%), עלויות חודשיות קבועות (מנויים + חד-פעמיים), ומשכורות (7%) — עד לרווח נטו אמיתי. שנה טווח או חנות וכל המספרים יתעדכנו."
+        description="כל ההכנסות פחות כל ההוצאות — ad spend, COGS, עמלות עיבוד, עלויות חודשיות קבועות (מנויים + חד-פעמיים), ומשכורות — עד לרווח נטו אמיתי. השיעורים בפועל (COGS, שכר) מוצגים בשורות למטה ומתעדכנים כשעורכים אותם. שנה טווח או חנות וכל המספרים יתעדכנו."
         formula="רווח נטו = הכנסות − Ad Spend − COGS − Transaction Fees − Fixed Costs − Salaries"
       />
       <PageScope

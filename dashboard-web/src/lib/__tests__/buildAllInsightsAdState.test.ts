@@ -14,8 +14,17 @@ import type { CampaignRow } from '@/lib/campaigns';
 import type { AdRow } from '@/lib/ads';
 import type { AdStateMap, AdPlatform } from '@/lib/adState';
 
-// ---- Fixed date seam --------------------------------------------------------
-const TODAY = '2026-06-04';
+// ---- Date seam --------------------------------------------------------------
+// The campaign-died / momentum detectors key on the REAL `todayInIsrael()`, so
+// the fixtures must anchor to the real current day — a hardcoded date silently
+// rots once "today" rolls past the detector's recency window (2026-06-09 fix).
+function todayInIsrael(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+}
+const TODAY = todayInIsrael();
 
 function addDays(dateStr: string, n: number): string {
   const [y, m, d] = dateStr.split('-').map(Number);

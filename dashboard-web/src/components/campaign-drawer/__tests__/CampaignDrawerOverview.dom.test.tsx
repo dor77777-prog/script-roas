@@ -181,8 +181,10 @@ describe('CampaignDrawerOverview — scorecard + collapsible accordions', () => 
 
   it('renders ROAS and ערך המרות exactly once (no duplicate cards)', () => {
     render(<CampaignDrawerOverview {...makeProps()} />);
-    // After de-dup: ROAS appears only in the scorecard (not also in KPI grid).
-    expect(screen.getAllByText('ROAS')).toHaveLength(1);
+    // After de-dup: the scorecard ROAS card appears once (not also in KPI grid).
+    // The label is qualified "ROAS (פלטפורמה)" (2026-06-09, Task 13) to mark it
+    // as the platform-claimed ratio vs the Shopify-based attribution numbers.
+    expect(screen.getAllByText('ROAS (פלטפורמה)')).toHaveLength(1);
     // ערך המרות appears only in the scorecard (not also in KPI grid).
     expect(screen.getAllByText('ערך המרות')).toHaveLength(1);
   });

@@ -45,7 +45,7 @@ export function AnalysisTrendsTab({ data, filtered, filters, setFilters }: Props
       <SectionIntro
         icon={<CalendarDays size={20} />}
         title="טווח לניתוח"
-        description="הסינון מטה משפיע על גרף המגמה בלבד. הטבלאות החודשיות מציגות עד 17 חודשים אחורה — בלי תלות בטווח שבחרת."
+        description="הסינון מטה משפיע על גרף המגמה והאנוטציות בלבד. הטבלאות החודשיות (עד 17 חודשים אחורה) נמצאות בטאב 'ארכיון' הנפרד."
       />
       <PageScope
         store={filters.store === 'All' ? 'כל החנויות' : filters.store}

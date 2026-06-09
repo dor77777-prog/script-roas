@@ -91,7 +91,7 @@ import {
   allocateProductRevenue,
   type ProductMap,
 } from '@/lib/campaignProductMap';
-import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
+import { buildDateRangeKey, getPreviousPeriod, getTodayInIsraelTz } from '@/lib/dateRange';
 import { useStores } from '@/lib/useStores';
 import type { CampaignHealth } from '@/lib/campaignHealthScore';
 
@@ -220,6 +220,9 @@ export function CampaignDrawer({
 
   // ---- SWR fetches ----------------------------------------------------
   const drawerRange = { from: rangeFrom, to: rangeTo };
+  // 2026-06-09 (Task 7): gates the "מתעדכן…/ממתין…" pending state in the ad-set
+  // + ads sub-tabs so it only fires when the range includes today.
+  const rangeIncludesToday = rangeTo >= getTodayInIsraelTz();
   const prevRange = useMemo(
     () => getPreviousPeriod({ from: rangeFrom, to: rangeTo }),
     [rangeFrom, rangeTo],
@@ -902,6 +905,7 @@ export function CampaignDrawer({
                 optimized={optimized}
                 onToggleOptimized={onToggle}
                 onDrillAds={setAdDrillSet}
+                rangeIncludesToday={rangeIncludesToday}
               />
             </TabsContent>
 
@@ -910,6 +914,7 @@ export function CampaignDrawer({
                 adSets={summary.adSets}
                 platform={summary.platform}
                 onDrillAds={setAdDrillSet}
+                rangeIncludesToday={rangeIncludesToday}
               />
             </TabsContent>
 

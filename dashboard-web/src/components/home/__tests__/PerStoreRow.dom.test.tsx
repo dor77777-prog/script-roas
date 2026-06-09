@@ -340,8 +340,9 @@ describe('PerStoreRow', () => {
     // definitely not "gray" from off-display).
     const band = card?.getAttribute('data-band');
     expect(band).not.toBe(null);
-    // The band is determined by the ROAS (3.0 → blue at boundary ≥3 per project rules),
-    // but either way it must not be overridden to "gray" (off-empty).
+    // The band is determined by the ROAS (3.0 → green "at target" since the
+    // 2026-06-09 boundary alignment), but either way it must not be overridden
+    // to "gray" (off-empty).
     expect(band).not.toBe('gray');
     // Hero shows the numeric ROAS, not "אורגני".
     const hero = card?.querySelector('.v.banded');
@@ -365,8 +366,9 @@ describe('PerStoreRow', () => {
     };
     const { container } = render(<PerStoreRow stores={[normalStore]} />);
     const card = container.querySelector('[data-testid="per-store-card"]');
-    // roas=3 → blue band (≥3.0)
-    expect(card?.getAttribute('data-band')).toBe('blue');
+    // roas=3.0 → green band ("at target") — lock-step with roasLabel after the
+    // 2026-06-09 boundary alignment (Task 11). >3.0 is blue ("above target").
+    expect(card?.getAttribute('data-band')).toBe('green');
     const hero = card?.querySelector('.v.banded');
     // Numeric ROAS rendered, not "אורגני"
     expect(hero?.textContent).not.toContain('אורגני');

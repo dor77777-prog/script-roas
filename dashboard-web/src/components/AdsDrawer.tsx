@@ -29,6 +29,9 @@ import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { readOptimized, toggleOptimized } from '@/lib/campaignOptimized';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import { buildDateRangeKey } from '@/lib/dateRange';
+import { throwOnErrorBody } from '@/lib/throwOnErrorBody';
+import { pendingRoasLabel } from '@/lib/campaignPendingState';
+import { getTodayInIsraelTz } from '@/lib/dateRange';
 import { Heading } from '@/components/ui/Typography';
 import { Sheet, SheetContent, SheetHeader, SheetBody } from '@/components/ui/Sheet';
 import { Badge, BADGE_TONE_BG, type BadgeTone } from '@/components/ui/Badge';
@@ -73,7 +76,9 @@ type AdSortDir = 'asc' | 'desc';
 const fetcher = async (url: string): Promise<AdsResponse> => {
   const r = await fetch(url, { cache: 'no-store' });
   if (!r.ok) throw new Error(`AdsDrawer: ${r.status} ${r.statusText}`);
-  return r.json();
+  // The route returns HTTP 200 + { rows: [], error } on a DB failure — throw on
+  // that too, so SWR's error UI fires instead of the "no ads" empty state.
+  return throwOnErrorBody(await r.json());
 };
 
 export function AdsDrawer({
@@ -90,6 +95,9 @@ export function AdsDrawer({
 }: Props) {
   // FIX-04 (5.2.2.1): range-keyed SWR for orders-attribution. Without ?from=&to=, the server defaults to 90 days and the drawer sees zero matched orders for any older date.
   const drawerRange = { from: rangeFrom, to: rangeTo };
+  // 2026-06-09 (Task 7): show "מתעדכן…/ממתין…" for today's spend=0 rows instead
+  // of a bare "—", consistent with the campaigns table.
+  const rangeIncludesToday = rangeTo >= getTodayInIsraelTz();
   // FIX-07 (5.2.2.1): range-keyed SWR for /api/ads. Server now filters by range; cache key per range prevents drawer-to-drawer cache pollution.
   const adsBaseKey = open ? buildDateRangeKey('/api/ads', drawerRange) : null;
   const { data, isLoading, error, mutate } = useSWR<AdsResponse>(
@@ -524,8 +532,15 @@ export function AdsDrawer({
                 <Stat label="ערך" value={fmtMoney(summary.totals.value)} accent="positive" />
                 <Stat
                   label="ROAS"
-                  value={summary.totals.roas > 0 ? formatNumber(summary.totals.roas) : '—'}
-                  chip={totalsInfo ? <Badge tone={totalsInfo.tone as BadgeTone}>{totalsInfo.text}</Badge> : undefined}
+                  value={
+                    summary.totals.roas > 0
+                      ? formatNumber(summary.totals.roas)
+                      : pendingRoasLabel(
+                          { spend: summary.totals.spend, conversionValue: summary.totals.value, conversions: summary.totals.conversions, impressions: 0 },
+                          rangeIncludesToday,
+                        ) ?? '—'
+                  }
+                  chip={summary.totals.roas > 0 && totalsInfo ? <Badge tone={totalsInfo.tone as BadgeTone}>{totalsInfo.text}</Badge> : undefined}
                 />
                 <Stat label="המרות" value={formatNumber(summary.totals.conversions, 0)} />
               </div>
@@ -634,9 +649,22 @@ export function AdsDrawer({
                           <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-status-greenFg font-medium')}>
                             {formatCurrency(a.value)}
                           </td>
-                          <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', BADGE_TONE_BG[info.tone as keyof typeof BADGE_TONE_BG])}>
-                            {a.roas > 0 ? formatNumber(a.roas) : '—'}
-                          </td>
+                          {(() => {
+                            // 2026-06-09 (Task 7): "מתעדכן…/ממתין…" for today's
+                            // spend=0 rows — rendered plain (not in the alarming
+                            // tone badge) so it doesn't read as a bad ROAS.
+                            const pend = a.roas > 0
+                              ? null
+                              : pendingRoasLabel({ spend: a.spend, conversionValue: a.value, conversions: a.conversions, impressions: a.impressions }, rangeIncludesToday);
+                            if (pend) {
+                              return <td className="px-3 py-2 text-center text-xs text-ink-muted tabular-nums">{pend}</td>;
+                            }
+                            return (
+                              <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', BADGE_TONE_BG[info.tone as keyof typeof BADGE_TONE_BG])}>
+                                {a.roas > 0 ? formatNumber(a.roas) : '—'}
+                              </td>
+                            );
+                          })()}
                           {/* Deterministic ROAS per ad via utm_content. */}
                           <td className="px-3 py-2 text-center">
                             {(() => {

@@ -29,3 +29,17 @@ export function campaignPendingState(
   if (a.impressions > 0) return 'awaiting';
   return null;
 }
+
+/**
+ * Convenience for directional-ROAS cells (campaigns table + the ad/ad-set
+ * drill-downs): the muted Hebrew pending label, or null when the cell should
+ * show its normal ROAS / "—". Keeps the "מתעדכן…/ממתין…" wording in ONE place
+ * so every surface reads identically.
+ */
+export function pendingRoasLabel(
+  a: { spend: number; conversionValue: number; conversions: number; impressions: number },
+  rangeIncludesToday: boolean,
+): string | null {
+  const s = campaignPendingState(a, rangeIncludesToday);
+  return s === 'updating' ? 'מתעדכן…' : s === 'awaiting' ? 'ממתין…' : null;
+}

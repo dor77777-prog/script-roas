@@ -36,6 +36,7 @@ import { Heading } from '@/components/ui/Typography';
 import { cn, formatCurrency, formatNumber, formatDate } from '@/lib/utils';
 import {
   useRoasBandGradient,
+  BAND_TAG_LABEL,
   type RoasBand,
 } from '@/lib/format/useRoasBandGradient';
 import { useStaleness, type StalenessInput } from '@/lib/freshness/useStaleness';
@@ -156,16 +157,8 @@ function chipClassForBand(band: RoasBand): string {
   }
 }
 
-function bandLabelHe(band: RoasBand): string {
-  switch (band) {
-    case 'red':    return 'מתחת ליעד';
-    case 'orange': return 'דורש מעקב';
-    case 'green':  return 'סביב היעד';
-    case 'blue':   return 'מעל יעד';
-    case 'gray':
-    default:       return 'אין נתונים';
-  }
-}
+// bandLabelHe removed 2026-06-09 (Task 10) — the KPI chip now uses the shared
+// canonical BAND_TAG_LABEL so its wording matches the per-store pills.
 
 function xForIndex(index: number, count: number): number {
   if (count <= 1) return PADDING_LEFT;
@@ -540,15 +533,23 @@ export function RoasTargetChart({
         <KpiTile
           label="ROAS"
           value={`${kpis.roas.toFixed(2)}x`}
-          chipClass={chipClassForBand(accentBand)}
-          chipLabel={bandLabelHe(accentBand)}
-          accentClass={bandClassForRoas(accentBand)}
+          // 2026-06-09 (Task 9 + 10): band the tile from the DISPLAYED number
+          // (roasBand = useRoasBandGradient(kpis.roas)), not accentBand (which
+          // uses the unweighted daily-mean band when confidence is high) — so
+          // the color always matches the number on the tile. Wording is the
+          // canonical BAND_TAG_LABEL (shared with the per-store pills), not the
+          // bespoke "מול היעד" vocabulary.
+          chipClass={chipClassForBand(roasBand)}
+          chipLabel={BAND_TAG_LABEL[roasBand]}
+          accentClass={bandClassForRoas(roasBand)}
           highlight
           testId="chart-kpi-roas"
         />
         <KpiTile label="הוצאת פרסום" value={formatCurrency(kpis.spend)} suffix="CAD" />
         <KpiTile label="רווח תפעולי" value={formatCurrency(kpis.netProfit)} suffix="CAD" />
-        <KpiTile label="CPM" value={formatNumber(kpis.cpm, 2)} suffix="CAD" />
+        {/* 2026-06-09 (Task 13): "—" when CPM is missing/0, matching the hero
+            (which nulls it). Was a hard "0.00" — inconsistent across surfaces. */}
+        <KpiTile label="CPM" value={kpis.cpm > 0 ? formatNumber(kpis.cpm, 2) : '—'} suffix={kpis.cpm > 0 ? 'CAD' : undefined} />
       </div>
 
       {/* Legend + min/max ------------------------------------------------ */}
