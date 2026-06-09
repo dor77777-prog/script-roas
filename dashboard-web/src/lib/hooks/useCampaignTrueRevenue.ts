@@ -204,31 +204,39 @@ function computeConfidence(
  *
  * Scope: GOOGLE ONLY (operator decision 2026-06-09) — unmapped Meta/TikTok
  * rows stay byte-identical ("—" + the map-products nudge), so the load-bearing
- * product-allocation contract for those platforms is untouched. Requires a
- * real deterministic match (`deterministicRevenue > 0`) so we never show a row
- * for a campaign with zero proven orders. Pure → unit-testable in the node
- * suite (the hook itself needs JSDOM).
+ * product-allocation contract for those platforms is untouched. Requires a real
+ * analysis (`attribution != null`) and `spend > 0`; deterministicRevenue may be
+ * 0 (it carries the "0 click-id / לא ניתן לקבוע" verdict). Pure → unit-testable
+ * in the node suite (the hook itself needs JSDOM).
  */
 export function buildUnmappedAttributionInfo(
   a: { platform: string; conversionValue: number; spend: number },
   attribution: AttributionAnalysis | null,
 ): TrueRevenueInfo | null {
   if (a.platform !== 'Google') return null;
-  if (!attribution || attribution.deterministicRevenue <= 0) return null;
+  // No analysis at all (empty orders pipeline / non-ad platform) → keep "—".
+  if (!attribution) return null;
   // No spend → no meaningful ROAS to surface (and the row's ROAS cell would
   // be 0.00x / the tooltip would divide by zero). Keep showing "—" instead.
   if (a.spend <= 0) return null;
+  // 2026-06-09 (Problem A): emit even when deterministicRevenue === 0, so long
+  // as a real analysis exists — the Campaign Health Score reads its attribution
+  // input from this same map; returning null for a 0-match Google campaign made
+  // it fall back to a 70% platform-prior + the stale "probably Google" message
+  // while the Attribution panel showed the real "30/100 · לא ניתן לקבוע".
+  // Carrying the verdict here makes every surface tell ONE story.
+  const det = Math.max(0, attribution.deterministicRevenue);
   return {
-    trueRevenue: attribution.deterministicRevenue,
+    trueRevenue: det,
     trueUnits: 0,
     metaClaim: a.conversionValue,
     spend: a.spend,
     mappedCount: 0,
     sharedCampaigns: 0,
-    confidence: computeConfidence(attribution.deterministicRevenue, a.conversionValue, a.spend, 0, 0),
+    confidence: computeConfidence(det, a.conversionValue, a.spend, 0, 0),
     attribution,
     productTotals: { revenue: 0, units: 0, orders: 0 },
-    deterministicRevenue: attribution.deterministicRevenue,
+    deterministicRevenue: det,
     deterministicUnits: 0,
   };
 }

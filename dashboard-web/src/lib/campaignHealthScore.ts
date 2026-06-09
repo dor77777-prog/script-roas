@@ -226,6 +226,11 @@ function scoreProfitability(
   let baseRoas: number;
   let trustModulator: number;
   let sourceLabel: string;
+  // The modulator means different things per branch — label it accordingly so
+  // it doesn't read as the SAME "אמינות attribution" number the Attribution
+  // panel + the attribution-clarity component show (Problem A, 2026-06-09). The
+  // platform-prior branch in particular is NOT click-id trust.
+  let modulatorLabel: string;
 
   if (info && info.deterministicRevenue > 0) {
     baseRoas = info.deterministicRevenue / spend;
@@ -234,6 +239,7 @@ function scoreProfitability(
         ? info.attribution.trust.score / 100
         : 0.7;
     sourceLabel = 'Shopify דטרמיניסטי';
+    modulatorLabel = 'אמינות click-id';
   } else if (info && info.trueRevenue > 0) {
     baseRoas = info.trueRevenue / spend;
     trustModulator =
@@ -243,15 +249,23 @@ function scoreProfitability(
           ? 0.7
           : 0.4;
     sourceLabel = 'Shopify משולב (מיפוי + פרופורציונלי)';
+    modulatorLabel = 'אמינות מיפוי';
   } else {
     baseRoas = aggregated.conversionValue / spend;
     // Audit fix 2026-05-23 (HR-01): per-platform fallback trust mod
     // replaces the previous fixed 0.5 — Google's platform-claimed
     // ROAS is more reliable than Meta's, so penalizing both identically
     // was a systematic anti-Google bias (~16 points on the weighted final).
+    // This is a PLATFORM-REPORT PRIOR (how much we trust the self-reported
+    // number when there's no click-id verification) — distinct from the
+    // attribution-clarity / click-id trust the Attribution panel shows. It is
+    // deliberately NOT reconciled to the click-id trust to avoid double-
+    // penalizing "unverified" (that uncertainty is already captured by the
+    // attribution-clarity component). It is labeled separately below.
     trustModulator =
       PLATFORM_FALLBACK_TRUST[aggregated.platform] ?? DEFAULT_FALLBACK_TRUST;
     sourceLabel = `הצהרת פלטפורמה (${aggregated.platform}, לא מאומת)`;
+    modulatorLabel = 'מהימנות-דיווח (לא מאומת click-id)';
   }
 
   // Audit fix 2026-05-23 (HR-02): per-platform ROAS pivot. The previous
@@ -268,7 +282,7 @@ function scoreProfitability(
   return {
     score: Math.round(modulated),
     reason:
-      `ROAS ${baseRoas.toFixed(2)} (${sourceLabel}, יעד ${pivot.toFixed(1)}) × אמינות ${Math.round(trustModulator * 100)}% ` +
+      `ROAS ${baseRoas.toFixed(2)} (${sourceLabel}, יעד ${pivot.toFixed(1)}) × ${modulatorLabel} ${Math.round(trustModulator * 100)}% ` +
       `→ ${Math.round(modulated)}/100`,
   };
 }
@@ -319,23 +333,29 @@ function scoreAttributionClarity(info: TrueRevenueInfo | undefined): {
   score: number;
   reason: string;
 } {
-  if (!info) {
+  // 2026-06-09 (Problem A): when an analyzeAttribution verdict exists, this
+  // component MUST equal it — it is the same "attribution certainty" the
+  // drawer's Attribution panel shows. The old neutral-50 "כנראה Google או שלא
+  // נסרק" fallback fired for every unmapped Google campaign (info undefined)
+  // and was both a 50-vs-30 conflict with the panel AND a stale claim (Google
+  // IS analyzed at campaign grain since T0 2026-06-02). The verdict now flows
+  // in via buildUnmappedAttributionInfo, so the real branches below fire.
+  if (!info || !info.attribution) {
+    // Genuinely no analysis (non-ad platform / empty orders pipeline) — a true
+    // neutral, with no platform blame.
     return {
       score: 50,
-      reason: 'אין נתוני attribution (כנראה Google או שלא נסרק) — ציון נייטרלי',
-    };
-  }
-  if (!info.attribution) {
-    return {
-      score: 50,
-      reason: 'אין click-ID coverage (Google או pipeline לא רץ) — ציון נייטרלי',
+      reason: 'attribution לא חושב לקמפיין זה — ציון נייטרלי',
     };
   }
   const trust = info.attribution.trust;
   if (trust.level === 'unknown') {
+    // Reconciled with the Attribution panel's verdict (e.g. "לא ניתן לקבוע").
+    // Platform-neutral copy — the actionable tagging hint lives in the panel's
+    // recommendation, which is already per-platform (ValueTrack for Google).
     return {
       score: 30,
-      reason: `${trust.label} — utm_campaign כנראה לא מוגדר ב-URL Parameters`,
+      reason: `${trust.label} — 0 הזמנות תויגו ב-click-id (לא ניתן לאמת)`,
     };
   }
   return {

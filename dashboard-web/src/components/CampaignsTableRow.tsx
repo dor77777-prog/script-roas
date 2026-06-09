@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Money } from '@/components/ui/Money';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { campaignKey } from '@/lib/campaignProductMap';
+import { campaignPendingState } from '@/lib/campaignPendingState';
 import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { roasLabel } from '@/lib/analytics';
 import type { Aggregated } from '@/lib/campaignsAggregator';
@@ -122,6 +123,9 @@ type Props = {
    * it once per render in the parent instead of per-row.
    */
   today: string;
+  /** Whether the selected range includes today — gates the live "מתעדכן/ממתין"
+   *  pending state so it never fires on a fully-historical range (Problem B). */
+  rangeIncludesToday: boolean;
   onToggleOptimized: (key: string) => void;
   onDrillCampaign: (campaignId: string, platform: string, storeId: string) => void;
   onDrillAd: (set: {
@@ -158,6 +162,7 @@ export function CampaignsTableRow({
   adAccounts,
   optimized,
   today,
+  rangeIncludesToday,
   onToggleOptimized,
   onDrillCampaign,
   onDrillAd,
@@ -451,9 +456,36 @@ export function CampaignsTableRow({
           {/* OPERATOR FIX (2026-06-01): ROAS value rendered as a SOLID rounded
               badge (mirrors HealthScoreBadge + mockup) instead of a pale
               full-cell tint. */}
-          <span className={cn(ROAS_BADGE_SHAPE, ROAS_TONE_BG[info.tone])}>
-            {roas > 0 ? formatNumber(roas) : '—'}
-          </span>
+          {(() => {
+            if (roas > 0) {
+              return (
+                <span className={cn(ROAS_BADGE_SHAPE, ROAS_TONE_BG[info.tone])}>
+                  {formatNumber(roas)}
+                </span>
+              );
+            }
+            // spend === 0 → ROAS uncomputable. Show an honest live state
+            // instead of a bare "—" (Problem B, 2026-06-09). Gated on
+            // rangeIncludesToday so a historical range shows the neutral "—".
+            const pending = campaignPendingState(a, rangeIncludesToday);
+            if (pending === 'updating') {
+              return (
+                <HelpTooltip content="הוצאה עדיין 0 אבל כבר יש המרות/ערך — הפלטפורמה מדווחת את ה-spend באיחור (מתעדכן בטיק הבא, ~10 דק׳). ה-ROAS יחושב כשה-spend ינחת.">
+                  <span className="text-ink-muted text-xs font-normal">מתעדכן…</span>
+                </HelpTooltip>
+              );
+            }
+            if (pending === 'awaiting') {
+              return (
+                <HelpTooltip content="קמפיין פעיל שטרם נקלט בו טיק מטריקות ראשון — ממתין לנתונים (עד ~10 דק׳).">
+                  <span className="text-ink-muted text-xs font-normal">ממתין…</span>
+                </HelpTooltip>
+              );
+            }
+            return (
+              <span className={cn(ROAS_BADGE_SHAPE, ROAS_TONE_BG[info.tone])}>—</span>
+            );
+          })()}
         </td>
       ),
       roasShopify: (
@@ -473,6 +505,28 @@ export function CampaignsTableRow({
                 <span className="text-ink-muted text-xs">
                   —
                 </span>
+              </HelpTooltip>
+            );
+          }
+          // 2026-06-09 (Problem A): an unmapped attribution-only row (Google)
+          // with NO click-id matches. `info` exists only to carry the verdict
+          // for the Health Score; there is no product mapping and no
+          // deterministic revenue, so the mapping-based fallback tooltip below
+          // would wrongly say "based on product mapping". Render "—" (no
+          // Shopify-verified ROAS) with the SAME verdict the Attribution panel
+          // shows, so the two surfaces agree.
+          if (info.mappedCount === 0 && info.deterministicRevenue === 0) {
+            const at = info.attribution;
+            const verdictTip = at
+              ? `ROAS Shopify (click-id) · ${at.trust.label} (${at.trust.score.toFixed(0)}/100)\n` +
+                `${a.platform} דיווח: ${fmtMoneyString(info.metaClaim)}\n` +
+                `מתויג click-id: ${fmtMoneyString(at.deterministicRevenue)} (${at.deterministicOrders} הזמנות)\n` +
+                `coverage: ${(at.coverage * 100).toFixed(0)}%` +
+                (at.recommendation ? `\n\n💡 ${at.recommendation}` : '')
+              : 'אין נתוני click-id לקמפיין זה בטווח';
+            return (
+              <HelpTooltip content={verdictTip}>
+                <span className="text-ink-muted text-xs">—</span>
               </HelpTooltip>
             );
           }

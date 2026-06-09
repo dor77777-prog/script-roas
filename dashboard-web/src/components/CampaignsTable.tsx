@@ -738,6 +738,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
   // (localRange is now an alias of the global range — declared above.)
 
   const today = todayInIsrael();
+  // Whether the selected range includes today — gates the live "מתעדכן/ממתין"
+  // pending state so it never fires on a fully-historical range (Problem B).
+  const rangeIncludesToday = range.to >= today;
 
   // Phase 05.7.x (2026-05-23) — operator filter "show only multi-mapped
   // campaigns". When ON, the table is filtered down to rows whose
@@ -1170,7 +1173,12 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
       const withRoas = source.map(a => {
         const info = trueRevenueByKey.get(campaignKey(a.storeId, a.platform, a.campaignId));
         const roas = info && a.spend > 0 ? info.trueRevenue / a.spend : 0;
-        return { a, roas, mapped: !!info };
+        // WR-05 (+ 2026-06-09): "mapped" = carries a real Shopify value. An
+        // unmapped Google row that exists ONLY to carry the attribution verdict
+        // (mappedCount 0 AND deterministicRevenue 0) has no Shopify-ROAS value,
+        // so it must stay in the bottom group — not jump to the top on asc.
+        const hasShopifyValue = info != null && !(info.mappedCount === 0 && info.deterministicRevenue === 0);
+        return { a, roas, mapped: hasShopifyValue };
       });
       withRoas.sort((x, y) => {
         // Push unmapped rows to bottom so mapped sort is meaningful.
@@ -1266,7 +1274,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
               break;
           }
         }
-        return { a, v, mapped: !!info };
+        // Same WR-05 grouping fix as shopifyRoas: a verdict-only unmapped
+        // Google row (mappedCount 0 AND deterministicRevenue 0) has no Shopify
+        // value → stays in the bottom group.
+        const hasShopifyValue = info != null && !(info.mappedCount === 0 && info.deterministicRevenue === 0);
+        return { a, v, mapped: hasShopifyValue };
       });
       withVal.sort((x, y) => {
         if (x.mapped !== y.mapped) return x.mapped ? -1 : 1;
@@ -2439,6 +2451,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
                     adAccounts={adAccounts}
                     optimized={optimized}
                     today={today}
+                    rangeIncludesToday={rangeIncludesToday}
                     onToggleOptimized={onToggleOptimized}
                     onDrillCampaign={(campaignId, platform, storeId) => {
                       const doc = document as typeof document & {

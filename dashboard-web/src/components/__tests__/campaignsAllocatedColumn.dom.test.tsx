@@ -101,6 +101,7 @@ function renderRow() {
           adAccounts={{}}
           optimized={new Set()}
           today="2026-06-01"
+          rangeIncludesToday={true}
           onToggleOptimized={() => {}}
           onDrillCampaign={() => {}}
           onDrillAd={() => {}}
@@ -161,7 +162,7 @@ describe('FIX 1 — shopifyValueAllocated column (ROAS Shopify numerator)', () =
           health={undefined}
           columnOrder={COLUMN_ORDER}
           dailySeries={undefined}
-          adAccounts={{}} optimized={new Set()} today="2026-06-01"
+          adAccounts={{}} optimized={new Set()} today="2026-06-01" rangeIncludesToday={true}
           onToggleOptimized={() => {}} onDrillCampaign={() => {}} onDrillAd={() => {}}
         />
       </tbody></table>,

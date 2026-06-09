@@ -57,8 +57,21 @@ describe('buildUnmappedAttributionInfo', () => {
     expect(buildUnmappedAttributionInfo(GOOGLE, null)).toBeNull();
   });
 
-  it('returns null when deterministicRevenue is 0 (no proven orders → preserve the em-dash)', () => {
-    expect(buildUnmappedAttributionInfo(GOOGLE, makeAttribution({ deterministicRevenue: 0, deterministicOrders: 0 }))).toBeNull();
+  it('with deterministicRevenue 0 still carries the verdict (Problem A — Health Score reads this; trueRevenue=0)', () => {
+    // 2026-06-09: a 0-match Google campaign must surface its real "unknown"
+    // verdict to the Health Score (not fall back to a 70% prior + stale
+    // "probably Google"). So we now emit info with trueRevenue=0 carrying the
+    // analysis, instead of returning null.
+    const unknownAttr = makeAttribution({
+      deterministicRevenue: 0,
+      deterministicOrders: 0,
+      trust: { level: 'unknown', label: 'לא ניתן לקבוע', score: 30 },
+    });
+    const info = buildUnmappedAttributionInfo(GOOGLE, unknownAttr);
+    expect(info).not.toBeNull();
+    expect(info!.trueRevenue).toBe(0);
+    expect(info!.deterministicRevenue).toBe(0);
+    expect(info!.attribution).toBe(unknownAttr); // same verdict object the panel shows
   });
 
   it('returns null when spend is 0 (no meaningful ROAS — avoids a divide-by-zero tooltip)', () => {

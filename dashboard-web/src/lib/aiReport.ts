@@ -1393,6 +1393,15 @@ export function generateAiReport({
       // Synthesise a minimal TrueRevenueInfo so computeCampaignHealth's
       // priority chain (deterministic → trueRevenue → platform) picks
       // the right modulator.
+      //
+      // 2026-06-09 (Problem A cross-surface parity): when det === 0 but the
+      // platform claims conversions (c.value > 0), carry the SAME "unknown /
+      // לא ניתן לקבוע" (30) verdict that analyzeAttribution + the campaigns
+      // table + the drawer Attribution panel show — instead of leaving the
+      // info undefined and letting scoreAttributionClarity fall to a neutral
+      // 50. Keeps the report's Health Score attribution component consistent
+      // with the dashboard for a 0-click-id campaign. profitability is
+      // unchanged (trueRevenue/det both 0 → platform-prior branch, as before).
       const trueRevenueInfo =
         det > 0
           ? {
@@ -1410,7 +1419,23 @@ export function generateAiReport({
               deterministicRevenue: det,
               deterministicUnits: 0,
             }
-          : undefined;
+          : c.value > 0
+            ? {
+                trueRevenue: 0,
+                trueUnits: 0,
+                metaClaim: c.value,
+                spend: c.spend,
+                mappedCount: 0,
+                sharedCampaigns: 0,
+                confidence: { level: 'low' as const, label: 'low', reasons: [] },
+                attribution: {
+                  trust: { level: 'unknown', label: 'לא ניתן לקבוע', score: 30 },
+                } as unknown as ReturnType<typeof analyzeCpmVsRoas>['details'] extends infer X ? X : never,
+                productTotals: { revenue: 0, units: 0 },
+                deterministicRevenue: 0,
+                deterministicUnits: 0,
+              }
+            : undefined;
 
       // Build Aggregated shape — partial OK because computeCampaignHealth
       // only reads spend / conversionValue / conversions for fallbacks.

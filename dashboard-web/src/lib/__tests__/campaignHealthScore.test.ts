@@ -345,9 +345,11 @@ describe('profitability — per-platform calibration (audit fix HR-01/HR-02 2026
         trueRevenueInfo: undefined,
       }),
     );
-    // ROAS 3.5 × Google fallback trust 0.7 = 70.
+    // ROAS 3.5 × Google fallback trust 0.7 = 70. The platform-prior modulator
+    // is now labeled "מהימנות-דיווח" (not "אמינות") to avoid colliding with the
+    // click-id attribution trust the panel shows (Problem A, 2026-06-09).
     expect(googleOut.components.profitability).toBe(70);
-    expect(googleOut.reasons[0]).toMatch(/אמינות 70%/);
+    expect(googleOut.reasons[0]).toMatch(/מהימנות-דיווח.*70%/);
 
     const metaOut = computeCampaignHealth(
       buildInputs({
@@ -359,9 +361,9 @@ describe('profitability — per-platform calibration (audit fix HR-01/HR-02 2026
         trueRevenueInfo: undefined,
       }),
     );
-    // ROAS 3.0 × Meta fallback trust 0.5 = 50.
+    // ROAS 3.0 × Meta fallback trust 0.5 = 50. (Modulator relabeled — see above.)
     expect(metaOut.components.profitability).toBe(50);
-    expect(metaOut.reasons[0]).toMatch(/אמינות 50%/);
+    expect(metaOut.reasons[0]).toMatch(/מהימנות-דיווח.*50%/);
   });
 });
 
@@ -522,7 +524,10 @@ describe('attribution clarity', () => {
     });
     const out = computeCampaignHealth(buildInputs({ trueRevenueInfo: tr }));
     expect(out.components.attributionClarity).toBe(30);
-    expect(out.reasons[3]).toMatch(/utm_campaign/);
+    // Reconciled with the Attribution panel's verdict; platform-neutral copy
+    // (the per-platform tagging hint lives in the panel recommendation now).
+    expect(out.reasons[3]).toContain('לא ניתן לקבוע');
+    expect(out.reasons[3]).toContain('לא ניתן לאמת');
   });
 
   it('returns 50 (neutral) when no attribution data (e.g. Google)', () => {
