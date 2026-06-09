@@ -2706,7 +2706,7 @@ function ColumnHeaderTh({
               variant="ghost"
               onClick={(e) => e.stopPropagation()}
               aria-label={ariaLabel ? `הסבר על ${ariaLabel}` : 'הסבר על העמודה'}
-              className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-accent-soft text-accent hover:bg-accent hover:text-accent-fg transition-colors"
+              className="!p-0 inline-flex items-center justify-center w-5 h-5 shrink-0 rounded-full bg-accent text-accent-fg hover:bg-accent-deep transition-colors"
             >
               <Info size={11} aria-hidden="true" />
             </Button>
