@@ -76,17 +76,20 @@ export async function GET(req: Request) {
     // Phase 12.5.x (2026-05-24) + Phase D (2026-05-30): fan out 3 parallel reads.
     // `fetchCurrentCampaignStatuses` is independent of `range` — it reads
     // campaign_registry (Phase D — was: 60-day campaigns_daily scan) and then
-    // broadcasts each campaign's status to its ad_sets via a distinct-tuples
-    // lookup on campaigns_daily — so it runs alongside the in-range reads
-    // without blocking them.
+    // broadcasts each campaign's status to its ad_sets via an ad_set-tuple
+    // lookup on adset_registry (P0-1 2026-06-10 — was: a date-unbounded
+    // campaigns_daily scan that risked silent truncation at the paginate()
+    // ceiling) — so it runs alongside the in-range reads without blocking them.
     const [rows, dataLastWriteAt, currentEffectiveStatus, lastKnownBudgetTypes] = await Promise.all([
       fetchCampaignsFromPostgres({ range }),
       fetchCampaignsDailyLastWriteAt({ range }),
       fetchCurrentCampaignStatuses(),
       fetchLastKnownBudgetTypes(),
     ]);
-    if (rows.length > 50000) {
-      console.warn(`/api/campaigns: large response (${rows.length} rows) — consider pagination`);
+    // P0-1 (2026-06-10): >= not > — paginate() caps at EXACTLY 50,000 rows,
+    // so the old `> 50000` guard was mathematically unreachable.
+    if (rows.length >= 50000) {
+      console.warn(`/api/campaigns: response at the paginate() ceiling (${rows.length} rows) — likely truncated (P0-1)`);
     }
     const body: CampaignsResponse = {
       rows,

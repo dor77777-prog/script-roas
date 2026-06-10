@@ -74,7 +74,7 @@ export async function GET(req: Request) {
         lastUpdated,
         error: userFacingError(rawMessage),
       },
-      { status: 200 },
+      { status: 200, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 }

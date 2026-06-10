@@ -167,3 +167,74 @@ describe('cloudSync hydrate (d/CR-07-soft — clear-conflict event)', () => {
     expect(changeEvents.length).toBe(1);
   });
 });
+
+describe('cloudSync hydrate (P1-18 — equality guard, 2026-06-10 audit)', () => {
+  it('does NOT write or dispatch when the cloud value equals the local value', async () => {
+    const fw = makeFakeWindow();
+    (globalThis as unknown as { window: typeof window }).window = fw.win;
+    // Local already holds exactly what the cloud returns.
+    fw.store.set('roas-dashboard:monthly-revenue-goal', '5000');
+
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({ kv: { 'monthly-revenue-goal': 5000 } }),
+        { status: 200 },
+      )) as typeof fetch;
+
+    const { hydrateFromCloud } = await import('@/lib/cloudSync');
+    await hydrateFromCloud();
+
+    // Value unchanged AND no change event — pre-fix this dispatched
+    // 'roas-goal-changed' (and every other key's event) on EVERY 30s poll,
+    // triggering hidden refetch + re-aggregate cascades.
+    expect(fw.store.get('roas-dashboard:monthly-revenue-goal')).toBe('5000');
+    const changeEvents = fw.dispatchEvents.filter(
+      e => e.type === 'roas-goal-changed',
+    );
+    expect(changeEvents.length).toBe(0);
+  });
+
+  it('still writes + dispatches when the cloud value DIFFERS', async () => {
+    const fw = makeFakeWindow();
+    (globalThis as unknown as { window: typeof window }).window = fw.win;
+    fw.store.set('roas-dashboard:monthly-revenue-goal', '4000');
+
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({ kv: { 'monthly-revenue-goal': 5000 } }),
+        { status: 200 },
+      )) as typeof fetch;
+
+    const { hydrateFromCloud } = await import('@/lib/cloudSync');
+    await hydrateFromCloud();
+
+    expect(fw.store.get('roas-dashboard:monthly-revenue-goal')).toBe('5000');
+    expect(
+      fw.dispatchEvents.filter(e => e.type === 'roas-goal-changed').length,
+    ).toBe(1);
+  });
+
+  it('a null cloud row with NO local value is a no-op (no clear-conflict storm)', async () => {
+    const fw = makeFakeWindow();
+    (globalThis as unknown as { window: typeof window }).window = fw.win;
+    // No local value at all.
+
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({ kv: { 'monthly-revenue-goal': null } }),
+        { status: 200 },
+      )) as typeof fetch;
+
+    const { hydrateFromCloud } = await import('@/lib/cloudSync');
+    await hydrateFromCloud();
+
+    // Pre-fix: clear-conflict + change events fired on every poll even with
+    // nothing to clear.
+    expect(
+      fw.dispatchEvents.filter(e => e.type === 'roas-cloud-clear-conflict').length,
+    ).toBe(0);
+    expect(
+      fw.dispatchEvents.filter(e => e.type === 'roas-goal-changed').length,
+    ).toBe(0);
+  });
+});

@@ -70,8 +70,12 @@ export async function GET(req: Request) {
     const tiktokStores = new Set<string>(TIKTOK_SHARED_STORES);
     const storeApplicablePlatforms: Record<string, AdPlatform[]> = {};
     for (const s of storeMeta) storeApplicablePlatforms[s.storeId] = applicablePlatforms(s, tiktokStores);
-    if (rows.length > 50000) {
-      console.warn(`/api/data: large response (${rows.length} rows) — consider pagination`);
+    // P0-1 (2026-06-10): >= not > — paginate() caps at EXACTLY 50,000 rows,
+    // so the old `> 50000` guard was mathematically unreachable. At the cap,
+    // the response is likely truncated (paginate() also fires its own
+    // console.error tripwire with the table label).
+    if (rows.length >= 50000) {
+      console.warn(`/api/data: response at the paginate() ceiling (${rows.length} rows) — likely truncated (P0-1)`);
     }
     const stores = Array.from(new Set(rows.map(r => r.storeName))).sort();
     const data: DashboardData = {

@@ -92,6 +92,7 @@ import {
   type ProductMap,
 } from '@/lib/campaignProductMap';
 import { buildDateRangeKey, getPreviousPeriod, getTodayInIsraelTz } from '@/lib/dateRange';
+import { throwOnErrorBody } from '@/lib/throwOnErrorBody';
 import { useStores } from '@/lib/useStores';
 import type { CampaignHealth } from '@/lib/campaignHealthScore';
 
@@ -227,43 +228,46 @@ export function CampaignDrawer({
     () => getPreviousPeriod({ from: rangeFrom, to: rangeTo }),
     [rangeFrom, rangeTo],
   );
-  const { data: campaignsData } = useSWR<CampaignsResponse>(
+  // P0-4 (2026-06-10, full-system audit): STRICT fetchers. Pre-fix all four
+  // returned `{ rows: [] }` on !r.ok and never read the 200-degraded `error`
+  // body, so a real DB/HTTP failure was cached as SUCCESS and every panel in
+  // the drawer rendered the plausible "no data" state — the exact P0-9 class
+  // fixed in AdsDrawer on 2026-06-09, one level up. Now: throw on !ok AND on
+  // 200-with-error (throwOnErrorBody) → SWR error state → visible error strip
+  // (drawerFetchErrors below) instead of fake-empty tabs.
+  const strictFetcher = async <T,>(url: string): Promise<T> => {
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error(`CampaignDrawer: ${r.status} ${r.statusText}`);
+    return throwOnErrorBody(await r.json());
+  };
+  const { data: campaignsData, error: campaignsError } = useSWR<CampaignsResponse>(
     open ? buildDateRangeKey('/api/campaigns', drawerRange) : null,
-    async (url: string) => {
-      const r = await fetch(url, { cache: 'no-store' });
-      if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
-      return r.json();
-    },
+    strictFetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
-  const { data: productsData } = useSWR<ProductsResponse>(
+  const { data: productsData, error: productsError } = useSWR<ProductsResponse>(
     open ? buildDateRangeKey('/api/products', drawerRange) : null,
-    async (url: string) => {
-      const r = await fetch(url, { cache: 'no-store' });
-      if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
-      return r.json();
-    },
+    strictFetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
   const { data: campaignsDataPrev } = useSWR<CampaignsResponse>(
     open && cpmAnalysisMode === 'prev' ? buildDateRangeKey('/api/campaigns', prevRange) : null,
-    async (url: string) => {
-      const r = await fetch(url, { cache: 'no-store' });
-      if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
-      return r.json();
-    },
+    strictFetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
   const ordersAttrBaseKey = open ? buildDateRangeKey('/api/orders-attribution', drawerRange) : null;
-  const { data: ordersAttrData } = useSWR<OrdersAttributionResponse>(
+  const { data: ordersAttrData, error: ordersAttrError } = useSWR<OrdersAttributionResponse>(
     ordersAttrBaseKey ? `${ordersAttrBaseKey}&lineItems=true` : null,
-    async (url: string) => {
-      const r = await fetch(url, { cache: 'no-store' });
-      if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
-      return r.json();
-    },
+    strictFetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
+  // Human-readable list of failed drawer data sources (campaignsDataPrev is
+  // an optional compare-mode enrichment — its failure degrades silently by
+  // design, matching the AdsDrawer secondary-fetch contract).
+  const drawerFetchErrors: string[] = [];
+  if (campaignsError) drawerFetchErrors.push('נתוני קמפיינים');
+  if (productsError) drawerFetchErrors.push('נתוני מוצרים');
+  if (ordersAttrError) drawerFetchErrors.push('נתוני ייחוס-הזמנות');
 
   // ---- Per-campaign summary (preserved verbatim) ----------------------
   const summary = useMemo(() => {
@@ -847,6 +851,18 @@ export function CampaignDrawer({
         </SheetHeader>
 
         <SheetBody>
+          {/* P0-4 (2026-06-10): explicit fetch-failure strip. Without it a DB
+              failure rendered every tab as a plausible "no data" state. */}
+          {drawerFetchErrors.length > 0 && (
+            <div
+              role="alert"
+              data-testid="campaign-drawer-fetch-error"
+              className="mb-4 rounded-md bg-status-redBg border border-status-red text-status-redFg px-3 py-2 text-[12px] leading-relaxed"
+            >
+              <strong>שגיאה בטעינת {drawerFetchErrors.join(' · ')}.</strong>{' '}
+              חלק מהפאנלים במגירה עשויים להיראות ריקים — זו תקלת טעינה, לא היעדר נתונים. סגור ופתח מחדש כדי לנסות שוב.
+            </div>
+          )}
           <Tabs
             variant="underline"
             value={activeTab}

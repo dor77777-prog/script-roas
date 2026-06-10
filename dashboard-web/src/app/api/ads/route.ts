@@ -42,8 +42,10 @@ export async function GET(req: Request) {
       fetchAdsFromPostgres({ range }),
       fetchAdsDailyLastWriteAt({ range }),
     ]);
-    if (rows.length > 50000) {
-      console.warn(`/api/ads: large response (${rows.length} rows) — consider pagination`);
+    // P0-1 (2026-06-10): >= not > — paginate() caps at EXACTLY 50,000 rows,
+    // so the old `> 50000` guard was mathematically unreachable.
+    if (rows.length >= 50000) {
+      console.warn(`/api/ads: response at the paginate() ceiling (${rows.length} rows) — likely truncated (P0-1)`);
     }
     return NextResponse.json(
       {
@@ -66,7 +68,7 @@ export async function GET(req: Request) {
         dataLastWriteAt: null,
         error: userFacingError(message),
       },
-      { status: 200 },
+      { status: 200, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 }

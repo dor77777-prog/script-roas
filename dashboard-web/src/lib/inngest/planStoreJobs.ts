@@ -64,10 +64,16 @@ export interface PlanStoreJobsOptions {
    */
   date?: string;
   /**
-   * Live-only id discriminator (e.g. registries/snapshots.tickIdForNow's
-   * 10-min bucket). Keeps live ids collision-free across the every-10-min
-   * cadence without the oracle ever reading the clock. Ignored when the
-   * family already carries a `date`.
+   * Per-fire id discriminator (e.g. registries/snapshots.tickIdForNow's
+   * 10-min bucket for live, or an hour bucket for yesterday). Keeps event ids
+   * collision-free across repeated fires without the oracle ever reading the
+   * clock.
+   *
+   * 2026-06-10 (P0-2 fix): COMBINED with `date` when both are present —
+   * previously `date` alone won, so the yesterday family (12 fires/day, all
+   * carrying the same date) emitted IDENTICAL event ids and Inngest's 24h
+   * event-id idempotency silently swallowed fires 2-12, making the every-2h
+   * cadence inert (yesterday reconciled once, at 00:15). Never payload.
    */
   tickId?: string;
 }
@@ -89,9 +95,12 @@ export function planStoreJobs(stores: string[], opts: PlanStoreJobsOptions): Sto
       ? { storeId, date: opts.date }
       : { storeId };
 
-    // Id discriminator precedence: an explicit `date` (daily/yesterday) wins;
-    // else a live `tickId`; else the bare family-store id (live, no tick).
-    const discriminator = opts.date ?? opts.tickId;
+    // Id discriminator: date and tickId COMBINE when both are present (P0-2,
+    // 2026-06-10) — the yesterday family fires 12×/day with the same date, so
+    // date-only ids were deduped by Inngest's 24h event-id idempotency and
+    // fires 2-12 never invoked the worker. daily (date only, one fire/day)
+    // and live (tickId only) are unchanged by the combine.
+    const discriminator = [opts.date, opts.tickId].filter(Boolean).join('-');
     const id = discriminator
       ? `cron-${opts.family}-${storeId}-${discriminator}`
       : `cron-${opts.family}-${storeId}`;

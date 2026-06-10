@@ -1,17 +1,25 @@
 /**
  * תשלומים (Task 5) — postgresReaders.readPaymentMethodsByMonth reader-side
- * contract. Aggregates orders_attribution rows per month × store × payment
- * category (credit / paypal / other), plus a business-wide rollup.
+ * contract. Aggregates per month × store × payment category (credit / paypal
+ * / other), plus a business-wide rollup.
  *
- * Mirrors the mock pattern in postgresReadersCohort.test.ts
- * (vi.mock('@/lib/supabase') with a thenable query builder driven by a
- * module-level rows holder + recorded .select() call). Asserts:
- *   1. the canonical PAYMENT_METHODS_SELECT requests every consumed column,
+ * P0-1 (2026-06-10): the reader no longer paginate()-scans the entire
+ * orders_attribution table (which silently truncated at the 50k ceiling —
+ * zolplus's NEWEST orders were the dropped tail). It now calls the
+ * `agg_payment_methods_monthly` RPC (migration 20260610130000), which GROUPs
+ * BY month × store × RAW gateway in SQL and returns
+ * `{ month, store_id, gateway, orders, revenue_cad }` rows. The regex-based
+ * categorization (categorizePaymentGateway) stays in code, unchanged — the
+ * RPC COALESCEs NULL gateways to '' which categorizes identically ('other').
+ *
+ * Asserts:
+ *   1. the reader calls the agg_payment_methods_monthly RPC (no table scan),
  *   2. categorization matches categorizePaymentGateway (paypal / credit /
- *      gift_card→other / NULL→other),
- *   3. revenue sums total_cad (numeric coercion via toNumber),
- *   4. per-store buckets are keyed by store DISPLAY NAME and the business rollup is the
- *      sum across stores,
+ *      gift_card→other / ''(NULL-coalesced)→other),
+ *   3. revenue sums revenue_cad (numeric coercion via toNumber) and orders
+ *      accumulate across multiple raw gateways in the same category,
+ *   4. per-store buckets are keyed by store DISPLAY NAME and the business
+ *      rollup is the sum across stores,
  *   5. months are returned in ascending order,
  *   6. a Supabase failure surfaces a namespaced error.
  */
@@ -20,87 +28,73 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // State holder the mocked client reads at call time.
 let mockRows: unknown[] = [];
 let mockError: { message: string } | null = null;
-const selectCols: string[] = [];
+const rpcCalls: { fn: string; args: unknown }[] = [];
 
-function setSupabaseRows(rows: unknown[]) {
+function setRpcRows(rows: unknown[]) {
   mockRows = rows;
   mockError = null;
 }
 
 vi.mock('@/lib/supabase', () => {
-  const makeQuery = () => {
-    const q: Record<string, unknown> = {};
-    q.select = vi.fn((cols: string) => {
-      selectCols.push(cols);
-      return q;
-    });
-    q.eq = vi.fn(() => q);
-    q.order = vi.fn(() => q);
-    q.gte = vi.fn(() => q);
-    q.lte = vi.fn(() => q);
-    q.range = vi.fn(() => q);
-    q.then = (
-      resolve: (v: { data: unknown[] | null; error: { message: string } | null }) => unknown,
-    ) => Promise.resolve({ data: mockError ? null : mockRows, error: mockError }).then(resolve);
-    return q;
-  };
   return {
     getSupabase: () => ({
-      from: vi.fn(() => makeQuery()),
+      // RPC mock — records the function name, resolves with the holder state.
+      rpc: vi.fn((fn: string, args?: unknown) => {
+        rpcCalls.push({ fn, args });
+        return Promise.resolve({ data: mockError ? null : mockRows, error: mockError });
+      }),
+      // .from() retained so an accidental regression back to a table scan
+      // fails loudly (the chain is not thenable).
+      from: vi.fn(() => {
+        throw new Error('readPaymentMethodsByMonth must use the RPC, not a table scan (P0-1)');
+      }),
     }),
   };
 });
 
-import { readPaymentMethodsByMonth, PAYMENT_METHODS_SELECT } from '../postgresReaders';
+import { readPaymentMethodsByMonth } from '../postgresReaders';
 
-const PAYMENT_METHODS_COLUMNS = ['store_id', 'date', 'total_cad', 'payment_gateway'] as const;
-
+// RPC-shaped rows: one per month × store × RAW gateway.
 // 2 months × 2 stores × mixed gateways.
 const fakeRows = [
   // 2025-07 — uzoshop
-  { store_id: 'uzoshop', date: '2025-07-03', total_cad: '100', payment_gateway: 'shopify_payments' },
-  { store_id: 'uzoshop', date: '2025-07-10', total_cad: 50, payment_gateway: 'paypal' },
-  { store_id: 'uzoshop', date: '2025-07-15', total_cad: '25.5', payment_gateway: 'gift_card' },
+  { month: '2025-07', store_id: 'uzoshop', gateway: 'shopify_payments', orders: 1, revenue_cad: '100' },
+  { month: '2025-07', store_id: 'uzoshop', gateway: 'paypal', orders: 1, revenue_cad: 50 },
+  { month: '2025-07', store_id: 'uzoshop', gateway: 'gift_card', orders: 1, revenue_cad: '25.5' },
   // 2025-07 — zolplus
-  { store_id: 'zolplus', date: '2025-07-20', total_cad: 200, payment_gateway: 'stripe' },
-  { store_id: 'zolplus', date: '2025-07-22', total_cad: 10, payment_gateway: null }, // NULL → other
+  { month: '2025-07', store_id: 'zolplus', gateway: 'stripe', orders: 1, revenue_cad: 200 },
+  // NULL payment_gateway is COALESCE'd to '' by the RPC → categorizes 'other'.
+  { month: '2025-07', store_id: 'zolplus', gateway: '', orders: 1, revenue_cad: 10 },
   // 2025-08 — uzoshop
-  { store_id: 'uzoshop', date: '2025-08-01', total_cad: 300, payment_gateway: 'PayPal Express Checkout' },
+  { month: '2025-08', store_id: 'uzoshop', gateway: 'PayPal Express Checkout', orders: 1, revenue_cad: 300 },
 ];
 
 beforeEach(() => {
   mockRows = [];
   mockError = null;
-  selectCols.length = 0;
+  rpcCalls.length = 0;
 });
 
 afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('PAYMENT_METHODS_SELECT', () => {
-  it('lists every consumed column', () => {
-    for (const col of PAYMENT_METHODS_COLUMNS) {
-      expect(PAYMENT_METHODS_SELECT).toContain(col);
-    }
-  });
-});
-
 describe('readPaymentMethodsByMonth', () => {
-  it('requests the canonical SELECT', async () => {
-    setSupabaseRows(fakeRows);
+  it('calls the agg_payment_methods_monthly RPC (replaces the full-table paginate scan — P0-1)', async () => {
+    setRpcRows(fakeRows);
     await readPaymentMethodsByMonth();
-    expect(selectCols[0]).toBe(PAYMENT_METHODS_SELECT);
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0].fn).toBe('agg_payment_methods_monthly');
   });
 
-  it('returns months in ascending order', async () => {
-    setSupabaseRows(fakeRows);
+  it('returns months in ascending order (even when the RPC returns them out of order)', async () => {
+    setRpcRows([...fakeRows].reverse());
     const { months } = await readPaymentMethodsByMonth();
     expect(months.map((m) => m.month)).toEqual(['2025-07', '2025-08']);
   });
 
-  it('aggregates per store × category with orders + revenueCad (total_cad)', async () => {
-    setSupabaseRows(fakeRows);
+  it('aggregates per store × category with orders + revenueCad (revenue_cad)', async () => {
+    setRpcRows(fakeRows);
     const { months } = await readPaymentMethodsByMonth();
 
     const july = months.find((m) => m.month === '2025-07')!;
@@ -108,7 +102,7 @@ describe('readPaymentMethodsByMonth', () => {
     expect(july.perStore.uzoshop.credit).toEqual({ orders: 1, revenueCad: 100 });
     expect(july.perStore.uzoshop.paypal).toEqual({ orders: 1, revenueCad: 50 });
     expect(july.perStore.uzoshop.other).toEqual({ orders: 1, revenueCad: 25.5 });
-    // zolplus July: stripe(credit,200), null(other,10).
+    // zolplus July: stripe(credit,200), ''(other,10).
     // Per-store buckets are keyed by DISPLAY NAME (STORE_NAME_BY_ID), not the
     // raw store_id — so the keys match data.stores / the global store filter
     // (the 2026-06-04 per-store-picker fix). zolplus → 'Zol Plus'.
@@ -119,15 +113,27 @@ describe('readPaymentMethodsByMonth', () => {
     expect(july.perStore.zolplus).toBeUndefined();
   });
 
+  it('accumulates multiple raw gateways that fall in the same category', async () => {
+    setRpcRows([
+      { month: '2025-09', store_id: 'uzoshop', gateway: 'visa', orders: 2, revenue_cad: 80 },
+      { month: '2025-09', store_id: 'uzoshop', gateway: 'stripe', orders: '3', revenue_cad: '120' },
+    ]);
+    const { months } = await readPaymentMethodsByMonth();
+    const sep = months.find((m) => m.month === '2025-09')!;
+    // visa + stripe both → credit; orders/revenue accumulate (string-coerced).
+    expect(sep.perStore.uzoshop.credit).toEqual({ orders: 5, revenueCad: 200 });
+    expect(sep.business.credit).toEqual({ orders: 5, revenueCad: 200 });
+  });
+
   it('rolls up the business-wide totals across stores', async () => {
-    setSupabaseRows(fakeRows);
+    setRpcRows(fakeRows);
     const { months } = await readPaymentMethodsByMonth();
 
     const july = months.find((m) => m.month === '2025-07')!;
     // business credit = uzoshop(100) + zolplus(200)
     expect(july.business.credit).toEqual({ orders: 2, revenueCad: 300 });
     expect(july.business.paypal).toEqual({ orders: 1, revenueCad: 50 });
-    // business other = gift_card(25.5) + null(10)
+    // business other = gift_card(25.5) + ''(10)
     expect(july.business.other).toEqual({ orders: 2, revenueCad: 35.5 });
 
     const aug = months.find((m) => m.month === '2025-08')!;
@@ -138,7 +144,7 @@ describe('readPaymentMethodsByMonth', () => {
   });
 
   it('returns an empty months array when there are no rows', async () => {
-    setSupabaseRows([]);
+    setRpcRows([]);
     const { months } = await readPaymentMethodsByMonth();
     expect(months).toEqual([]);
   });

@@ -91,15 +91,24 @@ describe('cronYesterdayRefreshScheduler', () => {
     const allEvents = sent.flatMap((s) => s.events);
     expect(allEvents).toHaveLength(3);
     const date = yesterday();
+    // P0-2 (2026-06-10): the scheduler now appends an hour-bucket tickId
+    // ('hHH', UTC) to every event id so the 12 daily fires emit UNIQUE ids —
+    // date-only ids were deduped by Inngest's 24h event-id idempotency and
+    // fires 2-12 silently no-oped. The PAYLOAD stays date-only (worker
+    // contract unchanged); only the id carries the per-fire discriminator.
+    const hourBucket = 'h' + new Date().toISOString().slice(11, 13);
     const expected = planStoreJobs(['uzoshop', 'zolplus', 'usmile360'], {
       family: 'yesterday',
       date,
+      tickId: hourBucket,
     });
     expect(allEvents).toEqual(
       expected.map((j) => ({ name: j.eventName, id: j.id, data: j.data })),
     );
+    // Each id ends with the per-fire hour bucket — the dedupe-breaking shape.
     for (const e of allEvents) {
       expect(e.name).toBe('cron/yesterday.store.requested');
+      expect(e.id).toMatch(/-h\d{2}$/);
     }
   });
 

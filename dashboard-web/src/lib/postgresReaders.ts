@@ -163,6 +163,9 @@ export async function paginate<T>(
   buildQuery: () => any,
   orderBy: readonly string[],
   chunkSize = 1000,
+  /** Optional table/query label included in the P0-1 truncation tripwire
+   *  message so the offending caller is identifiable from server logs. */
+  label?: string,
 ): Promise<T[]> {
   if (!orderBy || orderBy.length === 0) {
     throw new Error(
@@ -174,16 +177,42 @@ export async function paginate<T>(
   // Hard ceiling — 50 chunks × 1k = 50k rows. Prevents runaway loops if a
   // server bug returns the same page forever.
   const MAX_CHUNKS = 50;
+  // P0-1 (2026-06-10): track WHY the loop ended. `sawEnd` flips true only when
+  // we observed the dataset's end (an empty or short page). If the loop instead
+  // exhausts MAX_CHUNKS with a FULL last page, more rows almost certainly exist
+  // and the result is silently capped — fire the tripwire below.
+  let sawEnd = false;
   for (let chunk = 0; chunk < MAX_CHUNKS; chunk++) {
     let q = buildQuery() as PaginatedQuery;
     // Apply the unique key as a stable ORDER BY so pages don't overlap/skip.
     for (const col of orderBy) q = q.order(col, { ascending: true });
     const { data, error } = await q.range(start, start + chunkSize - 1);
     if (error) throw new Error(error.message);
-    if (!data || data.length === 0) break;
+    if (!data || data.length === 0) {
+      sawEnd = true;
+      break;
+    }
     all.push(...(data as T[]));
-    if (data.length < chunkSize) break;
+    if (data.length < chunkSize) {
+      sawEnd = true;
+      break;
+    }
     start += chunkSize;
+  }
+  // P0-1 truncation tripwire (2026-06-10). Before this, paginate() exited
+  // SILENTLY at exactly MAX_CHUNKS × chunkSize rows, which (a) made every
+  // route-level `rows.length > 50000` warning mathematically unreachable and
+  // (b) let date-unbounded readers drop their NEWEST rows without a trace.
+  // The return value intentionally stays as-is (the capped rows) — callers'
+  // graceful-degradation contracts are preserved; the tripwire makes the
+  // truncation visible in server logs so the dataset can be moved to a SQL
+  // aggregate (RPC) or date-bounded before correctness silently erodes.
+  if (!sawEnd) {
+    console.error(
+      `paginate()${label ? ` [${label}]` : ''}: hit MAX_CHUNKS (${MAX_CHUNKS} × ${chunkSize}) ` +
+        `with a FULL last page — result is likely TRUNCATED at ${all.length} rows. ` +
+        `Move this query's aggregation into SQL (RPC) or add a date bound. (P0-1)`,
+    );
   }
   return all;
 }
@@ -904,7 +933,9 @@ export async function fetchCampaignsFromPostgres(
 //     selected range.
 //
 //     Phase D (2026-05-30) — refactored to read campaign_registry directly
-//     + broadcast via campaigns_daily lookup. Previously this was a 60-day
+//     + broadcast via an ad_set-tuple lookup (P0-1 2026-06-10: tuple source
+//     moved from campaigns_daily to adset_registry — bounded row count).
+//     Previously this was a 60-day
 //     SELECT over campaigns_daily ordered by updated_at DESC. Post-Phase-B,
 //     campaign_registry IS the authoritative source: every (store, platform,
 //     campaign_id) has exactly one row whose effective_status is refreshed
@@ -922,7 +953,7 @@ export async function fetchCampaignsFromPostgres(
 
 /**
  * Phase D (2026-05-30) — refactored to read campaign_registry directly
- * + broadcast via campaigns_daily lookup.
+ * + broadcast via an ad_set-tuple lookup (P0-1 2026-06-10: adset_registry).
  *
  * Map value shape: `{ status, updatedAt }`. The `status` is the registry's
  * `effective_status`; the `updatedAt` is the registry's `last_seen_at`
@@ -932,18 +963,27 @@ export async function fetchCampaignsFromPostgres(
  * TitleCase to match `CampaignRow.platform` so the aggregator can look up
  * by the same key it already builds. Registry stores per-campaign — to
  * preserve the key shape, we broadcast each campaign's status to every
- * (campaign, ad_set) tuple that exists in campaigns_daily.
+ * (campaign, ad_set) tuple known to `adset_registry`.
  *
  * Soft-fail: a query error returns an empty map. The aggregator's existing
  * in-range logic still produces a status — this helper is an enhancement,
  * not a hard dependency.
  *
- * Known scale note: Query 2 (`campaigns_daily` → distinct `(store, platform,
- * campaign_id, ad_set_id)` tuples) is unbounded by date. At current prod
- * scale (~15k rows) it's well under the `paginate()` ceiling (50k rows). If
- * `campaigns_daily` grows past ~50k, the helper will silently truncate;
- * the proper fix is to switch Query 2 to read directly from `adset_registry`
- * (one row per ad_set, Phase D backfilled) and drop the broadcast loop.
+ * P0-1 (2026-06-10): Query 2 now reads `adset_registry` (ONE row per ad_set,
+ * PK (store_id, platform, adset_id), Phase D backfilled) — implementing what
+ * the previous "Known scale note" here prescribed. The old Query 2 was a
+ * date-UNBOUNDED scan over campaigns_daily's per-day rows (~15k and growing);
+ * past the `paginate()` 50k ceiling it would have silently dropped the
+ * NEWEST tuples (the scan was date-ASC), exactly the rows the chip needs.
+ * The registry's row count is bounded by the number of ad_sets ever seen, so
+ * the ceiling is no longer reachable in any realistic horizon. Note the
+ * registry row's OWN `effective_status` is deliberately NOT used — the map's
+ * value semantics are CAMPAIGN-level (Phase 12.5.x operator decision: the
+ * "כבוי" chip reflects the parent campaign's state), so the broadcast of the
+ * campaign_registry status is preserved unchanged. Ad_sets that existed only
+ * before the Phase D backfill (absent from the registry) simply get no map
+ * entry — the aggregator's in-range fallback covers them (soft contract
+ * above).
  */
 export type CurrentEffectiveStatusEntry = {
   status: string;
@@ -981,7 +1021,7 @@ export async function fetchCurrentCampaignStatuses(): Promise<
         .from('campaign_registry')
         .select('store_id, platform, campaign_id, effective_status, last_seen_at')
         .not('effective_status', 'is', null);
-    }, ['store_id', 'platform', 'campaign_id']);
+    }, ['store_id', 'platform', 'campaign_id'], 1000, 'campaign_registry (fetchCurrentCampaignStatuses)');
   } catch (e) {
     console.warn(`postgresReaders.fetchCurrentCampaignStatuses (registry): ${(e as Error).message}`);
     return out;
@@ -1002,29 +1042,37 @@ export async function fetchCurrentCampaignStatuses(): Promise<
     byCampaign.set(`${storeId}::${platform}::${campaignId}`, { status, updatedAt });
   }
 
-  // 3. For every (store, platform, campaign) we have a status for, look up
-  //    all of its ad_set_ids from campaigns_daily and broadcast the campaign
-  //    status to each. Keeps the existing key shape so callers don't change.
-  //    NB: campaigns_daily (not adsets_daily — that table doesn't exist) is
-  //    the source of (campaign_id, ad_set_id) tuples; its PK includes
-  //    ad_set_id, making it ad-set-granular.
+  // 3. For every (store, platform, campaign) we have a status for, broadcast
+  //    the campaign status to each of its ad_sets. Keeps the existing key
+  //    shape so callers don't change.
+  //    P0-1 (2026-06-10): the (campaign_id, adset_id) tuple source is now
+  //    adset_registry — ONE row per ad_set (PK store_id, platform, adset_id),
+  //    Phase D backfilled — replacing the previous date-UNBOUNDED scan of
+  //    campaigns_daily's per-day rows, which would have silently truncated
+  //    at paginate()'s 50k ceiling and (being date-ASC) dropped the NEWEST
+  //    ad_sets first. The registry row's own effective_status is deliberately
+  //    NOT selected: the broadcast keeps CAMPAIGN-level value semantics (see
+  //    JSDoc above).
   let adsets: DbRow[];
   try {
     adsets = await paginate<DbRow>(() => {
       return getSupabase()
-        .from('campaigns_daily')
-        .select('store_id, platform, campaign_id, ad_set_id');
-    }, ['date', 'store_id', 'platform', 'campaign_id', 'ad_set_id']);
+        .from('adset_registry')
+        .select('store_id, platform, campaign_id, adset_id');
+    }, ['store_id', 'platform', 'adset_id'], 1000, 'adset_registry (fetchCurrentCampaignStatuses)');
   } catch (e) {
     console.warn(`postgresReaders.fetchCurrentCampaignStatuses (adsets): ${(e as Error).message}`);
     return out;
   }
+  // adset_registry's PK makes duplicate tuples impossible; the dedup guard is
+  // kept defensively (it also preserves first-wins semantics if that ever
+  // changes).
   const seen = new Set<string>();
   for (const r of adsets) {
     const storeId    = String(r.store_id ?? '');
     const platform   = titleCasePlatform(r.platform);
     const campaignId = String(r.campaign_id ?? '');
-    const adSetId    = String(r.ad_set_id ?? '');
+    const adSetId    = String(r.adset_id ?? '');
     if (!storeId || !campaignId || !adSetId) continue;
     const campaignKey = `${storeId}::${platform}::${campaignId}`;
     const status = byCampaign.get(campaignKey);
@@ -1057,6 +1105,8 @@ export async function fetchCurrentCampaignStatuses(): Promise<
  * the chip only renders for Meta. Mirrors `fetchCurrentCampaignStatuses`
  * exactly: SAME key shape, SAME `titleCasePlatform` boundary, SAME
  * `paginate()` ceiling, SAME soft-fail-to-{} (console.warn) on query error.
+ * P0-1 (2026-06-10): the scan is date-bounded to ~120 days so it can never
+ * approach the `paginate()` ceiling (see inline comment).
  *
  * Map value shape: `{ budgetType, lastSeenAt }`. `lastSeenAt` is the row's
  * `date` (YYYY-MM-DD) of the most-recent non-empty budget_type; the
@@ -1068,6 +1118,18 @@ export async function fetchLastKnownBudgetTypes(): Promise<
 > {
   const out: Record<string, LastKnownBudgetTypeEntry> = {};
 
+  // P0-1 (2026-06-10): date-bound the scan to ~120 days. It was UNBOUNDED and
+  // paginated date-ASC, so once meta CBO/ABO rows in campaigns_daily crossed
+  // paginate()'s 50k ceiling, the NEWEST rows — exactly the "last-known"
+  // values this reader exists to find — would have been silently dropped.
+  // 120 days is ample: the chip backfill only matters for campaigns with
+  // in-range rows whose ENTIRE window carries a derived-empty budget_type;
+  // a campaign with no non-empty budget_type in 4 months loses only the
+  // soft backfill (the chip renders '—', the documented enhancement-only
+  // contract). Plain UTC date math — the ±1-day IL-timezone slop is
+  // immaterial at a 120-day horizon.
+  const cutoff = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
   let rows: DbRow[];
   try {
     rows = await paginate<DbRow>(() => {
@@ -1075,8 +1137,9 @@ export async function fetchLastKnownBudgetTypes(): Promise<
         .from('campaigns_daily')
         .select('store_id, platform, campaign_id, ad_set_id, budget_type, date')
         .eq('platform', 'meta')
-        .in('budget_type', ['CBO', 'ABO']);
-    }, ['date', 'store_id', 'platform', 'campaign_id', 'ad_set_id']);
+        .in('budget_type', ['CBO', 'ABO'])
+        .gte('date', cutoff);
+    }, ['date', 'store_id', 'platform', 'campaign_id', 'ad_set_id'], 1000, 'campaigns_daily (fetchLastKnownBudgetTypes)');
   } catch (e) {
     console.warn(`postgresReaders.fetchLastKnownBudgetTypes: ${(e as Error).message}`);
     return out;
@@ -1444,14 +1507,6 @@ export async function fetchCohortMonthlyFromPostgres(
 //     it runs in code over the raw `payment_gateway` rather than in SQL.
 // ────────────────────────────────────────────────────────────────────────
 
-/**
- * תשלומים — canonical orders_attribution SELECT for the payment-methods
- * aggregate. Exported so the select-string presence guard can pin every
- * downstream-consumed column (a dropped column otherwise reads back undefined).
- * Mirrors the ORDERS_ATTRIBUTION_SELECT / COHORT_MONTHLY_SELECT convention.
- */
-export const PAYMENT_METHODS_SELECT = 'store_id, date, total_cad, payment_gateway';
-
 /** One gateway bucket: order count + revenue (CAD, already FX-converted). */
 export type PaymentBucket = { orders: number; revenueCad: number };
 
@@ -1483,15 +1538,24 @@ function emptyCategoryTotals(): PaymentCategoryTotals {
 /**
  * Aggregate orders_attribution per month × store × payment category.
  *
- * - Reads the raw `payment_gateway` and categorizes in code via
- *   `categorizePaymentGateway` (regex-based — not expressible cheaply in the
- *   PostgREST select). NULL / unbackfilled gateways fall into `other`.
- * - Revenue sums `total_cad` (already FX-converted to CAD; no FX work here).
- * - Month derived from the `date` string's 'YYYY-MM' prefix (orders_attribution
- *   `date` is an IL-local 'YYYY-MM-DD' day key — same source the other order
- *   readers consume), so month bucketing stays consistent with the rest of the
- *   reader layer without a SQL date_trunc.
- * - Paginated (via `paginate()`) to bypass Supabase Cloud's db-max-rows=1000.
+ * P0-1 (2026-06-10): the GROUP BY now runs IN SQL via the
+ * `agg_payment_methods_monthly` RPC (migration 20260610130000). This replaces
+ * a full-table `paginate()` scan of orders_attribution (no date bound, ordered
+ * store_id, order_id ASC) that silently truncated at the 50k-row ceiling —
+ * orders_attribution was at ~46.8k rows growing ~2,100/month, so by ~Aug 2026
+ * the lexicographically-LAST store's (zolplus) NEWEST orders would have
+ * vanished from the תשלומים tab. The RPC returns one row per
+ * month × store × RAW gateway (a few hundred rows, unbounded by table growth).
+ *
+ * - The RPC emits the RAW `payment_gateway` (NULL COALESCE'd to '' — which
+ *   `categorizePaymentGateway` buckets identically to NULL: 'other'), so the
+ *   regex-based categorization stays HERE in code, adjustable as before.
+ * - `orders` counts every order row (even NULL total_cad); `revenue_cad` sums
+ *   COALESCE(total_cad, 0) — both exactly mirroring the previous JS loop
+ *   (`orders += 1` unconditionally; toNumber() coerced NULL to 0).
+ * - month = to_char(date, 'YYYY-MM') — same value the previous
+ *   `String(r.date).slice(0, 7)` produced (date is DATE NOT NULL in the
+ *   initial schema, so it is always well-formed).
  * - Per-store buckets are keyed by the store DISPLAY NAME (STORE_NAME_BY_ID,
  *   e.g. 'Zol Plus' / '360usmile') — NOT the raw store_id — so the keys match
  *   `data.stores` (built from `storeName`) and the global store filter that the
@@ -1502,10 +1566,9 @@ function emptyCategoryTotals(): PaymentCategoryTotals {
 export async function readPaymentMethodsByMonth(): Promise<PaymentMethodsByMonth> {
   let data: DbRow[];
   try {
-    data = await paginate<DbRow>(
-      () => getSupabase().from('orders_attribution').select(PAYMENT_METHODS_SELECT),
-      ['store_id', 'order_id'],
-    );
+    const { data: rpcData, error } = await getSupabase().rpc('agg_payment_methods_monthly');
+    if (error) throw new Error(error.message);
+    data = (rpcData ?? []) as DbRow[];
   } catch (e) {
     throw new Error(`postgresReaders.readPaymentMethodsByMonth: ${(e as Error).message}`);
   }
@@ -1514,19 +1577,20 @@ export async function readPaymentMethodsByMonth(): Promise<PaymentMethodsByMonth
   const byMonth = new Map<string, PaymentMethodsMonth>();
 
   for (const r of data) {
-    const month = String(r.date ?? '').slice(0, 7);
-    // Guard against malformed dates (no 'YYYY-MM' prefix) — skip rather than
-    // bucket under an empty month key.
+    const month = String(r.month ?? '');
+    // Guard against malformed month keys — skip rather than bucket under an
+    // empty/partial key (defense-in-depth; the RPC always emits 'YYYY-MM').
     if (month.length !== 7) continue;
 
     const storeId = String(r.store_id);
     // Key per-store buckets by the DISPLAY NAME so they match data.stores /
     // the global store filter (the client identifies stores by name, not id).
     const storeKey = STORE_NAME_BY_ID[storeId] ?? storeId;
-    const category = categorizePaymentGateway(
-      r.payment_gateway == null ? null : String(r.payment_gateway),
-    );
-    const revenueCad = toNumber(r.total_cad);
+    // gateway is COALESCE(payment_gateway, '') from the RPC; '' and NULL
+    // categorize identically ('other') — see categorizePaymentGateway.
+    const category = categorizePaymentGateway(r.gateway == null ? null : String(r.gateway));
+    const orders = toNumber(r.orders);
+    const revenueCad = toNumber(r.revenue_cad);
 
     let entry = byMonth.get(month);
     if (!entry) {
@@ -1540,9 +1604,10 @@ export async function readPaymentMethodsByMonth(): Promise<PaymentMethodsByMonth
       entry.perStore[storeKey] = store;
     }
 
-    store[category].orders += 1;
+    // Multiple raw gateways can land in the same category — accumulate.
+    store[category].orders += orders;
     store[category].revenueCad += revenueCad;
-    entry.business[category].orders += 1;
+    entry.business[category].orders += orders;
     entry.business[category].revenueCad += revenueCad;
   }
 

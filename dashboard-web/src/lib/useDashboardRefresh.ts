@@ -89,10 +89,19 @@ export function useDashboardRefresh(): RefreshState {
         await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
         if (signal.aborted) break;
         try {
-          const probe = await fetch(`/api/data?_t=${Date.now()}`, {
-            cache: 'no-store',
-            signal,
-          });
+          // P1-20 (2026-06-10 audit): the probe MUST carry a valid from/to —
+          // since the P1-2 hardening, /api/data without range params returns
+          // HTTP 400, so the old bare probe NEVER set backendDone and every
+          // press ran the full 180s watchdog with a false timeout warning.
+          // A 1-day today-IL window is the cheapest valid probe.
+          const todayIl = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Jerusalem',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+          }).format(new Date());
+          const probe = await fetch(
+            `/api/data?from=${todayIl}&to=${todayIl}&_t=${Date.now()}`,
+            { cache: 'no-store', signal },
+          );
           if (probe.ok) {
             const json = (await probe.json()) as {
               dataLastWriteAt?: string | null;

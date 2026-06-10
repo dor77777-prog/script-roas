@@ -440,6 +440,11 @@ export async function hydrateFromCloud(): Promise<boolean> {
     }
 
     if (cloudVal === null || cloudVal === undefined) {
+      // P1-18 (2026-06-10 audit): if the key is ALREADY absent locally there
+      // is nothing to mirror — skip the remove + clear-conflict event +
+      // dispatchChange. Pre-fix this branch re-fired the change event every
+      // 30s poll for every null cloud row, even with nothing to clear.
+      if (readLocal(lsKey) === null) continue;
       // Cloud row exists but value is null or undefined.
       //  - null: the user (possibly on another device) cleared the key.
       //  - undefined: a row with key set but column B blank, possible if
@@ -494,6 +499,14 @@ export async function hydrateFromCloud(): Promise<boolean> {
     }
 
     // Cloud wins on the regular path.
+    //
+    // P1-18 (2026-06-10 audit): EQUALITY GUARD. Pre-fix, writeLocal +
+    // dispatchChange fired for EVERY cloud key on EVERY 30s poll regardless
+    // of whether the value changed — 'roas-billing-changed' alone triggered
+    // an /api/data SWR revalidation + a full re-aggregate cascade twice per
+    // poll, silently undoing the 120s auto-refresh cost-cut. Skip when the
+    // incoming cloud value deep-equals the current local value.
+    if (jsonEq(readLocal(lsKey), cloudVal)) continue;
     writeLocal(lsKey, cloudVal);
     // Audit fix 2026-05-23 (d/MD-01): same protection as above.
     try {
@@ -519,6 +532,21 @@ export async function hydrateFromCloud(): Promise<boolean> {
     }
   }
   return true;
+}
+
+/**
+ * P1-18 — structural equality via JSON round-trip. Both sides are
+ * already-parsed values (readLocal parses; cloud kv arrives parsed), so a
+ * stringify-compare is the cheapest stable deep-equal for these small
+ * settings payloads. Returns false on stringify failure (treat as changed).
+ */
+function jsonEq(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
 }
 
 function dispatchChange(lsKey: StateKey) {

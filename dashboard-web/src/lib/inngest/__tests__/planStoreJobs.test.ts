@@ -76,6 +76,30 @@ describe('planStoreJobs', () => {
         },
       ]);
     });
+
+    // P0-2 (2026-06-10): the yesterday scheduler fires 12×/day with the SAME
+    // date. Inngest dedupes events by id for 24h, so date-only ids made fires
+    // 2-12 silently no-op — the every-2h cadence was inert. tickId must
+    // produce a DIFFERENT id per fire while the payload stays date-only.
+    it('two scheduler fires on the same date with different tickIds produce DIFFERENT event ids (Inngest dedupe fix)', () => {
+      const fire1 = planStoreJobs(STORES, { family: 'yesterday', date: '2026-06-05', tickId: 'h00' });
+      const fire2 = planStoreJobs(STORES, { family: 'yesterday', date: '2026-06-05', tickId: 'h02' });
+
+      expect(fire1[0].id).toBe('cron-yesterday-uzoshop-2026-06-05-h00');
+      expect(fire2[0].id).toBe('cron-yesterday-uzoshop-2026-06-05-h02');
+      for (let i = 0; i < STORES.length; i++) {
+        expect(fire1[i].id).not.toBe(fire2[i].id);
+        // Payload is identical — only the id discriminates (tickId never leaks
+        // into data, so the worker contract is unchanged).
+        expect(fire1[i].data).toEqual(fire2[i].data);
+        expect(fire1[i].data).toEqual({ storeId: STORES[i], date: '2026-06-05' });
+      }
+    });
+
+    it('daily family (date only, one fire/day) keeps its historical id shape — the combine changes nothing', () => {
+      const jobs = planStoreJobs(STORES, { family: 'daily', date: '2026-06-06' });
+      expect(jobs[0].id).toBe('cron-daily-uzoshop-2026-06-06');
+    });
   });
 
   describe("family: 'live'", () => {

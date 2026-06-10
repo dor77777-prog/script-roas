@@ -58,7 +58,7 @@ export async function GET() {
         lastUpdated: new Date().toISOString(),
         error: userFacingError(message),
       },
-      { status: 200 },
+      { status: 200, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 }

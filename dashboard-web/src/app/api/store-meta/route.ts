@@ -47,6 +47,6 @@ export async function GET() {
     // auto-detect feature instead of breaking BillingSettings entirely.
     // Sanitize the error message before sending — raw Supabase errors can
     // leak schema/table internals into the client.
-    return NextResponse.json({ rows: [], error: userFacingError(message) }, { status: 200 });
+    return NextResponse.json({ rows: [], error: userFacingError(message) }, { status: 200, headers: { 'Cache-Control': 'no-store' } });
   }
 }

@@ -55,8 +55,10 @@ export async function GET(req: Request) {
 
   try {
     const rows = await fetchOrdersAttributionFromPostgres({ range, includeLineItems });
-    if (rows.length > 50000) {
-      console.warn(`/api/orders-attribution: large response (${rows.length} rows) — consider pagination`);
+    // P0-1 (2026-06-10): >= not > — paginate() caps at EXACTLY 50,000 rows,
+    // so the old `> 50000` guard was mathematically unreachable.
+    if (rows.length >= 50000) {
+      console.warn(`/api/orders-attribution: response at the paginate() ceiling (${rows.length} rows) — likely truncated (P0-1)`);
     }
     return NextResponse.json(
       { rows, lastUpdated: new Date().toISOString() } satisfies OrdersAttributionResponse,

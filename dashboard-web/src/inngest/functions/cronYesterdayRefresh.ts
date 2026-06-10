@@ -134,7 +134,18 @@ export const cronYesterdayRefreshScheduler = inngest.createFunction(
   async ({ step }) => {
     const jobs = await step.run('load-stores', async () => {
       const stores = await loadActiveStoreIds();
-      return planStoreJobs(stores, { family: 'yesterday', date: yesterdayJerusalem() });
+      // P0-2 (2026-06-10): hour-bucket tickId so each of the 12 daily fires
+      // emits a UNIQUE event id. Pre-fix the id was date-only → Inngest's 24h
+      // event-id idempotency deduped fires 2-12 and the every-2h cadence was
+      // completely inert (yesterday reconciled once, at 00:15, right after
+      // cron-daily had already done the same date). Computed INSIDE step.run
+      // so retries of the same scheduler run reuse the memoized ids.
+      const hourBucket = 'h' + new Date().toISOString().slice(11, 13);
+      return planStoreJobs(stores, {
+        family: 'yesterday',
+        date: yesterdayJerusalem(),
+        tickId: hourBucket,
+      });
     });
 
     // Emit one event per store, staggered. step.sleep + step.sendEvent are both

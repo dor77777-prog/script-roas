@@ -131,9 +131,14 @@ describe('useDashboardRefresh (d/CR-03 — cache-bust is per-iteration)', () => 
     // Each probe URL must be UNIQUE — Date.now() advances between iterations.
     const unique = new Set(probeUrls);
     expect(unique.size).toBe(probeUrls.length);
-    // Sanity: every probe URL is the cache-busted shape.
+    // Sanity: every probe URL carries a VALID 1-day from/to (P1-20,
+    // 2026-06-10 — /api/data without range params 400s since P1-2, so the
+    // old bare `?_t=` probe never set backendDone and every press ran the
+    // full 180s watchdog) plus the cache-bust.
     for (const u of probeUrls) {
-      expect(u).toMatch(/^\/api\/data\?_t=\d+$/);
+      expect(u).toMatch(/^\/api\/data\?from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}&_t=\d+$/);
+      const m = u.match(/from=(\d{4}-\d{2}-\d{2})&to=(\d{4}-\d{2}-\d{2})/)!;
+      expect(m[1]).toBe(m[2]); // 1-day window — cheapest valid probe
     }
   });
 });

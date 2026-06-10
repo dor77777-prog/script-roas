@@ -202,6 +202,37 @@ export function Dashboard() {
     return readDashboardState({ tab: 'home', filters: defaults }, window.location.search).filters;
   });
 
+  // P1-19 (2026-06-10 audit): IL-midnight rollover. filters.range was computed
+  // ONCE in the useState initializer, so a session left open across Israel
+  // midnight (the operator's documented pattern) kept showing YESTERDAY
+  // labeled "היום" indefinitely — with a green freshness chip — and
+  // stableNcacRange's `to` froze at the mount date. A minute-tick +
+  // visibilitychange listener tracks the IL day; when it rolls, every
+  // non-custom relative preset re-derives its range and stableNcacRange's
+  // `to` advances.
+  const [ilToday, setIlToday] = useState(() => getTodayInIsraelTz());
+  useEffect(() => {
+    const check = () =>
+      setIlToday(prev => {
+        const now = getTodayInIsraelTz();
+        return now === prev ? prev : now;
+      });
+    const iv = setInterval(check, 60_000);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, []);
+  useEffect(() => {
+    setFilters(f => {
+      if (f.preset === 'custom') return f;
+      const next = computePresetRange(f.preset);
+      if (next.from === f.range.from && next.to === f.range.to) return f;
+      return { ...f, range: next };
+    });
+  }, [ilToday]);
+
   const { data: rawData, error, isLoading, mutate } = useSWR<DashboardData>(
     buildDateRangeKey('/api/data', filters.range),
     fetcher,
@@ -297,9 +328,12 @@ export function Dashboard() {
   // These keys are distinct from the range-scoped keys above, so they ride the
   // single useAutoRefresh(60s) tick like every other key but never re-fire when
   // the user changes the date filter (only at IL-midnight, when `to` rolls).
+  // P1-19: `to` rides the shared ilToday tick so the window actually rolls at
+  // IL-midnight (the [] deps froze it at the mount date, contradicting the
+  // comment above).
   const stableNcacRange = useMemo(
-    () => ({ from: SPEND_HISTORY_FLOOR, to: getTodayInIsraelTz() }),
-    [],
+    () => ({ from: SPEND_HISTORY_FLOOR, to: ilToday }),
+    [ilToday],
   );
   const { data: stableSpendData } = useSWR<DashboardData>(
     buildDateRangeKey('/api/data', stableNcacRange),

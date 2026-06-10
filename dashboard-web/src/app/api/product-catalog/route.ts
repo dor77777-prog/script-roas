@@ -40,6 +40,6 @@ export async function GET() {
     console.error('product-catalog fetch failed:', message);
     // Degrade gracefully — picker falls back to /api/products list when this
     // route returns empty.
-    return NextResponse.json({ rows: [], error: userFacingError(message) }, { status: 200 });
+    return NextResponse.json({ rows: [], error: userFacingError(message) }, { status: 200, headers: { 'Cache-Control': 'no-store' } });
   }
 }
