@@ -51,7 +51,7 @@ import { RoasChart } from '@/components/RoasChart';
 import { useStores } from '@/lib/useStores';
 import { buildStoreBrandColorMap } from '@/lib/storeColors';
 import { useDrawerEsc } from '@/lib/drawerStack';
-import { useRoasBandGradient, type RoasBand } from '@/lib/format/useRoasBandGradient';
+import { useRoasBandGradient, BAND_TAG_LABEL } from '@/lib/format/useRoasBandGradient';
 import { adDisplayState, adDisplayBand } from '@/lib/adState';
 import { roasLabel } from '@/lib/analytics';
 import { ROAS_TONE_BG, ROAS_BADGE_SHAPE } from '@/lib/format/roasCell';
@@ -61,17 +61,11 @@ import type { DailyRow } from '@/lib/types';
 import type { StoreDetailData } from '@/lib/home/storeDetail';
 
 /* --------------------------------------------------------------------------
- * Band-tag label per band id — mirrors PerStoreRow's canonical wording so
- * the modal header pill reads identically to the per-store card it opened from.
+ * Band-tag wording: the SHARED canonical BAND_TAG_LABEL (P2-33, 2026-06-10
+ * audit) — this file used to keep a private copy that could silently drift
+ * from PerStoreRow / the RoasTargetChart KPI chip. One source of truth now
+ * (lib/format/useRoasBandGradient, guarded by roasBandConsistency.guard).
  * -------------------------------------------------------------------------- */
-const BAND_TAG_LABEL: Record<RoasBand, string> = {
-  red:         'דורש בחינה',
-  'red-alarm': '0 מכירות',
-  orange:      'סביר',
-  green:       'טוב',
-  blue:        'מעולה',
-  gray:        'אין נתונים',
-};
 
 export interface StoreDetailModalProps {
   data: StoreDetailData | null;

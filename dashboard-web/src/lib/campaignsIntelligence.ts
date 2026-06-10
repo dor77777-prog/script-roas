@@ -39,6 +39,7 @@ import { computeMultiMappingCohort } from './multiMappingCohort';
 import { detectProductCannibalization } from './cannibalizationDetection';
 import { analyzeCpmVsRoas, type DailyCpmRoasPoint } from './cpmRoasAnalysis';
 import { campaignKey, type ProductMap } from './campaignProductMap';
+import { getTodayInIsraelTz } from './dateRange';
 import type { Aggregated } from './campaignsAggregator';
 import type { TrueRevenueInfo } from './hooks/useCampaignTrueRevenue';
 import type { DateRange } from './types';
@@ -111,6 +112,16 @@ export function buildHealthByKey(inputs: BuildHealthByKeyInputs): Map<string, Ca
 
   const out = new Map<string, CampaignHealth>();
 
+  // P1-7 (audit 2026-06-10): the trajectory signal is computed from
+  // COMPLETED days only. dailyByCampaign (built component-side from the
+  // visible range) includes the in-progress Israel day, whose
+  // lagged-attribution ROAS understates the day every morning —
+  // analyzeCpmVsRoas then read a fake "ROAS collapsing" recent half and the
+  // health grade swung B↔C by time of day. The chart display keeps today;
+  // only the health-trajectory input drops it (mirrors the insights.ts
+  // z-score / streak today-1 anchor and detectCampaignDied).
+  const todayIl = getTodayInIsraelTz();
+
   // Build per-key ROAS lookups from trueRevenueByKey so the cohort module can
   // rank without re-computing.
   //
@@ -155,8 +166,13 @@ export function buildHealthByKey(inputs: BuildHealthByKeyInputs): Map<string, Ca
 
     const info = trueRevenueByKey.get(campaignKey(a.storeId, a.platform, a.campaignId));
     const series = dailyByCampaign.get(a.key);
+    // P1-7: exclude the in-progress IL day from the trajectory evaluation
+    // (see comment above). The 5-day gate applies to COMPLETED days.
+    const completedSeries = series?.filter((p) => p.date !== todayIl);
     const trajectory =
-      series && series.length >= 5 ? analyzeCpmVsRoas(series) : undefined;
+      completedSeries && completedSeries.length >= 5
+        ? analyzeCpmVsRoas(completedSeries)
+        : undefined;
     const base = computeCampaignHealth({
       aggregated: a,
       trueRevenueInfo: info,

@@ -99,6 +99,48 @@ describe('manualOverrides — mergeOverridesFromSupabase', () => {
     expect(mockState.fxCalls).toEqual([]);
   });
 
+  // P1-11 (2026-06-10): the NO-override fetched path null-preserves on FX
+  // failure (returns null; persist-batch omits the column) instead of
+  // throwing. Meta is always ILS, so the old throw ran on EVERY nightly merge
+  // — one Frankfurter outage failed the whole apply-overrides step
+  // pre-persist and lost Shopify+Google+TikTok for that (store, day).
+  it('P1-11: fetched-path FX throw → fbSpendCad null + totalSpendCad null, does NOT throw; Google CAD passthrough survives', async () => {
+    // No override rows; Meta fetched spend is ILS and FX is down.
+    mockState.fxResponder = () => {
+      throw new Error('Frankfurter 503');
+    };
+
+    const result = await mergeOverridesFromSupabase({
+      storeId: 'uzoshop',
+      date: '2026-05-19',
+      metaSpend: { spend: 100, currency: 'ILS' },
+      googleSpend: { spend: 25, currency: 'CAD' },
+    });
+
+    expect(result.fbSpendCad).toBeNull(); // null → persist-batch omits fb_spend_cad
+    expect(result.gaSpendCad).toBe(25); // CAD passthrough unaffected
+    expect(result.totalSpendCad).toBeNull(); // no partial sums
+    expect(result.overridesApplied).toEqual({ meta: false, google: false, tiktok: false });
+  });
+
+  it('P1-11: OVERRIDE path still throws on FX failure (operator value is authoritative)', async () => {
+    mockState.rows = [
+      { date: '2026-05-19', store_id: 'uzoshop', platform: 'meta', spend: 100, currency: 'ILS' },
+    ];
+    mockState.fxResponder = () => {
+      throw new Error('Frankfurter 503');
+    };
+
+    await expect(
+      mergeOverridesFromSupabase({
+        storeId: 'uzoshop',
+        date: '2026-05-19',
+        metaSpend: { spend: 50, currency: 'CAD' },
+        googleSpend: { spend: 25, currency: 'CAD' },
+      }),
+    ).rejects.toThrow(/Frankfurter 503/);
+  });
+
   it('replaces Meta spend with FX-converted override row (ILS→CAD); leaves Google untouched', async () => {
     mockState.rows = [
       { date: '2026-05-19', store_id: 'uzoshop', platform: 'meta', spend: 100, currency: 'ILS' },

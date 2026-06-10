@@ -63,10 +63,22 @@ export type MergeInput = {
 };
 
 export type MergeResult = {
-  fbSpendCad: number;
-  gaSpendCad: number;
+  /**
+   * P1-11 (2026-06-10) — FX doctrine at the merge layer: `null` means the
+   * NON-override fetched value could not be FX-converted (Frankfurter
+   * outage). cronDaily's persist-batch OMITS the corresponding data_daily
+   * column (+ the derived totals) so ON CONFLICT preserves the prior value
+   * — mirroring the tt_spend_cad / cadFor CRIT-5 pattern that already lives
+   * one step later. Override values (operator-typed) still THROW on FX
+   * failure: the operator value is authoritative and the run SHOULD surface
+   * an error if its currency can't be converted (documented in the TikTok
+   * branch below).
+   */
+  fbSpendCad: number | null;
+  gaSpendCad: number | null;
   ttSpendCad: number;
-  totalSpendCad: number;
+  /** null when fbSpendCad or gaSpendCad is null (no partial sums). */
+  totalSpendCad: number | null;
   overridesApplied: { meta: boolean; google: boolean; tiktok: boolean };
 };
 
@@ -80,10 +92,26 @@ type OverrideRow = {
   currency: string;
 };
 
-async function spendToCad(input: SpendInput, dateStr: string): Promise<number> {
+// P1-11 (2026-06-10): the no-override path returns `null` on FX failure
+// instead of throwing. Meta is always ILS, so this ran (and could throw) on
+// EVERY nightly merge — a Frankfurter outage here failed the WHOLE
+// apply-manual-overrides step pre-persist, losing Shopify revenue + Google +
+// TikTok for that (store, day) until the next ~24h auto-retry. Null-preserve
+// semantics match cronDaily's documented FX doctrine (CRIT-5 / O4-CR-01):
+// persist-batch omits the column; ON CONFLICT preserves the prior value.
+async function spendToCad(input: SpendInput, dateStr: string): Promise<number | null> {
   if (input.currency === 'CAD') return input.spend;
-  const rate = await getFxRate(input.currency, 'CAD', dateStr);
-  return input.spend * rate;
+  try {
+    const rate = await getFxRate(input.currency, 'CAD', dateStr);
+    return input.spend * rate;
+  } catch (e) {
+    console.warn(
+      `manual-overrides merge: FX ${input.currency}→CAD failed for ${dateStr} — ` +
+        `returning null so persist-batch omits the column (ON CONFLICT preserves prior value). ` +
+        `Error: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    return null;
+  }
 }
 
 async function overrideToCad(row: OverrideRow, dateStr: string): Promise<number> {
@@ -120,7 +148,10 @@ export async function mergeOverridesFromSupabase(
 
   // Resolve Meta side first, then Google. `.find` is fine — at most one row
   // per (date, store_id, platform) thanks to the UNIQUE constraint.
-  let fbSpendCad: number;
+  // P1-11: override path (overrideToCad) still throws on FX failure
+  // (operator value is authoritative); fetched path (spendToCad) returns
+  // null → persist-batch omits the column.
+  let fbSpendCad: number | null;
   const metaRow = rows.find((r) => r.platform === 'meta');
   if (metaRow) {
     fbSpendCad = await overrideToCad(metaRow, date);
@@ -129,7 +160,7 @@ export async function mergeOverridesFromSupabase(
     fbSpendCad = await spendToCad(metaSpend, date);
   }
 
-  let gaSpendCad: number;
+  let gaSpendCad: number | null;
   const googleRow = rows.find((r) => r.platform === 'google');
   if (googleRow) {
     gaSpendCad = await overrideToCad(googleRow, date);
@@ -182,6 +213,13 @@ export async function mergeOverridesFromSupabase(
     }
   }
 
-  const totalSpendCad = fbSpendCad + gaSpendCad + ttSpendCad;
+  // P1-11: no partial sums — a total computed without a failed platform's
+  // spend would contradict the (preserved) per-platform column. Null total
+  // → persist-batch omits total_spend_cad / roas / gross / net the same way
+  // it already does for a TikTok FX failure.
+  const totalSpendCad =
+    fbSpendCad === null || gaSpendCad === null
+      ? null
+      : fbSpendCad + gaSpendCad + ttSpendCad;
   return { fbSpendCad, gaSpendCad, ttSpendCad, totalSpendCad, overridesApplied };
 }

@@ -61,12 +61,20 @@ type Props = {
   /** True while the underlying SWR data is still loading — suppresses the
    *  "all good" empty state so we don't flash "nothing to do" before data lands. */
   loading?: boolean;
+  /**
+   * P1-4c (2026-06-10 state-honesty sweep) — true when ANY of the parent's
+   * data feeds FAILED. A failed feed means the analysis is blind, so the calm
+   * green "אין פעולות דחופות כרגע. הכול נראה תקין." all-clear would be a lie
+   * (an outage rendered as a healthy business). Renders a neutral
+   * can't-analyze state instead.
+   */
+  error?: boolean;
   onMark: (insight: Insight, kind: InsightStateKind) => void;
   adAccounts: AdAccountMap;
   className?: string;
 };
 
-export function ActionListPanel({ insights, loading, onMark, adAccounts, className }: Props) {
+export function ActionListPanel({ insights, loading, error, onMark, adAccounts, className }: Props) {
   const count = insights.length;
 
   return (
@@ -92,12 +100,27 @@ export function ActionListPanel({ insights, loading, onMark, adAccounts, classNa
         </span>
       </div>
 
-      {/* Body */}
+      {/* Body — order matters: loading → error → all-clear. The all-clear is
+          allowed ONLY on settled SUCCESS with zero insights (P1-4c). */}
       {count === 0 ? (
         loading ? (
           <div className="px-5 sm:px-6 py-6 flex items-center gap-2 text-sm text-ink-muted">
             <RefreshCw size={14} className="animate-spin" />
             מנתח נתונים…
+          </div>
+        ) : error ? (
+          <div
+            role="alert"
+            data-testid="action-list-error"
+            className="px-5 sm:px-6 py-6 flex items-center gap-3"
+          >
+            <AlertTriangle size={16} className="shrink-0 text-ink-muted" aria-hidden />
+            <div className="text-[12px] sm:text-sm text-ink-secondary">
+              <span className="text-ink font-semibold">לא ניתן לטעון תובנות כרגע.</span>{' '}
+              <span className="text-ink-muted">
+                אחת מקריאות הנתונים נכשלה — זה לא אומר שהכול תקין. נסה לרענן בעוד רגע.
+              </span>
+            </div>
           </div>
         ) : (
           <div className="px-5 sm:px-6 py-6 flex items-center gap-3">

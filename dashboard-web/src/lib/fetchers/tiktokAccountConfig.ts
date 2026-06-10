@@ -164,27 +164,40 @@ export async function getTikTokAccountForStore(
 
 /**
  * FX adapter mirroring `getFxCadAdapterForStore` in metaAccountConfig.ts.
- * Uses today's Frankfurter rate; `'CAD'` is identity. Returns 0 on
- * Frankfurter error so a transient outage doesn't block the worker — the
- * resulting row records spend_cad=0 which the operator panel can flag.
+ * Uses today's Frankfurter rate; `'CAD'` is identity.
+ *
+ * P1-11 (2026-06-10) — FX doctrine: returns `null` (NOT 0) on Frankfurter
+ * failure. Callers OMIT the `*_cad` keys from the upsert payload when the
+ * conversion is null so ON CONFLICT preserves the last good value, instead of
+ * overwriting real intraday spend with $0 every 10-min tick. The throttled
+ * notifyFxFailure alert (DQ-2) is preserved. Per-currency result cached in
+ * the closure for batch-uniform keys + fewer Frankfurter hits.
  */
 export async function getTikTokFxCadAdapterForStore(
   _storeId: StoreId,
-): Promise<(amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number>> {
+): Promise<(amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number | null>> {
   const dateStr = new Date().toISOString().slice(0, 10);
+  const rateCache = new Map<string, number | null>();
   return async (amount, currency) => {
     if (currency === 'CAD') return amount;
-    try {
-      const rate = await getFxRate(currency, 'CAD', dateStr);
-      if (!Number.isFinite(rate) || rate <= 0) {
-        // DQ-2: alert instead of silently zeroing CAD spend.
-        await notifyFxFailure({ currency, dateStr, errorMsg: `invalid rate ${rate}` });
-        return 0;
+    let rate = rateCache.get(currency);
+    if (rate === undefined) {
+      try {
+        const fetched = await getFxRate(currency, 'CAD', dateStr);
+        if (!Number.isFinite(fetched) || fetched <= 0) {
+          // DQ-2: alert instead of silently corrupting CAD spend.
+          await notifyFxFailure({ currency, dateStr, errorMsg: `invalid rate ${fetched}` });
+          rate = null;
+        } else {
+          rate = fetched;
+        }
+      } catch (e) {
+        await notifyFxFailure({ currency, dateStr, errorMsg: e instanceof Error ? e.message : String(e) });
+        rate = null;
       }
-      return amount * rate;
-    } catch (e) {
-      await notifyFxFailure({ currency, dateStr, errorMsg: e instanceof Error ? e.message : String(e) });
-      return 0;
+      rateCache.set(currency, rate);
     }
+    if (rate === null) return null;
+    return amount * rate;
   };
 }

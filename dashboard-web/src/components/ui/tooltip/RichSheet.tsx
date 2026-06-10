@@ -10,6 +10,7 @@ import {
 import { Info, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { isNonPhrasingChild } from './phrasing';
+import { markEscHandledByInnerLayer } from '@/lib/drawerStack';
 import {
   Sheet,
   SheetContent,
@@ -51,6 +52,14 @@ export interface RichSheetProps {
   /** Accessible label for the ⓘ button. */
   label?: string;
   className?: string;
+  /**
+   * 2026-06-10 audit (touch double-ⓘ): force the CHILD itself to be the tap
+   * trigger even when it is phrasing content. Used when the child already IS
+   * a dedicated help affordance (the column-header violet ⓘ Button) — pairing
+   * a second sibling gray ⓘ rendered TWO ⓘ glyphs, with the operator's
+   * violet one dead (its only handler is stopPropagation).
+   */
+  forceChildTrigger?: boolean;
 }
 
 export function RichSheet({
@@ -59,6 +68,7 @@ export function RichSheet({
   title,
   label,
   className,
+  forceChildTrigger = false,
 }: RichSheetProps) {
   const [open, setOpen] = useState(false);
 
@@ -76,12 +86,17 @@ export function RichSheet({
   // block container) can't legally sit inside the `<span>` ⓘ-pairing wrapper
   // and can't have a sibling `<button>`. For those the child ITSELF opens the
   // sheet on tap — its own onClick is preserved (called first), then we open.
-  const childIsTrigger = isNonPhrasingChild(children);
+  // `forceChildTrigger` extends the same model to a phrasing child that
+  // already IS the help affordance (the violet column-header ⓘ Button).
+  const childIsTrigger = forceChildTrigger || isNonPhrasingChild(children);
 
   const triggerChild = childIsTrigger
     ? cloneElement(children as ReactElement<{ onClick?: (e: MouseEvent) => void }>, {
         onClick: (e: MouseEvent) => {
           (children as ReactElement<{ onClick?: (e: MouseEvent) => void }>).props.onClick?.(e);
+          // A help reveal must never bubble into an ancestor row's drill
+          // onClick (2026-06-10 audit: in-row taps double-fired).
+          e.stopPropagation();
           setOpen(true);
         },
       })
@@ -91,7 +106,12 @@ export function RichSheet({
     <button
       type="button"
       aria-label={buttonLabel}
-      onClick={() => setOpen(true)}
+      // stopPropagation (2026-06-10 audit): an in-row ⓘ tap must open the
+      // help sheet ONLY — not bubble into the row's own drill onClick.
+      onClick={(e) => {
+        e.stopPropagation();
+        setOpen(true);
+      }}
       className={cn(
         // 24px glyph; `::after` inset expands the hit area to ≥44px (WCAG 2.5.8).
         'relative inline-flex h-6 w-6 flex-none items-center justify-center rounded-full',
@@ -131,6 +151,10 @@ export function RichSheet({
           // We render our own header/close below, so suppress the auto X.
           hideDefaultClose
           dir="rtl"
+          // Mark the Esc as consumed by THIS layer so the shared drawer stack
+          // doesn't also close a drawer underneath (2026-06-10 audit: Esc
+          // double-dismiss). No preventDefault — Radix still dismisses.
+          onEscapeKeyDown={markEscHandledByInnerLayer}
         >
           {/* Radix wires `aria-describedby` to this <SheetDescription> via its
               own descriptionId — that both silences the "Missing Description"

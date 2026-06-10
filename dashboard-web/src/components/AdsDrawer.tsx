@@ -517,9 +517,13 @@ export function AdsDrawer({
             <div className="text-center py-10 text-ink-muted">
               <Layers size={28} className="mx-auto mb-2 text-ink-subtle" />
               <div className="text-sm">אין נתוני מודעות לטווח הזה.</div>
+              {/* Copy-truth (2026-06-10 audit P1-26): used to say "ודא
+                  ש-runDailyUpdate רץ" — an Apps-Script entry point removed
+                  post-Phase-11. Current pipeline: the hot-metrics worker
+                  refreshes ads_daily ~every 10 min; "רענן הכל" forces it. */}
               <div className="text-[11px] mt-1 leading-relaxed">
-                ודא ש-<code className="font-mono">runDailyUpdate</code>{' '}
-                רץ לפחות פעם אחת מאז שהפיצ&apos;ר נפרס.
+                ה-worker של נתוני המודעות מתעדכן בערך כל 10 דק׳ — אם המודעות
+                חדשות, חכה סבב קצר או לחץ &quot;רענן הכל&quot; בראש הטאב.
               </div>
             </div>
           )}

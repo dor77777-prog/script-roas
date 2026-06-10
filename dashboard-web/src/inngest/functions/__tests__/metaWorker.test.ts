@@ -159,6 +159,66 @@ describe('runMetaWorkerJob()', () => {
     expect(rows[0]).not.toHaveProperty('conversions');
   });
 
+  // P1-12 (2026-06-10): the status branch previously had NO try/catch — a
+  // thrown fetch (including metaStatus.asArray's new throw-on-batch-part-error)
+  // left zero freshness rows and, worse, a swallowed inner error fell through
+  // to the unconditional success write. Now it mirrors its google/tiktok
+  // siblings: transient_error per scope + re-throw (Inngest retries).
+  it('P1-12: status fetchStatus rejects → records transient_error for all 3 status scopes, then re-throws', async () => {
+    const err = new Error('Meta status batch part failed (code=500): {"error":{"message":"throttled"}}');
+    const fetchStatus = vi.fn().mockRejectedValue(err);
+    const upsertRegistry = vi.fn();
+    const recordFreshness = vi.fn();
+    await expect(runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 900, budget_pct_estimate: 12 },
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
+      fetchStatus,
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry,
+      insertStatusEvents: vi.fn(),
+      recordFreshness,
+      upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
+      nowIso: NOW_ISO,
+    })).rejects.toThrow('throttled');
+    // Nothing was upserted (the failure happened at fetch)…
+    expect(upsertRegistry).not.toHaveBeenCalled();
+    // …and the operator panel sees transient_error for ALL 3 status scopes
+    // (previously: zero rows + Inngest retry with no panel signal).
+    const transientCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'transient_error');
+    expect(transientCalls.map(c => c[0].scope).sort()).toEqual(['ad_status', 'adset_status', 'campaign_status']);
+    expect(transientCalls.every(c => /throttled/.test(c[0].errorMessage))).toBe(true);
+    // No false-green: zero success rows.
+    expect(recordFreshness.mock.calls.some(c => c[0].status === 'success')).toBe(false);
+  });
+
+  it('P1-12: status upsertRegistry rejects mid-pipeline → transient_error ×3 + re-throw (no success rows)', async () => {
+    const fetchStatus = vi.fn().mockResolvedValue({
+      campaigns: [freshCampaign('C1', 'ACTIVE')],
+      adsets: [], ads: [],
+      bucUsage: {
+        ads_insights_call_pct: 12, ads_insights_cputime_pct: 5, ads_insights_time_pct: 5, ads_insights_eta_minutes: 0,
+        ads_management_call_pct: 7, ads_management_cputime_pct: 2, ads_management_time_pct: 2, ads_management_eta_minutes: 0,
+      },
+    });
+    const recordFreshness = vi.fn();
+    await expect(runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 900, budget_pct_estimate: 12 },
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
+      fetchStatus,
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn().mockRejectedValue(new Error('campaign_registry upsert: connection reset')),
+      insertStatusEvents: vi.fn(),
+      recordFreshness,
+      upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
+      nowIso: NOW_ISO,
+    })).rejects.toThrow('connection reset');
+    const transientCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'transient_error');
+    expect(transientCalls).toHaveLength(3);
+    expect(recordFreshness.mock.calls.some(c => c[0].status === 'success')).toBe(false);
+  });
+
   it('ignores scope !== status (Phase C will handle hot_metrics)', async () => {
     const fetcher = vi.fn();
     await runMetaWorkerJob({

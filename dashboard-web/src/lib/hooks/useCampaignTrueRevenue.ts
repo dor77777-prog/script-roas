@@ -92,6 +92,13 @@ function computeConfidence(
   spend: number,
   sharedCampaigns: number,
   mappedCount: number,
+  // P1-25 (2026-06-10 audit, bbadd3c class): the reason strings used to
+  // hardcode the literal "Meta" — a TikTok-mapped or Google row read a
+  // gap-vs-Meta reason, sending the operator to the wrong ad account. The
+  // platform is in scope at the call site (a.platform); the neutral default
+  // keeps any legacy caller honest. Guarded by the P1-25 grep-guard in
+  // attributionPlatformTagging.test.ts.
+  platform: string = 'הפלטפורמה',
 ): ConfidenceLevel {
   const reasons: string[] = [];
   let level: ConfidenceLevel['level'] = 'high';
@@ -113,13 +120,13 @@ function computeConfidence(
     return current;
   }
 
-  // Hard gap thresholds — Meta and Shopify telling different stories.
+  // Hard gap thresholds — the platform and Shopify telling different stories.
   if (gap > 0.7) {
     level = 'low';
-    reasons.push(`פער של ${(gap * 100).toFixed(0)}% מול Meta — בדוק לעומק לפני שמסיק מסקנות`);
+    reasons.push(`פער של ${(gap * 100).toFixed(0)}% מול ${platform} — בדוק לעומק לפני שמסיק מסקנות`);
   } else if (gap > 0.3) {
     level = applyDowngrade(level, 'medium');
-    reasons.push(`פער של ${(gap * 100).toFixed(0)}% מול Meta — סביר, יתכן שילוב של over-attribution + halo`);
+    reasons.push(`פער של ${(gap * 100).toFixed(0)}% מול ${platform} — סביר, יתכן שילוב של over-attribution + halo`);
   }
 
   // Shared products. 3+ is always concerning; 1-2 only matters when there's
@@ -137,7 +144,7 @@ function computeConfidence(
   // (that's actually evidence the mapping is correct).
   if (mappedCount < 2 && metaClaim > 0 && trueRevenue < metaClaim * 0.5) {
     level = applyDowngrade(level, 'medium');
-    reasons.push('מוצר יחיד משויך + פער גדול מול Meta — ייתכן שמיפוי לא מלא');
+    reasons.push(`מוצר יחיד משויך + פער גדול מול ${platform} — ייתכן שמיפוי לא מלא`);
   }
 
   // Low spend = small sample. Used to be an automatic LOW downgrade, which
@@ -548,7 +555,7 @@ export function useCampaignTrueRevenue(opts: {
               score: Math.round(100 - gap * 100),
             },
             reasons: [
-              `הסכמה בין Meta ל-Shopify mapping בתוך ${(gap * 100).toFixed(1)}% — שתי שיטות עצמאיות חופפות, סיגנל חזק`,
+              `הסכמה בין ${a.platform} ל-Shopify mapping בתוך ${(gap * 100).toFixed(1)}% — שתי שיטות עצמאיות חופפות, סיגנל חזק`,
               ...attribution.reasons,
             ],
           };
@@ -561,7 +568,7 @@ export function useCampaignTrueRevenue(opts: {
               score: Math.max(attribution.trust.score, Math.round(70 - gap * 100)),
             },
             reasons: [
-              `Meta ↔ Shopify mapping מסכימים בתוך ${(gap * 100).toFixed(0)}% — חיזוק חלקי לאמינות, גם ש-click-id coverage נמוך`,
+              `${a.platform} ↔ Shopify mapping מסכימים בתוך ${(gap * 100).toFixed(0)}% — חיזוק חלקי לאמינות, גם ש-click-id coverage נמוך`,
               ...attribution.reasons,
             ],
           };
@@ -585,7 +592,7 @@ export function useCampaignTrueRevenue(opts: {
         mappedCount: mappedIds.length,
         sharedCampaigns: shared,
         spend: a.spend,
-        confidence: computeConfidence(trueRevenue, a.conversionValue, a.spend, shared, mappedIds.length),
+        confidence: computeConfidence(trueRevenue, a.conversionValue, a.spend, shared, mappedIds.length, a.platform),
         attribution,
         productTotals,
         deterministicRevenue: alloc.deterministicRevenue,

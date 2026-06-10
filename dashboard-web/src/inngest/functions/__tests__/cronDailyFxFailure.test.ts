@@ -567,4 +567,49 @@ describe('cronDaily — FX failure preserves prior CAD via per-row omit (CRIT-5)
     ).find((r) => r.platform === 'tiktok')!;
     expect('spend_cad' in tiktokCampRow).toBe(false);
   });
+
+  // -----------------------------------------------------------------------
+  // Scenario 4 (P1-11, 2026-06-10): MERGE-layer FX failure. The
+  // apply-manual-overrides step's spendToCad now returns null instead of
+  // throwing (the old throw failed the WHOLE step pre-persist — Shopify +
+  // Google + TikTok lost for the day). persist-batch must OMIT fb_spend_cad
+  // (+ the fb_impressions pair + every derived total) and still land all
+  // other writes.
+  // -----------------------------------------------------------------------
+  it('Scenario 4 (P1-11): merge-layer returns fbSpendCad=null → data_daily omits fb_spend_cad + totals; everything else lands', async () => {
+    const overridesMod = await import('@/lib/fetchers/manualOverrides');
+    (overridesMod.mergeOverridesFromSupabase as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        fbSpendCad: null, // merge-layer FX failure (Meta is ILS nightly)
+        gaSpendCad: 50,
+        ttSpendCad: 0,
+        totalSpendCad: null, // no partial sums
+        overridesApplied: { meta: false, google: false, tiktok: false },
+      });
+
+    const { step } = makeMockStep();
+    // Critical: the run must NOT throw (the old behavior failed the whole
+    // nightly persist for the store).
+    await expect(
+      runDailyForStore('uzoshop', '2026-05-20', { step }),
+    ).resolves.toBeDefined();
+
+    const dataDailyCall = mockState.upserts.find((u) => u.table === 'data_daily');
+    expect(dataDailyCall).toBeDefined();
+    const row = dataDailyCall!.rows as Record<string, unknown>;
+    // fb pair omitted → ON CONFLICT preserves prior values.
+    expect('fb_spend_cad' in row).toBe(false);
+    expect('fb_impressions' in row).toBe(false);
+    // Derived totals omitted (would contradict the preserved fb column).
+    expect('total_spend_cad' in row).toBe(false);
+    expect('roas' in row).toBe(false);
+    expect('gross_profit_cad' in row).toBe(false);
+    expect('net_profit_cad' in row).toBe(false);
+    // ga pair + revenue still land.
+    expect(row.ga_spend_cad).toBe(50);
+    expect(row.revenue_cad).toBe(1234);
+    // Sibling tables still write.
+    expect(mockState.upserts.some((u) => u.table === 'products_daily')).toBe(true);
+    expect(mockState.upserts.some((u) => u.table === 'orders_attribution')).toBe(true);
+  });
 });

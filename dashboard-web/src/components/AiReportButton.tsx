@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
-import { Bot, Copy, Check, Download, X, Loader2 } from 'lucide-react';
+import { AlertTriangle, Bot, Copy, Check, Download, X, Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateAiReport } from '@/lib/aiReport';
 import { Button } from '@/components/ui/Button';
@@ -15,7 +15,7 @@ import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/rou
 import type { AdsResponse } from '@/app/api/ads/route';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { readProductMap } from '@/lib/campaignProductMap';
-import { fetchJsonOrNull } from '@/lib/fetchJson';
+import { fetchJsonStrict } from '@/lib/fetchJson';
 import { aggregate, filterRows } from '@/lib/analytics';
 import { useSalarySettings } from '@/lib/hooks/useSalarySettings';
 import { salariesForRange } from '@/lib/salarySettings';
@@ -67,18 +67,42 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
   const campaignsKey = open ? buildDateRangeKey('/api/campaigns', filters.range) : null;
   const ordersKey = open ? buildDateRangeKey('/api/orders-attribution', filters.range) : null;
   const adsKey = open ? buildDateRangeKey('/api/ads', filters.range) : null;
-  const { data: products } = useSWR<ProductsResponse | null>(productsKey, fetchJsonOrNull, {
+  // P1-4b (2026-06-10 state-honesty sweep) — pre-fix all four used
+  // fetchJsonOrNull: a products/campaigns failure left `dataReady` false
+  // FOREVER (perpetual "טוען נתונים…" spinner), and orders/ads failures
+  // silently dropped those sections from the generated report. Now every
+  // fetcher throws (on !ok AND on a 200-with-error body) so we can tell
+  // "failed" apart from "loading": products+campaigns errors disable the
+  // generate button with an explicit reason + retry; orders/ads stay
+  // optional (the report degrades gracefully) but their failure is SIGNALED
+  // with a small note instead of being invisible.
+  const {
+    data: products,
+    error: productsError,
+    mutate: mutateProducts,
+  } = useSWR<ProductsResponse | null>(productsKey, fetchJsonStrict, {
     revalidateOnFocus: false,
   });
-  const { data: campaigns } = useSWR<CampaignsResponse | null>(campaignsKey, fetchJsonOrNull, {
+  const {
+    data: campaigns,
+    error: campaignsError,
+    mutate: mutateCampaigns,
+  } = useSWR<CampaignsResponse | null>(campaignsKey, fetchJsonStrict, {
     revalidateOnFocus: false,
   });
-  const { data: orders } = useSWR<OrdersAttributionResponse | null>(ordersKey, fetchJsonOrNull, {
+  const { data: orders, error: ordersError } = useSWR<OrdersAttributionResponse | null>(
+    ordersKey,
+    fetchJsonStrict,
+    { revalidateOnFocus: false },
+  );
+  const { data: ads, error: adsError } = useSWR<AdsResponse | null>(adsKey, fetchJsonStrict, {
     revalidateOnFocus: false,
   });
-  const { data: ads } = useSWR<AdsResponse | null>(adsKey, fetchJsonOrNull, {
-    revalidateOnFocus: false,
-  });
+  const coreError = productsError ?? campaignsError ?? null;
+  const optionalMissing: string[] = [
+    ...(ordersError ? ['הזמנות'] : []),
+    ...(adsError ? ['מודעות'] : []),
+  ];
 
   // Phase 12.5.x audit fix (2026-05-24, HIGH #1) — when the operator edits
   // the product-map (CampaignDrawer / picker), invalidate the SWR caches the
@@ -182,7 +206,10 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
 
   // Orders are nice-to-have (the report degrades gracefully when missing),
   // so we don't gate "create report" on them — only the core two datasets.
+  // P1-4b: a CORE error is NOT "still loading" — the button must say so
+  // instead of spinning forever.
   const dataReady = !!products && !!campaigns;
+  const coreLoading = !dataReady && !coreError;
 
   return (
     <>
@@ -249,6 +276,63 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
                 </p>
               </div>
 
+              {/* P1-4b — core (products/campaigns) failure: explicit error
+                  strip + retry; the generate button is disabled with a REASON
+                  instead of an endless "טוען נתונים…" spinner. */}
+              {coreError != null && (
+                <div
+                  role="alert"
+                  data-testid="ai-report-error"
+                  className="rounded-xl border border-status-red bg-status-redBg text-status-redFg px-4 py-3"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-[13px]">
+                        שגיאה בטעינת נתוני הדוח
+                      </div>
+                      <div className="text-[11px] opacity-80 mt-1 leading-relaxed">
+                        הקריאה ל-
+                        <code className="font-mono">
+                          {productsError ? '/api/products' : '/api/campaigns'}
+                        </code>{' '}
+                        נכשלה — אי אפשר ליצור דוח בלי הנתונים האלה. נסה שוב.
+                      </div>
+                      <div className="text-[10px] opacity-60 mt-1 font-mono">
+                        {coreError instanceof Error ? coreError.message : String(coreError)}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          void mutateProducts();
+                          void mutateCampaigns();
+                        }}
+                        className="mt-2 gap-1.5 text-[12px]"
+                      >
+                        <RefreshCw size={12} />
+                        נסה שוב
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* P1-4b — orders/ads are optional (the report degrades
+                  gracefully without them) but their failure must be SIGNALED,
+                  not silent: the operator should know the report will be
+                  partial before pasting it into an AI tool. */}
+              {coreError == null && optionalMissing.length > 0 && (
+                <div
+                  data-testid="ai-report-partial-note"
+                  className="rounded-lg border border-status-warning bg-status-warningBg px-3 py-2 text-[11px] text-status-warningFg leading-relaxed"
+                >
+                  נתוני {optionalMissing.join(' + ')} לא נטענו — הדוח ייווצר בלעדיהם
+                  (הסעיפים האלה יחסרו).
+                </div>
+              )}
+
               {!report && (
                 <Button
                   type="button"
@@ -261,7 +345,12 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
                       <Loader2 size={16} className="animate-spin" />
                       מכין את הדוח…
                     </>
-                  ) : !dataReady ? (
+                  ) : coreError != null ? (
+                    <>
+                      <AlertTriangle size={16} />
+                      לא ניתן ליצור דוח — הנתונים לא נטענו
+                    </>
+                  ) : coreLoading ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
                       טוען נתונים…

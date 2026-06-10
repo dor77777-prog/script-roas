@@ -390,6 +390,96 @@ describe('analyzeAttribution', () => {
   });
 
   // ----------------------------------------------------------------
+  // P1-8 (audit 2026-06-10) — trust-ladder outage honesty.
+  // (a) platform claims ZERO conversions while Shopify has real tagged
+  //     orders → that is the signature of a tracking outage (the TikTok
+  //     conversions=0 incident, fixed c8c38a9), NOT a halo to scale into.
+  //     Pre-fix: computeCoverage's claim=0→1 fallback routed this into the
+  //     high-trust branch → 'אמין 90 + שקול גידול תקציב 20-40%'.
+  // (b) coverage > 2 (coverageExceedsClamp) → the panel shows the red
+  //     'בדוק את הפיקסל' banner; the verdict below it must not say
+  //     'high trust + scale budget' in the same card.
+  // ----------------------------------------------------------------
+
+  describe('trust-ladder outage honesty (P1-8)', () => {
+    it('claim=0 + det>0 → distinct "platform reports 0" verdict, NOT high-trust halo', () => {
+      const campaign = makeCampaign({ metaClaim: 0, spend: 100 });
+      const orders = Array.from({ length: 2 }, (_, i) =>
+        makeOrder({ orderId: `o-${i}`, totalCad: 100, utmId: 'camp-1', date: '2026-05-10' }),
+      );
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      // Coverage VALUE keeps the legacy claim=0→1 fallback (test-locked in
+      // the computeCoverage suite below) — only the VERDICT changes.
+      expect(result!.coverage).toBe(1);
+      expect(result!.trust.level).toBe('unknown');
+      expect(result!.trust.score).toBe(40);
+      expect(result!.trust.label).toBe('הפלטפורמה מדווחת 0');
+      // Reasons explain the asymmetry: platform 0, Shopify real orders.
+      const reasonsJoined = result!.reasons.join(' ');
+      expect(reasonsJoined).toMatch(/0 המרות/);
+      expect(reasonsJoined).toMatch(/2 הזמנות/);
+      // Recommendation = check the conversion tag — NEVER scale advice.
+      expect(result!.recommendation).toMatch(/תגית|Pixel|CAPI/);
+      expect(result!.recommendation).not.toMatch(/גידול תקציב|halo/i);
+    });
+
+    it('claim=0 + det>0 for a Google campaign points at the conversion tag (no Pixel/CAPI copy)', () => {
+      const campaign = makeCampaign({
+        platform: 'Google',
+        campaignId: '23590447604',
+        metaClaim: 0,
+        spend: 100,
+      });
+      const orders = [
+        makeOrder({ orderId: 'g-1', source: 'google-paid', totalCad: 150, utmId: '23590447604', utmCampaign: '', date: '2026-05-10' }),
+      ];
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.trust.level).toBe('unknown');
+      expect(result!.trust.label).toBe('הפלטפורמה מדווחת 0');
+      // Google has no Pixel/CAPI — the copy must reference the conversion tag.
+      expect(result!.recommendation).toMatch(/תגית/);
+      expect(result!.recommendation).not.toMatch(/Pixel\/CAPI/);
+      expect(result!.recommendation).not.toMatch(/גידול תקציב/);
+    });
+
+    it('coverage 2.5 → trust capped at medium + pixel-check recommendation (no scale advice)', () => {
+      // Meta claims $100; Shopify sees $250 click-id-tagged → coverage 2.5
+      // (> COVERAGE_WARNING_THRESHOLD). Pre-fix: trust high + the SAME
+      // scale advice under the red pixel banner.
+      const campaign = makeCampaign({ metaClaim: 100, spend: 100 });
+      const orders = [
+        makeOrder({ orderId: 'o-0', totalCad: 120, utmId: 'camp-1', date: '2026-05-10' }),
+        makeOrder({ orderId: 'o-1', totalCad: 130, utmId: 'camp-1', date: '2026-05-11' }),
+      ];
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.coverage).toBeCloseTo(2.5, 4);
+      expect(result!.coverageExceedsClamp).toBe(true);
+      // Cap: never 'high' when the pixel-broken flag is up.
+      expect(result!.trust.level).toBe('medium');
+      // Scale advice swapped for the pixel check — ONE story per card.
+      expect(result!.recommendation).not.toMatch(/גידול תקציב|halo/i);
+      expect(result!.recommendation).toMatch(/Pixel|פיקסל|תגית/);
+    });
+
+    it('normal halo (coverage 1.3, ≤ 2) keeps the high-trust scale recommendation', () => {
+      // Symmetry guard: the cap only fires ABOVE the warning threshold.
+      const campaign = makeCampaign({ metaClaim: 500, spend: 200 });
+      const orders = Array.from({ length: 8 }, (_, i) =>
+        makeOrder({ orderId: `o-${i}`, totalCad: 81, utmId: 'camp-1', date: '2026-05-10' }),
+      );
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.coverage).toBeCloseTo(1.296, 3);
+      expect(result!.coverageExceedsClamp).toBe(false);
+      expect(result!.trust.level).toBe('high');
+      expect(result!.recommendation).toMatch(/halo|גידול תקציב/i);
+    });
+  });
+
+  // ----------------------------------------------------------------
   // T0 (2026-06-02) — Google un-excluded at CAMPAIGN GRAIN ONLY.
   // ----------------------------------------------------------------
 

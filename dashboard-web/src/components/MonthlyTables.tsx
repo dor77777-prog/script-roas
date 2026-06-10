@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { TableBase } from '@/components/ui/TableBase';
 import { buildDateRangeKey } from '@/lib/dateRange';
+import { fetchJsonStrict } from '@/lib/fetchJson';
 import { roasCell } from '@/lib/format/roasCell';
 import { RoasBadge, roasCellTdClass } from '@/lib/format/RoasBadge';
 import { Heading } from '@/components/ui/Typography';
@@ -121,14 +122,12 @@ function isoToday(): string {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-const fetcher = async (url: string): Promise<DashboardData> => {
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body?.error || `Failed to load (${res.status})`);
-  }
-  return res.json() as Promise<DashboardData>;
-};
+// P1-4 (2026-06-10 state-honesty sweep) — fetchJsonStrict also throws on the
+// /api/data 200-with-error degraded body (WR-06). The archive-year SWR key is
+// OUTSIDE the Dashboard's WR-06 banner scope, so without this a degraded body
+// rendered as a legitimately-empty year instead of the existing red error line.
+const fetcher = (url: string): Promise<DashboardData> =>
+  fetchJsonStrict<DashboardData>(url);
 
 
 export function MonthlyTables({
@@ -240,7 +239,11 @@ export function MonthlyTables({
 
   if (error) {
     return (
-      <div className={cn('px-4 sm:px-5 py-6 text-sm text-status-redFg', bare && 'border-b border-glass-edge')}>
+      <div
+        role="alert"
+        data-testid="monthly-tables-error"
+        className={cn('px-4 sm:px-5 py-6 text-sm text-status-redFg', bare && 'border-b border-glass-edge')}
+      >
         שגיאה בטעינת הטבלאות החודשיות: {error instanceof Error ? error.message : String(error)}
       </div>
     );

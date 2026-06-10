@@ -18,7 +18,10 @@ export const Switch = forwardRef<
     )}
     {...props}
   >
-    <RadixSwitch.Thumb className="block h-4 w-4 rounded-full bg-glass-1 shadow-glass transition-transform data-[state=checked]:translate-x-4 rtl:data-[state=checked]:-translate-x-4 translate-x-0.5" />
+    {/* Unchecked inset is direction-aware (2026-06-10 audit): the flex start
+        edge flips in RTL, so the +2px physical inset must flip to −2px there
+        or the thumb overhangs the pill edge in every operator panel. */}
+    <RadixSwitch.Thumb className="block h-4 w-4 rounded-full bg-glass-1 shadow-glass transition-transform translate-x-0.5 rtl:-translate-x-0.5 data-[state=checked]:translate-x-4 rtl:data-[state=checked]:-translate-x-4" />
   </RadixSwitch.Root>
 ));
 Switch.displayName = RadixSwitch.Root.displayName;

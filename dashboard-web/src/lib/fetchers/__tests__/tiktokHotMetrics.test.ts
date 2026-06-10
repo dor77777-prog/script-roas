@@ -33,6 +33,40 @@ describe('fetchTikTokHotMetricsForStore()', () => {
     });
   });
 
+  // P1-11 (2026-06-10): FX failure → adapter returns null → the row payload
+  // OMITS spend_cad + conversion_value_cad (key-level) so the worker's upsert
+  // ON CONFLICT preserves the last good value instead of zeroing it.
+  it('P1-11: FX adapter returns null → adset rows omit spend_cad/conversion_value_cad but keep non-CAD metrics', async () => {
+    const adgroupBody = {
+      code: 0,
+      data: {
+        list: [{
+          dimensions: { adgroup_id: 'TG1' },
+          metrics: { spend: '25.5', impressions: '1000', clicks: '20', conversion: 3, complete_payment: '3', value_per_complete_payment: '50.0' },
+        }],
+      },
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(adgroupBody), { status: 200 }));
+    const out = await fetchTikTokHotMetricsForStore({
+      storeId: 'uzoshop', advertiserId: '12345', accessToken: 'tok',
+      hotCampaignIds: ['TC1'], hotAdgroupIds: ['TG1'], hotAdIds: [],
+      dateStr: '2026-05-30', campaignStoreMap: {},
+      accountCurrency: 'USD',
+      adsetIdToCampaignId: new Map([['TG1', 'TC1']]),
+      fetcher: fetchMock,
+      // Frankfurter outage: USD→CAD conversion fails.
+      getFxCadFor: async () => null,
+    });
+    expect(out.adsets).toHaveLength(1);
+    expect(out.adsets[0]).not.toHaveProperty('spend_cad');
+    expect(out.adsets[0]).not.toHaveProperty('conversion_value_cad');
+    // Non-CAD metrics still refresh this tick.
+    expect(out.adsets[0]).toMatchObject({
+      campaign_id: 'TC1', ad_set_id: 'TG1',
+      impressions: 1000, clicks: 20, conversions: 3,
+    });
+  });
+
   it('AUCTION_ADGROUP request sends only ["adgroup_id"] in dimensions', async () => {
     const adgroupBody = { code: 0, data: { list: [] } };
     const calls: string[] = [];

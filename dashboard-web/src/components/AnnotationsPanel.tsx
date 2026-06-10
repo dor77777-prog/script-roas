@@ -169,7 +169,12 @@ export function AnnotationsPanel({ range, store }: Props) {
                         <span
                           className="text-base shrink-0 grid place-items-center w-7 h-7 rounded"
                           style={{
-                            background: ANNOTATION_KIND_COLOR[a.kind] + '15',
+                            // P2-50 (2026-06-10 audit): ANNOTATION_KIND_COLOR
+                            // values are var(--…) strings — appending a hex
+                            // alpha ('15') produced invalid CSS ("var(--x)15")
+                            // → transparent chip. color-mix derives the same
+                            // ~8% tint from the token validly.
+                            background: `color-mix(in srgb, ${ANNOTATION_KIND_COLOR[a.kind]} 12%, transparent)`,
                             color: ANNOTATION_KIND_COLOR[a.kind],
                           }}
                           aria-label={ANNOTATION_KIND_LABEL[a.kind]}

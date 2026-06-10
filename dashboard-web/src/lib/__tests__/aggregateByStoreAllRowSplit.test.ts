@@ -112,11 +112,15 @@ function row(overrides: Partial<DailyRow> = {}): DailyRow {
 // ---------------------------------------------------------------------------
 
 describe('aggregateByStore pre-splits All-scoped billing (CRIT-1 / O3-CR-01)', () => {
-  const RANGE: DateRange = { from: '2026-05-01', to: '2026-05-30' };
+  // P1-31a (2026-06-10, D3): billing now prorates by TRUE calendar months
+  // (full month = exactly monthlyCAD), so the fixture window is the FULL May
+  // (31 days) — the old May-1..30 window relied on the retired ×days/30
+  // convention to hit round numbers.
+  const RANGE: DateRange = { from: '2026-05-01', to: '2026-05-31' };
 
   it('sum of per-store fixedCosts == global fixedCosts when an All row is present (to the cent)', () => {
     // Production-shape: 3 store-specific recurring rows + 1 All-scoped row.
-    // 30-day window → 30/30 multiplier on each monthly amount.
+    // Full-May window → calendar proration = exactly the monthly amounts (D3).
     seedRecurring(mem, [
       { id: 'r1', store: 'uzoshop',   name: 'Shopify Plan A', source: 'shopify-plan',  monthlyCAD: 105, active: true },
       { id: 'r2', store: 'Zol Plus',  name: 'Shopify Plan B', source: 'shopify-plan',  monthlyCAD: 105, active: true },
@@ -142,7 +146,7 @@ describe('aggregateByStore pre-splits All-scoped billing (CRIT-1 / O3-CR-01)', (
     const perStore = aggregateByStore(rows, RANGE);
 
     // Global expected: 3 store-specific @ 105 + All Klaviyo 60 + All one-time 300 = 675.
-    // (30-day range × 30/30 multiplier = full monthly amounts.)
+    // (Full calendar month = exactly the monthly amounts under D3 proration.)
     expect(global.fixedCosts).toBeCloseTo(675, 6);
 
     // Sum-of-per-store invariant — the hammer that pins the fix:
@@ -335,7 +339,7 @@ describe('aggregateByStore pre-splits All-scoped billing (CRIT-1 / O3-CR-01)', (
     const global = aggregate(rows, RANGE);
     const perStore = aggregateByStore(rows, RANGE);
 
-    // Global: fixed 60 × (30/30) + percent 5% × 300k = 60 + 15000 = 15060.
+    // Global: fixed 60 (full May = exactly monthlyCAD, D3) + percent 5%% × 300k = 15060.
     expect(global.fixedCosts).toBeCloseTo(15_060, 6);
 
     const sumPerStore = perStore.reduce((s, x) => s + x.fixedCosts, 0);

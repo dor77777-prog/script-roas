@@ -76,13 +76,19 @@ export async function insertStatusEventsBatch(input: {
 }): Promise<void> {
   const { admin, events } = input;
   if (events.length === 0) return;
+  // P1-32 (2026-06-10): true ON CONFLICT (dedupe_key) DO NOTHING via
+  // PostgREST upsert + ignoreDuplicates. The previous plain `.insert()` that
+  // treated error 23505 as benign was WRONG for multi-row batches: Postgres
+  // aborts the ENTIRE multi-row INSERT on one unique violation, so a mixed
+  // dup+new batch silently dropped the NEW transitions feeding the operator
+  // panel and the campaign-died/fatigue detectors. With DO NOTHING, dupes are
+  // skipped row-by-row and new rows land. (Same pattern as
+  // lib/webhooks/store.ts:70.) dedupe_key is a GENERATED STORED column —
+  // valid as a conflict target; it is never part of the payload.
   const { error } = await admin
     .from('campaign_status_events')
-    .insert(events, { count: 'exact', defaultToNull: true });
-  // ON CONFLICT (dedupe_key) DO NOTHING is enforced by the UNIQUE
-  // constraint. Translate the 23505 unique_violation into a soft warning
-  // (we already deduped in app code; the constraint is belt-and-suspenders).
-  if (error && error.code !== '23505') {
+    .upsert(events, { onConflict: 'dedupe_key', ignoreDuplicates: true });
+  if (error) {
     throw new Error(`insert campaign_status_events: ${error.message}`);
   }
 }

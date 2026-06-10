@@ -84,10 +84,21 @@ function installFetchMock() {
 
 const PROPS = { range: RANGE, store: 'uzoshop', stores: ['uzoshop'], dailyRows: [] };
 
-/** The clickable sort <button> inside a header cell carries aria-sort. */
+/**
+ * The clickable sort <button> inside a header cell. aria-sort moved to the
+ * <th> itself (2026-06-10 audit — valid ARIA placement), so the sort button
+ * is located as the cell's non-ⓘ button (the ⓘ help trigger carries an
+ * aria-label starting with "הסבר").
+ */
 function sortButton(cell: HTMLElement): HTMLElement {
-  const btn = cell.querySelector('button[aria-sort]') as HTMLElement | null;
-  expect(btn, 'header cell should contain an aria-sort button').not.toBeNull();
+  expect(
+    cell.getAttribute('aria-sort'),
+    'sortable header <th> should carry aria-sort',
+  ).not.toBeNull();
+  const btn = Array.from(cell.querySelectorAll('button')).find(
+    (b) => !(b.getAttribute('aria-label') ?? '').includes('הסבר'),
+  ) as HTMLElement | undefined;
+  expect(btn, 'header cell should contain a sort button').not.toBeUndefined();
   return btn as HTMLElement;
 }
 

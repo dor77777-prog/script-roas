@@ -207,14 +207,22 @@ async function safeCredentials(
   if (override) return override(storeId);
   try {
     return await defaultCredentials(storeId);
-  } catch {
-    // Unit-test path: env vars not set. The fetchStatus stub is a vi.fn()
-    // that ignores the input shape, so synthetic placeholders are fine.
-    return {
-      adAccountId: '',
-      accessToken: '',
-      getFxCadFor: async () => 0,
-    };
+  } catch (err) {
+    // P1-12 (2026-06-10): swallow ONLY under vitest (the fetchStatus stub is
+    // a vi.fn() that ignores the input shape, so synthetic placeholders are
+    // fine). In production a credential-resolution failure is a real
+    // misconfig — rethrow so the worker's catch records transient_error and
+    // Inngest retries, instead of driving an unguarded Graph batch with an
+    // empty access_token. Mirrors googleWorker's safeCustomer + tiktokWorker's
+    // safeAccount VITEST gating exactly.
+    if (process.env.VITEST) {
+      return {
+        adAccountId: '',
+        accessToken: '',
+        getFxCadFor: async () => 0,
+      };
+    }
+    throw err;
   }
 }
 
@@ -304,9 +312,18 @@ export async function runMetaWorkerJob(input: RunMetaWorkerJobInput): Promise<vo
     return;
   }
 
+  // P1-12 (2026-06-10): the status branch now mirrors its google/tiktok
+  // siblings' try/catch — any failure from credential resolution / the Graph
+  // batch / the diff+upsert pipeline records a transient_error freshness row
+  // per status scope BEFORE re-throwing (Inngest's exponential-backoff retry
+  // stays intact). Previously this branch had NO try/catch: a thrown fetch
+  // left zero freshness rows, and a swallowed inner batch-part error (see
+  // metaStatus.asArray) fell through to step 7's unconditional 'success'.
+  try {
   // 3. Resolve credentials + fetch — single batched Graph call returning all
-  //    3 entity types. safeCredentials swallows env-var errors so unit tests
-  //    with stubbed fetchStatus run without UZOSHOP_META_ACCESS_TOKEN set.
+  //    3 entity types. safeCredentials swallows env-var errors ONLY under
+  //    vitest so unit tests with stubbed fetchStatus run without
+  //    UZOSHOP_META_ACCESS_TOKEN set; in production it rethrows.
   const creds = await safeCredentials(storeId, getCredentials);
   const status: MetaStatusResult = await fetchStatus({
     storeId,
@@ -405,6 +422,25 @@ export async function runMetaWorkerJob(input: RunMetaWorkerJobInput): Promise<vo
       tableName: registryNameForScope(s),
       status: 'success',
     });
+  }
+  } catch (err) {
+    // P1-12: surface the failure to the operator panel by writing a
+    // transient_error row per status scope BEFORE re-throwing. Re-throwing
+    // keeps Inngest's exponential-backoff retry intact; the next successful
+    // tick overwrites the rows with status='success'. Mirrors
+    // googleWorker.runGoogleStatusBranch + tiktokWorker's status branch.
+    const message = err instanceof Error ? err.message : String(err);
+    for (const s of ['campaign_status', 'adset_status', 'ad_status'] as const) {
+      await rec({
+        storeId,
+        platform: 'meta',
+        scope: s,
+        tableName: registryNameForScope(s),
+        status: 'transient_error',
+        errorMessage: message,
+      });
+    }
+    throw err;
   }
 }
 

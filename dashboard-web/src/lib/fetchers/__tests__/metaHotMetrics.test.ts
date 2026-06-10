@@ -151,6 +151,53 @@ describe('fetchMetaHotMetricsForStore()', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  // P1-11 (2026-06-10): FX failure → adapter returns null → the row payload
+  // OMITS spend_cad + conversion_value_cad (key-level, not row-level) so the
+  // worker's upsert ON CONFLICT preserves the last good value. The non-CAD
+  // metrics (impressions/clicks/conversions) still refresh.
+  it('P1-11: FX adapter returns null → adset + ad rows omit spend_cad/conversion_value_cad but keep non-CAD metrics', async () => {
+    const fetchMock = mockFetch(BATCH_BODY);
+    const out = await fetchMetaHotMetricsForStore({
+      storeId: 'uzoshop', adAccountId: 'act_111', accessToken: 'tok',
+      hotCampaignIds: ['C1'], hotAdsetIds: ['AS1'], hotAdIds: ['AD1'],
+      dateStr: '2026-05-30', fetcher: fetchMock,
+      // Frankfurter outage: every non-CAD conversion fails.
+      getFxCadFor: async () => null,
+    });
+    expect(out.adsets).toHaveLength(1);
+    expect(out.adsets[0]).not.toHaveProperty('spend_cad');
+    expect(out.adsets[0]).not.toHaveProperty('conversion_value_cad');
+    // Non-CAD metrics still refresh this tick.
+    expect(out.adsets[0]).toMatchObject({
+      campaign_id: 'C1', ad_set_id: 'AS1', impressions: 500, clicks: 10,
+    });
+    expect(out.ads[0]).not.toHaveProperty('spend_cad');
+    expect(out.ads[0]).not.toHaveProperty('conversion_value_cad');
+    expect(out.ads[0]).toMatchObject({ ad_id: 'AD1', impressions: 500 });
+  });
+
+  // P1-12 (2026-06-10): inner batch-part failure must THROW (worker records
+  // transient_error + Inngest retries) instead of silently yielding [] and a
+  // false freshness-success.
+  it('P1-12: throws when an inner batch part has code !== 200 (error payload in the message)', async () => {
+    const errorPart = JSON.stringify({
+      error: { message: '(#80004) There have been too many calls', code: 80004 },
+    });
+    const batchBody = JSON.stringify([
+      { code: 400, body: errorPart },
+      { code: 200, body: AD_INSIGHTS_BODY },
+    ]);
+    const fetchMock = mockFetch(batchBody);
+    await expect(
+      fetchMetaHotMetricsForStore({
+        storeId: 'uzoshop', adAccountId: 'act_111', accessToken: 'tok',
+        hotCampaignIds: ['C1'], hotAdsetIds: ['AS1'], hotAdIds: ['AD1'],
+        dateStr: '2026-05-30', fetcher: fetchMock,
+        getFxCadFor: async (amount) => amount,
+      }),
+    ).rejects.toThrow(/code=400.*too many calls/);
+  });
+
   it('uses filtering=[IN, hot_ids] in each sub-request URL', async () => {
     const fetchMock = mockFetch(BATCH_BODY);
     await fetchMetaHotMetricsForStore({

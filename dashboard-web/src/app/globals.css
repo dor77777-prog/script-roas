@@ -1520,8 +1520,11 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 }
 
 /* Band chips — restate the band as a small uppercase pill alongside
-   the big number (e.g. "GREEN" / "RED"). Verbatim from mockup. */
-.band-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.06em; font-family: 'Geist Mono'; }
+   the big number (e.g. "GREEN" / "RED"). Verbatim from mockup.
+   Font (2026-06-10 audit): next/font registers Geist Mono under a HASHED
+   family name exposed via --font-geist-mono (layout.tsx) — the literal
+   'Geist Mono' never resolves unless the font is locally installed. */
+.band-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--font-geist-mono), ui-monospace, monospace; }
 .chip-red    { background: oklch(from var(--band-red) l c h / 0.18); color: var(--band-red); }
 .chip-orange { background: oklch(from var(--band-orange) l c h / 0.18); color: var(--band-orange); }
 .chip-green  { background: oklch(from var(--band-green) l c h / 0.18); color: var(--band-green); }
@@ -1597,7 +1600,7 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    22min" / "STALE · 1h 47min"). Pulse dot animates only when fresh.
    Renamed @keyframes to `fresh-pulse` to avoid collision with Tailwind's
    built-in `animate-pulse` utility (same trap as Task 1.1 cleanup). */
-.fresh-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; font-family: 'Geist Mono'; text-transform: uppercase; letter-spacing: 0.06em; }
+.fresh-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; font-family: var(--font-geist-mono), ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.06em; }
 .fresh-chip .pulse { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 6px currentColor; }
 .fresh-chip.live  { background: oklch(from var(--band-green) l c h / 0.18); color: var(--band-green); }
 .fresh-chip.aging { background: oklch(from var(--band-orange) l c h / 0.18); color: var(--band-orange); }
@@ -1764,7 +1767,7 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   padding: 3px 9px;
   border-radius: 999px;
   text-transform: uppercase;
-  font-family: 'Geist Mono';
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
   /* Deepened-bands (2026-06-01) — the card is now a DEEP vibrant gradient with
      all-white text, so the band-tag pill sits on a DARK SCRIM + WHITE text in
      both themes. The pill lives in the card header (top-LEFT corner = the

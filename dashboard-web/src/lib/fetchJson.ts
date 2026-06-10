@@ -1,3 +1,5 @@
+import { throwOnErrorBody } from '@/lib/throwOnErrorBody';
+
 /**
  * fetch + JSON parse with `cache: 'no-store'`.
  *
@@ -42,4 +44,18 @@ export async function fetchJsonOrNull<T>(url: string): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * 2026-06-10 (Wave 3 state-honesty sweep, P1-2/3/4) — the STRICT sibling:
+ * throws on `!res.ok` (like {@link fetchJson}) AND on a 200-with-error body
+ * (via {@link throwOnErrorBody}). Several routes soft-fail with HTTP 200 +
+ * `{ rows: [], error }` so SWR consumers stay consistent — a fetcher that only
+ * checks `res.ok` resolves that as success and the empty rows masquerade as a
+ * legitimate "no data" business verdict. Use this for every SWR fetcher whose
+ * component renders an explicit error state; keep `fetchJsonOrNull` only for
+ * genuinely optional cosmetic feeds (e.g. SyncIndicator).
+ */
+export async function fetchJsonStrict<T>(url: string): Promise<T> {
+  return throwOnErrorBody(await fetchJson<T>(url));
 }

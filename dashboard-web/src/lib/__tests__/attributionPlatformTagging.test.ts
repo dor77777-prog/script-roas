@@ -108,3 +108,40 @@ describe('analyzeAttribution recommendation is platform-correct', () => {
     expect(result!.recommendation).toContain('Pixel/CAPI');
   });
 });
+
+/* ---------------------------------------------------------------------------
+ * P1-25 (2026-06-10 audit) — hardcoded-"Meta" grep-guard over the two bbadd3c
+ * SURVIVORS the behavioural tests above can't reach (one is a React hook, the
+ * other a component-private helper): useCampaignTrueRevenue's confidence
+ * reason strings and ProductCentricView's "בלבד" delta chip. The guard scans
+ * the SOURCE for the exact banned phrases so the class ("the literal 'Meta'
+ * written where the row's platform belongs") cannot silently regress.
+ * ------------------------------------------------------------------------- */
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+describe('P1-25 grep-guard — no hardcoded "Meta" platform copy in the bbadd3c survivors', () => {
+  // src/ root, resolved like designColorGuard does (__dirname-relative — the
+  // suite must not depend on the vitest cwd).
+  const SRC_DIR = resolve(__dirname, '..', '..');
+  const FILES = [
+    'lib/hooks/useCampaignTrueRevenue.ts',
+    'components/ProductCentricView.tsx',
+  ];
+  // Phrases that put the LITERAL "Meta" where the row's platform belongs.
+  // (Comments may mention Meta; these phrases only ever appeared inside the
+  // operator-facing template literals.)
+  const BANNED = [
+    'מול Meta',           // "פער של X% מול Meta" on a TikTok/Google row
+    'Meta בלבד',          // the delta chip on a Google PMax row
+    'בין Meta ל-Shopify', // the two-method-agreement trust reason
+    'Meta ↔ Shopify',     // the partial-agreement trust reason
+  ];
+
+  it.each(FILES)('%s contains none of the banned hardcoded-Meta phrases', (rel) => {
+    const src = readFileSync(join(SRC_DIR, rel), 'utf8');
+    for (const phrase of BANNED) {
+      expect(src.includes(phrase), `found banned phrase "${phrase}" in ${rel}`).toBe(false);
+    }
+  });
+});

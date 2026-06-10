@@ -41,8 +41,13 @@ export function OperatorSecretBanner() {
 
   const handleSave = () => {
     const trimmed = input.trim();
-    setOperatorSecret(trimmed || null);
-    setStored(trimmed || null);
+    // Destructive-friction guard (2026-06-10 audit): Enter on an EMPTY input
+    // used to silently CLEAR the stored secret (the Save buttons are disabled
+    // when empty, but the onKeyDown path called handleSave unconditionally).
+    // Clearing is an explicit action — the "נקה" button (handleClear).
+    if (!trimmed) return;
+    setOperatorSecret(trimmed);
+    setStored(trimmed);
     setInput('');
     setShowInput(false);
     setSaved(true);

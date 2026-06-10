@@ -44,15 +44,18 @@ describe('Dashboard salaries wiring (T7 — dynamic salaries %)', () => {
   });
 
   it('threads salariesForRange into the current-range aggregate as the 5th arg', () => {
-    // aggregate(cur, filters.range, undefined, undefined, salariesForRange(salarySettings, cur, filters.range))
+    // P1-31b (2026-06-10, D4): args 3+4 are now the store-scope threading
+    // (scopedStoreNames + revenueByStoreFor(...)) so a store-filtered view
+    // carries only its fair share of All-scoped fixed costs. The guard pins
+    // the 5th arg (salaries) and the scope args by NAME, not `undefined`.
     expect(src).toMatch(
-      /aggregate\(\s*cur\s*,\s*filters\.range\s*,\s*undefined\s*,\s*undefined\s*,\s*salariesForRange\(\s*salarySettings\s*,\s*cur\s*,\s*filters\.range\s*\)\s*\)/,
+      /aggregate\(\s*cur\s*,\s*filters\.range\s*,\s*scopedStoreNames\s*,\s*revenueByStoreFor\(\s*filters\.range\s*\)\s*,\s*salariesForRange\(\s*salarySettings\s*,\s*cur\s*,\s*filters\.range\s*\)\s*\)/,
     );
   });
 
   it('threads salariesForRange into the previous-range aggregate as the 5th arg', () => {
     expect(src).toMatch(
-      /aggregate\(\s*prev\s*,\s*prevR\s*,\s*undefined\s*,\s*undefined\s*,\s*salariesForRange\(\s*salarySettings\s*,\s*prev\s*,\s*prevR\s*\)\s*\)/,
+      /aggregate\(\s*prev\s*,\s*prevR\s*,\s*scopedStoreNames\s*,\s*revenueByStoreFor\(\s*prevR\s*\)\s*,\s*salariesForRange\(\s*salarySettings\s*,\s*prev\s*,\s*prevR\s*\)\s*\)/,
     );
   });
 

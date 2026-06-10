@@ -197,11 +197,24 @@ describe('<ActivityFeed> — LIVE badge state machine', () => {
 });
 
 describe('<ActivityFeed> — empty / listening state', () => {
-  it('shows the "מאזין בזמן אמת…" empty state with the 3-stores copy', () => {
+  it('shows the "מאזין בזמן אמת…" empty state with the dynamic store-count copy', () => {
     swrReturn = { data: resp({ lastReceivedAt: null, events: [] }), error: undefined };
     render(<ActivityFeed />);
     expect(screen.getByText(/מאזין בזמן אמת/)).toBeInTheDocument();
-    expect(screen.getByText(/3 החנויות/)).toBeInTheDocument();
+    // P1-26 (2026-06-10): the count is now DYNAMIC (useStores → fallback 3).
+    // Both the empty state ("מחובר ל-3 החנויות") and the footer
+    // ("מאזין ל-3 החנויות") carry it.
+    expect(screen.getByText(/מחובר ל-3 החנויות/)).toBeInTheDocument();
+    expect(screen.getByText(/מאזין ל-3 החנויות/)).toBeInTheDocument();
+  });
+
+  it('scopes the copy to the filtered store when a store filter is active (P1-26)', () => {
+    swrReturn = { data: resp({ lastReceivedAt: null, events: [] }), error: undefined };
+    render(<ActivityFeed store="zolplus" />);
+    // Filtered to one store → no "N חנויות" claim; the store name appears.
+    expect(screen.getByText(/מחובר לחנות zolplus/)).toBeInTheDocument();
+    expect(screen.getByText(/מאזין לחנות zolplus/)).toBeInTheDocument();
+    expect(screen.queryByText(/החנויות/)).toBeNull();
   });
 });
 

@@ -141,70 +141,88 @@ function detectMetricAnomalies(
   const today = rows[rows.length - 1];
   const todayDate = today.date;
 
-  // Build series per metric
-  const revenue = rows.map(r => r.revenue);
-  const spend = rows.map(r => r.totalSpend);
-  const roas = rows.map(r => (r.totalSpend > 0 ? r.revenue / r.totalSpend : 0));
+  // P1-7 (audit 2026-06-10): NEVER anchor the z-score / ROAS-streak rules on
+  // the in-progress Israel day. Mid-morning the current day's revenue is
+  // legitimately a fraction of a full day (orders haven't attributed yet),
+  // so the robust z-score read it as a CRITICAL "revenue crash" every
+  // morning, and the streak rule counted today's lagged-attribution ROAS as
+  // a low day. A9-04 fixed only the dead-day rule (guard kept below);
+  // mirror detectCampaignDied's today-1 anchor here: when the last row IS
+  // the current IL day, evaluate the series ending on the last COMPLETED
+  // day instead. The partial day stays visible in charts — it is only
+  // excluded from anomaly evaluation.
+  const evalRows = todayDate === todayInIsrael() ? rows.slice(0, -1) : rows;
+  const anchor = evalRows[evalRows.length - 1];
 
-  // Revenue spike / drop
-  const zRev = robustZScore(revenue);
-  if (Math.abs(zRev) >= 2.5) {
-    const isUp = zRev > 0;
-    insights.push({
-      id: `${scope}-rev-${todayDate}`,
-      severity: isUp ? 'positive' : 'critical',
-      kind: 'anomaly',
-      scope,
-      storeId,
-      storeName: scope,
-      title: isUp
-        ? `הכנסות חריגות גבוהות ב-${scope}`
-        : `צניחה חריגה בהכנסות ב-${scope}`,
-      detail: `הכנסות היום: ${fmtMoneyString(today.revenue)}`,
-      why: `z-score ${zRev.toFixed(1)} מול חציון 14 ימים. סטטיסטית חריג.`,
-      weight: isUp ? 75 : 95,
-    });
-  }
+  if (anchor && evalRows.length >= 8) {
+    const anchorDate = anchor.date;
 
-  // Spend spike (the more interesting case)
-  const zSpend = robustZScore(spend);
-  if (zSpend >= 2.5) {
-    insights.push({
-      id: `${scope}-spend-${todayDate}`,
-      severity: 'warning',
-      kind: 'anomaly',
-      scope,
-      storeId,
-      storeName: scope,
-      title: `הוצאת פרסום חריגה ב-${scope}`,
-      detail: `הוצאה היום: ${fmtMoneyString(today.totalSpend)}`,
-      why: `z-score ${zSpend.toFixed(1)} מול חציון 14 ימים. בדוק שאין budget runaway.`,
-      weight: 85,
-    });
-  }
+    // Build series per metric (completed days only).
+    const revenue = evalRows.map(r => r.revenue);
+    const spend = evalRows.map(r => r.totalSpend);
+    const roas = evalRows.map(r => (r.totalSpend > 0 ? r.revenue / r.totalSpend : 0));
 
-  // ROAS sustained drop — last 3 days all below 2.0 AND below trailing average
-  if (rows.length >= 8) {
-    const last3 = roas.slice(-3);
-    const allBelow = last3.every(r => r > 0 && r < 2.0);
-    if (allBelow) {
-      const baseline = roas.slice(-15, -3).filter(r => r > 0);
-      const baselineAvg = baseline.length > 0
-        ? baseline.reduce((s, x) => s + x, 0) / baseline.length
-        : 0;
-      if (baselineAvg > 2.2) {
-        insights.push({
-          id: `${scope}-roas-streak-${todayDate}`,
-          severity: 'critical',
-          kind: 'anomaly',
-          scope,
-          storeId,
-          storeName: scope,
-          title: `ROAS נמוך 3 ימים ברצף ב-${scope}`,
-          detail: `ממוצע 3 ימים אחרונים ${(last3.reduce((s, x) => s + x, 0) / 3).toFixed(2)}, ממוצע 14 ימים קודמים ${baselineAvg.toFixed(2)}.`,
-          why: `שלושה ימים ברצף עם ROAS < 2.0, הירידה משמעותית מהבסיס.`,
-          weight: 90,
-        });
+    // Revenue spike / drop
+    const zRev = robustZScore(revenue);
+    if (Math.abs(zRev) >= 2.5) {
+      const isUp = zRev > 0;
+      insights.push({
+        id: `${scope}-rev-${anchorDate}`,
+        severity: isUp ? 'positive' : 'critical',
+        kind: 'anomaly',
+        scope,
+        storeId,
+        storeName: scope,
+        title: isUp
+          ? `הכנסות חריגות גבוהות ב-${scope}`
+          : `צניחה חריגה בהכנסות ב-${scope}`,
+        detail: `הכנסות ב-${anchorDate}: ${fmtMoneyString(anchor.revenue)}`,
+        why: `z-score ${zRev.toFixed(1)} מול חציון 14 ימים. סטטיסטית חריג.`,
+        weight: isUp ? 75 : 95,
+      });
+    }
+
+    // Spend spike (the more interesting case)
+    const zSpend = robustZScore(spend);
+    if (zSpend >= 2.5) {
+      insights.push({
+        id: `${scope}-spend-${anchorDate}`,
+        severity: 'warning',
+        kind: 'anomaly',
+        scope,
+        storeId,
+        storeName: scope,
+        title: `הוצאת פרסום חריגה ב-${scope}`,
+        detail: `הוצאה ב-${anchorDate}: ${fmtMoneyString(anchor.totalSpend)}`,
+        why: `z-score ${zSpend.toFixed(1)} מול חציון 14 ימים. בדוק שאין budget runaway.`,
+        weight: 85,
+      });
+    }
+
+    // ROAS sustained drop — last 3 COMPLETED days all below 2.0 AND below
+    // the trailing average (the in-progress day never counts as a low day).
+    {
+      const last3 = roas.slice(-3);
+      const allBelow = last3.length === 3 && last3.every(r => r > 0 && r < 2.0);
+      if (allBelow) {
+        const baseline = roas.slice(-15, -3).filter(r => r > 0);
+        const baselineAvg = baseline.length > 0
+          ? baseline.reduce((s, x) => s + x, 0) / baseline.length
+          : 0;
+        if (baselineAvg > 2.2) {
+          insights.push({
+            id: `${scope}-roas-streak-${anchorDate}`,
+            severity: 'critical',
+            kind: 'anomaly',
+            scope,
+            storeId,
+            storeName: scope,
+            title: `ROAS נמוך 3 ימים ברצף ב-${scope}`,
+            detail: `ממוצע 3 ימים אחרונים ${(last3.reduce((s, x) => s + x, 0) / 3).toFixed(2)}, ממוצע 14 ימים קודמים ${baselineAvg.toFixed(2)}.`,
+            why: `שלושה ימים ברצף עם ROAS < 2.0, הירידה משמעותית מהבסיס.`,
+            weight: 90,
+          });
+        }
       }
     }
   }

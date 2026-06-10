@@ -103,18 +103,21 @@ describe('billingForRange (d/CR-01 — All-stores recurring split)', () => {
       },
     ]);
 
-    // 30-day window so the proration math is 60 × (30/30) = 60 exactly.
+    // P1-31a (2026-06-10, D3): TRUE CALENDAR proration — a FULL May (31 days)
+    // bills exactly monthlyCAD (the old `× days/30` billed 103.33% for May
+    // and 93.33% for February, contradicting salariesForRange's convention
+    // inside the same trueNetProfit).
     const result = billingForRange({
       from: '2026-05-01',
-      to: '2026-05-30',
+      to: '2026-05-31',
       storeNames: ['uzoshop', 'Zol Plus', '360usmile'],
     });
 
-    expect(result.recurringInPeriod).toBe(60);
+    expect(result.recurringInPeriod).toBeCloseTo(60, 10);
     // The pre-fix bug summed 60 × 3 = 180; pin the new behavior so a future
     // refactor cannot silently regress.
     expect(result.recurringInPeriod).not.toBe(180);
-    expect(result.bySource.email).toBe(60);
+    expect(result.bySource.email).toBeCloseTo(60, 10);
     // Per-store attribution splits evenly: 60 / 3 = 20 per store.
     expect(result.byStore.uzoshop).toBeCloseTo(20, 10);
     expect(result.byStore['Zol Plus']).toBeCloseTo(20, 10);
@@ -138,15 +141,35 @@ describe('billingForRange (d/CR-01 — All-stores recurring split)', () => {
         active: true,
       },
     ]);
+    // P1-31a (D3): full calendar month → exactly monthlyCAD.
     const result = billingForRange({
       from: '2026-05-01',
-      to: '2026-05-30',
+      to: '2026-05-31',
       storeNames: ['uzoshop', 'Zol Plus', '360usmile'],
     });
-    expect(result.recurringInPeriod).toBe(105);
-    expect(result.byStore.uzoshop).toBe(105);
+    expect(result.recurringInPeriod).toBeCloseTo(105, 10);
+    expect(result.byStore.uzoshop).toBeCloseTo(105, 10);
     expect(result.byStore['Zol Plus']).toBe(0);
     expect(result.byStore['360usmile']).toBe(0);
+  });
+
+  // P1-31a (2026-06-10, D3) — calendar-proration convention pins.
+  it('calendar proration: full Feb = exactly monthlyCAD; full year = exactly 12×; half a 30-day month = half', () => {
+    seedRecurring(mem, [
+      { id: 'r1', store: 'All', name: 'Sub', source: 'other', monthlyCAD: 100, active: true },
+    ]);
+    // Full February (non-leap 2026, 28 days) — exactly 100, not 93.33.
+    const feb = billingForRange({ from: '2026-02-01', to: '2026-02-28', storeNames: ['uzoshop'] });
+    expect(feb.recurringInPeriod).toBeCloseTo(100, 10);
+    // Full calendar year — exactly 1200, not 1217 (the old 365/30).
+    const year = billingForRange({ from: '2026-01-01', to: '2026-12-31', storeNames: ['uzoshop'] });
+    expect(year.recurringInPeriod).toBeCloseTo(1200, 10);
+    // First half of June (15 of 30 days) — exactly half.
+    const halfJune = billingForRange({ from: '2026-06-01', to: '2026-06-15', storeNames: ['uzoshop'] });
+    expect(halfJune.recurringInPeriod).toBeCloseTo(50, 10);
+    // Cross-month window: May 16 → Jun 15 = 16/31 + 15/30 of 100.
+    const cross = billingForRange({ from: '2026-05-16', to: '2026-06-15', storeNames: ['uzoshop'] });
+    expect(cross.recurringInPeriod).toBeCloseTo(100 * (16 / 31) + 100 * (15 / 30), 10);
   });
 
   it('inactive recurring rows are excluded from the total', () => {

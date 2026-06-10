@@ -104,7 +104,11 @@ export function aggregateCpm(
 export function toHeroPeriod(
   agg: Aggregate,
   cpm: BlendedCpm,
-  ordersTotal: number,
+  // P1-3 (2026-06-10 state-honesty sweep) — `null` means "orders UNKNOWN"
+  // (the orders-attribution fetch hasn't settled, or failed). The hero card
+  // renders "—" for null; pre-fix the caller seeded 0 before the fetch
+  // settled, so loading (and outages) read as "0 הזמנות" beside real revenue.
+  ordersTotal: number | null,
 ): CommandCenterPeriod {
   const operatingProfit = agg.revenue - agg.spend - agg.cogs;
   return {
@@ -129,7 +133,9 @@ export function toHeroDelta(
   prev: Aggregate,
   curCpm: BlendedCpm,
   prevCpm: BlendedCpm,
-  curOrders: number,
+  // P1-3 — cur side may be null too (orders fetch unsettled/failed) → the
+  // Orders delta is unknowable and must render suppressed, not "cur − prev".
+  curOrders: number | null,
   prevOrders: number | null,
 ): CommandCenterDelta {
   const baselineEmpty = prev.spend === 0 && prev.revenue === 0;
@@ -153,7 +159,10 @@ export function toHeroDelta(
       curCpm.cpm > 0 && prevCpm.cpm > 0
         ? (curCpm.cpm - prevCpm.cpm) / prevCpm.cpm
         : null,
-    orders: baselineEmpty || prevOrders == null ? null : curOrders - prevOrders,
+    orders:
+      baselineEmpty || prevOrders == null || curOrders == null
+        ? null
+        : curOrders - prevOrders,
     cogs: baselineEmpty ? null : cur.cogs - prev.cogs,
   };
 }
@@ -308,7 +317,11 @@ export function toPerStoreData(
   storeAggs: StoreAgg[],
   campaignsRows: CampaignsResponse['rows'] | undefined,
   range: { from: string; to: string },
-  ordersByStore: Record<string, number>,
+  // P1-3 — `null` map means the orders-attribution fetch hasn't settled (or
+  // failed): every row's orders/AOV render "—" (PerStoreRow's null contract)
+  // instead of a fake 0. A present map with a missing store still means a
+  // REAL 0 (store had no orders in range).
+  ordersByStore: Record<string, number> | null,
   storeIdByName: Record<string, string> = {},
   dataLastWriteAt: string | null = null,
   series?: DailySeries[],
@@ -382,21 +395,20 @@ export function toPerStoreData(
 
   return storeAggs.map((s) => {
     const storeId = storeIdByName[s.store] ?? s.store;
+    // P1-3 — null while the orders fetch is unsettled/failed → "—", never 0.
+    const storeOrders = ordersByStore == null ? null : ordersByStore[s.store] ?? 0;
     return {
       storeId,
       storeName: s.store,
       spend: s.spend,
       revenue: s.revenue,
-      orders: ordersByStore[s.store] ?? 0,
+      orders: storeOrders,
       // AOV = gross order value at checkout ÷ order count. The per-store CARD is
       // the only surface carrying the AOV emphasis band ($50/$70), so it MUST use
       // the same gross÷orders basis as the StoreDetailModal (storeDetail.ts) —
       // never net÷orders, which would false-flip the band on a refund day and
       // disagree with the modal for the same store (Wave 1 cross-surface fix).
-      aov:
-        (ordersByStore[s.store] ?? 0) > 0
-          ? s.grossRevenue / (ordersByStore[s.store] ?? 1)
-          : null,
+      aov: storeOrders != null && storeOrders > 0 ? s.grossRevenue / storeOrders : null,
       roas: s.roas > 0 ? s.roas : null,
       updatedAt: dataLastWriteAt,
       perPlatformCpm: perPlatformCpm(s.store),

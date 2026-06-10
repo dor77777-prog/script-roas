@@ -201,10 +201,44 @@ export function billingForRange(input: {
       oneTimeInPeriod: 0,
     };
   }
-  const days = Math.round((toMs - fromMs) / 86400000) + 1;
   const storeSet = new Set(storeNames);
 
-  // Recurring: monthly × (days/30) for each row whose store matches.
+  // P1-31a (2026-06-10 audit, operator-approved D3): TRUE CALENDAR proration.
+  // The old `monthlyCAD × days/30` mis-stated every non-30-day month (a full
+  // May billed 103.33%, February 93.33%, a full year = 12.17 "months") and
+  // contradicted salariesForRange, which prorates by real days-in-month — two
+  // conventions inside the same trueNetProfit. Now each overlapped calendar
+  // month contributes monthlyCAD × (overlapDays / daysInThatMonth), exactly
+  // the salaries convention: full month = exactly monthlyCAD, full year =
+  // exactly 12 × monthlyCAD.
+  const prorateMonthlyCad = (monthlyCAD: number): number => {
+    let total = 0;
+    let y = Number(from.slice(0, 4));
+    let m = Number(from.slice(5, 7));
+    const endY = Number(to.slice(0, 4));
+    const endM = Number(to.slice(5, 7));
+    while (y < endY || (y === endY && m <= endM)) {
+      const key = `${y}-${String(m).padStart(2, '0')}`;
+      const dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      const monthStart = `${key}-01`;
+      const monthEnd = `${key}-${String(dim).padStart(2, '0')}`;
+      const s = from > monthStart ? from : monthStart;
+      const e = to < monthEnd ? to : monthEnd;
+      if (s <= e) {
+        const overlap =
+          Math.round(
+            (new Date(e + 'T00:00:00Z').getTime() - new Date(s + 'T00:00:00Z').getTime()) /
+              86400000,
+          ) + 1;
+        total += monthlyCAD * (overlap / dim);
+      }
+      m += 1;
+      if (m === 13) { m = 1; y += 1; }
+    }
+    return total;
+  };
+
+  // Recurring: monthly × calendar-prorated share for each row whose store matches.
   //
   // Audit fix 2026-05-23 (d/CR-01): an "All"-stores row must contribute
   // its amount EXACTLY ONCE to `recurringInPeriod` and `bySource` — it's
@@ -265,7 +299,7 @@ export function billingForRange(input: {
       if (storeNames.length === 0) continue;
       const amount = isPercent
         ? (Math.max(0, revenue) * pct) / 100
-        : (r.monthlyCAD * days) / 30;
+        : prorateMonthlyCad(r.monthlyCAD);
       recurringInPeriod += amount;
       bySource[r.source] = (bySource[r.source] ?? 0) + amount;
       if (isPercent) {
@@ -297,7 +331,7 @@ export function billingForRange(input: {
       // P&L cards reflect the real per-store burden.
       const amount = isPercent
         ? (revenueForStore(r.store) * pct) / 100
-        : (r.monthlyCAD * days) / 30;
+        : prorateMonthlyCad(r.monthlyCAD);
       recurringInPeriod += amount;
       bySource[r.source] = (bySource[r.source] ?? 0) + amount;
       byStore[r.store] = (byStore[r.store] ?? 0) + amount;

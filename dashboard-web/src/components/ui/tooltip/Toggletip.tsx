@@ -1,11 +1,17 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import {
+  isValidElement,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { isNonPhrasingChild } from './phrasing';
+import { markEscHandledByInnerLayer } from '@/lib/drawerStack';
 
 /**
  * Tooltip-system-redesign — Phase 1 · Task 1.2, mode C (touch simple) +
@@ -47,6 +53,14 @@ export interface ToggletipProps {
   className?: string;
   /** Lift content above a Sheet/drawer scrim (z-[60]) when opened within one. */
   withinDrawer?: boolean;
+  /**
+   * 2026-06-10 audit (touch double-ⓘ): force the CHILD itself to be the tap
+   * trigger even when it is phrasing content. Used when the child already IS
+   * a dedicated help affordance (the column-header violet ⓘ Button) — pairing
+   * a second sibling gray ⓘ next to it rendered TWO ⓘ glyphs, with the
+   * operator's violet one dead.
+   */
+  forceChildTrigger?: boolean;
 }
 
 export function Toggletip({
@@ -58,6 +72,7 @@ export function Toggletip({
   sideOffset = 6,
   className,
   withinDrawer = false,
+  forceChildTrigger = false,
 }: ToggletipProps) {
   const [open, setOpen] = useState(false);
 
@@ -66,18 +81,43 @@ export function Toggletip({
   // and can't have a sibling `<button>` (it would break the table/list). For
   // those the child ITSELF is the tap trigger via Radix `asChild` — no wrapper,
   // no ⓘ glyph (open-Q3: dense rows tap themselves; ⓘ stays for inline help).
-  const childIsTrigger = isNonPhrasingChild(children);
+  const childIsTrigger = forceChildTrigger || isNonPhrasingChild(children);
+
+  // 2026-06-10 audit (row-tap double-fire): a non-phrasing trigger child that
+  // carries its OWN onClick (the drillable `<tr>` wrapped in the
+  // 'לחץ לפרטים מלאים' hint) must not ALSO toggle a hint popover — Radix
+  // composes the handlers, so one tap opened the drawer AND left an orphaned
+  // popover floating over it. On touch the tap IS the action, so the hint
+  // adds nothing: suppress the popover entirely and render the child as-is.
+  // (Explicit `forceChildTrigger` opt-ins keep the popover — their child's
+  // own onClick is a stopPropagation-style guard, not a competing action.)
+  const childOwnOnClick = isValidElement(children)
+    ? (children as ReactElement<{ onClick?: unknown }>).props.onClick
+    : undefined;
+  if (childIsTrigger && !forceChildTrigger && typeof childOwnOnClick === 'function') {
+    // eslint-disable-next-line react/jsx-no-useless-fragment
+    return <>{children}</>;
+  }
 
   // The reveal affordance: for phrasing children we keep the dedicated ⓘ
   // button (rendered alongside the child); for non-phrasing children the child
   // is itself the trigger (no extra glyph). Both go through Radix `asChild`.
+  //
+  // Both triggers stop click propagation (2026-06-10 audit): a help reveal
+  // inside a drillable table row must never bubble into the row's own
+  // onClick — tapping an in-row ⓘ (or an in-row cell trigger) opened the
+  // help AND drilled into the drawer in one tap. stopPropagation doesn't
+  // preventDefault, so Radix's composed toggle still runs.
   const trigger = childIsTrigger ? (
-    <RadixPopover.Trigger asChild>{children}</RadixPopover.Trigger>
+    <RadixPopover.Trigger asChild onClick={(e) => e.stopPropagation()}>
+      {children}
+    </RadixPopover.Trigger>
   ) : (
     <RadixPopover.Trigger asChild>
       <button
         type="button"
         aria-label={label}
+        onClick={(e) => e.stopPropagation()}
         className={cn(
           // 24px glyph; `::after` inset expands the hit area to ≥44px (WCAG 2.5.8).
           'relative inline-flex h-6 w-6 flex-none items-center justify-center rounded-full',
@@ -103,6 +143,11 @@ export function Toggletip({
             align={align}
             sideOffset={sideOffset}
             collisionPadding={8}
+            // Mark the Esc as consumed by THIS layer so the shared drawer
+            // stack doesn't also close the drawer underneath (2026-06-10
+            // audit: Esc double-dismiss). No preventDefault here — Radix's
+            // own dismissal branch (preventDefault + close) still runs.
+            onEscapeKeyDown={markEscHandledByInnerLayer}
             className={cn(
               withinDrawer ? 'z-[60]' : 'z-50',
               'max-w-[min(15rem,calc(100vw-1.75rem))] rounded-card',

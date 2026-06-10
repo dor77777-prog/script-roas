@@ -25,6 +25,13 @@ async function fetchTodayFx(): Promise<number | null> {
   try {
     const r = await fetch('https://api.frankfurter.dev/v1/latest?base=ILS&symbols=CAD', {
       next: { revalidate: 3600 }, // FX changes once per business day; 1h cache is fine
+      // P1-11 (2026-06-10): hard 3s ceiling. This fetch sits inside the
+      // route's Promise.all — without a signal, a hung Frankfurter
+      // connection stalls the PRIMARY dashboard route to the platform
+      // timeout ceiling. On abort/timeout the catch below returns null and
+      // the client renders without the FX-derived extras (graceful, same as
+      // any other FX failure).
+      signal: AbortSignal.timeout(3000),
     });
     if (!r.ok) return null;
     const j = (await r.json()) as { rates?: { CAD?: number } };

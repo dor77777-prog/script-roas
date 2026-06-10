@@ -2678,12 +2678,18 @@ function ColumnHeaderTh({
   className,
   dataColId,
   ariaLabel,
+  ariaSort,
   children,
 }: {
   tooltip?: string;
   className?: string;
   dataColId?: string;
   ariaLabel?: string;
+  /** 2026-06-10 audit — aria-sort belongs on the <th> (it previously sat on
+   *  the inner sort <Button>, which is invalid ARIA: the attribute is only
+   *  defined for row/column header elements, so AT never announced sort
+   *  state). SortHeader passes the active direction through here. */
+  ariaSort?: React.AriaAttributes['aria-sort'];
   children?: React.ReactNode;
 }) {
   // Tooltip-system-redesign — Phase 3b (2026-06-03): the bespoke
@@ -2704,7 +2710,12 @@ function ColumnHeaderTh({
         : 'justify-end';
 
   return (
-    <th className={className} data-col-id={dataColId} aria-label={ariaLabel}>
+    <th
+      className={className}
+      data-col-id={dataColId}
+      aria-label={ariaLabel}
+      aria-sort={ariaSort}
+    >
       <span className={cn('inline-flex items-center gap-1', justify)}>
         {children}
         {tooltip && (
@@ -2713,6 +2724,10 @@ function ColumnHeaderTh({
             title={ariaLabel ?? undefined}
             content={tooltip}
             align="center"
+            // 2026-06-10 audit (touch double-ⓘ): the violet ⓘ Button below
+            // IS the help affordance — on touch it becomes the tap trigger
+            // itself instead of being paired with a duplicate gray ⓘ.
+            touchTrigger="child"
           >
             <Button
               type="button"
@@ -2788,6 +2803,9 @@ function SortHeader({
       className={cn('font-medium', textAlign, className)}
       dataColId={dataColId}
       tooltip={tooltip}
+      // 2026-06-10 audit — aria-sort moved from the inner <Button> (invalid
+      // ARIA, never announced) onto the <th> via ColumnHeaderTh.
+      ariaSort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       <Button
         type="button"
@@ -2801,7 +2819,6 @@ function SortHeader({
             ? 'text-accent font-semibold'
             : 'text-ink-secondary hover:text-ink',
         )}
-        aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
         {align === 'end' ? (
           <>

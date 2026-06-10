@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { Target, Edit3, Check, X, TrendingUp, Calendar, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Target, Edit3, Check, X, TrendingUp, Calendar, ChevronRight, ChevronLeft, AlertTriangle, RefreshCw } from 'lucide-react';
+import { fetchJsonStrict } from '@/lib/fetchJson';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -85,14 +86,12 @@ function daysInMonthOf(month: string): number {
 // Local fetcher for the GoalTracker's OWN month-anchored window — same shape /
 // route the dashboard uses for daily rows (/api/data → DashboardData), kept
 // self-contained so the panel never depends on the parent's filtered SWR cache.
-const wideDataFetcher = async (url: string): Promise<DashboardData> => {
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body?.error || `Failed to load (${res.status})`);
-  }
-  return res.json() as Promise<DashboardData>;
-};
+// P1-4d (2026-06-10 state-honesty sweep) — fetchJsonStrict also throws on the
+// /api/data 200-with-error degraded body (WR-06), so a DB blip surfaces as the
+// explicit error card below instead of silently falling back to the parent's
+// FILTERED rows → "$0 actuals" for a past month.
+const wideDataFetcher = (url: string): Promise<DashboardData> =>
+  fetchJsonStrict<DashboardData>(url);
 
 export function GoalTracker({ data, range }: Props) {
   const [goalSettings, setGoalSettings] = useGoalSettings();
@@ -141,7 +140,14 @@ export function GoalTracker({ data, range }: Props) {
     return buildDateRangeKey('/api/data', { from: monthStart, to: monthEnd });
   }, [effectiveMonth, isCurrent]);
 
-  const { data: wideData } = useSWR<DashboardData>(rangeKey, wideDataFetcher, {
+  // P1-4d — read `error` + `mutate` too: pre-fix a failed wide fetch silently
+  // fell back to the parent's FILTERED rows (wrong scope → wrong/zero actuals
+  // for the viewed month) with no signal anything broke.
+  const {
+    data: wideData,
+    error: wideError,
+    mutate: mutateWide,
+  } = useSWR<DashboardData>(rangeKey, wideDataFetcher, {
     refreshInterval: 60_000,
     revalidateOnFocus: true,
   });
@@ -334,6 +340,65 @@ export function GoalTracker({ data, range }: Props) {
         <p className="text-[11px] text-ink-muted mt-2">
           הערך נשמר גם בענן (cloud-synced) וגם בדפדפן, פר-חודש. אפשר לעדכן בכל עת.
         </p>
+      </Card>
+    );
+  }
+
+  // ---- Render: WIDE FETCH FAILED (and no stale data to show) ---------------
+  // P1-4d — pre-fix this state fell through to the normal layouts with the
+  // parent's filtered rows → a past month rendered "✗ לא עמד · $0" as if the
+  // data legitimately said so. Honest state: explicit error + retry; the goal
+  // itself (and the month nav / edit affordance) stays reachable.
+  if (wideError && !wideData) {
+    return (
+      <Card className="!p-4 sm:!p-5">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent-bg text-accent shrink-0">
+              <Target size={14} />
+            </span>
+            <Heading level="section">יעד חודשי</Heading>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {monthNav}
+            <HelpTooltip content="ערוך יעד">
+              <Button variant="ghost" size="icon" onClick={startEdit} aria-label="ערוך יעד">
+                <Edit3 size={13} />
+              </Button>
+            </HelpTooltip>
+          </div>
+        </div>
+        <div
+          role="alert"
+          data-testid="goal-tracker-error"
+          className="rounded-xl border border-status-red bg-status-redBg text-status-redFg px-4 py-3"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-[13px]">
+                שגיאה בטעינת נתוני החודש
+              </div>
+              <div className="text-[11px] opacity-80 mt-1 leading-relaxed">
+                הקריאה ל-<code className="font-mono">/api/data</code> נכשלה — אי אפשר להציג
+                ביצוע מול יעד בלי הנתונים. זה לא אומר שלא היו מכירות.
+              </div>
+              <div className="text-[10px] opacity-60 mt-1 font-mono">
+                {wideError instanceof Error ? wideError.message : String(wideError)}
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => mutateWide()}
+                className="mt-2 gap-1.5 text-[12px]"
+              >
+                <RefreshCw size={12} />
+                נסה שוב
+              </Button>
+            </div>
+          </div>
+        </div>
       </Card>
     );
   }

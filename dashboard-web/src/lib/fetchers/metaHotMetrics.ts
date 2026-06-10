@@ -48,7 +48,13 @@ export type MetaHotMetricsInput = {
   hotAdIds: string[];
   dateStr: string;
   fetcher?: typeof fetch;
-  getFxCadFor: (amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number>;
+  /**
+   * P1-11 (2026-06-10) — FX doctrine: the adapter returns `null` on FX
+   * failure. Row builders OMIT the `spend_cad` / `conversion_value_cad`
+   * keys when the conversion is null so the upsert's ON CONFLICT preserves
+   * the last good value instead of zeroing it every tick.
+   */
+  getFxCadFor: (amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number | null>;
 };
 
 export type CampaignDailyRow = {
@@ -57,11 +63,13 @@ export type CampaignDailyRow = {
   campaign_id: string;
   campaign_name: string | null;
   date: string;
-  spend_cad: number;
+  // P1-11: CAD keys are OPTIONAL — absent when FX failed for the row's
+  // currency this tick (ON CONFLICT then preserves the prior value).
+  spend_cad?: number;
   impressions: number;
   clicks: number;
   conversions: number;
-  conversion_value_cad: number;
+  conversion_value_cad?: number;
 };
 
 export type AdsetDailyRow = CampaignDailyRow & {
@@ -127,8 +135,19 @@ export async function fetchMetaHotMetricsForStore(input: MetaHotMetricsInput): P
   return { adsets, ads };
 }
 
-function asArray(part: { code: number; body: string } | undefined): Array<Record<string, unknown>> {
-  if (!part || part.code !== 200) return [];
+// P1-12 (2026-06-10): an inner batch part with code !== 200 (per-call
+// throttling, transient 500 inside the envelope — a NORMAL Meta failure mode)
+// must THROW, not silently return []. Returning [] made the worker upsert
+// nothing and record freshness='success' — a false-green panel while today's
+// spend silently stopped refreshing. Throwing routes through the worker's
+// try/catch → transient_error row → Inngest retry.
+function asArray(part: { code: number; body: string } | null | undefined): Array<Record<string, unknown>> {
+  if (!part) {
+    throw new Error('Meta hot-metrics batch part missing/null in envelope response');
+  }
+  if (part.code !== 200) {
+    throw new Error(`Meta hot-metrics batch part failed (code=${part.code}): ${part.body}`);
+  }
   try {
     const parsed = JSON.parse(part.body) as { data?: unknown };
     return Array.isArray(parsed.data) ? (parsed.data as Array<Record<string, unknown>>) : [];
@@ -150,19 +169,23 @@ async function toCampaignRow(
   // Source of truth: meta.ts:280 (extractMetaPurchases).
   const conv = extractMetaPurchasesHot(r.actions, r.action_values);
   const convValueCad = await getFx(conv.value, currency);
-  return {
+  const row: CampaignDailyRow = {
     store_id: storeId, platform: 'meta',
     campaign_id: String(r.campaign_id),
     // IMP-A: preserve campaign_name so upsert does not null the existing
     // column (Supabase upsert SETs every column in the row).
     campaign_name: (r.campaign_name as string | undefined) ?? null,
     date: dateStr,
-    spend_cad: spendCad,
     impressions: Math.round(Number(r.impressions ?? 0)),
     clicks: Math.round(Number(r.clicks ?? 0)),
     conversions: Math.round(conv.count),
-    conversion_value_cad: convValueCad,
   };
+  // P1-11 FX doctrine: omit the CAD keys (key-level, not row-level) when FX
+  // failed (adapter returned null) so ON CONFLICT preserves the last good
+  // value. The non-CAD metrics above still refresh.
+  if (spendCad !== null) row.spend_cad = spendCad;
+  if (convValueCad !== null) row.conversion_value_cad = convValueCad;
+  return row;
 }
 
 async function toAdsetRow(

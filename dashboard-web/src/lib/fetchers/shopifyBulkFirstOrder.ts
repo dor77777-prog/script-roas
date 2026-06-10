@@ -26,13 +26,19 @@ export type BulkOrderLine = {
   customer: { id?: string | null } | null;
 };
 
-/** GraphQL document exporting {id, createdAt, customer{id}} for ALL orders. */
+/**
+ * GraphQL document exporting {id, createdAt, customer{id}} for orders.
+ * P1-15 (2026-06-10 audit): query filter excludes test + cancelled orders —
+ * every LIVE ingest path (REST orders fetch, revenue/refunds) already
+ * excludes them, so the unfiltered bulk seed distorted LTV/cohorts and could
+ * permanently flip a real first order to "returning" via the ledger min.
+ */
 export const BULK_FIRST_ORDER_QUERY = `
 mutation {
   bulkOperationRunQuery(
     query: """
     {
-      orders {
+      orders(query: "test:false AND -status:cancelled") {
         edges {
           node {
             id

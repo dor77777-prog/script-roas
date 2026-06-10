@@ -111,6 +111,14 @@ export function isDashboardAuthAllowlisted(pathname: string): boolean {
   // the deploy-time sync (Inngest's PUT got 401'd), silently pinning Inngest to
   // a pre-gate deployment so new cron code never went live (2026-06-03 incident).
   if (pathname === '/api/inngest') return true;
+  // P1-28 (2026-06-10 audit) — TikTok OAuth redirect landing page. Its two
+  // documented external audiences CANNOT carry the dash_auth cookie: TikTok
+  // App reviewers visiting the redirect URL during App approval, and a
+  // fresh-browser re-auth redirect from TikTok itself. The page renders NO
+  // secrets — only the single-use (1h TTL) auth_code TikTok appended to the
+  // URL plus exchange instructions; the App Secret never touches this route.
+  // Same silent-401 incident class as the Inngest pinning above.
+  if (pathname === '/api/oauth/tiktok/callback') return true;
   return false;
 }
 

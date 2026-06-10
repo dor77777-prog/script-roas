@@ -342,10 +342,19 @@ async function runGoogleStatusBranch(input: RunGoogleWorkerJobInput): Promise<vo
     // placeholder row in campaigns_daily so it appears in the dashboard
     // within 10 min of going live, even when hot_metrics hasn't yet
     // fetched real spend.
+    //
+    // P1-13 (2026-06-10): filter on `is_enabled === true`, NOT
+    // `effective_status === 'ENABLED'`. googleStatus.toAdsetRow builds
+    // ad-group rows with effective_status ALWAYS null (Google's ad_group
+    // resource exposes no serving_status — the IMP-D comment there); the
+    // ENABLED signal lives in configured_status / is_enabled. The old
+    // filter matched nothing → this whole block was dead code and
+    // newly-enabled zero-spend Google campaigns stayed invisible until
+    // they accrued spend, defeating the E1.5 design for Google.
     if (input.upsertCampaignsDaily) {
       const today = getTodayInIsraelTz(nowIso);
       const activePlaceholders = status.adsets
-        .filter((a) => a.effective_status === 'ENABLED')
+        .filter((a) => a.is_enabled === true)
         .map((a) => ({
           date: today,
           store_id: a.store_id,
@@ -354,7 +363,12 @@ async function runGoogleStatusBranch(input: RunGoogleWorkerJobInput): Promise<vo
           campaign_name: status.campaigns.find((c) => c.campaign_id === a.campaign_id)?.name ?? '',
           ad_set_id: a.adset_id,
           ad_set_name: a.name ?? '',
-          effective_status: a.effective_status,
+          // effective_status is null on googleStatus ad-group rows (no
+          // serving_status at this level) — fall back to configured_status
+          // ('ENABLED' for every row passing the is_enabled filter) so the
+          // placeholder upsert doesn't NULL the column that the nightly
+          // cron populates on the same row.
+          effective_status: a.effective_status ?? a.configured_status ?? null,
         }));
       if (activePlaceholders.length > 0) {
         await input.upsertCampaignsDaily(activePlaceholders);

@@ -584,6 +584,29 @@ export function analyzeAttribution(
     recommendation =
       `הוסף URL Parameters לקמפיין ב-${tag.surface}: ${tag.template}. ` +
       'תוך 24 שעות מההשמעה הבאה תראה כאן את ההזמנות האמיתיות.';
+  } else if (campaign.metaClaim === 0 && deterministicOrders > 0) {
+    // P1-8a (audit 2026-06-10): the platform reports ZERO conversions while
+    // Shopify has real click-id-tagged orders. computeCoverage's legacy
+    // claim=0→1 fallback used to route this into the high-trust halo branch
+    // ('אמין 90 + שקול גידול תקציב 20-40%') — i.e. the trust ladder REWARDED
+    // a tracking outage (the exact signature of the TikTok conversions=0
+    // incident, fixed c8c38a9). A platform claiming 0 while tagged money
+    // flows is a broken conversion tag / reporting outage until proven
+    // otherwise — surface a distinct "check the tag" verdict, never scale
+    // advice. The coverage VALUE keeps the legacy 1.0 fallback (test-locked);
+    // only the verdict changes.
+    trust = { level: 'unknown', label: 'הפלטפורמה מדווחת 0', score: 40 };
+    reasons.push(
+      `${platformLabel} מדווח 0 המרות בזמן ש-Shopify רשם ${deterministicOrders} הזמנות מתויגות (${fmtMoneyString(deterministicRevenue)}) לקמפיין הזה`,
+    );
+    reasons.push(
+      'כשהפלטפורמה מדווחת 0 והזמנות אמיתיות נכנסות — כנראה תקלה בדיווח-ההמרות של הפלטפורמה, לא ביצועים יוצאי-דופן',
+    );
+    const tagCheck = tag.hasPixel
+      ? `בדוק את תגית-ההמרות/החיבור של הפלטפורמה (Pixel/CAPI) ב-${tag.surface}`
+      : `בדוק את תגית-ההמרות / הגדרת ההמרות ב-${tag.surface}`;
+    recommendation =
+      `${tagCheck}. אל תקבל החלטות תקציב על בסיס הדיווח של ${platformLabel} עד שהדיווח חוזר.`;
   } else if (coverage >= 0.8) {
     const pct = Math.round(coverage * 100);
     trust = { level: 'high', label: 'אמין', score: Math.min(100, 70 + pct / 5) };
@@ -655,6 +678,27 @@ export function analyzeAttribution(
       `${platformLabel} מנפח דיווחים לקמפיין הזה. ` +
       'אל תקבל החלטות "להגדיל" על בסיס ה-ROAS שלו. ' +
       `בדוק: האם ${tag.missingTag} מוגדר נכון, ${pixelBullet}והאם הקמפיין באמת מביא מכירות.`;
+  }
+
+  // P1-8b (audit 2026-06-10): coverage > 2 means Shopify sees MORE THAN
+  // DOUBLE what the platform claims — the documented broken-pixel signature
+  // (this same condition drives the red 'בדוק את הפיקסל' banner via
+  // coverageExceedsClamp). Pre-fix the trust ladder still said
+  // high + 'שקול גידול תקציב 20-40%' in the SAME card. Cap trust at medium
+  // and swap the scale advice for the pixel/tag check so the panel tells
+  // one story.
+  if (coverage > COVERAGE_WARNING_THRESHOLD) {
+    if (trust.level === 'high') {
+      trust = { level: 'medium', label: 'חלקי', score: Math.min(trust.score, 65) };
+    }
+    reasons.push(
+      `coverage ${coverage.toFixed(1)}× — Shopify רואה יותר מפי 2 ממה ש-${platformLabel} מדווח; חשד לתקלת מעקב בצד הפלטפורמה`,
+    );
+    const trackingCheck = tag.hasPixel
+      ? `בדוק את ה-Pixel/CAPI ואת ${tag.missingTag} ב-${tag.surface}`
+      : `בדוק את תגית-ההמרות ואת ${tag.missingTag} ב-${tag.surface}`;
+    recommendation =
+      `${trackingCheck} לפני כל החלטת תקציב — הפער החריג מעיד על דיווח-חסר של ${platformLabel}, לא בהכרח על ביצועים.`;
   }
 
   // Augment reasons + recommendation with the new signals.

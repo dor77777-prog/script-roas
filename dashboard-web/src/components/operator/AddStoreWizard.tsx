@@ -185,7 +185,11 @@ export function AddStoreWizard({
   // off them. Frozen at mount (taken set doesn't change while the wizard is open).
   const usedColors = useMemo(() => new Set(takenColors.map(normColor)), [takenColors]);
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  // P2-43 (2026-06-10 audit): a credential-matrix "חבר/החלף" click passes
+  // focusPlatform — land the operator directly on the CREDENTIALS step (the
+  // highlighted block scroll/autofocus already lives in Step2) instead of
+  // making them re-walk the basics step.
+  const [step, setStep] = useState<1 | 2 | 3>(isEdit && focusPlatform ? 2 : 1);
   const [s1, setS1] = useState<Step1State>(() =>
     isEdit
       ? { ...EMPTY_STEP1, storeId: editStoreId! }
@@ -221,6 +225,11 @@ export function AddStoreWizard({
   // D3 — the webhook signing-secret PRESENCE (from GET hasWebhookSecret). Drives
   // the "מוגדר / לא מוגדר" status in edit; the raw value is NEVER prefilled.
   const [hasWebhookSecret, setHasWebhookSecret] = useState(false);
+  // P1-27a (2026-06-10 audit): the server-side ON state per ad platform. The
+  // PATCH payload carries no hasMeta/hasGoogle, and the server only ADDs
+  // newly-credentialed platforms — so toggling an existing platform OFF was a
+  // SILENT no-op. We lock the off-direction for these (honest > discard).
+  const [serverPlatforms, setServerPlatforms] = useState<Platform[]>([]);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -246,6 +255,7 @@ export function AddStoreWizard({
         if (res.status >= 400) throw new Error(body.error ?? `HTTP ${res.status}`);
         if (cancelled) return;
         const platforms = (body.platforms ?? []) as Platform[];
+        setServerPlatforms(platforms);
         setHasWebhookSecret(body.hasWebhookSecret === true);
         setS1((s) => ({
           ...s,
@@ -559,13 +569,17 @@ export function AddStoreWizard({
           nameError={nameError}
           domainError={domainError}
           isEdit={isEdit}
+          // P1-27a — lock the OFF direction for platforms already on in the DB
+          // (PATCH would silently discard the removal).
+          lockedOnMeta={isEdit && serverPlatforms.includes('meta')}
+          lockedOnGoogle={isEdit && serverPlatforms.includes('google')}
           usedColors={usedColors}
           onNext={goToStep2}
           onCancel={onDone}
         />
       )}
 
-      {step === 2 && (
+      {!prefilling && step === 2 && (
         <Step2
           s1={s1}
           s2={s2}
@@ -671,6 +685,8 @@ function Step1({
   nameError,
   domainError,
   isEdit,
+  lockedOnMeta = false,
+  lockedOnGoogle = false,
   usedColors,
   onNext,
   onCancel,
@@ -684,6 +700,10 @@ function Step1({
   nameError: string | null;
   domainError: string | null;
   isEdit: boolean;
+  /** P1-27a — platform is ON in the DB; PATCH can't remove it, so the
+   *  off-direction is disabled with an honest hint instead of a silent no-op. */
+  lockedOnMeta?: boolean;
+  lockedOnGoogle?: boolean;
   /** Normalised brand colours used by OTHER stores → mark "(בשימוש)". */
   usedColors: Set<string>;
   onNext: () => void;
@@ -794,7 +814,10 @@ function Step1({
         />
       </Field>
 
-      {/* Platform toggles */}
+      {/* Platform toggles. P1-27a: a platform already ON in the DB can't be
+          toggled OFF here (PATCH has no removal path — it would be silently
+          discarded), so the off-direction is disabled with a hint. TikTok's
+          hasTiktok DOES round-trip, so it stays freely togglable. */}
       <div className="mb-4">
         <span className="mb-2 block text-xs font-medium text-ink-secondary">פלטפורמות פעילות</span>
         <div className="flex flex-wrap gap-2">
@@ -802,11 +825,13 @@ function Step1({
             label="Meta"
             checked={s1.hasMeta}
             onChange={setHasMeta}
+            disabled={lockedOnMeta && s1.hasMeta}
           />
           <PlatformToggle
             label="Google"
             checked={s1.hasGoogle}
             onChange={setHasGoogle}
+            disabled={lockedOnGoogle && s1.hasGoogle}
           />
           <PlatformToggle
             label="TikTok"
@@ -815,6 +840,11 @@ function Step1({
             onChange={(v) => setS1((s) => ({ ...s, hasTiktok: v }))}
           />
         </div>
+        {((lockedOnMeta && s1.hasMeta) || (lockedOnGoogle && s1.hasGoogle)) && (
+          <Text as="p" tone="muted" className="mt-1.5 text-2xs">
+            הסרת פלטפורמה מחוברת אינה נתמכת עדיין מהממשק — פנה ל-DB.
+          </Text>
+        )}
       </div>
 
       {/* Advanced — Shopify customerJourneySummary gap-fill */}
@@ -853,15 +883,18 @@ function PlatformToggle({
   note,
   checked,
   onChange,
+  disabled = false,
 }: {
   label: string;
   note?: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  /** P1-27a — true when the toggle's only legal direction (off) is unsupported. */
+  disabled?: boolean;
 }) {
   return (
     <label className="flex items-center gap-2 rounded-full border border-glass-edge bg-glass-2 px-3 py-1.5 text-sm text-ink">
-      <Switch aria-label={label} checked={checked} onCheckedChange={onChange} />
+      <Switch aria-label={label} checked={checked} onCheckedChange={onChange} disabled={disabled} />
       {label}
       {note && (
         <Text as="span" tone="muted" className="text-2xs">

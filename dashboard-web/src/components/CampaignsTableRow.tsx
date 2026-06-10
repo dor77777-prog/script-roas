@@ -204,6 +204,36 @@ export function CampaignsTableRow({
     accounts: adAccounts,
   });
   const isOptimized = optimized.has(a.key);
+  // 2026-06-10 audit (keyboard row drilldown): the drill logic is shared by
+  // click AND Enter/Space so the core daily drilldown is keyboard-reachable
+  // (mirrors the Card.tsx interactive pattern).
+  const drillable =
+    (mode === 'campaign' && !!a.campaignId) ||
+    (mode === 'adset' &&
+      !!a.adSetId &&
+      (a.platform === 'Meta' || a.platform === 'TikTok'));
+  const drill = () => {
+    if (mode === 'campaign' && a.campaignId) {
+      // Campaign click → ad-sets drawer.
+      onDrillCampaign(a.campaignId, a.platform, a.storeId);
+    } else if (
+      mode === 'adset' &&
+      a.adSetId &&
+      (a.platform === 'Meta' || a.platform === 'TikTok')
+    ) {
+      // Ad-set click → drill deeper into individual ads.
+      // Meta + TikTok have ad-level rows in ads_daily (Phase 05.6.1 +
+      // 05.7.7). Google still excluded — PMax/Shopping ad-group fallback
+      // doesn't surface individual ads in a meaningful way.
+      onDrillAd({
+        storeId: a.storeId,
+        campaignId: a.campaignId,
+        adSetId: a.adSetId,
+        adSetName: a.adSetName || a.campaignName,
+        platform: a.platform as 'Meta' | 'TikTok',
+      });
+    }
+  };
   return (
     <HelpTooltip
       content={
@@ -222,29 +252,29 @@ export function CampaignsTableRow({
         // them back to full opacity so re-reading details
         // (or unmarking) is easy.
         isOptimized && 'opacity-50 hover:opacity-100',
+        drillable &&
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
       )}
-      onClick={() => {
-        if (mode === 'campaign' && a.campaignId) {
-          // Campaign click → ad-sets drawer.
-          onDrillCampaign(a.campaignId, a.platform, a.storeId);
-        } else if (
-          mode === 'adset' &&
-          a.adSetId &&
-          (a.platform === 'Meta' || a.platform === 'TikTok')
-        ) {
-          // Ad-set click → drill deeper into individual ads.
-          // Meta + TikTok have ad-level rows in ads_daily (Phase 05.6.1 +
-          // 05.7.7). Google still excluded — PMax/Shopping ad-group fallback
-          // doesn't surface individual ads in a meaningful way.
-          onDrillAd({
-            storeId: a.storeId,
-            campaignId: a.campaignId,
-            adSetId: a.adSetId,
-            adSetName: a.adSetName || a.campaignName,
-            platform: a.platform as 'Meta' | 'TikTok',
-          });
-        }
-      }}
+      // Keyboard reachability (Card.tsx pattern): tabIndex only on drillable
+      // rows; Enter/Space trigger the same drill as a click. role stays the
+      // native `row` — replacing it with `button` would break the table's
+      // required ARIA structure and flatten the cells for screen readers.
+      tabIndex={drillable ? 0 : undefined}
+      onClick={drill}
+      onKeyDown={
+        drillable
+          ? (e) => {
+              // Only act on keys originating on the row itself — Enter/Space
+              // on in-row buttons (optimize toggle, ⓘ helps, deep-link)
+              // bubble here and must not ALSO drill.
+              if (e.target !== e.currentTarget) return;
+              if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                e.preventDefault(); // Space must not scroll the page
+                drill();
+              }
+            }
+          : undefined
+      }
     >
       {/* Per-row optimization toggle. Clicking flips the mark
           without bubbling into the row click (which would

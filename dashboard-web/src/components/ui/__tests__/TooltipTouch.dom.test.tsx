@@ -22,7 +22,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // Pin the TOUCH (coarse-pointer) branch for the whole suite.
-vi.mock('@/lib/hooks/useIsMobile', () => ({ useIsMobile: () => true }));
+// 2026-06-10 — HelpTooltip's mode gate moved from viewport width
+// (useIsMobile) to pointer capability (useTouchTooltipMode); the pin moves
+// with it.
+vi.mock('@/components/ui/tooltip/useTouchTooltipMode', () => ({
+  useTouchTooltipMode: () => true,
+}));
 
 import { HelpTooltip } from '../Tooltip';
 import { Card } from '../Card';

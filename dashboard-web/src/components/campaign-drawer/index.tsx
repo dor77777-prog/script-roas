@@ -723,8 +723,11 @@ export function CampaignDrawer({
               </Heading>
             </div>
             <p className="text-[11px] text-ink-muted leading-relaxed bg-glass-2/40 rounded-lg px-3 py-2 mb-2">
+              {/* Copy-truth (2026-06-10 audit P1-26): cron-live-heavy was
+                  decommissioned in Phase E1 — the hot-metrics worker (~10 דק׳)
+                  is what rewrites campaigns_daily now. */}
               ה-TikTok advertiser שלנו (uzoshop) משרת מספר חנויות. בחר לאיזו חנות הקמפיין שייך —
-              קודם תייג חנות, אח״כ שייך מוצרים. שינוי חל מיידית על מיפוי המוצרים למטה; הסבב הבא של cron-live-heavy (עד 30 דק׳)
+              קודם תייג חנות, אח״כ שייך מוצרים. שינוי חל מיידית על מיפוי המוצרים למטה; הסבב הבא של ה-worker (כ-10 דק׳)
               ירשום את ה-spend תחת החנות הנכונה ב-<code>campaigns_daily</code>. שורות היסטוריות נשארות תחת uzoshop.
             </p>
             <NativeSelect
@@ -766,7 +769,7 @@ export function CampaignDrawer({
             {!isUnmapped && currentValue !== storeId && (
               <p className="text-[11px] text-status-orangeFg mt-2 inline-flex items-start gap-1">
                 <AlertTriangle size={11} className="shrink-0 mt-0.5" aria-hidden />
-                <span>מיפוי המוצרים למטה כבר מציג את {currentValue}. שאר הפאנלים בכרטיסייה הזו עדיין מציגים נתונים של {storeId} עד שcron-live-heavy יכתוב מחדש (עד 30 דק׳).</span>
+                <span>מיפוי המוצרים למטה כבר מציג את {currentValue}. שאר הפאנלים בכרטיסייה הזו עדיין מציגים נתונים של {storeId} עד שה-worker יכתוב מחדש (כ-10 דק׳).</span>
               </p>
             )}
           </section>

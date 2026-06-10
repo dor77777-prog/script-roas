@@ -317,6 +317,46 @@ describe('analyzeCpmVsRoas', () => {
     });
   });
 
+  // ─────────────────────────────────────────────────────────────────────
+  // P1-9b (audit 2026-06-10) — a TOTAL ROAS collapse must read as a real
+  // decline, not 'flat'. meanOrNull_ used to return null when sum===0, so
+  // a current period of all-zero ROAS vs a prev mean of 3.0 produced
+  // roasDelta=null → categorize 'flat' → "אין סיגנל לפעולה דחופה" — the
+  // WORST campaign state described as stability. Post-fix the mean of a
+  // NON-EMPTY series is the real mean (including 0); null is reserved for
+  // genuinely empty series, and divide-by-zero on a zero BASELINE is still
+  // guarded at the call sites.
+  // ─────────────────────────────────────────────────────────────────────
+  describe('P1-9b: total ROAS collapse vs previous period', () => {
+    it("prev ROAS 3.0 → current all-zero ROAS reads as a DECLINE, not 'flat/steady'", () => {
+      // Current: 7 active days (cpm>0) with ZERO conversions.
+      const current = makeSeries({ cpm: 10, roas: 0 });
+      // Prev: 7 active days at ROAS 3.0.
+      const prev = makeSeries({ cpm: 10, roas: 3 });
+      const result = analyzeCpmVsRoas(current, { prev });
+      expect(result.hasData).toBe(true);
+      expect(result.mode).toBe('previous-period');
+      expect(result.verdict).toBe('normal');
+      // The real delta: (0 - 3) / 3 = -100%.
+      expect(result.details.roasDeltaPct).not.toBeNull();
+      expect(result.details.roasDeltaPct!).toBeCloseTo(-1, 6);
+      // FLAT CPM + DOWN ROAS = the creative-fatigue/decline branch — the
+      // copy must say the ROAS FELL and must NOT claim steady-state.
+      expect(result.text).toMatch(/ROAS ירד/);
+      expect(result.text).not.toMatch(/סטדי|יציבות מלאה/);
+      expect(['warning', 'negative']).toContain(result.tone);
+    });
+
+    it('zero-baseline prev ROAS still yields null delta (divide-by-zero guard preserved)', () => {
+      // Prev ran (cpm>0) but converted nothing (roas 0 on every day) — a
+      // relative change FROM zero is undefined; delta stays null → flat leg.
+      const current = makeSeries({ cpm: 10, roas: 3 });
+      const prev = makeSeries({ cpm: 10, roas: 0 });
+      const result = analyzeCpmVsRoas(current, { prev });
+      expect(result.details.roasDeltaPct).toBeNull();
+    });
+  });
+
   it('computes previous-period delta = (curMean - prevMean) / prevMean', () => {
     // Current: 5 days, all CPM=10. Mean current = 10.
     const current = [

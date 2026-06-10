@@ -126,8 +126,29 @@ const PADDING_RIGHT = 0;
 const PADDING_TOP = 20;
 const PADDING_BOTTOM = 40;    // x-axis labels
 const Y_MIN = 0;
-const Y_MAX = 4;              // gridlines at 1.0 / 2.0 / 3.0 / 4.0
+const Y_MAX = 4;              // FLOOR for the y-domain (gridlines 1.0-4.0 on a normal series)
 const TARGET_Y_DEFAULT = 3.0;
+
+/**
+ * Dynamic y-domain top (2026-06-10 audit): a fixed Y_MAX=4 silently CLAMPED
+ * every day above 4.0 onto the top gridline while the שיא label printed the
+ * real value — the drawn shape lied about the best days. The domain now grows
+ * to fit the data (never shrinks below the 4.0 floor so a normal ≤4 series
+ * renders byte-identically), and the 3.0 target line stays fixed.
+ */
+function computeYMax(maxRoas: number | null | undefined): number {
+  if (maxRoas == null || !Number.isFinite(maxRoas)) return Y_MAX;
+  return Math.max(Y_MAX, Math.ceil(maxRoas));
+}
+
+/** Integer gridline values for a given yMax, descending (top first). Steps of
+ *  1 up to 6; wider steps beyond so an outlier day can't flood the axis. */
+function gridValuesFor(yMax: number): number[] {
+  const step = yMax <= 6 ? 1 : Math.ceil(yMax / 4);
+  const vals: number[] = [];
+  for (let v = yMax; v >= 1; v -= step) vals.push(v);
+  return vals;
+}
 
 /* --------------------------------------------------------------------------
  * Helpers — kept inline so the component is single-file readable.
@@ -210,7 +231,7 @@ interface PlotPoint {
   date: string;
 }
 
-function buildSegments(points: RoasChartPoint[]): PlotPoint[][] {
+function buildSegments(points: RoasChartPoint[], yMax: number): PlotPoint[][] {
   const segments: PlotPoint[][] = [];
   let cur: PlotPoint[] = [];
   for (let i = 0; i < points.length; i++) {
@@ -223,7 +244,7 @@ function buildSegments(points: RoasChartPoint[]): PlotPoint[][] {
     cur.push({
       index: i,
       x: xForIndex(i, points.length),
-      y: yForRoas(p.roas),
+      y: yForRoas(p.roas, Y_MIN, yMax),
       roas: p.roas,
       date: p.date,
     });
@@ -325,6 +346,10 @@ export function RoasTargetChart({
     [points, range, target],
   );
   const minMax = useMemo(() => findMinMax(points), [points]);
+  // Dynamic y-domain top — grows to fit the best day (floor 4.0) so points
+  // above 4.0 are never clamped onto the top gridline. Target line stays 3.0.
+  const yMax = useMemo(() => computeYMax(minMax.max?.value), [minMax]);
+  const gridValues = useMemo(() => gridValuesFor(yMax), [yMax]);
   const roasBand = useRoasBandGradient(kpis.roas).band;
   const accentBand: RoasBand =
     synthesis.confidence === 'high' ? synthesis.band : roasBand;
@@ -333,7 +358,7 @@ export function RoasTargetChart({
   // line keeps the `chart-roas-line` testid (now a smooth monotone-style
   // curve instead of straight segments); the area is a NEW overlay clipped
   // at the target line so green sits above the target and red below it.
-  const segments = useMemo(() => buildSegments(points), [points]);
+  const segments = useMemo(() => buildSegments(points, yMax), [points, yMax]);
   const smoothLinePath = useMemo(
     () => segments.map((seg) => smoothPath(seg)).join(' '),
     [segments],
@@ -351,14 +376,14 @@ export function RoasTargetChart({
         return {
           index: i,
           x: xForIndex(i, points.length),
-          y: yForRoas(p.roas),
+          y: yForRoas(p.roas, Y_MIN, yMax),
           roas: p.roas,
           date: p.date,
         };
       }
     }
     return null;
-  }, [points]);
+  }, [points, yMax]);
 
   // Crosshair anchor — only when the hovered index has a real ROAS value.
   const hoverPoint = useMemo<PlotPoint | null>(() => {
@@ -368,11 +393,11 @@ export function RoasTargetChart({
     return {
       index: hoverIndex,
       x: xForIndex(hoverIndex, points.length),
-      y: yForRoas(p.roas),
+      y: yForRoas(p.roas, Y_MIN, yMax),
       roas: p.roas,
       date: p.date,
     };
-  }, [hoverIndex, points]);
+  }, [hoverIndex, points, yMax]);
 
   // Map pointer clientX → nearest data index (viewBox-space, RTL-safe:
   // getBoundingClientRect is screen-space and the viewBox maps left→right).
@@ -626,7 +651,7 @@ export function RoasTargetChart({
                 const plotH = VB_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
                 const targetOffset = Math.max(
                   0,
-                  Math.min(1, (yForRoas(target) - PADDING_TOP) / plotH),
+                  Math.min(1, (yForRoas(target, Y_MIN, yMax) - PADDING_TOP) / plotH),
                 );
                 const pct = `${(targetOffset * 100).toFixed(2)}%`;
                 return (
@@ -649,24 +674,25 @@ export function RoasTargetChart({
             </clipPath>
           </defs>
 
-          {/* Gridlines at integer ROAS values */}
-          {[Y_MAX, 3, 2, 1].map((v) => (
+          {/* Gridlines at integer ROAS values (re-derived from the dynamic yMax) */}
+          {gridValues.map((v) => (
             <line
               key={`grid-${v}`}
+              data-testid={`chart-gridline-${v}`}
               x1={PADDING_LEFT}
               x2={VB_WIDTH}
-              y1={yForRoas(v)}
-              y2={yForRoas(v)}
+              y1={yForRoas(v, Y_MIN, yMax)}
+              y2={yForRoas(v, Y_MIN, yMax)}
               style={{ stroke: 'var(--chart-grid-line)', strokeWidth: 1 }}
             />
           ))}
 
           {/* Y-axis labels */}
-          {[Y_MAX, 3, 2, 1].map((v) => (
+          {gridValues.map((v) => (
             <text
               key={`yl-${v}`}
               x={0}
-              y={yForRoas(v) + 4}
+              y={yForRoas(v, Y_MIN, yMax) + 4}
               style={{
                 fontFamily: 'var(--font-mono, ui-monospace)',
                 fontSize: 10,
@@ -693,12 +719,13 @@ export function RoasTargetChart({
             ) : null,
           )}
 
-          {/* Target line */}
+          {/* Target line — anchor value stays FIXED at the 3.0 target even
+              when the y-domain grows (only its pixel position rescales). */}
           <line
             x1={PADDING_LEFT}
             x2={VB_WIDTH}
-            y1={yForRoas(target)}
-            y2={yForRoas(target)}
+            y1={yForRoas(target, Y_MIN, yMax)}
+            y2={yForRoas(target, Y_MIN, yMax)}
             style={{
               stroke: 'var(--chart-target-line)',
               strokeWidth: 1.5,
@@ -763,7 +790,7 @@ export function RoasTargetChart({
           {points.map((p, i) => {
             if (p.roas == null || Number.isNaN(p.roas)) return null;
             const x = xForIndex(i, points.length);
-            const y = yForRoas(p.roas);
+            const y = yForRoas(p.roas, Y_MIN, yMax);
             const isMax = minMax.max?.index === i;
             const isMin = minMax.min?.index === i;
             const fill = isMax
@@ -791,7 +818,7 @@ export function RoasTargetChart({
           {minMax.max && minMax.max.index !== minMax.min?.index && (
             <text
               x={xForIndex(minMax.max.index, points.length)}
-              y={yForRoas(minMax.max.value) - 8}
+              y={yForRoas(minMax.max.value, Y_MIN, yMax) - 8}
               textAnchor="middle"
               style={{
                 fontFamily: 'var(--font-mono, ui-monospace)',
@@ -807,7 +834,7 @@ export function RoasTargetChart({
           {minMax.min && minMax.min.index !== minMax.max?.index && (
             <text
               x={xForIndex(minMax.min.index, points.length)}
-              y={yForRoas(minMax.min.value) + 16}
+              y={yForRoas(minMax.min.value, Y_MIN, yMax) + 16}
               textAnchor="middle"
               style={{
                 fontFamily: 'var(--font-mono, ui-monospace)',

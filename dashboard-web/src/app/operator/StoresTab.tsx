@@ -52,7 +52,13 @@ type WizardState =
 export function StoresTab() {
   const [stores, setStores] = useState<StoreRowData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // P1-27b (2026-06-10 state-honesty sweep) — SPLIT error states. Pre-fix a
+  // failed archive/restore set the SAME `error` the LOADER uses, and the list
+  // render was gated on it → one failed POST blanked the entire (still valid)
+  // store list. `loadError` gates the list; `actionError` renders as an
+  // inline alert ABOVE the list, which stays fully rendered.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [wizard, setWizard] = useState<WizardState>({ mode: 'closed' });
 
   // Reconcile against the server. The operator GET is gated — a 401/404/500
@@ -65,9 +71,9 @@ export function StoresTab() {
       const body = (await res.json()) as { stores?: StoreRowData[] };
       // UNWRAP `.stores` — the GET returns `{ stores: [...] }`.
       setStores(Array.isArray(body?.stores) ? body.stores : []);
-      setError(null);
+      setLoadError(null);
     } catch {
-      setError('טעינת רשימת החנויות נכשלה. ודא שה-Operator secret מוגדר.');
+      setLoadError('טעינת רשימת החנויות נכשלה. ודא שה-Operator secret מוגדר.');
     } finally {
       setLoading(false);
     }
@@ -94,7 +100,8 @@ export function StoresTab() {
   // Phase 6b Task 3 — lifecycle: archive / restore. Both are reversible
   // status-only flips on the server (no data row touched). On success we re-fetch
   // so the store moves between the active list and the "חנויות שהוסרו" area; on
-  // failure we surface a Hebrew error (mirrors the load-error pattern). DELETE is
+  // failure we surface a Hebrew ACTION error inline (P1-27b: actionError, NOT
+  // the loader's error — the working list must stay rendered). DELETE is
   // DEFERRED (a later task) — no delete handler here yet.
   const lifecycle = useCallback(
     async (storeId: string, action: 'archive' | 'restore'): Promise<void> => {
@@ -103,10 +110,10 @@ export function StoresTab() {
           method: 'POST',
         });
         if (!res.ok) throw new Error(`${action} HTTP ${res.status}`);
-        setError(null);
+        setActionError(null);
         await load(); // re-fetch → the store moves between active / removed-area
       } catch {
-        setError(
+        setActionError(
           action === 'archive'
             ? 'העברת החנות לארכיון נכשלה. נסה שוב.'
             : 'שחזור החנות נכשל. נסה שוב.',
@@ -197,17 +204,29 @@ export function StoresTab() {
         </Button>
       </div>
 
-      {error && (
-        <Text as="p" role="alert" className="text-sm text-status-redFg">
-          {error}
+      {loadError && (
+        <Text as="p" role="alert" data-testid="stores-load-error" className="text-sm text-status-redFg">
+          {loadError}
         </Text>
+      )}
+
+      {/* P1-27b — a FAILED lifecycle action renders inline; the list below
+          stays rendered (the stores are still there — only the action failed). */}
+      {actionError && (
+        <div
+          role="alert"
+          data-testid="stores-action-error"
+          className="rounded-lg border border-status-red bg-status-redBg px-3 py-2 text-sm text-status-redFg"
+        >
+          {actionError}
+        </div>
       )}
 
       {loading ? (
         <Text as="p" tone="muted" role="status" className="text-sm">
           טוען חנויות…
         </Text>
-      ) : error ? null : (
+      ) : loadError ? null : (
         <>
           <StoreList stores={stores} onManage={openManage} onArchive={handleArchive} />
           {/* "חנויות שהוסרו" — the removed-area below the active list. Renders

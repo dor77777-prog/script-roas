@@ -135,6 +135,18 @@ export function AdSetTable({
               // TikTok. Google PMax still excluded (Shopping/PMax fallback
               // synthesizes campaign-level rows, no real ad granularity).
               const canDrillToAds = !!((a.platform === 'Meta' || a.platform === 'TikTok') && a.id);
+              // 2026-06-10 audit (keyboard row drilldown): one handler shared
+              // by click AND Enter/Space so the drill is keyboard-reachable
+              // (mirrors the Card.tsx interactive pattern).
+              const drillToAds = () => {
+                if (!canDrillToAds) return;
+                onDrillAds({
+                  storeId: a.storeId,
+                  campaignId: a.campaignId,
+                  adSetId: a.id,
+                  adSetName: a.name,
+                });
+              };
               return (
                 <HelpTooltip
                   key={a.id || a.name || i}
@@ -145,16 +157,30 @@ export function AdSetTable({
                     'border-t border-glass-edge transition-opacity',
                     isOptimized && 'opacity-50 hover:opacity-100',
                     canDrillToAds && 'cursor-pointer hover:bg-glass-2/30',
+                    canDrillToAds &&
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                   )}
-                  onClick={() => {
-                    if (!canDrillToAds) return;
-                    onDrillAds({
-                      storeId: a.storeId,
-                      campaignId: a.campaignId,
-                      adSetId: a.id,
-                      adSetName: a.name,
-                    });
-                  }}
+                  // Keyboard reachability (Card.tsx pattern): tabIndex only on
+                  // drillable rows; Enter/Space trigger the same drill as a
+                  // click. role stays the native `row` — replacing it with
+                  // `button` would break the table's required ARIA structure
+                  // and flatten the cells for screen readers.
+                  tabIndex={canDrillToAds ? 0 : undefined}
+                  onClick={drillToAds}
+                  onKeyDown={
+                    canDrillToAds
+                      ? (e) => {
+                          // Only act on keys originating on the row itself —
+                          // Enter/Space on the in-row optimize Button bubbles
+                          // here and must not ALSO drill.
+                          if (e.target !== e.currentTarget) return;
+                          if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                            e.preventDefault(); // Space must not scroll the page
+                            drillToAds();
+                          }
+                        }
+                      : undefined
+                  }
                 >
                   <td className="px-2 py-2 text-center w-[36px]">
                     <Button
@@ -304,7 +330,13 @@ function AdSetSortHeader({
     <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-60 transition-opacity" />
   );
   return (
-    <th className={cn('font-medium px-3 py-2', textAlign)}>
+    <th
+      className={cn('font-medium px-3 py-2', textAlign)}
+      // 2026-06-10 audit — aria-sort moved from the inner <Button> (invalid
+      // ARIA: the attribute is only defined for header cells, so AT never
+      // announced sort state) onto the <th>.
+      aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
       <Button
         type="button"
         variant="ghost"
@@ -316,7 +348,6 @@ function AdSetSortHeader({
             ? 'text-accent font-semibold'
             : 'text-ink-secondary hover:text-ink',
         )}
-        aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
         {align === 'end' ? (
           <>

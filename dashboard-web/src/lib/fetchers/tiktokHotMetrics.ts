@@ -76,7 +76,13 @@ export type TikTokHotMetricsInput = {
    */
   accountCurrency: 'USD' | 'CAD' | 'ILS';
   fetcher?: typeof fetch;
-  getFxCadFor: (amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number>;
+  /**
+   * P1-11 (2026-06-10) — FX doctrine: the adapter returns `null` on FX
+   * failure. Row builders OMIT the `spend_cad` / `conversion_value_cad`
+   * keys when the conversion is null so the upsert's ON CONFLICT preserves
+   * the last good value instead of zeroing it every tick.
+   */
+  getFxCadFor: (amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number | null>;
 };
 
 export type TikTokHotMetricsResult = {
@@ -195,7 +201,7 @@ async function toCampaignRow(
   const avgPurchase = Number(m.value_per_complete_payment ?? 0);
   const purchaseValue = purchase * avgPurchase;
   const purchaseValueCad = await getFx(purchaseValue, accountCurrency);
-  return {
+  const row: CampaignDailyRow = {
     store_id: resolveStore(cid), platform: 'tiktok',
     campaign_id: cid,
     // IMP-A note: TikTok's BASIC report_type does NOT expose entity names.
@@ -203,12 +209,15 @@ async function toCampaignRow(
     // requires a separate /campaign|adgroup|ad/get/ lookup keyed by ids).
     campaign_name: null,
     date: dateStr,
-    spend_cad: spendCad,
     impressions: Math.round(Number(m.impressions ?? 0)),
     clicks: Math.round(Number(m.clicks ?? 0)),
     conversions: Math.round(purchase),
-    conversion_value_cad: purchaseValueCad,
   };
+  // P1-11 FX doctrine: omit the CAD keys (key-level) when FX failed
+  // (adapter returned null) so ON CONFLICT preserves the last good value.
+  if (spendCad !== null) row.spend_cad = spendCad;
+  if (purchaseValueCad !== null) row.conversion_value_cad = purchaseValueCad;
+  return row;
 }
 
 async function toAdsetRow(

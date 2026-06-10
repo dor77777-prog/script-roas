@@ -205,6 +205,45 @@ describe('useDrawerEsc (CC-02 — register-once-per-open-cycle)', () => {
     expect(calls).toEqual(['v2', 'v3']);
   });
 
+  it('ignores an Escape marked as handled by an inner tooltip/popover layer (2026-06-10 Esc double-dismiss)', async () => {
+    const { useDrawerEsc, markEscHandledByInnerLayer } = await import('../drawerStack');
+    const calls: string[] = [];
+
+    function runHook(open: boolean) {
+      stateIndex = 0;
+      refIndex = 0;
+      useDrawerEsc(open, () => {
+        calls.push('closed');
+      });
+    }
+
+    runHook(true);
+    for (const e of effectRegistry) {
+      const cleanup = e.fn();
+      e.cleanup = typeof cleanup === 'function' ? cleanup : undefined;
+    }
+
+    // An Esc consumed by an inner light-dismiss layer (rich popover /
+    // toggletip / rich bottom-sheet) is marked — the stack must NOT also
+    // close the drawer underneath.
+    const consumed = { key: 'Escape' } as KeyboardEvent;
+    markEscHandledByInnerLayer(consumed);
+    installedKeyDownListeners[0]?.(consumed);
+    expect(calls).toEqual([]);
+
+    // An UNMARKED Esc still closes the drawer — even when defaultPrevented.
+    // The registered Radix drawers suppress Radix's own Esc-dismiss with
+    // `onEscapeKeyDown={(e) => e.preventDefault()}` (capture phase, runs
+    // before this listener), so a bare defaultPrevented bail would make
+    // them permanently un-closable via Esc. This pins that contract.
+    const drawerSuppressed = {
+      key: 'Escape',
+      defaultPrevented: true,
+    } as KeyboardEvent;
+    installedKeyDownListeners[0]?.(drawerSuppressed);
+    expect(calls).toEqual(['closed']);
+  });
+
   it('registers on open=false → true transition and unregisters on true → false', async () => {
     const { useDrawerEsc } = await import('../drawerStack');
     function runHook(open: boolean) {

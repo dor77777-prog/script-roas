@@ -252,8 +252,12 @@ describe('cronDaily return-roas / persisted-roas equivalence (INN-01)', () => {
     expect(persistedTotal).toBeCloseTo(86 + 40 * 1.35, 9);
 
     // ===== CORE ASSERTION =====
+    // P1-11 (2026-06-10): RunDailyResult.totalSpendCad is now `number | null`
+    // (null = merge-layer FX failure). This scenario has working FX, so the
+    // value must be a real number.
+    expect(result.totalSpendCad).not.toBeNull();
     expect(
-      Math.abs(result.totalSpendCad - persistedTotal),
+      Math.abs((result.totalSpendCad as number) - persistedTotal),
       `result.totalSpendCad (${result.totalSpendCad}) must equal persisted data_daily.total_spend_cad (${persistedTotal}) within FP epsilon. ` +
         `Pre-fix the return excluded TikTok; post-fix both include it.`,
     ).toBeLessThan(1e-9);

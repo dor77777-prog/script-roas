@@ -29,8 +29,52 @@ import { useEffect, useRef } from 'react';
 const stack: Array<() => () => void> = [];
 let listenerInstalled = false;
 
+/**
+ * 2026-06-10 audit (Esc double-dismiss): an Esc that an INNER light-dismiss
+ * layer (HelpTooltip rich popover / toggletip / rich bottom-sheet) already
+ * consumed must NOT also close the topmost drawer — one keystroke, one
+ * dismissal.
+ *
+ * Why not simply check `e.defaultPrevented`: the registered Radix-based
+ * drawers deliberately suppress Radix's own Esc-dismiss with
+ * `onEscapeKeyDown={(e) => e.preventDefault()}` (campaign-drawer/index.tsx,
+ * StoreDetailModal.tsx, AdsDrawer.tsx) and delegate closing to this stack.
+ * Radix's escape handler runs on `document` in the CAPTURE phase — before
+ * our window bubble listener — so when a drawer is the highest Radix layer,
+ * EVERY Esc reaching this stack is already defaultPrevented. A bare
+ * defaultPrevented bail would make those drawers permanently un-closable
+ * via Esc. Instead, the tooltip/popover layer marks the events IT consumes
+ * (see `markEscHandledByInnerLayer` callers in ui/Tooltip.tsx +
+ * ui/tooltip/{RichPopover,Toggletip,RichSheet}.tsx) and we ignore exactly
+ * those.
+ */
+const ESC_HANDLED_BY_INNER_LAYER = Symbol.for(
+  'roas.drawerStack.escHandledByInnerLayer',
+);
+
+type MaybeMarkedEvent = { [ESC_HANDLED_BY_INNER_LAYER]?: boolean };
+
+/**
+ * Tag a (native) Escape keydown event as "consumed by an inner light-dismiss
+ * layer" — a tooltip popover, toggletip, or rich bottom-sheet that sits ON
+ * TOP of a drawer. The shared drawer-stack listener then leaves the drawer
+ * underneath open; the NEXT Esc addresses the drawer. Radix passes the raw
+ * native KeyboardEvent to `onEscapeKeyDown`, and the same object later
+ * reaches our window listener, so an expando marker survives the trip.
+ */
+export function markEscHandledByInnerLayer(e: Event): void {
+  (e as unknown as MaybeMarkedEvent)[ESC_HANDLED_BY_INNER_LAYER] = true;
+}
+
+function wasEscHandledByInnerLayer(e: Event): boolean {
+  return (e as unknown as MaybeMarkedEvent)[ESC_HANDLED_BY_INNER_LAYER] === true;
+}
+
 function onKeyDown(e: KeyboardEvent) {
   if (e.key !== 'Escape') return;
+  // Esc already spent on closing a tooltip/popover INSIDE the drawer —
+  // swallow it here so the drawer survives (one Esc, one dismissal).
+  if (wasEscHandledByInnerLayer(e)) return;
   const topGetter = stack[stack.length - 1];
   if (topGetter) {
     const cb = topGetter();

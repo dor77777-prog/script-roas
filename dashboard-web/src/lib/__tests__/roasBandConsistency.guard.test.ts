@@ -15,6 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import { useRoasBandGradient, BAND_TAG_LABEL, type RoasBand } from '@/lib/format/useRoasBandGradient';
 import { roasLabel } from '@/lib/analytics';
+import { synthesizeRoasChart } from '@/lib/synthesis/roasChart';
 
 // Positive ROAS only — at exactly 0 the two helpers diverge BY DESIGN
 // (gradient surfaces the red-alarm "0 sales with spend" path via a flag; label
@@ -34,5 +35,38 @@ describe('ROAS band helpers stay in lock-step (false-alarm guard)', () => {
       expect(roasLabel(r).tone).toBe(band);
       expect(BAND_TAG_LABEL[band]).toBe(roasLabel(r).text);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// P1-10 (audit 2026-06-10) — synthesis/roasChart drifted: its PRIVATE
+// bandForRoas copy mapped exactly-3.0 to BLUE while the canonical helper
+// maps 3.0 to GREEN (the 2026-06-09 Task 11 lock), and it banded the
+// UNROUNDED average while displaying the ROUNDED anchor (3.04 showed "3.0"
+// tinted blue beside a green KPI tile). The synthesiser now delegates to
+// useRoasBandGradient on the ROUNDED anchor — this guard keeps it locked.
+// ─────────────────────────────────────────────────────────────────────────
+
+function flatPoints(roas: number) {
+  return [1, 2, 3].map((d) => ({ date: `2026-06-0${d}`, roas }));
+}
+
+describe('synthesizeRoasChart band stays in lock-step with the canonical helper (P1-10)', () => {
+  it.each(SAMPLES)('flat series at %s → chart band === useRoasBandGradient(anchor).band', (r) => {
+    const out = synthesizeRoasChart({ points: flatPoints(r), range: '7' });
+    expect(out.band).toBe(useRoasBandGradient(out.anchorMetric).band);
+  });
+
+  it('ROAS exactly 3.0 → GREEN ("at target", Task 11 lock) — not blue', () => {
+    const out = synthesizeRoasChart({ points: flatPoints(3.0), range: '7' });
+    expect(out.anchorMetric).toBe(3.0);
+    expect(out.band).toBe('green');
+    expect(useRoasBandGradient(3.0).band).toBe('green');
+  });
+
+  it('bands the ROUNDED anchor: avg 3.04 displays "3.0" and must tint green like the KPI tile', () => {
+    const out = synthesizeRoasChart({ points: flatPoints(3.04), range: '7' });
+    expect(out.anchorMetric).toBe(3.0);
+    expect(out.band).toBe('green');
   });
 });

@@ -93,23 +93,54 @@ describe('upsertRegistryBatch()', () => {
 });
 
 describe('insertStatusEventsBatch()', () => {
-  it('inserts events with ignoreDuplicates: true (ON CONFLICT DO NOTHING via PostgREST)', async () => {
-    const insert = vi.fn().mockResolvedValue({ error: null });
-    const from = vi.fn().mockReturnValue({ insert });
-    const admin = { from } as unknown as Parameters<typeof insertStatusEventsBatch>[0]['admin'];
-    const events: StatusEventInsert[] = [{
+  function makeEvent(entityId: string): StatusEventInsert {
+    return {
       store_id: 'uzoshop',
       platform: 'meta',
       entity_type: 'campaign',
-      entity_id: 'C1',
+      entity_id: entityId,
       occurred_at: NOW,
       from_status: null,
       to_status: 'ACTIVE',
       change_kind: 'first_seen',
       raw_event: {},
-    }];
+    };
+  }
+
+  // P1-32 (2026-06-10): must be a TRUE per-row ON CONFLICT (dedupe_key)
+  // DO NOTHING. The previous plain .insert() (treating 23505 as benign)
+  // aborted the WHOLE multi-row INSERT on one duplicate — a mixed dup+new
+  // batch silently dropped the NEW transitions feeding the operator panel
+  // and the campaign-died/fatigue detectors.
+  it('upserts events with onConflict=dedupe_key + ignoreDuplicates: true (per-row DO NOTHING)', async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn().mockReturnValue({ upsert });
+    const admin = { from } as unknown as Parameters<typeof insertStatusEventsBatch>[0]['admin'];
+    const events: StatusEventInsert[] = [makeEvent('C1'), makeEvent('C2')];
     await insertStatusEventsBatch({ admin, events });
     expect(from).toHaveBeenCalledWith('campaign_status_events');
-    expect(insert).toHaveBeenCalledWith(events, { count: 'exact', defaultToNull: true });
+    expect(upsert).toHaveBeenCalledWith(events, {
+      onConflict: 'dedupe_key',
+      ignoreDuplicates: true,
+    });
+  });
+
+  it('throws with table context when PostgREST returns an error (no silent 23505 carve-out anymore)', async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: { code: '23505', message: 'duplicate key value' } });
+    const from = vi.fn().mockReturnValue({ upsert });
+    const admin = { from } as unknown as Parameters<typeof insertStatusEventsBatch>[0]['admin'];
+    // With ignoreDuplicates the DB never raises 23505 for dedupe_key dupes;
+    // any error that DOES surface is a real failure and must be loud.
+    await expect(
+      insertStatusEventsBatch({ admin, events: [makeEvent('C1')] }),
+    ).rejects.toThrow(/campaign_status_events.*duplicate key value/);
+  });
+
+  it('no-ops on an empty events array (no DB call)', async () => {
+    const upsert = vi.fn();
+    const from = vi.fn().mockReturnValue({ upsert });
+    const admin = { from } as unknown as Parameters<typeof insertStatusEventsBatch>[0]['admin'];
+    await insertStatusEventsBatch({ admin, events: [] });
+    expect(from).not.toHaveBeenCalled();
   });
 });

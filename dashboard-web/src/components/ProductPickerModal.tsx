@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { Package, Search, X, Check } from 'lucide-react';
+import { AlertTriangle, Package, RefreshCw, Search, X, Check } from 'lucide-react';
 import { cn, formatNumber } from '@/lib/utils';
+import { fetchJsonStrict } from '@/lib/fetchJson';
 import { fmtMoney } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -44,16 +45,17 @@ import type { ProductCatalogResponse } from '@/app/api/product-catalog/route';
  * from Radix — the old `useDrawerEsc` + custom backdrop are gone.
  */
 
-const salesFetcher = async (url: string): Promise<ProductsResponse> => {
-  const r = await fetch(url, { cache: 'no-store' });
-  if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString(), dataLastWriteAt: null };
-  return r.json();
-};
-const catalogFetcher = async (url: string): Promise<ProductCatalogResponse> => {
-  const r = await fetch(url, { cache: 'no-store' });
-  if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
-  return r.json();
-};
+// P1-4e (2026-06-10 state-honesty sweep) — pre-fix both fetchers swallowed
+// `!r.ok` and returned `{ rows: [] }`, so a real API failure rendered the
+// "אין מוצרים זמינים... ודא ש-products-daily מאוכלס" verdict — sending the
+// operator to debug the WRONG table — and a failed catalog fetch raised the
+// misleading "הקטלוג עוד לא סונכרן" banner. fetchJsonStrict throws (on !ok
+// AND on a 200-with-error body) so SWR's `error` state fires and the picker
+// renders an explicit error strip with retry instead.
+const salesFetcher = (url: string): Promise<ProductsResponse> =>
+  fetchJsonStrict<ProductsResponse>(url);
+const catalogFetcher = (url: string): Promise<ProductCatalogResponse> =>
+  fetchJsonStrict<ProductCatalogResponse>(url);
 
 type Props = {
   open: boolean;
@@ -99,7 +101,12 @@ export function ProductPickerModal({
 }: Props) {
   // Full catalog from <storeId>-products-catalog → drives the picker list.
   // Includes products that haven't sold yet, which products-daily misses.
-  const { data: catalogData, isLoading: catalogLoading } = useSWR<ProductCatalogResponse>(
+  const {
+    data: catalogData,
+    isLoading: catalogLoading,
+    error: catalogError,
+    mutate: mutateCatalog,
+  } = useSWR<ProductCatalogResponse>(
     open ? '/api/product-catalog' : null,
     catalogFetcher,
     // 30s dedupe — reasonable middle ground between "refetch every time
@@ -110,13 +117,21 @@ export function ProductPickerModal({
   // Sales data is overlaid as context (units sold, recent revenue) so the
   // user can see which product is the hero — but it's NOT the source of
   // truth for which products exist.
-  const { data: salesData, isLoading: salesLoading } = useSWR<ProductsResponse>(
+  const {
+    data: salesData,
+    isLoading: salesLoading,
+    error: salesError,
+    mutate: mutateSales,
+  } = useSWR<ProductsResponse>(
     open ? '/api/products' : null,
     salesFetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
   const data = salesData;
   const isLoading = catalogLoading || salesLoading;
+  // P1-4e — either feed failing means the list below may be missing products;
+  // surface it as an error, never as "this store has no products".
+  const fetchError = catalogError ?? salesError ?? null;
 
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initial));
   const [query, setQuery] = useState('');
@@ -274,7 +289,10 @@ export function ProductPickerModal({
         </SheetHeader>
 
         <div className="px-4 sm:px-5 py-3 border-b border-glass-edge">
-          {!isLoading && !usingCatalog && (
+          {/* P1-4e — gate on !fetchError too: a FAILED catalog fetch is not
+              "the catalog hasn't synced yet"; showing the sync-now banner sent
+              the operator to debug the wrong thing. */}
+          {!isLoading && !fetchError && !usingCatalog && (
             <div className="mb-2.5 rounded-md bg-status-warningBg border border-status-warning px-2.5 py-2 text-[11px] text-status-warningFg leading-relaxed">
               <strong>הקטלוג עוד לא סונכרן.</strong> מוצגים רק מוצרים שכבר ביצעו
               מכירה. כדי לראות את כל המוצרים בחנות (כולל חדשים בלי הזמנות),
@@ -309,12 +327,52 @@ export function ProductPickerModal({
         </div>
 
         <SheetBody className="px-2 sm:px-3 py-2">
-          {isLoading && (
+          {isLoading && !fetchError && (
             <div className="text-center text-sm text-ink-muted py-10">
               טוען מוצרים…
             </div>
           )}
-          {!isLoading && filtered.length === 0 && (
+          {/* P1-4e — explicit error UI. Pre-fix a failed fetch fell into the
+              "אין מוצרים זמינים... ודא ש-products-daily מאוכלס" empty state —
+              the wrong table to debug for an API/DB failure. */}
+          {fetchError != null && (
+            <div
+              role="alert"
+              data-testid="product-picker-error"
+              className="mx-2 my-4 rounded-xl border border-status-red bg-status-redBg text-status-redFg px-4 py-4"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold text-[13px]">שגיאה בטעינת המוצרים</div>
+                  <div className="text-[11px] opacity-80 mt-1 leading-relaxed">
+                    הקריאה ל-
+                    <code className="font-mono">
+                      {catalogError ? '/api/product-catalog' : '/api/products'}
+                    </code>{' '}
+                    נכשלה. זה לא אומר שאין מוצרים בחנות — זה אומר שהשרת לא ענה. נסה שוב.
+                  </div>
+                  <div className="text-[10px] opacity-60 mt-1 font-mono">
+                    {fetchError instanceof Error ? fetchError.message : String(fetchError)}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      void mutateCatalog();
+                      void mutateSales();
+                    }}
+                    className="mt-2 gap-1.5 text-[12px]"
+                  >
+                    <RefreshCw size={12} />
+                    נסה שוב
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+          {!isLoading && !fetchError && filtered.length === 0 && (
             <div className="text-center text-sm text-ink-muted py-10">
               <Package size={28} className="mx-auto mb-2 text-ink-subtle" />
               {query

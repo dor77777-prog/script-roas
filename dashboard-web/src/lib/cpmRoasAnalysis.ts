@@ -195,13 +195,19 @@ const STABLE_THRESHOLD = 0.05; // 5%
  *   flat        flat         יציבות מלאה — הקמפיין במצב סטדי
  */
 /**
- * Mean of an array, or null when empty / sum is 0 (used to skip zero
- * baselines that would cause divide-by-zero in delta math).
+ * Mean of an array; null ONLY for an empty array.
+ *
+ * P1-9b (audit 2026-06-10): the previous `sum === 0 → null` guard meant a
+ * TOTAL collapse (prev ROAS 3.0 → current all-zero) produced a null delta →
+ * categorize() read it as 'flat' → "אין סיגנל לפעולה דחופה" — the worst
+ * campaign state described as stability. A non-empty all-zero series now
+ * returns its real mean (0) so the decline is computed honestly.
+ * Divide-by-zero on a zero BASELINE is still guarded at the call sites
+ * (`prevMean !== 0` checks before dividing).
  */
 function meanOrNull_(values: number[]): number | null {
   if (values.length === 0) return null;
   const sum = values.reduce((s, x) => s + x, 0);
-  if (sum === 0) return null;
   return sum / values.length;
 }
 

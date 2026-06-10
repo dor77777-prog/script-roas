@@ -32,7 +32,8 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { CreditCard, ChevronDown } from 'lucide-react';
+import { AlertTriangle, CreditCard, ChevronDown, RefreshCw } from 'lucide-react';
+import { fetchJsonStrict } from '@/lib/fetchJson';
 import { Card } from '@/components/ui/Card';
 import { Heading } from '@/components/ui/Typography';
 import { NativeSelect } from '@/components/ui/NativeSelect';
@@ -244,14 +245,14 @@ function ShareBar({
   );
 }
 
-const fetcher = async (url: string): Promise<PaymentMethodsResponse> => {
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body?.error || `Failed to load (${res.status})`);
-  }
-  return res.json();
-};
+// P1-2 (2026-06-10 state-honesty sweep) — /api/payment-methods soft-fails with
+// HTTP 200 + { months: [], error }. A fetcher that only checks `res.ok`
+// resolved that as success → a DB blip rendered the "הדאטה תופיע ברגע
+// שהזמנות יסונכרנו" empty verdict — a wrong diagnosis on a financial tab.
+// fetchJsonStrict throws on !ok AND on the 200-with-error body so SWR's
+// `error` state fires and the tab renders an explicit error strip instead.
+const fetcher = (url: string): Promise<PaymentMethodsResponse> =>
+  fetchJsonStrict<PaymentMethodsResponse>(url);
 
 export interface PaymentMethodsTabProps {
   /** Store names for the per-store picker. */
@@ -293,12 +294,17 @@ export function PaymentMethodsTab({
     }
   }, [globalStore, stores]);
 
+  // P1-2 — destructure error/isLoading too: the tab must distinguish
+  // "loading" / "failed" / "settled-empty" instead of rendering the business
+  // empty-copy for all three.
   const useInjected = injectedData != null;
-  const { data } = useSWR<PaymentMethodsResponse>(
+  const { data, error, isLoading, mutate } = useSWR<PaymentMethodsResponse>(
     useInjected ? null : '/api/payment-methods',
     fetcher,
     { revalidateOnFocus: false },
   );
+  const showError = !useInjected && Boolean(error || data?.error);
+  const showLoading = !useInjected && !showError && isLoading;
 
   const months = useMemo(
     () => (useInjected ? injectedData!.months : data?.months ?? []),
@@ -439,7 +445,48 @@ export function PaymentMethodsTab({
         }
       />
 
-      {rows.length === 0 ? (
+      {/* P1-2 honest states: error (red strip + retry) → loading (skeleton) →
+          settled-empty (the business copy) → data. Pre-fix, error AND loading
+          both fell into the "הדאטה תופיע ברגע שהזמנות יסונכרנו" verdict. */}
+      {showError ? (
+        <div
+          role="alert"
+          data-testid="pm-error"
+          className="rounded-xl border border-status-red bg-status-redBg text-status-redFg px-4 py-4"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-[13px]">שגיאה בטעינת נתוני אמצעי-התשלום</div>
+              <div className="text-[11px] opacity-80 mt-1 leading-relaxed">
+                הקריאה ל-<code className="font-mono">/api/payment-methods</code> נכשלה.
+                זה לא אומר שאין הזמנות — זה אומר שהשרת לא ענה. נסה לרענן.
+              </div>
+              <div className="text-[10px] opacity-60 mt-1 font-mono">
+                {error instanceof Error ? error.message : String(error ?? data?.error)}
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => mutate()}
+                className="mt-3 gap-1.5 text-[12px]"
+              >
+                <RefreshCw size={12} />
+                נסה שוב
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : showLoading ? (
+        <div data-testid="pm-loading" aria-busy="true" className="space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="skeleton h-24 rounded-xl" aria-hidden />
+            ))}
+          </div>
+          <div className="p-4 text-center text-ink-muted text-sm">טוען נתוני אמצעי-תשלום…</div>
+        </div>
+      ) : rows.length === 0 ? (
         <Card data-testid="pm-empty">
           <p className="text-sm text-ink-secondary">
             אין עדיין נתוני אמצעי-תשלום לתצוגה. הדאטה תופיע כאן ברגע שהזמנות יסונכרנו

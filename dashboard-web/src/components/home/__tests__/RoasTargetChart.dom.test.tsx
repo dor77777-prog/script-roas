@@ -276,3 +276,55 @@ describe('<RoasTargetChart>', () => {
     ).toBe('stale');
   });
 });
+
+/* --------------------------------------------------------------------------
+ * Dynamic y-domain (2026-06-10 audit): a fixed Y_MAX=4 clamped every day
+ * above 4.0 onto the top gridline while the שיא label printed the real value.
+ * yMax = max(4, ceil(max roas)) — the drawn shape must match the label.
+ * -------------------------------------------------------------------------- */
+describe('<RoasTargetChart> — dynamic yMax (no clamping above 4.0)', () => {
+  function dataWithPeak(peak: number): RoasChartData {
+    const d = makeData();
+    d.points = [
+      { date: '2026-05-01', roas: 3.2 },
+      { date: '2026-05-02', roas: peak },
+      { date: '2026-05-03', roas: 2.4 },
+      { date: '2026-05-04', roas: 2.2 },
+    ];
+    return d;
+  }
+
+  it('maps a 5.5 point ABOVE the 4.0 gridline position (not clamped onto it)', () => {
+    render(<RoasTargetChart range="30" data={dataWithPeak(5.5)} />);
+    // yMax = max(4, ceil(5.5)) = 6 → gridlines 1..6 render.
+    const grid4 = screen.getByTestId('chart-gridline-4');
+    const grid6 = screen.getByTestId('chart-gridline-6');
+    const grid4Y = Number(grid4.getAttribute('y1'));
+    const grid6Y = Number(grid6.getAttribute('y1'));
+    // The שיא label anchors at yForRoas(5.5) - 8.
+    const maxLabel = screen.getByTestId('chart-max-label');
+    expect(maxLabel.textContent).toBe('שיא 5.5');
+    const labelY = Number(maxLabel.getAttribute('y'));
+    const pointY = labelY + 8;
+    // SVG y grows downward: above the 4.0 gridline means smaller y.
+    expect(pointY).toBeLessThan(grid4Y);
+    // …but NOT clamped to the very top of the domain (the old bug pinned it
+    // to the top gridline; under yMax=6 the top gridline is 6.0).
+    expect(pointY).toBeGreaterThan(grid6Y);
+  });
+
+  it('a normal ≤4 series keeps the original fixed 1..4 gridlines (regression)', () => {
+    render(<RoasTargetChart range="30" data={makeData()} />);
+    expect(screen.getByTestId('chart-gridline-4')).toBeInTheDocument();
+    expect(screen.queryByTestId('chart-gridline-5')).toBeNull();
+    expect(screen.getByTestId('chart-gridline-1')).toBeInTheDocument();
+  });
+
+  it('the 3.0 target line stays anchored at the target VALUE when the domain grows', () => {
+    render(<RoasTargetChart range="30" data={dataWithPeak(5.5)} />);
+    // With yMax=6 the target (3.0) must sit exactly on the 3.0 gridline.
+    const grid3Y = Number(screen.getByTestId('chart-gridline-3').getAttribute('y1'));
+    const targetY = Number(screen.getByTestId('chart-target-line').getAttribute('y1'));
+    expect(targetY).toBeCloseTo(grid3Y, 5);
+  });
+});

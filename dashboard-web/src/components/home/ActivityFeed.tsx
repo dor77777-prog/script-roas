@@ -357,6 +357,15 @@ export function ActivityFeed({ store, limit = 20, className, onSeeAll }: Activit
   const serverNowMs = Date.parse(serverNow);
   const events = (data?.events ?? []).slice(0, limit);
 
+  // Copy-truth (2026-06-10 audit P1-26): the footer/empty-state scope line.
+  // Previously a hardcoded "3 חנויות" — wrong after a store is added AND when
+  // the feed is filtered to a single store. `prefix` is "מאזין ל" / "מחובר ל".
+  const isFiltered = Boolean(store && store !== 'All');
+  const scopeText = (prefix: string): string =>
+    isFiltered
+      ? `${prefix}חנות ${store}`
+      : `${prefix}-${storeList.length} החנויות`;
+
   return (
     <Card className={cn('!p-0 overflow-hidden flex flex-col', className)} data-testid="activity-feed">
       <div className="px-5 py-3.5 flex items-center justify-between border-b border-glass-edge">
@@ -393,8 +402,11 @@ export function ActivityFeed({ store, limit = 20, className, onSeeAll }: Activit
             ) : (
               <>
                 <div className="font-bold text-[13px] text-ink">מאזין בזמן אמת…</div>
+                {/* Copy-truth (2026-06-10 audit P1-26): store count is dynamic
+                    (useStores) — the "3" literal lied the moment a store was
+                    added, and "החנויות" is scoped down when a filter is on. */}
                 <div className="mt-1 text-[12px] text-ink-muted">
-                  מחובר ל-3 החנויות. אירועים (מכירות, החזרים, הוספות לעגלה) יופיעו כאן ברגע שיקרו.
+                  {scopeText('מחובר ל')}. אירועים (מכירות, החזרים, הוספות לעגלה) יופיעו כאן ברגע שיקרו.
                 </div>
               </>
             )}
@@ -416,7 +428,7 @@ export function ActivityFeed({ store, limit = 20, className, onSeeAll }: Activit
       </div>
 
       <div className="px-5 py-2.5 text-center text-[11px] text-ink-subtle border-t border-glass-edge">
-        מאזין ל-3 חנויות · מתעדכן רגעית
+        {scopeText('מאזין ל')} · מתעדכן רגעית
       </div>
 
       {/* "ראה הכל ‹" — deep-links to the full "פעילות" (Activity) tab. Only

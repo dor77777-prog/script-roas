@@ -150,6 +150,14 @@ describe('CustomerValueTab — verdict coherence (mature basis: no "losing" + "r
     expect(container.querySelector('[data-testid="cv-payback-callout"]')).toBeNull();
   });
 
+  it('STILL renders the nCAC break-even line when losing (2026-06-10 audit — the copy references it)', () => {
+    // The line used to be suppressed when losing — exactly the case where
+    // "כשהוא חוצה את קו עלות-הגיוס" matters most. It must render (above the
+    // curve — the y-domain includes ncac) even though no crossing exists.
+    renderLosing();
+    expect(screen.getByText(/קו עלות-גיוס/)).toBeInTheDocument();
+  });
+
   it('renders a finite payback + month KPI when mature-LTV ≥ nCAC', () => {
     // MATURE cohort with a high per-customer M0 value (net 150/cust) so that even
     // under the default keep-rate (1 − 25% cogs − 6.5% fees = 0.685) the mature

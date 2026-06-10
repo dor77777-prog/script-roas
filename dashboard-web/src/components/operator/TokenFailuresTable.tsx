@@ -129,7 +129,8 @@ export function TokenFailuresTable() {
   if (error) {
     return (
       <div className="text-sm text-status-orangeFg inline-flex items-center gap-1">
-        <AlertCircle size={14} /> שגיאת רענון — ננסה שוב בעוד 30 שניות.
+        {/* Copy-truth: SWR refreshInterval above is 15s (was 30s pre-Task-5.2). */}
+        <AlertCircle size={14} /> שגיאת רענון — ננסה שוב בעוד 15 שניות.
       </div>
     );
   }
@@ -154,8 +155,13 @@ export function TokenFailuresTable() {
           <div className="text-xs text-ink-muted mb-2">
             כשלים פתוחים: <span className="font-semibold text-status-redFg">{unresolved.length}</span>
           </div>
-          <div className="border border-status-red rounded-lg overflow-hidden">
-            <TableBase className="text-xs sm:text-sm">
+          {/* Horizontal scroll (2026-06-10 audit): 7 columns inside
+              overflow-hidden clipped the "סמן כתוקן" action off-screen on the
+              phone — exactly the alert-triage flow. Same overflow-x-auto +
+              minWidth pattern as the other tables (CohortComparisonPanel /
+              ProductsTable). */}
+          <div className="border border-status-red rounded-lg overflow-x-auto">
+            <TableBase className="text-xs sm:text-sm" minWidth={640}>
               <thead className="bg-status-redBg text-ink-secondary">
                 <tr>
                   <th className="px-3 py-2 text-start font-medium">פלטפורמה</th>
@@ -193,8 +199,8 @@ export function TokenFailuresTable() {
           <summary className="text-xs text-ink-muted cursor-pointer hover:text-ink-secondary">
             תוקנו לאחרונה ({resolved.length})
           </summary>
-          <div className="mt-2 border border-glass-edge rounded-lg overflow-hidden">
-            <TableBase className="text-xs">
+          <div className="mt-2 border border-glass-edge rounded-lg overflow-x-auto">
+            <TableBase className="text-xs" minWidth={480}>
               <tbody>
                 {resolved.map((row) => (
                   <tr
@@ -223,7 +229,7 @@ export function TokenFailuresTable() {
       )}
 
       <div className="text-2xs text-ink-muted">
-        רענון אוטומטי כל 30 שניות. עדכון אחרון: {formatRelative(data.lastUpdated)}
+        רענון אוטומטי כל 15 שניות. עדכון אחרון: {formatRelative(data.lastUpdated)}
       </div>
     </div>
   );

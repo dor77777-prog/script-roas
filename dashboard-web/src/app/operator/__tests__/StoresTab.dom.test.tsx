@@ -162,9 +162,15 @@ describe('StoresTab — חנויות operator tab (Phase 6a Task 7)', () => {
     // Meta is connected on usmile360 → its cell shows a rotate ("החלף") action.
     const metaCell = within(row).getByTestId('cred-cell-usmile360-meta');
     fireEvent.click(within(metaCell).getByRole('button', { name: /החלף|ערוך/ }));
-    // EDIT mode mounts the wizard with the edit heading + prefilled, disabled slug.
+    // EDIT mode mounts the wizard with the edit heading. P2-43 (2026-06-10):
+    // a matrix action lands DIRECTLY on the credential step (the Meta cred
+    // fields are visible without walking step 1).
     expect(await screen.findByText('עריכת חנות')).toBeDefined();
-    const slug = screen.getByLabelText(/מזהה/) as HTMLInputElement;
+    expect(await screen.findByLabelText(/Meta access[_ ]?token/i)).toBeDefined();
+    // Walking back to step 1 shows the prefilled, locked slug. (Exact name —
+    // the StoresTab header also has a "→ חזרה לרשימה" button.)
+    fireEvent.click(screen.getByRole('button', { name: '→ חזרה' }));
+    const slug = (await screen.findByLabelText(/מזהה/)) as HTMLInputElement;
     expect(slug.disabled).toBe(true);
     expect(slug.value).toBe('usmile360');
   });
@@ -202,12 +208,10 @@ describe('StoresTab — חנויות operator tab (Phase 6a Task 7)', () => {
     const row = screen.getByTestId('store-row-usmile360');
     const googleCell = within(row).getByTestId('cred-cell-usmile360-google');
     fireEvent.click(within(googleCell).getByRole('button', { name: /חבר/ }));
-    // Edit wizard opened + prefilled.
+    // Edit wizard opened. P2-43 (2026-06-10): focusPlatform='google' lands
+    // DIRECTLY on the credential step with the pre-enabled Google cred block —
+    // no step-1 walk needed.
     await screen.findByText('עריכת חנות');
-    await screen.findByDisplayValue('360usmile');
-    // focusPlatform='google' pre-enabled the Google toggle → advancing to step 2
-    // surfaces the Google cred block.
-    fireEvent.click(screen.getByRole('button', { name: /הבא|Next/ }));
     expect(await screen.findByLabelText(/Google customer/i)).toBeDefined();
   });
 
@@ -334,6 +338,54 @@ describe('StoresTab — archive / restore (Phase 6b Task 3)', () => {
     fireEvent.click(within(screen.getByTestId('store-row-uzoshop')).getByRole('button', { name: /העבר לארכיון/ }));
     // A Hebrew error surfaces (mirrors the load-error pattern).
     expect(await screen.findByText(/נכשל/)).toBeDefined();
+  });
+
+  // P1-27b (2026-06-10 state-honesty sweep) — pre-fix a failed lifecycle POST
+  // set the SAME `error` state the LOADER uses, and the list render was gated
+  // on it → one failed archive blanked the entire (still valid) store list.
+  // Now the action error is a separate INLINE role=alert and the list stays.
+  it('P1-27b — a FAILED archive keeps the store list rendered + shows an inline action alert (no blanking)', async () => {
+    responder = (url, init) => {
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/api/operator/stores') && method === 'GET') return okStores(MIXED);
+      if (url.endsWith('/archive') && method === 'POST') {
+        return { ok: false, status: 500, json: async () => ({ error: 'boom' }) };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+    render(<StoresTab />);
+    await screen.findByTestId('store-row-uzoshop');
+    fireEvent.click(within(screen.getByTestId('store-row-uzoshop')).getByRole('button', { name: /העבר לארכיון/ }));
+
+    // The inline ACTION alert renders (role=alert, near the action)…
+    const alert = await screen.findByTestId('stores-action-error');
+    expect(alert.getAttribute('role')).toBe('alert');
+    expect(alert.textContent).toContain('העברת החנות לארכיון נכשלה');
+    // …and the working context is PRESERVED: active list AND removed-area
+    // both still rendered (pre-fix both vanished behind the loader error).
+    expect(screen.getByTestId('store-row-uzoshop')).toBeDefined();
+    expect(screen.getByTestId('removed-store-row-oldstore')).toBeDefined();
+    // The loader error (which would blank the list) did NOT fire.
+    expect(screen.queryByTestId('stores-load-error')).toBeNull();
+  });
+
+  it('P1-27b — a FAILED restore keeps the list rendered + shows the inline restore alert', async () => {
+    responder = (url, init) => {
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/api/operator/stores') && method === 'GET') return okStores(MIXED);
+      if (url.endsWith('/restore') && method === 'POST') {
+        return { ok: false, status: 500, json: async () => ({ error: 'boom' }) };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+    render(<StoresTab />);
+    await screen.findByTestId('removed-store-row-oldstore');
+    fireEvent.click(within(screen.getByTestId('removed-store-row-oldstore')).getByRole('button', { name: /שחזר/ }));
+
+    const alert = await screen.findByTestId('stores-action-error');
+    expect(alert.textContent).toContain('שחזור החנות נכשל');
+    expect(screen.getByTestId('store-row-uzoshop')).toBeDefined();
+    expect(screen.getByTestId('removed-store-row-oldstore')).toBeDefined();
   });
 
   // -------------------------------------------------------------------------

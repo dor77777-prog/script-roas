@@ -301,8 +301,11 @@ export function ResetData() {
                     <li key={t} dir="ltr">
                       <code className="text-status-greenFg">{t}</code>
                       {t === 'stores' && (
+                        // Copy-truth (2026-06-10 audit P1-26): no count — the
+                        // stores TABLE also holds archived rows, so any number
+                        // (active count included) would mis-state its contents.
                         <span className="text-ink-secondary" dir="rtl">
-                          {' '}— 3 החנויות שלך
+                          {' '}— החנויות שלך (כולל מאורכבות)
                         </span>
                       )}
                       {t === 'notification_config' && (

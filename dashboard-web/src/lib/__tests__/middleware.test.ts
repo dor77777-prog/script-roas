@@ -240,11 +240,21 @@ describe('isDashboardAuthAllowlisted — Shopify ingest endpoints (Task 2)', () 
     expect(isDashboardAuthAllowlisted('/api/inngest')).toBe(true);
   });
 
+  it('allowlists the TikTok OAuth callback landing page (P1-28)', () => {
+    // TikTok App reviewers + fresh-browser re-auth redirects cannot carry the
+    // dash_auth cookie; the page renders no secrets (single-use auth_code only).
+    expect(isDashboardAuthAllowlisted('/api/oauth/tiktok/callback')).toBe(true);
+  });
+
   it('does NOT allowlist a random API path', () => {
     expect(isDashboardAuthAllowlisted('/api/x')).toBe(false);
     expect(isDashboardAuthAllowlisted('/api/data')).toBe(false);
     expect(isDashboardAuthAllowlisted('/api/webhooks/shopify/extra')).toBe(false);
     expect(isDashboardAuthAllowlisted('/api/inngest/extra')).toBe(false);
+    // The TikTok allowlist entry is EXACT — siblings/children stay gated.
+    expect(isDashboardAuthAllowlisted('/api/oauth/tiktok/callback/extra')).toBe(false);
+    expect(isDashboardAuthAllowlisted('/api/oauth/tiktok')).toBe(false);
+    expect(isDashboardAuthAllowlisted('/api/oauth/google/callback')).toBe(false);
   });
 
   it('still allowlists the existing entries (regression)', () => {

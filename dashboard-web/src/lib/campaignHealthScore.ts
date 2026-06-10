@@ -197,6 +197,40 @@ const GRADE_LADDER: ReadonlyArray<{ min: number; grade: Exclude<HealthGrade, 'un
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
+ * P1-9c (audit 2026-06-10) — evidence floor for the deterministic branch.
+ *
+ * ONE tagged $100 order used to flip `scoreProfitability` into the
+ * deterministic branch (baseRoas = 100/spend → ~0 → grade F) while an
+ * IDENTICAL campaign with zero tagged orders kept the platform prior
+ * (grade ~C): the scorer punished PARTIAL evidence below ZERO evidence —
+ * a non-monotonic cliff that bites during the Google ValueTrack ramp-up,
+ * when campaigns accumulate their first 1-2 tagged orders.
+ *
+ * The deterministic read is only authoritative once the click-id sample
+ * has minimal mass: >= 3 tagged orders OR >= 20% coverage of the platform
+ * claim. Below the floor the deterministic dribble is ignored for scoring
+ * (profitability falls through to the prior-based branches; attribution
+ * clarity floors at the zero-evidence 'unknown' verdict's 30).
+ *
+ * A null attribution (no analysis ran at all) passes the floor — there is
+ * no sample to judge as thin, and pre-fix behaviour is preserved. The same
+ * applies to SYNTHETIC/partial attribution shapes that omit the sample-size
+ * fields entirely (aiReport.ts builds a minimal `{ trust }` object and casts
+ * it in): absent counters are "no counter-evidence", not "zero orders".
+ */
+function deterministicEvidenceFloorMet(
+  att: TrueRevenueInfo['attribution'],
+): boolean {
+  if (!att) return true;
+  const orders = att.deterministicOrders;
+  const coverage = att.coverage;
+  const hasOrders = typeof orders === 'number' && Number.isFinite(orders);
+  const hasCoverage = typeof coverage === 'number' && Number.isFinite(coverage);
+  if (!hasOrders && !hasCoverage) return true;
+  return (hasOrders && orders >= 3) || (hasCoverage && coverage >= 0.2);
+}
+
+/**
  * Profitability: ROAS mapped to 0..100, modulated by trust.
  *
  * Source-of-truth priority (best signal first):
@@ -232,7 +266,17 @@ function scoreProfitability(
   // platform-prior branch in particular is NOT click-id trust.
   let modulatorLabel: string;
 
-  if (info && info.deterministicRevenue > 0) {
+  // P1-9c: the deterministic branch requires the evidence floor (>= 3 tagged
+  // orders OR >= 20% coverage). An under-floor dribble (e.g. ONE tagged $100
+  // order) falls through: to the combined branch when product mapping adds
+  // revenue BEYOND the dribble (a separate evidence channel), else to the
+  // platform-prior branch — so partial evidence can never score BELOW zero
+  // evidence for the same underlying performance.
+  if (
+    info &&
+    info.deterministicRevenue > 0 &&
+    deterministicEvidenceFloorMet(info.attribution)
+  ) {
     baseRoas = info.deterministicRevenue / spend;
     trustModulator =
       info.attribution && info.attribution.trust.level !== 'unknown'
@@ -240,7 +284,7 @@ function scoreProfitability(
         : 0.7;
     sourceLabel = 'Shopify דטרמיניסטי';
     modulatorLabel = 'אמינות click-id';
-  } else if (info && info.trueRevenue > 0) {
+  } else if (info && info.trueRevenue > 0 && info.trueRevenue > info.deterministicRevenue) {
     baseRoas = info.trueRevenue / spend;
     trustModulator =
       info.confidence.level === 'high'
@@ -356,6 +400,21 @@ function scoreAttributionClarity(info: TrueRevenueInfo | undefined): {
     return {
       score: 30,
       reason: `${trust.label} — 0 הזמנות תויגו ב-click-id (לא ניתן לאמת)`,
+    };
+  }
+  // P1-9c (audit 2026-06-10): under the evidence floor (< 3 tagged orders AND
+  // < 20% coverage) the click-id sample is too thin to JUDGE clarity — a
+  // 1-order 7%-coverage 'low' read must not score BELOW the zero-evidence
+  // 'unknown' verdict's 30 (partial evidence would otherwise be punished
+  // below zero evidence). Floor at 30 with honest "sample too small" copy.
+  if (
+    trust.level === 'low' &&
+    trust.score < 30 &&
+    !deterministicEvidenceFloorMet(info.attribution)
+  ) {
+    return {
+      score: 30,
+      reason: `מדגם click-id קטן מדי לשפוט (${info.attribution.deterministicOrders} הזמנות, ${Math.round(info.attribution.coverage * 100)}% coverage) — ציון רצפת אי-ודאות`,
     };
   }
   return {

@@ -198,21 +198,33 @@ export const COMPARE_BASELINE_LABELS: Record<CompareBaseline, string> = {
 
 /**
  * Shift a single YYYY-MM-DD date back by `months` calendar months and/or
- * `years` years, anchored in UTC so the result is DST-immune. Day-of-month is
- * preserved by JS Date month arithmetic, which clamps overflow (e.g. shifting
- * 2026-03-31 back one month yields 2026-02-28/-29 via the standard rollover).
+ * `years` years, anchored in UTC so the result is DST-immune.
+ *
+ * P1-1 (audit 2026-06-10): day-of-month is CLAMPED to the target month's
+ * length before the date is built. The previous implementation passed the
+ * raw day into Date.UTC(y, m-1, day), and JS Date ROLLS overflow forward
+ * (Apr 31 → May 1, Feb 30 → Mar 2), so prev_month/prev_year compare
+ * windows OVERLAPPED the active range on month-end dates — full May
+ * compared against 2026-04-01..2026-05-01, double-counting May 1 in every
+ * hero delta. shifting 2026-03-31 back one month now yields 2026-02-28
+ * (or -29 in leap years) via an explicit min(day, daysInMonth) clamp.
  */
+function daysInMonthUtc(year: number, monthIndex0: number): number {
+  // Day 0 of the NEXT month = the last day of (year, monthIndex0).
+  return new Date(Date.UTC(year, monthIndex0 + 1, 0)).getUTCDate();
+}
+
 function shiftDateBack(date: string, months: number, years: number): string {
   const d = new Date(date + 'T00:00:00Z');
-  return fmt(
-    new Date(
-      Date.UTC(
-        d.getUTCFullYear() - years,
-        d.getUTCMonth() - months,
-        d.getUTCDate(),
-      ),
-    ),
+  // Normalize the target year/month FIRST via a day-1 anchor (month index
+  // may go negative when crossing a year boundary — Date.UTC normalizes it).
+  const anchor = new Date(
+    Date.UTC(d.getUTCFullYear() - years, d.getUTCMonth() - months, 1),
   );
+  const targetYear = anchor.getUTCFullYear();
+  const targetMonth = anchor.getUTCMonth();
+  const day = Math.min(d.getUTCDate(), daysInMonthUtc(targetYear, targetMonth));
+  return fmt(new Date(Date.UTC(targetYear, targetMonth, day)));
 }
 
 /**

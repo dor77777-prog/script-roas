@@ -70,6 +70,7 @@ import {
 } from '@/lib/fetchers/tiktok';
 import { mergeOverridesFromSupabase } from '@/lib/fetchers/manualOverrides';
 import { getFxRate } from '@/lib/fetchers/fx';
+import { getTodayInIsraelTz } from '@/lib/dateRange';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 // Phase 12.5.x (2026-05-24) — token-failure alerts. `notifyTokenFailure` is
 // soft-fail (never throws); we wrap each platform's catch with an auth-shape
@@ -351,9 +352,11 @@ export type RunDailyResult = {
   storeId: StoreId;
   date: string;
   shopifyRevenueCad: number;
-  fbSpendCad: number;
-  gaSpendCad: number;
-  totalSpendCad: number;
+  // P1-11 (2026-06-10): null = the merge-layer FX conversion failed and the
+  // corresponding data_daily column was OMITTED (prior value preserved).
+  fbSpendCad: number | null;
+  gaSpendCad: number | null;
+  totalSpendCad: number | null;
   roas: number;
   grossProfitCad: number;
   cogsCad: number;
@@ -458,6 +461,18 @@ async function runDailyForStoreInner(
   // share the same reconciled_at".
   const reconciledAt = new Date().toISOString();
 
+  // P1-14 (2026-06-10): is_finalized must reflect whether the processed day
+  // is actually OVER in Israel time. The nightly cron always runs for
+  // yesterday (true), but the operator "Refresh All" / sync-now path runs
+  // runDailyForStore for TODAY too — unconditionally stamping
+  // is_finalized=true mid-day made the UI provenance verdict
+  // (lib/freshness/provenance.ts) lie for the rest of the day (cron-live's
+  // later writes omit the column, so the stale flag persisted). source stays
+  // 'daily_reconcile' for ALL runs (it honestly describes the pipeline that
+  // produced the row; no new source enum exists) — only the finalized bit is
+  // date-aware now. The next post-midnight nightly run flips today→true.
+  const isFinalized = dateStr < getTodayInIsraelTz();
+
   // ---- Step 0: Load ad-state map (ads-off Phase 3, 2026-06-06) ---------------
   // Lightweight DB read — fetches store_ad_state in one paginated query.
   // Missing key ⇒ ON (isAdsEnabled defaults to true) so an empty table is
@@ -502,7 +517,14 @@ async function runDailyForStoreInner(
 
   // If pre-flight gates Meta, record freshness for all 4 scopes and enqueue
   // a synthetic failure for the routing logic below.
+  //
+  // P1-32 (2026-06-10): these side effects (4 freshness writes + notify) run
+  // inside their OWN step.run. Previously they executed at function top level
+  // between steps → Inngest re-executed them on EVERY subsequent step replay
+  // (seen_count inflated ~10× per logical skip, ~40 duplicate upserts).
+  // step.run memoizes the result so they fire exactly once per run.
   if (metaSkipDueToBudget) {
+    await step.run(`meta-budget-skip-side-effects-${storeId}`, async () => {
     const skipMsg =
       'cron-daily: Meta BUC ≥ 80% within last 15 min; deferred to next cron-daily tick';
     await Promise.all([
@@ -557,6 +579,7 @@ async function runDailyForStoreInner(
         'Meta BUC reached 80% threshold; cron-daily pre-flight gate skipped Meta fetch. ' +
         'No operator action — cron-daily will retry next tick once usage decays.',
     }).catch(() => {});
+    });
   }
 
   // ---- Step 1: Shopify (orders × 2 windows, dedup, refund-aware net rev) --
@@ -913,8 +936,12 @@ async function runDailyForStoreInner(
     // figure, so reusing it would double-count TikTok. fb/ga are identical
     // between merged.* and the persisted columns, so this stays consistent with
     // the fb_spend_cad / ga_spend_cad / tt_spend_cad actually written below.
+    // P1-11 (2026-06-10): merged.fbSpendCad / merged.gaSpendCad can now be
+    // null too (merge-layer FX failure on the no-override path — see
+    // manualOverrides.spendToCad). Any null component → null total, so we
+    // never persist a partial sum that contradicts the preserved columns.
     const totalSpendCadAll =
-      ttSpendCad === null
+      ttSpendCad === null || merged.fbSpendCad === null || merged.gaSpendCad === null
         ? null
         : merged.fbSpendCad + merged.gaSpendCad + ttSpendCad;
     const roas =
@@ -1019,8 +1046,11 @@ async function runDailyForStoreInner(
         date: string;
         store_id: string;
         store_name: string;
-        fb_spend_cad: number;
-        ga_spend_cad: number;
+        // P1-11 (2026-06-10): fb/ga spend columns are OPTIONAL — absent when
+        // the merge-layer FX conversion failed (merged.* === null) so ON
+        // CONFLICT preserves the prior value, mirroring tt_spend_cad below.
+        fb_spend_cad?: number;
+        ga_spend_cad?: number;
         revenue_cad: number;
         gross_revenue_cad: number;
         refund_deduction_cad: number;
@@ -1045,24 +1075,30 @@ async function runDailyForStoreInner(
         date: dateStr,
         store_id: storeId,
         store_name: shopify.storeName,
-        fb_spend_cad: merged.fbSpendCad,
-        ga_spend_cad: merged.gaSpendCad,
         revenue_cad: shopify.revenueCad,
         gross_revenue_cad: shopify.grossRevenueCad,
         refund_deduction_cad: shopify.refundDeductionCad,
         cogs_cad: cogsCad,
-        // Phase 13.8 — impressions come directly from the platform fetcher
-        // (manual overrides only affect spend, not reach). Always written
-        // — even on the Meta/Google/TikTok soft-fail path the fallback
-        // shape carries `impressions: 0` so the column resets rather than
-        // hanging onto a stale prior value.
-        fb_impressions: meta.spend.impressions,
-        ga_impressions: google.spend.impressions,
         // Phase A 2026-05-29 (Task 13) — finalization fields.
         source: 'daily_reconcile',
-        is_finalized: true,
+        is_finalized: isFinalized,
         reconciled_at: reconciledAt,
       };
+      // P1-11: per-platform spend + impressions pairs land together or not
+      // at all (mirrors the tt_spend_cad / tt_impressions gating below) so a
+      // preserved spend column never sits next to a contradicting fresh
+      // impressions count. Phase 13.8 note: impressions come directly from
+      // the platform fetcher (manual overrides only affect spend, not reach);
+      // the soft-fail fetch path carries `impressions: 0` so the column
+      // resets rather than hanging onto a stale prior value.
+      if (merged.fbSpendCad !== null) {
+        dataDailyRow.fb_spend_cad = merged.fbSpendCad;
+        dataDailyRow.fb_impressions = meta.spend.impressions;
+      }
+      if (merged.gaSpendCad !== null) {
+        dataDailyRow.ga_spend_cad = merged.gaSpendCad;
+        dataDailyRow.ga_impressions = google.spend.impressions;
+      }
       if (ttSpendCad !== null && totalSpendCadAll !== null) {
         dataDailyRow.tt_spend_cad = ttSpendCad;
         dataDailyRow.total_spend_cad = totalSpendCadAll;
@@ -1106,7 +1142,7 @@ async function runDailyForStoreInner(
         net_revenue_cad: p.net_revenue_cad,
         // Phase A 2026-05-29 (Task 13) — finalization fields.
         source: 'daily_reconcile',
-        is_finalized: true,
+        is_finalized: isFinalized,
         reconciled_at: reconciledAt,
       }));
       const { error } = await admin
@@ -1254,7 +1290,7 @@ async function runDailyForStoreInner(
             effective_status: effectiveStatus,
             // Phase A 2026-05-29 (Task 13) — finalization fields.
             source: 'daily_reconcile',
-            is_finalized: true,
+            is_finalized: isFinalized,
             reconciled_at: reconciledAt,
           };
           if (spendCad !== null) row.spend_cad = spendCad;
@@ -1316,7 +1352,7 @@ async function runDailyForStoreInner(
         effective_status: r.effectiveStatus ?? null,
         // Phase A 2026-05-29 (Task 13) — finalization fields.
         source: 'daily_reconcile',
-        is_finalized: true,
+        is_finalized: isFinalized,
         reconciled_at: reconciledAt,
       }));
       const { error } = await admin
@@ -1393,7 +1429,7 @@ async function runDailyForStoreInner(
             roas: null,
             // Phase A 2026-05-29 (Task 13) — finalization fields.
             source: 'daily_reconcile',
-            is_finalized: true,
+            is_finalized: isFinalized,
             reconciled_at: reconciledAt,
           };
           if (spendCad !== null) row.spend_cad = spendCad;
@@ -1420,7 +1456,7 @@ async function runDailyForStoreInner(
         roas: null,
         // Phase A 2026-05-29 (Task 13) — finalization fields.
         source: 'daily_reconcile',
-        is_finalized: true,
+        is_finalized: isFinalized,
         reconciled_at: reconciledAt,
       }));
       // Phase 05.7.7: TikTok rows. Same shape as Meta/Google but flagged
@@ -1471,7 +1507,7 @@ async function runDailyForStoreInner(
             roas: null,
             // Phase A 2026-05-29 (Task 13) — finalization fields.
             source: 'daily_reconcile',
-            is_finalized: true,
+            is_finalized: isFinalized,
             reconciled_at: reconciledAt,
           };
           if (spendCad !== null) row.spend_cad = spendCad;
@@ -1618,7 +1654,7 @@ async function runDailyForStoreInner(
             effective_status: agg.effectiveStatus,
             // Phase A 2026-05-29 (Task 13) — finalization fields.
             source: 'daily_reconcile',
-            is_finalized: true,
+            is_finalized: isFinalized,
             reconciled_at: reconciledAt,
           };
           if (spendCad !== null) row.spend_cad = spendCad;

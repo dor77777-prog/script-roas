@@ -34,7 +34,7 @@ import {
 } from '@/lib/insights';
 import { prioritizeInsights } from '@/lib/insights/prioritize';
 import { cn } from '@/lib/utils';
-import { fetchJsonOrNull } from '@/lib/fetchJson';
+import { fetchJsonStrict } from '@/lib/fetchJson';
 import { buildDateRangeKey, getTodayInIsraelTz, type DateRange } from '@/lib/dateRange';
 import { AiInsightPill } from '@/components/ui/AiInsightPill';
 import { Button } from '@/components/ui/Button';
@@ -131,25 +131,34 @@ export function InsightsBoard({ data }: Props) {
   // We do NOT use the `data` prop (it's scoped to the operator's selected range,
   // e.g. today) so the board stays a true "recent activity" analyzer; the prop
   // is only a no-flash fallback while this fetch loads.
-  const { data: dataResp, isLoading: dLoading } = useSWR<DashboardData | null>(
-    buildDateRangeKey('/api/data', insightsRange), fetchJsonOrNull,
+  // P1-4c (2026-06-10 state-honesty sweep) — pre-fix all four feeds used
+  // fetchJsonOrNull: a failed fetch resolved to null → zero insights → the
+  // board (and the WS3 action list) rendered the all-clear "אין פעולות דחופות
+  // כרגע. הכול נראה תקין." — the WORST possible degradation for an alerting
+  // surface (an outage looks like a healthy business). fetchJsonStrict throws
+  // (on !ok AND on a 200-with-error body) so each feed exposes a real `error`
+  // and the surfaces below render a neutral can't-analyze state instead.
+  const { data: dataResp, isLoading: dLoading, error: dError } = useSWR<DashboardData | null>(
+    buildDateRangeKey('/api/data', insightsRange), fetchJsonStrict,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
-  const { data: products, isLoading: pLoading } = useSWR<ProductsResponse | null>(
-    buildDateRangeKey('/api/products', insightsRange), fetchJsonOrNull,
+  const { data: products, isLoading: pLoading, error: pError } = useSWR<ProductsResponse | null>(
+    buildDateRangeKey('/api/products', insightsRange), fetchJsonStrict,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
-  const { data: campaigns, isLoading: cLoading } = useSWR<CampaignsResponse | null>(
-    buildDateRangeKey('/api/campaigns', insightsRange), fetchJsonOrNull,
+  const { data: campaigns, isLoading: cLoading, error: cError } = useSWR<CampaignsResponse | null>(
+    buildDateRangeKey('/api/campaigns', insightsRange), fetchJsonStrict,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
   // WS3 — per-day ad rows power the creative-fatigue detector (CTR decay +
   // CPM creep). Same cadence as products/campaigns; dedupes with CampaignsTable's
   // ads fetch via SWR's key cache.
-  const { data: ads, isLoading: aLoading } = useSWR<AdsResponse | null>(
-    buildDateRangeKey('/api/ads', insightsRange), fetchJsonOrNull,
+  const { data: ads, isLoading: aLoading, error: aError } = useSWR<AdsResponse | null>(
+    buildDateRangeKey('/api/ads', insightsRange), fetchJsonStrict,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
+  // ANY failed feed ⇒ the analysis is partial/blind — never show an all-clear.
+  const feedError = Boolean(dError || pError || cError || aError);
   // Task 5.6 (P1-10 / Q7) — feeds `InsightActions` deep-links with
   // account-aware URLs. Hook dedupes the SWR call with CampaignsTable.
   const adAccounts = useStoreAdAccounts();
@@ -291,6 +300,7 @@ export function InsightsBoard({ data }: Props) {
       <ActionListPanel
         insights={prioritized}
         loading={loading}
+        error={feedError}
         onMark={markInsight}
         adAccounts={adAccounts}
       />
@@ -361,7 +371,23 @@ export function InsightsBoard({ data }: Props) {
         </div>
       )}
 
-      {boardExpanded && !loading && totalCount === 0 && hiddenCount === 0 && (
+      {/* P1-4c — a failed feed must NOT read as "no insights" (false
+          all-clear). Neutral can't-analyze state instead. */}
+      {boardExpanded && !loading && feedError && totalCount === 0 && (
+        <div
+          role="alert"
+          data-testid="insights-board-error"
+          className="px-4 sm:px-5 py-10 text-center text-ink-secondary"
+        >
+          <AlertTriangle size={28} className="mx-auto mb-2 text-ink-subtle" />
+          <div className="text-sm font-semibold">לא ניתן לטעון תובנות כרגע.</div>
+          <div className="text-[11px] mt-1 text-ink-muted">
+            אחת מקריאות הנתונים נכשלה — זה לא אומר שהכול תקין. נסה לרענן בעוד רגע.
+          </div>
+        </div>
+      )}
+
+      {boardExpanded && !loading && !feedError && totalCount === 0 && hiddenCount === 0 && (
         <div className="px-4 sm:px-5 py-10 text-center text-ink-muted">
           <Sparkles size={28} className="mx-auto mb-2 text-ink-subtle" />
           <div className="text-sm">אין תובנות חדשות לרגע זה.</div>

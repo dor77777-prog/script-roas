@@ -649,6 +649,96 @@ describe('cron-daily — finalization writes + pre-flight Meta BUC gate', () => 
     expect(unique.size).toBe(1);
   });
 
+  // P1-14 (2026-06-10): is_finalized must be date-aware. The nightly cron
+  // processes YESTERDAY (finalized), but operator Refresh-All / sync-now runs
+  // runDailyForStore for TODAY too — stamping is_finalized=true mid-day made
+  // the UI provenance verdict lie for the rest of the day.
+  it('10. P1-14: run for TODAY (Israel tz) → is_finalized=false, source stays daily_reconcile', async () => {
+    const { getMetaBucUsageForStore } = await import('@/lib/notifications/metaBucUsage');
+    (getMetaBucUsageForStore as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    const todayIL = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date());
+
+    const { runDailyForStore } = await import('../cronDaily');
+    const { step } = makeStepStub();
+    await runDailyForStore(STORE, todayIL, { step });
+
+    const dataDailyCall = upsertCalls.find((u) => u.table === 'data_daily');
+    expect(dataDailyCall).toBeDefined();
+    const row = dataDailyCall!.rows as Record<string, unknown>;
+    expect(row.is_finalized).toBe(false);
+    // source stays honest-but-unchanged: it describes the producing pipeline;
+    // only the finalized bit is date-aware (no new source enum invented).
+    expect(row.source).toBe('daily_reconcile');
+    expect(typeof row.reconciled_at).toBe('string');
+
+    // Every other finalization-tracked table mirrors the same flag.
+    for (const table of ['products_daily', 'campaigns_daily', 'ads_daily']) {
+      const calls = upsertCalls.filter((u) => u.table === table);
+      expect(calls.length).toBeGreaterThan(0);
+      for (const call of calls) {
+        const rows = Array.isArray(call.rows) ? (call.rows as Array<Record<string, unknown>>) : [call.rows as Record<string, unknown>];
+        for (const r of rows) {
+          // Placeholder/secondary writers may omit the column entirely;
+          // any row that DOES carry it must say false for today.
+          if ('is_finalized' in r) expect(r.is_finalized).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('11. P1-14: run for a PAST date → is_finalized=true (nightly behavior preserved)', async () => {
+    const { getMetaBucUsageForStore } = await import('@/lib/notifications/metaBucUsage');
+    (getMetaBucUsageForStore as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    const { runDailyForStore } = await import('../cronDaily');
+    const { step } = makeStepStub();
+    await runDailyForStore(STORE, DATE, { step }); // DATE = 2026-05-28, long past
+
+    const dataDailyCall = upsertCalls.find((u) => u.table === 'data_daily');
+    const row = dataDailyCall!.rows as Record<string, unknown>;
+    expect(row.is_finalized).toBe(true);
+    expect(row.source).toBe('daily_reconcile');
+  });
+
+  // P1-32 (2026-06-10): the budget-skip side effects (4 freshness writes +
+  // notify) must run inside their OWN step.run so Inngest memoizes them —
+  // previously they ran at top level between steps and were re-executed on
+  // every step replay (~10× seen_count inflation per logical skip).
+  it('12. P1-32: budget-skip side effects execute inside a dedicated step.run', async () => {
+    const { getMetaBucUsageForStore } = await import('@/lib/notifications/metaBucUsage');
+    (getMetaBucUsageForStore as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeBucUsage(90), // ≥ 80 within 15 min → skip
+    );
+    const { recordFreshness } = await import('@/lib/inngest/freshness');
+
+    const stepIds: string[] = [];
+    let freshnessCallsInsideSkipStep = 0;
+    const recordingStep = {
+      async run<T>(id: string, cb: () => Promise<T>): Promise<T> {
+        stepIds.push(id);
+        const before = (recordFreshness as ReturnType<typeof vi.fn>).mock.calls.length;
+        const out = await cb();
+        if (id === `meta-budget-skip-side-effects-${STORE}`) {
+          freshnessCallsInsideSkipStep =
+            (recordFreshness as ReturnType<typeof vi.fn>).mock.calls.length - before;
+        }
+        return out;
+      },
+    };
+
+    const { runDailyForStore } = await import('../cronDaily');
+    await runDailyForStore(STORE, DATE, { step: recordingStep });
+
+    // The dedicated step exists…
+    expect(stepIds).toContain(`meta-budget-skip-side-effects-${STORE}`);
+    // …and ALL 4 budget_skip freshness writes happened INSIDE it (so Inngest
+    // memoization shields them from step-replay re-execution).
+    expect(freshnessCallsInsideSkipStep).toBe(4);
+  });
+
   it('9. stale BUC row (older than 15 min) → optimistic proceed (Meta still fetched)', async () => {
     const { getMetaBucUsageForStore } = await import('@/lib/notifications/metaBucUsage');
     // High pct but 20 min old — beyond the 15-min fresh window

@@ -651,6 +651,140 @@ describe('realistic scenarios', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
+// P1-9c (audit 2026-06-10) — evidence floor. ONE tagged $100 order used to
+// flip scoreProfitability into the deterministic branch (tiny ROAS → grade
+// F) while an identical zero-evidence campaign kept the platform prior (C):
+// the scorer punished PARTIAL evidence below ZERO evidence — a
+// non-monotonic cliff that bites during the Google ValueTrack ramp-up.
+// Post-fix the deterministic branch requires deterministicOrders >= 3 OR
+// coverage >= 0.2; below the floor profitability falls through to the
+// prior-based branch and attribution clarity floors at the zero-evidence
+// 'unknown' verdict's 30.
+// ─────────────────────────────────────────────────────────────────────────
+
+describe('evidence floor (P1-9c)', () => {
+  // Identical underlying performance: $500 spend, platform claims $1500
+  // (ROAS 3.0). Only the click-id evidence differs.
+  const aggregated = () =>
+    makeAggregated({ spend: 500, conversionValue: 1500, conversions: 15 });
+
+  const zeroEvidenceInfo = () =>
+    makeTrueRevenue({
+      deterministicRevenue: 0,
+      trueRevenue: 0,
+      spend: 500,
+      attribution: {
+        ...makeTrueRevenue().attribution,
+        deterministicRevenue: 0,
+        deterministicOrders: 0,
+        coverage: 0,
+        trust: { level: 'unknown', label: 'לא ניתן לקבוע', score: 30 },
+      } as TrueRevenueInfo['attribution'],
+    });
+
+  const oneOrderInfo = () =>
+    makeTrueRevenue({
+      deterministicRevenue: 100, // ONE tagged $100 order
+      trueRevenue: 100,          // unmapped flow: trueRevenue === deterministic
+      spend: 500,
+      attribution: {
+        ...makeTrueRevenue().attribution,
+        deterministicRevenue: 100,
+        deterministicOrders: 1,
+        coverage: 100 / 1500,    // ≈ 0.067 — under the 0.2 floor
+        trust: { level: 'low', label: 'לא אמין', score: 7 },
+      } as TrueRevenueInfo['attribution'],
+    });
+
+  it('partial evidence (1 tagged order, coverage 6.7%) scores >= the identical zero-evidence campaign', () => {
+    const zero = computeCampaignHealth(
+      buildInputs({ aggregated: aggregated(), trueRevenueInfo: zeroEvidenceInfo() }),
+    );
+    const partial = computeCampaignHealth(
+      buildInputs({ aggregated: aggregated(), trueRevenueInfo: oneOrderInfo() }),
+    );
+    expect(partial.score).toBeGreaterThanOrEqual(zero.score);
+  });
+
+  it('under the floor, profitability falls through to the platform prior (not the $100 dribble)', () => {
+    const partial = computeCampaignHealth(
+      buildInputs({ aggregated: aggregated(), trueRevenueInfo: oneOrderInfo() }),
+    );
+    // Platform prior: ROAS 3.0 = Meta pivot → 100 raw × 0.5 fallback = 50.
+    expect(partial.components.profitability).toBe(50);
+    expect(partial.reasons[0]).toMatch(/הצהרת פלטפורמה/);
+  });
+
+  it('the floor is met by deterministicOrders >= 3 even at low coverage', () => {
+    const info = makeTrueRevenue({
+      deterministicRevenue: 300,
+      trueRevenue: 300,
+      spend: 500,
+      attribution: {
+        ...makeTrueRevenue().attribution,
+        deterministicRevenue: 300,
+        deterministicOrders: 3,
+        coverage: 0.1, // under the coverage leg, but 3 orders pass the count leg
+        trust: { level: 'low', label: 'לא אמין', score: 10 },
+      } as TrueRevenueInfo['attribution'],
+    });
+    const out = computeCampaignHealth(
+      buildInputs({ aggregated: aggregated(), trueRevenueInfo: info }),
+    );
+    // Deterministic branch engaged: ROAS 0.6 × trust 10% → ~0, and the
+    // reason names the deterministic source.
+    expect(out.reasons[0]).toMatch(/דטרמיניסטי/);
+  });
+
+  it('the floor is met by coverage >= 0.2 even with fewer than 3 orders', () => {
+    const info = makeTrueRevenue({
+      deterministicRevenue: 400,
+      trueRevenue: 400,
+      spend: 500,
+      attribution: {
+        ...makeTrueRevenue().attribution,
+        deterministicRevenue: 400,
+        deterministicOrders: 2,
+        coverage: 400 / 1500, // ≈ 0.27 — passes the coverage leg
+        trust: { level: 'low', label: 'לא אמין', score: 27 },
+      } as TrueRevenueInfo['attribution'],
+    });
+    const out = computeCampaignHealth(
+      buildInputs({ aggregated: aggregated(), trueRevenueInfo: info }),
+    );
+    expect(out.reasons[0]).toMatch(/דטרמיניסטי/);
+  });
+
+  it('under-floor click-id sample floors attribution clarity at the zero-evidence 30 (not the raw 7)', () => {
+    const partial = computeCampaignHealth(
+      buildInputs({ aggregated: aggregated(), trueRevenueInfo: oneOrderInfo() }),
+    );
+    expect(partial.components.attributionClarity).toBe(30);
+  });
+
+  it('mapping evidence BEYOND the deterministic dribble still uses the combined-Shopify branch', () => {
+    // Under-floor click-id evidence but real product-mapped revenue: the
+    // combined branch is a separate evidence channel and must still fire.
+    const info = makeTrueRevenue({
+      deterministicRevenue: 100,
+      trueRevenue: 1400, // mapping adds revenue beyond the dribble
+      spend: 500,
+      attribution: {
+        ...makeTrueRevenue().attribution,
+        deterministicRevenue: 100,
+        deterministicOrders: 1,
+        coverage: 100 / 1500,
+        trust: { level: 'low', label: 'לא אמין', score: 7 },
+      } as TrueRevenueInfo['attribution'],
+    });
+    const out = computeCampaignHealth(
+      buildInputs({ aggregated: aggregated(), trueRevenueInfo: info }),
+    );
+    expect(out.reasons[0]).toMatch(/Shopify משולב/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
 // Reasons array — the strings drive the drilldown popover.
 // ─────────────────────────────────────────────────────────────────────────
 

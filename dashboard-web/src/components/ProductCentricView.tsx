@@ -18,8 +18,9 @@
 
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
-import { ChevronDown, ChevronLeft, Info, Package, Trophy } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronLeft, Info, Package, RefreshCw, Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonStrict } from '@/lib/fetchJson';
 import { fmtMoney, fmtMoneyString } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -41,11 +42,12 @@ type Props = {
   productMap?: ProductMap;
 };
 
-const fetcher = async <T,>(url: string): Promise<T | null> => {
-  const r = await fetch(url, { cache: 'no-store' });
-  if (!r.ok) return null;
-  return r.json();
-};
+// P1-4a (2026-06-10 state-honesty sweep) — pre-fix this returned `null` on
+// `!r.ok`, which left the view stuck on 'טוען…' FOREVER (data never arrives,
+// no error ever fires), and a degraded 200 + { rows: [], error } body read as
+// the 'אין מיפויים פעילים' business verdict. fetchJsonStrict throws on both so
+// SWR's `error` state activates and the explicit error branch below renders.
+const fetcher = <T,>(url: string): Promise<T> => fetchJsonStrict<T>(url);
 
 function fmtPct(n: number): string {
   if (!Number.isFinite(n) || n === 0) return '0%';
@@ -104,6 +106,11 @@ function statBlock(rows: Array<{ label: string; value: string; emphasis?: boolea
 function pixelShopifyDelta(
   platformValue: number,
   shopifyValue: number,
+  // P1-25 (2026-06-10 audit, bbadd3c class): the "בלבד" chip used to hardcode
+  // the literal "Meta" — a Google PMax row was labeled as Meta-only. The
+  // caller passes the row's platform group name. Guarded by the P1-25
+  // grep-guard in attributionPlatformTagging.test.ts.
+  platform: string = 'הפלטפורמה',
 ): { text: string; tone: 'good' | 'warn' | 'bad' | 'neutral'; tooltip: ReactNode } {
   const platformValid = Number.isFinite(platformValue) && platformValue > 0;
   const shopifyValid = Number.isFinite(shopifyValue) && shopifyValue > 0;
@@ -140,7 +147,7 @@ function pixelShopifyDelta(
     // product didn't actually sell (platform attributing the wrong product) or
     // sales went to other products that aren't mapped to this campaign.
     return {
-      text: 'Meta בלבד',
+      text: `${platform} בלבד`,
       tone: 'warn',
       tooltip: (
         <div>
@@ -222,12 +229,25 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
 
   // Range-keyed SWR fetches. SWR dedupes against CampaignsTable /
   // ProductsTable fetching the same range.
-  const { data: campaignsData } = useSWR<CampaignsResponse | null>(
+  // P1-4a — read error + mutate for the two REQUIRED feeds (campaigns +
+  // products gate the whole pivot); their failure renders the explicit error
+  // branch below instead of an infinite 'טוען…'. orders-attribution + catalog
+  // are enrichment-only (allocation column / title fallback) and keep
+  // degrading softly to undefined.
+  const {
+    data: campaignsData,
+    error: campaignsError,
+    mutate: mutateCampaigns,
+  } = useSWR<CampaignsResponse | null>(
     !isAllStores ? buildDateRangeKey('/api/campaigns', range) : null,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
-  const { data: productsData } = useSWR<ProductsResponse | null>(
+  const {
+    data: productsData,
+    error: productsError,
+    mutate: mutateProducts,
+  } = useSWR<ProductsResponse | null>(
     !isAllStores ? buildDateRangeKey('/api/products', range) : null,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
@@ -392,6 +412,55 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
         <div className="text-sm text-ink-muted">
           בחר חנות ספציפית בפילטר העליון כדי לראות את הפיבוט. (מיפויים הם לפי
           חנות; ב-"All" אין דרך לאחד.)
+        </div>
+      </section>
+    );
+  }
+
+  // P1-4a — explicit error branch BEFORE the loading gate. Pre-fix a failed
+  // fetch resolved to null → `!campaignsData` stayed true forever → infinite
+  // 'טוען…' with no signal that anything broke.
+  if (campaignsError || productsError) {
+    const err = campaignsError ?? productsError;
+    return (
+      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
+        <Heading level="section" className="inline-flex items-center gap-2 mb-2">
+          <Package size={16} className="text-ink-secondary" />
+          מוצרים → קמפיינים
+        </Heading>
+        <div
+          role="alert"
+          data-testid="pcv-error"
+          className="rounded-xl border border-status-red bg-status-redBg text-status-redFg px-4 py-4"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-[13px]">שגיאה בטעינת נתוני הפיבוט</div>
+              <div className="text-[11px] opacity-80 mt-1 leading-relaxed">
+                הקריאה ל-
+                <code className="font-mono">
+                  {campaignsError ? '/api/campaigns' : '/api/products'}
+                </code>{' '}
+                נכשלה. זה לא אומר שאין מיפויים — זה אומר שהשרת לא ענה. נסה לרענן.
+              </div>
+              <div className="text-[10px] opacity-60 mt-1 font-mono">
+                {err instanceof Error ? err.message : String(err)}
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  void mutateCampaigns();
+                  void mutateProducts();
+                }}
+                className="mt-3 gap-1.5 text-[12px]"
+              >
+                <RefreshCw size={12} />
+                נסה שוב
+              </Button>
+            </div>
+          </div>
         </div>
       </section>
     );
@@ -727,6 +796,7 @@ function ProductRow({
                             const d = pixelShopifyDelta(
                               m.conversionValue,
                               m.allocatedRevenueEstimate,
+                              platformGroup.platform,
                             );
                             const chip = (
                               <span

@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { computeSparklineGeometry } from '@/lib/sparklineGeometry';
 
 /**
  * Tiny inline sparkline. No Recharts dependency — pure SVG path so it
@@ -44,16 +45,14 @@ export function Sparkline({
 }: SparklineProps) {
   const path = useMemo(() => {
     if (data.length === 0) return '';
-    const min = Math.min(...data);
-    const max = Math.max(...data);
-    const range = max - min || 1;
-    const stepX = data.length > 1 ? width / (data.length - 1) : 0;
-    return data
-      .map((v, i) => {
-        const x = i * stepX;
-        const y = height - ((v - min) / range) * height;
-        return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
-      })
+    // c/HI-05 (audit-2026-05-23-v2, finally wired 2026-06-10): the previous
+    // inline math used `range = max - min || 1`, which pinned an all-equal
+    // series to the BOTTOM of the box — a constant ROAS of 3.0 read as
+    // "crashed to zero". computeSparklineGeometry treats the degenerate
+    // range as a first-class case and centers the flat line vertically.
+    const { points } = computeSparklineGeometry(data, width, height, 0);
+    return points
+      .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`)
       .join(' ');
   }, [data, width, height]);
 

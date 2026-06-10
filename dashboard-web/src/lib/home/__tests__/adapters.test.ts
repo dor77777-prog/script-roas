@@ -557,6 +557,67 @@ describe('toChartData — annotation pins wiring (Bug fix 2026-05-31)', () => {
 });
 
 /* --------------------------------------------------------------------------
+ * P1-3 (2026-06-10 state-honesty sweep) — null-orders seam.
+ *
+ * While the orders-attribution fetch is UNSETTLED (loading or failed) the
+ * Dashboard now passes `null` instead of a zero-seeded map, so the hero
+ * Orders card and the per-store orders/AOV cells render "—" (their existing
+ * null contract) rather than a fake 0 beside real revenue.
+ * -------------------------------------------------------------------------- */
+describe('P1-3 — orders unknown (null) renders as null, never 0', () => {
+  it('toHeroPeriod passes null orders through (hero renders "—")', () => {
+    const p = toHeroPeriod(agg({ revenue: 1000, spend: 100 }), { cpm: 0, impressions: 0, spend: 0 }, null);
+    expect(p.orders).toBeNull();
+    // The rest of the period is unaffected by the unknown orders count.
+    expect(p.revenue).toBe(1000);
+  });
+
+  it('toHeroDelta suppresses the orders delta when CUR orders is null (unknowable, not "null − prev")', () => {
+    const d = toHeroDelta(
+      agg({ revenue: 200, spend: 100, roas: 2 }),
+      agg({ revenue: 100, spend: 50, roas: 1 }),
+      { cpm: 8, impressions: 10, spend: 80 },
+      { cpm: 4, impressions: 5, spend: 20 },
+      null, // current orders fetch unsettled/failed
+      5,
+    );
+    expect(d.orders).toBeNull();
+    // Other deltas still compute (their inputs are known).
+    expect(d.revenuePct).toBe(1);
+  });
+
+  it('toPerStoreData with a NULL map → orders null + aov null for every row (loading/outage = "—")', () => {
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 5000, grossRevenue: 5000, spend: 1500, roas: 3.3 }), store: 'uzoshop' },
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-01', to: '2026-05-31' },
+      null, // orders fetch unsettled
+      {},
+    );
+    expect(result[0].orders).toBeNull();
+    expect(result[0].aov).toBeNull();
+  });
+
+  it('toPerStoreData with a PRESENT map keeps a missing store as a REAL 0 (settled: no orders in range)', () => {
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 500, grossRevenue: 500, spend: 100, roas: 5 }), store: 'zolplus' },
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-01', to: '2026-05-31' },
+      { uzoshop: 7 }, // settled map; zolplus simply had no orders
+      {},
+    );
+    expect(result[0].orders).toBe(0);
+    expect(result[0].aov).toBeNull(); // 0 orders → no AOV (divide guard)
+  });
+});
+
+/* --------------------------------------------------------------------------
  * Helpers
  * -------------------------------------------------------------------------- */
 

@@ -537,10 +537,13 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                   </div>
                 </div>
 
-                {/* Live bucket empty state — explain that data is on the way */}
+                {/* Live bucket empty state — explain that data is on the way.
+                    Copy-truth (2026-06-10 audit P1-26): "הסקריפט החי... כל 15
+                    דקות" referred to the removed Apps-Script path; today the
+                    hot-metrics worker refreshes ~every 10 min. */}
                 {isLive && isEmpty && (
                   <div className="px-4 sm:px-5 py-4 text-center text-xs sm:text-sm text-ink-secondary border-t border-status-green bg-status-greenBg">
-                    עוד לא נמכרו מוצרים היום. הסקריפט החי מרענן את הטאב כל 15 דקות —
+                    עוד לא נמכרו מוצרים היום. הנתונים מתעדכנים בערך כל 10 דקות —
                     שורה זו תמשיך להתעדכן עד חצות.
                   </div>
                 )}

@@ -87,28 +87,48 @@ export async function getMetaAccessTokenForStore(storeId: StoreId): Promise<stri
  * Returns an FX adapter that converts an arbitrary `(amount, currency)` to CAD
  * using today's Frankfurter rate. `'CAD'` is identity. Used by
  * `fetchMetaStatusForStore` to normalize ad-set `daily_budget` / `lifetime_budget`
- * into the CAD-denominated registry columns. The adapter swallows FX errors and
- * returns `0` so a transient Frankfurter outage doesn't block the entire status
- * refresh — the registry simply records a missing-budget row that day, which
- * the operator panel can flag.
+ * into the CAD-denominated registry columns and by the hot-metrics fetcher for
+ * spend / conversion-value conversion.
+ *
+ * P1-11 (2026-06-10) — FX doctrine: on Frankfurter failure the adapter returns
+ * `null` (NOT 0). Callers must OMIT the `*_cad` keys from their upsert payloads
+ * when the conversion is null so Supabase ON CONFLICT preserves the last good
+ * value. The previous `return 0` contract made every 10-min hot-metrics tick
+ * overwrite real intraday spend with $0 during an FX outage — fake blue-band
+ * ROAS until cron-daily repaired it. The throttled notifyFxFailure alert (DQ-2)
+ * is preserved.
+ *
+ * The per-currency result (rate OR null failure sentinel) is cached inside the
+ * adapter closure so (a) one worker invocation produces a CONSISTENT
+ * null-vs-number answer for every row of the same currency (heterogeneous
+ * upsert batches would fail PostgREST's uniform-keys rule), and (b) a flapping
+ * Frankfurter isn't hammered once per row. Mirrors cronDaily's `fxCache`.
  */
 export async function getFxCadAdapterForStore(
   _storeId: StoreId,
-): Promise<(amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number>> {
+): Promise<(amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number | null>> {
   const dateStr = new Date().toISOString().slice(0, 10);
+  const rateCache = new Map<string, number | null>();
   return async (amount, currency) => {
     if (currency === 'CAD') return amount;
-    try {
-      const rate = await getFxRate(currency, 'CAD', dateStr);
-      if (!Number.isFinite(rate) || rate <= 0) {
-        // DQ-2: alert instead of silently zeroing CAD spend.
-        await notifyFxFailure({ currency, dateStr, errorMsg: `invalid rate ${rate}` });
-        return 0;
+    let rate = rateCache.get(currency);
+    if (rate === undefined) {
+      try {
+        const fetched = await getFxRate(currency, 'CAD', dateStr);
+        if (!Number.isFinite(fetched) || fetched <= 0) {
+          // DQ-2: alert instead of silently corrupting CAD spend.
+          await notifyFxFailure({ currency, dateStr, errorMsg: `invalid rate ${fetched}` });
+          rate = null;
+        } else {
+          rate = fetched;
+        }
+      } catch (e) {
+        await notifyFxFailure({ currency, dateStr, errorMsg: e instanceof Error ? e.message : String(e) });
+        rate = null;
       }
-      return amount * rate;
-    } catch (e) {
-      await notifyFxFailure({ currency, dateStr, errorMsg: e instanceof Error ? e.message : String(e) });
-      return 0;
+      rateCache.set(currency, rate);
     }
+    if (rate === null) return null;
+    return amount * rate;
   };
 }

@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { cn } from '@/lib/utils';
+import { markEscHandledByInnerLayer } from '@/lib/drawerStack';
 
 /**
  * Tooltip-system-redesign — Phase 1 · Task 1.1, mode B (desktop rich).
@@ -117,7 +118,12 @@ export function RichPopover({
           onPointerEnter={clearTimers}
           onPointerLeave={scheduleClose}
           // Esc + click-outside close (Radix fires these; mirror to our state).
-          onEscapeKeyDown={() => {
+          // The Esc is MARKED as consumed so the shared drawer stack doesn't
+          // ALSO close the drawer underneath (2026-06-10 audit: Esc
+          // double-dismiss). Radix then preventDefaults + dismisses (we don't
+          // preventDefault here, so its own dismissal branch still runs).
+          onEscapeKeyDown={(e) => {
+            markEscHandledByInnerLayer(e);
             clearTimers();
             setOpen(false);
           }}

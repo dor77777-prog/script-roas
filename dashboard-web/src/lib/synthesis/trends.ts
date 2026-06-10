@@ -88,16 +88,27 @@ export function synthesizeTrends(
   const first = days.slice(0, half);
   const second = days.slice(half);
 
-  const prevSpend = sumBy(first, (d) => d.spend);
-  const currSpend = sumBy(second, (d) => d.spend);
-  const prevRevenue = sumBy(first, (d) => d.revenue);
-  const currRevenue = sumBy(second, (d) => d.revenue);
-  const prevRoas = prevSpend > 0 ? prevRevenue / prevSpend : 0;
-  const currRoas = currSpend > 0 ? currRevenue / currSpend : 0;
+  const prevSpendSum = sumBy(first, (d) => d.spend);
+  const currSpendSum = sumBy(second, (d) => d.spend);
+  const prevRevenueSum = sumBy(first, (d) => d.revenue);
+  const currRevenueSum = sumBy(second, (d) => d.revenue);
+  // ROAS is a ratio of sums — count-invariant, so sums are fine here.
+  const prevRoas = prevSpendSum > 0 ? prevRevenueSum / prevSpendSum : 0;
+  const currRoas = currSpendSum > 0 ? currRevenueSum / currSpendSum : 0;
+
+  // P1-9a (audit 2026-06-10): compare spend/revenue by per-day MEANS, not
+  // raw half-SUMS. Math.floor splits an odd-length range unevenly (7 days →
+  // 3 vs 4), so a perfectly flat $100/day series used to read
+  // "הוצאה עלתה 33.3%" purely from the extra day in the second half.
+  // first.length / second.length are ≥ 3 (guarded by the ≥6-rows gate).
+  const prevSpendMean = prevSpendSum / first.length;
+  const currSpendMean = currSpendSum / second.length;
+  const prevRevenueMean = prevRevenueSum / first.length;
+  const currRevenueMean = currRevenueSum / second.length;
 
   const roasDelta = clampOneDecimal(pctChange(prevRoas, currRoas));
-  const spendDelta = clampOneDecimal(pctChange(prevSpend, currSpend));
-  const revenueDelta = clampOneDecimal(pctChange(prevRevenue, currRevenue));
+  const spendDelta = clampOneDecimal(pctChange(prevSpendMean, currSpendMean));
+  const revenueDelta = clampOneDecimal(pctChange(prevRevenueMean, currRevenueMean));
 
   const roasDir = direction(roasDelta);
   const spendDir = direction(spendDelta);

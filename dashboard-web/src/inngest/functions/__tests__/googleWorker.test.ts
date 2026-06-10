@@ -40,7 +40,14 @@ describe('runGoogleWorkerJob() — status scope', () => {
 });
 
 describe('runGoogleWorkerJob() — status scope Phase E1.5 placeholder enrollment', () => {
-  it('ENABLED adsets UPSERT placeholder rows into campaigns_daily (no metrics)', async () => {
+  // P1-13 (2026-06-10): fixtures are now googleStatus-SHAPED — i.e.
+  // `effective_status: null` on the ad-group rows. googleStatus.toAdsetRow
+  // ALWAYS produces null there (Google's ad_group resource exposes no
+  // serving_status; the ENABLED signal lives in configured_status /
+  // is_enabled). The old worker filter `effective_status === 'ENABLED'`
+  // therefore matched nothing and this whole enrollment block was dead code.
+  // The filter is now `is_enabled === true`.
+  it('P1-13: googleStatus-shaped ENABLED ad-group (effective_status=null, is_enabled=true) produces a placeholder row', async () => {
     const fetchStatus = vi.fn().mockResolvedValue({
       campaigns: [{
         store_id: 'uzoshop', platform: 'google', campaign_id: 'GC1', name: 'GCamp 1',
@@ -53,22 +60,27 @@ describe('runGoogleWorkerJob() — status scope Phase E1.5 placeholder enrollmen
       }],
       adsets: [
         {
+          // ENABLED ad-group exactly as googleStatus builds it: the IMP-D
+          // comment there documents effective_status is ALWAYS null at this
+          // level; is_enabled carries the ENABLED signal.
           store_id: 'uzoshop', platform: 'google', campaign_id: 'GC1', adset_id: 'GA1', name: 'AdGroup Active',
-          configured_status: 'ENABLED', effective_status: 'ENABLED', delivery_status: 'DELIVERING',
+          configured_status: 'ENABLED', effective_status: null, delivery_status: null,
           is_enabled: true, is_serving: true,
           first_seen_at: null, last_seen_at: null,
           platform_updated_at: null, status_changed_at: null,
           last_metrics_success_at: null, last_status_success_at: null,
           raw_status_payload: null, missed_seen_count: 0, is_removed: false,
+          daily_budget_cad: null, lifetime_budget_cad: null,
         },
         {
           store_id: 'uzoshop', platform: 'google', campaign_id: 'GC2', adset_id: 'GA2', name: 'AdGroup Paused',
-          configured_status: 'PAUSED', effective_status: 'PAUSED', delivery_status: 'NOT_DELIVERING',
+          configured_status: 'PAUSED', effective_status: null, delivery_status: null,
           is_enabled: false, is_serving: false,
           first_seen_at: null, last_seen_at: null,
           platform_updated_at: null, status_changed_at: null,
           last_metrics_success_at: null, last_status_success_at: null,
           raw_status_payload: null, missed_seen_count: 0, is_removed: false,
+          daily_budget_cad: null, lifetime_budget_cad: null,
         },
       ],
       ads: [],
@@ -93,6 +105,8 @@ describe('runGoogleWorkerJob() — status scope Phase E1.5 placeholder enrollmen
       platform: 'google',
       campaign_id: 'GC1',
       ad_set_id: 'GA1',
+      // effective_status falls back to configured_status ('ENABLED') so the
+      // placeholder upsert never NULLs the column the nightly cron populates.
       effective_status: 'ENABLED',
     });
     expect(rows[0]).not.toHaveProperty('spend_cad');

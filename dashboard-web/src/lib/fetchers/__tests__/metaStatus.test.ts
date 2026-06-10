@@ -100,4 +100,42 @@ describe('fetchMetaStatusForStore()', () => {
     expect(body).toContain('act_111%2Fadsets');
     expect(body).toContain('act_111%2Fads');
   });
+
+  // P1-12 (2026-06-10): an inner batch part with code !== 200 must THROW
+  // (worker catch → transient_error → Inngest retry), not silently return []
+  // — which made the worker upsert nothing and record freshness='success'.
+  it('P1-12: throws when an inner batch part has code !== 200 (error payload in the message)', async () => {
+    const errorPart = JSON.stringify({
+      error: { message: '(#17) User request limit reached', code: 17 },
+    });
+    const bodyWithFailedPart = JSON.stringify([
+      { code: 500, body: errorPart },
+      { code: 200, body: JSON.stringify({ data: [] }) },
+      { code: 200, body: JSON.stringify({ data: [] }) },
+    ]);
+    const fetchMock = mockFetch(bodyWithFailedPart, '{}');
+    await expect(
+      fetchMetaStatusForStore({
+        storeId: 'uzoshop', adAccountId: 'act_111', accessToken: 'tok',
+        fetcher: fetchMock,
+        getFxCadFor: async () => 0,
+      }),
+    ).rejects.toThrow(/code=500.*User request limit reached/);
+  });
+
+  it('P1-12: throws when a batch part is null (Meta returns null for timed-out parts)', async () => {
+    const bodyWithNullPart = JSON.stringify([
+      null,
+      { code: 200, body: JSON.stringify({ data: [] }) },
+      { code: 200, body: JSON.stringify({ data: [] }) },
+    ]);
+    const fetchMock = mockFetch(bodyWithNullPart, '{}');
+    await expect(
+      fetchMetaStatusForStore({
+        storeId: 'uzoshop', adAccountId: 'act_111', accessToken: 'tok',
+        fetcher: fetchMock,
+        getFxCadFor: async () => 0,
+      }),
+    ).rejects.toThrow(/batch part missing\/null/);
+  });
 });

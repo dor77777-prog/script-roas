@@ -31,7 +31,13 @@ export type MetaStatusFetchInput = {
   adAccountId: string;
   accessToken: string;
   fetcher?: typeof fetch;
-  getFxCadFor: (amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number>;
+  /**
+   * P1-11 (2026-06-10) — FX doctrine: the adapter returns `null` on FX
+   * failure. Budget rows already type the CAD columns `number | null`, so a
+   * null conversion lands as a null budget (the registry upsert preserves
+   * nothing here — budgets are point-in-time config, not cumulative spend).
+   */
+  getFxCadFor: (amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number | null>;
 };
 
 export type MetaStatusResult = {
@@ -103,8 +109,20 @@ export async function fetchMetaStatusForStore(input: MetaStatusFetchInput): Prom
   return { campaigns, adsets, ads, bucUsage };
 }
 
-function asArray(part: { code: number; body: string }): Array<Record<string, unknown>> {
-  if (part.code !== 200) return [];
+// P1-12 (2026-06-10): an inner batch part with code !== 200 (per-call
+// throttling, transient 500 inside the envelope — a NORMAL Meta failure mode)
+// must THROW, not silently return []. Returning [] made the worker upsert
+// nothing and record freshness='success' (metaWorker then marked all 3 status
+// scopes green) — exactly the false-green the Phase A freshness contract
+// exists to prevent. Throwing routes through the worker's status-branch
+// try/catch → transient_error row → Inngest retry.
+function asArray(part: { code: number; body: string } | null | undefined): Array<Record<string, unknown>> {
+  if (!part) {
+    throw new Error('Meta status batch part missing/null in envelope response');
+  }
+  if (part.code !== 200) {
+    throw new Error(`Meta status batch part failed (code=${part.code}): ${part.body}`);
+  }
   try {
     const parsed = JSON.parse(part.body) as { data?: unknown };
     return Array.isArray(parsed.data) ? (parsed.data as Array<Record<string, unknown>>) : [];

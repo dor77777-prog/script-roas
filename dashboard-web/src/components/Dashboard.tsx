@@ -51,7 +51,7 @@ import { useCogsSettings } from '@/lib/hooks/useCogsSettings';
 import { applyCogsToRows } from '@/lib/cogsSettings';
 import { useSalarySettings } from '@/lib/hooks/useSalarySettings';
 import { salariesForRange } from '@/lib/salarySettings';
-import { fetchJson, fetchJsonOrNull } from '@/lib/fetchJson';
+import { fetchJson, fetchJsonOrNull, fetchJsonStrict } from '@/lib/fetchJson';
 import { useAutoRefresh } from '@/lib/hooks/useAutoRefresh';
 import { CogsSettings } from '@/components/CogsSettings';
 import { SalarySettings } from '@/components/SalarySettings';
@@ -134,8 +134,12 @@ type OrdersResponseShape = {
   lastUpdated: string;
   error?: string;
 };
+// P1-3 (2026-06-10 state-honesty sweep) — fetchJsonStrict also throws on the
+// route's 200-with-error degraded body (whose `error` field previously had
+// ZERO consumers), so an orders-attribution outage surfaces in the WR-06
+// banner instead of silently rendering "0 הזמנות" beside real revenue.
 const ordersFetcher = (url: string): Promise<OrdersResponseShape> =>
-  fetchJson<OrdersResponseShape>(url);
+  fetchJsonStrict<OrdersResponseShape>(url);
 
 // Operator hard requirement (2026-06-04): the dashboard opens on TODAY.
 // Single source of truth in urlState.DEFAULT_PRESET (also drives the
@@ -268,7 +272,10 @@ export function Dashboard() {
   // "X הזמנות" alongside revenue/spend. Keeps the data path separate from
   // /api/data (which doesn't carry per-store order counts) without baking
   // it into the heavier dashboard payload.
-  const { data: ordersData } = useSWR(
+  // P1-3 — read `error` too: pre-fix only {data} was destructured, so an
+  // orders-attribution failure was fully silent (no banner) while the
+  // order-derived KPIs (הזמנות / AOV / coverage) quietly zeroed/vanished.
+  const { data: ordersData, error: ordersError } = useSWR(
     buildDateRangeKey('/api/orders-attribution', filters.range),
     ordersFetcher,
     // refreshInterval 0 — periodic refresh is driven by the single coordinated
@@ -521,12 +528,29 @@ export function Dashboard() {
     const prevR = previousRange(filters.range);
     const prev = filterRows(data.rows, prevR, filters.store);
     const stores = filters.store === 'All' ? data.stores : [filters.store];
+    // P1-31b (2026-06-10 audit, operator-approved D4): when the operator
+    // filters to ONE store, billingForRange used to derive its store universe
+    // from the (single-store) rows — so every "All"-scoped fixed cost charged
+    // its FULL business-wide amount to that one store, inflating its true-net
+    // burden vs the per-store cards (which already fair-share via
+    // aggregateByStore's CRIT-1 threading). Passing the FULL store universe +
+    // the unfiltered per-store revenue split makes the single-store view carry
+    // only its fair share — consistent with the hero per-store cards. For the
+    // 'All' view this matches the row-derived behavior (no change).
+    const scopedStoreNames = filters.store === 'All' ? undefined : data.stores;
+    const revenueByStoreFor = (range: { from: string; to: string }): Record<string, number> | undefined => {
+      if (filters.store === 'All') return undefined;
+      const allRows = filterRows(data.rows, range, 'All');
+      const out: Record<string, number> = {};
+      for (const r of allRows) out[r.storeName] = (out[r.storeName] ?? 0) + r.revenue;
+      return out;
+    };
     return {
       cur,
       // Phase 05.7.8 — pass the request range so fixed-cost proration uses
       // the user-selected window, not the data-derived min/max date.
-      curAgg: aggregate(cur, filters.range, undefined, undefined, salariesForRange(salarySettings, cur, filters.range)),
-      prevAgg: aggregate(prev, prevR, undefined, undefined, salariesForRange(salarySettings, prev, prevR)),
+      curAgg: aggregate(cur, filters.range, scopedStoreNames, revenueByStoreFor(filters.range), salariesForRange(salarySettings, cur, filters.range)),
+      prevAgg: aggregate(prev, prevR, scopedStoreNames, revenueByStoreFor(prevR), salariesForRange(salarySettings, prev, prevR)),
       // Audit fix 2026-05-23 (d/CR-02): forward filters.range so per-store
       // cards prorate fixed costs over the user's selected window, matching
       // the top-level aggregate above. Without this they prorate over the
@@ -558,17 +582,21 @@ export function Dashboard() {
 
   // Phase 05.7.8 — per-store order count map for the current range. Filters
   // the same way `filtered.cur` does so cards stay in sync with the global
-  // store dropdown. Seeds zero for every visible store so a store with no
-  // orders in the range renders "0" instead of "—" (— means "still loading").
-  const ordersByStore = useMemo<Record<string, number>>(() => {
+  // store dropdown.
+  // P1-3 (2026-06-10) — `null` until the orders-attribution fetch SETTLES
+  // (loading or failed): pre-fix this seeded 0 per store BEFORE the fetch
+  // landed, which made PerStoreRow's documented '—'-for-null contract
+  // unreachable — loading (and outages) rendered as a real "0 הזמנות".
+  // Once data is present, a store absent from the rows still seeds a REAL 0.
+  const ordersByStore = useMemo<Record<string, number> | null>(() => {
+    if (!ordersData) return null;
     const out: Record<string, number> = {};
     if (data?.stores) {
       for (const s of data.stores) {
         if (filters.store === 'All' || s === filters.store) out[s] = 0;
       }
     }
-    const rows = ordersData?.rows ?? [];
-    for (const r of rows) {
+    for (const r of ordersData.rows ?? []) {
       const storeName = r.storeName;
       if (!storeName) continue;
       if (filters.store !== 'All' && storeName !== filters.store) continue;
@@ -726,19 +754,36 @@ export function Dashboard() {
         </header>
 
         <main className="max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-5">
-          {/* Two error sources: (a) SWR threw (network failure, malformed JSON),
+          {/* Three error sources: (a) SWR threw (network failure, malformed JSON),
             * (b) /api/data returned 200 + empty rows + error field (WR-06 degraded
             * path — preferred over status 500 so SWR consumers downstream stay
             * consistent across /api/data, /api/campaigns, /api/products, /api/ads,
-            * /api/orders-attribution, etc.). Either surfaces in the same banner. */}
-          {(error || data?.error) && (
-            <div className="rounded-xl bg-status-redBg border border-[color-mix(in_oklab,var(--status-red)_30%,transparent)] p-4 flex items-start gap-3">
+            * /api/orders-attribution, etc.), (c) P1-3 — the orders-attribution
+            * fetch failed (thrown !ok OR its 200-with-error body via the strict
+            * fetcher). Pre-fix (c) was fully silent: real revenue rendered beside
+            * vanished order KPIs with no banner. Each failing source is NAMED. */}
+          {(error || data?.error || ordersError) && (
+            <div
+              role="alert"
+              data-testid="dashboard-degraded-banner"
+              className="rounded-xl bg-status-redBg border border-[color-mix(in_oklab,var(--status-red)_30%,transparent)] p-4 flex items-start gap-3"
+            >
               <AlertCircle className="text-status-redFg shrink-0" size={20} />
               <div>
                 <div className="font-semibold text-status-redFg">שגיאה בטעינת הנתונים</div>
-                <div className="text-sm text-ink-secondary mt-1">
-                  {error ? (error as Error).message : data?.error}
-                </div>
+                {(error || data?.error) && (
+                  <div className="text-sm text-ink-secondary mt-1">
+                    נתוני הדשבורד (/api/data):{' '}
+                    {error ? (error as Error).message : data?.error}
+                  </div>
+                )}
+                {ordersError != null && (
+                  <div className="text-sm text-ink-secondary mt-1">
+                    נתוני ההזמנות (/api/orders-attribution) לא נטענו — מדדי הזמנות / AOV /
+                    כיסוי-שיוך מוצגים כ&quot;—&quot;:{' '}
+                    {ordersError instanceof Error ? ordersError.message : String(ordersError)}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -906,8 +951,10 @@ function HomeTab({
   setFilters: (next: F) => void;
   /** Increments when the command palette wants to open the AI report. */
   aiReportSignal: number;
-  /** Phase 05.7.8 — per-store order count for the range, keyed by storeName. */
-  ordersByStore: Record<string, number>;
+  /** Phase 05.7.8 — per-store order count for the range, keyed by storeName.
+   *  P1-3: `null` while the orders-attribution fetch is unsettled/failed →
+   *  hero Orders + per-store orders/AOV render "—" instead of a fake 0. */
+  ordersByStore: Record<string, number> | null;
   /**
    * Raw orders-attribution rows for the active range. Threaded through so
    * the Hero strip's per-day Orders sparkline can bucket the same row set
@@ -1127,7 +1174,10 @@ function HomeTab({
   // hero's "Orders" big number. The previous-range counterpart is
   // `prevOrdersTotal` (a dedicated prev orders-attribution fetch) so the
   // Orders delta is real, not "cur − 0".
-  const heroOrders = useMemo(() => {
+  // P1-3 — null while the orders fetch is unsettled/failed → the hero Orders
+  // card renders "—" (toHeroPeriod's null path), never a fake 0.
+  const heroOrders = useMemo<number | null>(() => {
+    if (!ordersByStore) return null;
     let total = 0;
     for (const k of Object.keys(ordersByStore)) total += ordersByStore[k] ?? 0;
     return total;
@@ -1374,7 +1424,7 @@ function HomeTab({
       series: filtered.series,
       campaignRows: campaignsData?.rows,
       range: filters.range,
-      orders: ordersByStore[storeName] ?? 0,
+      orders: ordersByStore?.[storeName] ?? 0,
       prevOrders: compare.show
         ? prevOrdersByStore
           ? (prevOrdersByStore[storeName] ?? 0)
@@ -1948,7 +1998,10 @@ function Footer({ lastUpdated }: { lastUpdated: string }) {
         </span>
       </span>
       <span className="mx-2 text-ink-subtle">·</span>
-      <span>מתעדכן אוטומטית כל דקה</span>
+      {/* Copy-truth (2026-06-10 audit P1-26): the auto-refresh interval is
+          120s (useAutoRefresh intervalMs above) — "כל דקה" was stale since
+          the Inngest cost cut. */}
+      <span>מתעדכן אוטומטית כל 2 דקות</span>
     </footer>
   );
 }

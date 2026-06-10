@@ -24,7 +24,7 @@
  * accents so the tinting matches `useRoasBandGradient` exactly.
  */
 
-import type { RoasBand } from '@/lib/format/useRoasBandGradient';
+import { useRoasBandGradient, type RoasBand } from '@/lib/format/useRoasBandGradient';
 
 export interface RoasChartPoint {
   /** ISO date YYYY-MM-DD. */
@@ -82,18 +82,15 @@ function clampOneDecimal(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
-/**
- * Pick the band the chart's anchor number should wear. Identical
- * thresholds to `useRoasBandGradient` so the sentence and the KPI strip
- * never disagree on the colour for the same number.
- */
-function bandForRoas(roas: number): RoasBand {
-  if (Number.isNaN(roas)) return 'gray';
-  if (roas < 2.0) return 'red';
-  if (roas < 2.7) return 'orange';
-  if (roas < 3.0) return 'green';
-  return 'blue';
-}
+// P1-10 (audit 2026-06-10): the private bandForRoas copy that used to live
+// here drifted from the canonical thresholds (it mapped exactly-3.0 to BLUE;
+// useRoasBandGradient maps 3.0 to GREEN per the 2026-06-09 Task 11 "at
+// target" lock) — despite its own doc claiming "identical thresholds". It
+// was deleted; the synthesiser now delegates to useRoasBandGradient (a pure
+// function despite the use- prefix — see its NOTE on naming) applied to the
+// ROUNDED anchor, so the sentence's tint can never disagree with the KPI
+// tile showing the same displayed number. Locked by
+// roasBandConsistency.guard.test.ts.
 
 /**
  * Hebrew label for the chart's range — only used inside the TL;DR
@@ -151,8 +148,12 @@ export function synthesizeRoasChart(
   const direction: 'up' | 'down' | 'flat' =
     deltaRaw < -5 ? 'down' : deltaRaw > 5 ? 'up' : 'flat';
 
-  const band = bandForRoas(overallAvg);
   const anchorMetric = clampOneDecimal(overallAvg);
+  // Band the ROUNDED anchor — the number the operator actually reads. Banding
+  // the unrounded average let avg 3.04 display "3.0" tinted blue beside a
+  // green KPI tile for the same displayed value (P1-10).
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- useRoasBandGradient is a PURE function; the use- prefix is a locked naming convention (see lib/format/useRoasBandGradient.ts docs), not a React hook.
+  const band: RoasBand = useRoasBandGradient(anchorMetric).band;
   const label = rangeLabelHe(input.range);
 
   let text: string;

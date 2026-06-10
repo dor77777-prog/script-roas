@@ -76,6 +76,29 @@ describe('synthesizeTrends', () => {
     expect(r.text).toMatch(/מגמה יציבה/);
   });
 
+  it('P1-9a: odd-length flat series (7 days, flat $100/day) reads ~0% change — not +33%', () => {
+    // Pre-fix the half comparison used raw SUMS: Math.floor splits 7 days
+    // into 3 vs 4, so a perfectly flat $100/day series read
+    // "הוצאה עלתה 33.3%" purely from the extra day in the second half.
+    // Post-fix the halves are compared by per-day MEANS.
+    const rows: DailyRow[] = [];
+    for (let i = 1; i <= 7; i++) rows.push(row(`2026-05-0${i}`, 100, 250));
+    const r = synthesizeTrends({ rows });
+    expect(r.confidence).toBe('high');
+    expect(r.text).toMatch(/מגמה יציבה/);
+    expect(r.anchorMetric).toBe(0);
+  });
+
+  it('P1-9a: odd-length range still detects a REAL spend move (no over-suppression)', () => {
+    // 9 days: first half $100/day, second half $200/day → per-day means
+    // diverge by +100% — must still call out the divergence.
+    const rows: DailyRow[] = [];
+    for (let i = 1; i <= 4; i++) rows.push(row(`2026-05-0${i}`, 100, 250));
+    for (let i = 5; i <= 9; i++) rows.push(row(`2026-05-0${i}`, 200, 500));
+    const r = synthesizeTrends({ rows });
+    expect(r.text).toMatch(/הוצאה עלתה/);
+  });
+
   it('calls out spend/revenue divergence when ROAS is flat', () => {
     // Spend doubled (up), revenue doubled (up) → ROAS unchanged → divergence
     // path emits "הוצאה ... בעוד הכנסה ...".

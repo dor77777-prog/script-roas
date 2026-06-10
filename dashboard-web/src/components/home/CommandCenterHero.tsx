@@ -497,7 +497,7 @@ const NEUTRAL_SPARK_STROKE = 'oklch(from var(--text) l c h / 0.55)';
  * tuning.
  * -------------------------------------------------------------------------- */
 
-function MiniSparkline({
+export function MiniSparkline({
   values,
   stroke,
 }: {
@@ -517,12 +517,17 @@ function MiniSparkline({
   if (clean.length < 2) return null;
   const lo = Math.min(...clean);
   const hi = Math.max(...clean);
-  // When every value is identical the range is 0; render a flat line at
-  // the vertical midline instead of dividing by zero.
+  // c/HI-05 class (2026-06-10 audit): when every value is identical the
+  // range is 0 — render a flat line at the vertical MIDLINE. The previous
+  // `range = hi - lo || 1` swap made (v - lo) evaluate to 0 for every
+  // point, gluing the line to the BOTTOM of the box ("crashed to zero")
+  // even though the comment promised a midline. Mirrors the degenerate
+  // branch in lib/sparklineGeometry.computeSparklineGeometry.
+  const degenerate = hi - lo === 0;
   const range = hi - lo || 1;
   const stepX = W / (clean.length - 1);
   const yFor = (v: number) =>
-    H - PAD_Y - ((v - lo) / range) * (H - PAD_Y * 2);
+    degenerate ? H / 2 : H - PAD_Y - ((v - lo) / range) * (H - PAD_Y * 2);
 
   const linePath = clean
     .map((v, i) => {
@@ -546,8 +551,11 @@ function MiniSparkline({
           <stop offset="100%" stopColor={stroke} stopOpacity={0} />
         </linearGradient>
       </defs>
-      <path d={linePath} fill="none" stroke={stroke} strokeWidth={1.5} />
+      {/* Fill FIRST, stroke LAST — the area gradient used to be painted on
+          top of the stroke, washing the line out exactly where values peak
+          (the gradient is most opaque at the top). 2026-06-10 audit. */}
       <path d={areaPath} fill={`url(#${gid})`} />
+      <path d={linePath} fill="none" stroke={stroke} strokeWidth={1.5} />
     </svg>
   );
 }

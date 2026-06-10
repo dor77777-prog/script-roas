@@ -12,6 +12,7 @@ import { PageScope } from '@/components/ui/PageScope';
 import { PageSynthesis } from '@/components/ui/PageSynthesis';
 import { synthesizeArchive } from '@/lib/synthesis/archive';
 import { buildDateRangeKey } from '@/lib/dateRange';
+import { fetchJsonStrict } from '@/lib/fetchJson';
 import type { DashboardData } from '@/lib/types';
 
 type Props = {
@@ -29,14 +30,11 @@ type Props = {
 // Match MonthlyTables' fetcher so the SWR key is shared (no duplicate
 // network request — same `/api/data?from=...&to=...` URL is hit by both
 // children of AnalysisArchiveTab).
-const fetcher = async (url: string): Promise<DashboardData> => {
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body?.error || `Failed to load (${res.status})`);
-  }
-  return res.json();
-};
+// P1-4 (2026-06-10 state-honesty sweep) — fetchJsonStrict also throws on the
+// /api/data 200-with-error degraded body (WR-06), matching MonthlyTables'
+// fetcher so the shared key keeps one behavior.
+const fetcher = (url: string): Promise<DashboardData> =>
+  fetchJsonStrict<DashboardData>(url);
 
 export function AnalysisArchiveTab({ stores, globalStore }: Props) {
   const now = new Date();
@@ -70,7 +68,11 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
   // request and could disagree on the "strongest month" when the
   // network responses returned at slightly different times.
   const historyRange = { from: `${year}-01-01`, to: `${year}-12-31` };
-  const { data } = useSWR<DashboardData>(
+  // P1-4 — read `error` too: on a failed year fetch the synthesiser must NOT
+  // run over [] rows (it would emit a fake "weak year" verdict). The visible
+  // red error line itself renders in the MonthlyTables child (same SWR key →
+  // same error), so here we only suppress the synthesis.
+  const { data, error } = useSWR<DashboardData>(
     buildDateRangeKey('/api/data', historyRange),
     fetcher,
     { revalidateOnFocus: false },
@@ -104,11 +106,17 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
         rangeLabel={month != null ? `${month}/${year}` : `${year}`}
         currency="CAD"
       />
-      <PageSynthesis
-        text={archiveSynthesis.text}
-        anchorMetric={archiveSynthesis.anchorMetric}
-        confidence={archiveSynthesis.confidence}
-      />
+      {/* P1-4 — suppress the synthesis verdict when the year fetch failed:
+          synthesizing over [] rows would read as a confident (and false)
+          business verdict. The MonthlyTables child below surfaces the red
+          error line for the same shared SWR key. */}
+      {!error && (
+        <PageSynthesis
+          text={archiveSynthesis.text}
+          anchorMetric={archiveSynthesis.anchorMetric}
+          confidence={archiveSynthesis.confidence}
+        />
+      )}
       {/* All FOUR archive controls on a SINGLE aligned row (operator request
           2026-06-01): year · month · mode-toggle · store-picker. Each is
           constrained to a fixed width so they don't span the full screen.

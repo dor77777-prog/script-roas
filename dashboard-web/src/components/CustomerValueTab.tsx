@@ -22,7 +22,8 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { Gem } from 'lucide-react';
+import { AlertTriangle, Gem, RefreshCw } from 'lucide-react';
+import { fetchJsonStrict } from '@/lib/fetchJson';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { NativeSelect } from '@/components/ui/NativeSelect';
@@ -75,14 +76,14 @@ export interface CustomerValueTabProps {
   todayMonth?: string;
 }
 
-const fetcher = async (url: string): Promise<CohortsResponse> => {
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body?.error || `Failed to load (${res.status})`);
-  }
-  return res.json();
-};
+// P1-2 (2026-06-10 state-honesty sweep) — /api/cohorts soft-fails with HTTP
+// 200 + { rows: [], error } (so SWR consumers stay consistent). A fetcher that
+// only checks `res.ok` resolved that as success → a Supabase blip rendered as
+// "LTV $0 / אין עדיין מספיק נתונים" — a WRONG business verdict on a financial
+// tab. fetchJsonStrict throws on !ok AND on the 200-with-error body, so SWR's
+// `error` state fires and the tab renders an explicit error strip instead.
+const fetcher = (url: string): Promise<CohortsResponse> =>
+  fetchJsonStrict<CohortsResponse>(url);
 
 /** Format a fraction (0..1) as a whole-percent string. */
 function pctText(frac: number): string {
@@ -165,8 +166,11 @@ export function CustomerValueTab({
   }, []);
 
   // ── cohort rows (injected in tests; SWR in prod) ─────────────────────────
+  // P1-2 — destructure error/isLoading too: the tab must distinguish
+  // "loading" / "failed" / "settled-empty" instead of rendering the business
+  // empty-copy for all three.
   const useInjected = injectedRows != null;
-  const { data } = useSWR<CohortsResponse>(
+  const { data, error, isLoading, mutate } = useSWR<CohortsResponse>(
     useInjected ? null : '/api/cohorts',
     fetcher,
     { revalidateOnFocus: false },
@@ -261,8 +265,13 @@ export function CustomerValueTab({
 
   // Curve break-even line (nCAC) ONLY on the PROFIT curve (comparing a revenue
   // curve to acquisition cost is the B3 category error), and only when there's
-  // a mature curve and we're not losing (no crossing the verdict denies).
-  const curveNcac = isProfit && hasMatureCurve && !losing ? ncac : null;
+  // a mature curve. 2026-06-10 audit (live-pass #2): the line used to be
+  // suppressed when LOSING — exactly the case where the copy's "קו עלות-הגיוס"
+  // matters most ("how far below break-even are we?"). The curve component
+  // includes ncac in its y-domain (maxY = max(curve, ncac) × 1.12) so the line
+  // always renders, sitting visibly ABOVE the curve when losing; no payback
+  // crossing/callout is drawn because none exists (paybackMonths stays null).
+  const curveNcac = isProfit && hasMatureCurve ? ncac : null;
   const curvePayback = isProfit ? payback : null;
 
   // ── A5: new-vs-old at the SHARED depth (no immature carry-forward) ────────
@@ -323,6 +332,71 @@ export function CustomerValueTab({
           : t === 'accent'
             ? 'text-accent'
             : 'text-ink';
+
+  // ── P1-2 honest-state gates (SWR path only; injected rows bypass) ────────
+  // ERROR (thrown !ok OR 200-with-error body) → explicit red strip + retry.
+  // Pre-fix this rendered the "אין עדיין מספיק נתונים" business verdict —
+  // a wrong diagnosis (DB blip ≠ immature cohorts) on a financial tab.
+  if (!useInjected && (error || data?.error)) {
+    return (
+      <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
+        <SectionIntro
+          icon={<Gem size={20} />}
+          title="כמה שווה לך לקוח"
+          description="כמה רווח לקוח חדש מכניס לאורך זמן, מול כמה עלה לגייס אותו — ואם הגיוס משתלם."
+        />
+        <div
+          role="alert"
+          data-testid="cv-error"
+          className="rounded-xl border border-status-red bg-status-redBg text-status-redFg px-4 py-4"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-[13px]">שגיאה בטעינת נתוני הלקוחות</div>
+              <div className="text-[11px] opacity-80 mt-1 leading-relaxed">
+                הקריאה ל-<code className="font-mono">/api/cohorts</code> נכשלה. זה לא אומר
+                שאין נתונים — זה אומר שהשרת לא ענה. נסה לרענן, ואם זה לא עוזר בדוק את הלוגים.
+              </div>
+              <div className="text-[10px] opacity-60 mt-1 font-mono">
+                {error instanceof Error ? error.message : String(error ?? data?.error)}
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => mutate()}
+                className="mt-3 gap-1.5 text-[12px]"
+              >
+                <RefreshCw size={12} />
+                נסה שוב
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // LOADING → skeleton (ProductsTable pattern), never the business empty-copy.
+  if (!useInjected && isLoading) {
+    return (
+      <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
+        <SectionIntro
+          icon={<Gem size={20} />}
+          title="כמה שווה לך לקוח"
+          description="כמה רווח לקוח חדש מכניס לאורך זמן, מול כמה עלה לגייס אותו — ואם הגיוס משתלם."
+        />
+        <div data-testid="cv-loading" aria-busy="true" className="space-y-3">
+          <div className="skeleton h-24 rounded-2xl" aria-hidden />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="skeleton h-24 rounded-xl" aria-hidden />
+            ))}
+          </div>
+          <div className="p-4 text-center text-ink-muted text-sm">טוען נתוני לקוחות…</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
@@ -588,8 +662,9 @@ export function CustomerValueTab({
           // B3: the break-even line + zone split appear ONLY on the PROFIT curve
           // (curveNcac/curvePayback are null on the revenue curve — comparing a
           // revenue curve to acquisition cost is a category error). Also null
-          // when there's no mature cohort (pooled fallback shape) or when losing,
-          // so the curve never draws a crossing the headline disclaims.
+          // when there's no mature cohort (pooled fallback shape). When LOSING
+          // the line still renders (above the curve — the y-domain includes
+          // ncac) but no payback crossing/callout is drawn (none exists).
           ncac={curveNcac}
           paybackMonths={curvePayback}
           basisLabel={basisLabel}

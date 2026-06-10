@@ -58,6 +58,10 @@ export type BulkCohortRow = {
  * GraphQL document exporting per order {id, createdAt, customer{id}, gross,
  * refunds, currency} for ALL orders.
  *
+ * P1-15 (2026-06-10 audit): the orders(query:) filter excludes test +
+ * cancelled orders — mirrors every live ingest path; the unfiltered seed
+ * distorted LTV/cohorts.
+ *
  * `totalPriceSet` (NOT currentTotalPriceSet) is the IMMUTABLE gross — see the
  * Invariant #1 note at the top of this file. `totalRefundedSet` is the refund
  * leg; net is derived downstream as gross − refund.
@@ -67,7 +71,7 @@ mutation {
   bulkOperationRunQuery(
     query: """
     {
-      orders {
+      orders(query: "test:false AND -status:cancelled") {
         edges {
           node {
             id

@@ -590,12 +590,14 @@ describe('AddStoreWizard — EDIT mode (Phase 6a Task 8)', () => {
 
   it('focusPlatform="google" pre-enables the Google toggle so its cred block shows in step 2 (D3)', async () => {
     render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" focusPlatform="google" />);
-    await screen.findByDisplayValue('My Store');
-    // Google was NOT in platforms; focusPlatform pre-enabled it → its switch is on.
+    // P2-43 (2026-06-10): focusPlatform now lands DIRECTLY on the credential
+    // step — the pre-enabled Google cred block is visible without clicking
+    // through step 1.
+    expect(await screen.findByLabelText(/Google customer/i)).toBeDefined();
+    // Walking back to step 1 shows the pre-enabled switch.
+    fireEvent.click(screen.getByRole('button', { name: /חזרה/ }));
     const googleSwitch = screen.getByRole('switch', { name: /Google/i }) as HTMLButtonElement;
     expect(googleSwitch.getAttribute('aria-checked')).toBe('true');
-    clickNext();
-    expect(await screen.findByLabelText(/Google customer/i)).toBeDefined();
   });
 
   it('focusPlatform="tiktok" pre-enables has_tiktok (no creds needed)', async () => {
@@ -614,7 +616,10 @@ describe('AddStoreWizard — EDIT mode (Phase 6a Task 8)', () => {
       return { status: 200, json: async () => ({}) };
     };
     render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" focusPlatform="tiktok" />);
-    await screen.findByDisplayValue('My Store');
+    // P2-43 (2026-06-10): focusPlatform lands on the credential step; walk
+    // back to step 1 to see the pre-enabled TikTok toggle (no creds needed).
+    await screen.findByLabelText(/Shopify client_id/i);
+    fireEvent.click(screen.getByRole('button', { name: /חזרה/ }));
     const tkSwitch = screen.getByRole('switch', { name: /TikTok/i }) as HTMLButtonElement;
     expect(tkSwitch.getAttribute('aria-checked')).toBe('true');
   });
@@ -705,5 +710,100 @@ describe('AddStoreWizard — distinct brand colour for new stores', () => {
     render(<AddStoreWizard onDone={vi.fn()} />);
     const select = screen.getByLabelText(/צבע-מותג/) as HTMLSelectElement;
     expect(select.value).toBe('var(--store-uzo)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P1-27a + P2-43 (2026-06-10 audit) — edit-mode off-toggle lock + credential
+// step focus jump.
+// ---------------------------------------------------------------------------
+describe('AddStoreWizard — EDIT mode platform-toggle lock (P1-27a)', () => {
+  const PREFILL = {
+    storeId: 'mystore',
+    name: 'My Store',
+    shopDomain: 'mystore.myshopify.com',
+    isHeadless: false,
+    brandColor: 'var(--store-uzo)',
+    displayOrder: 2,
+    hasTiktok: true,
+    enableCustomerJourney: false,
+    platforms: ['shopify', 'meta'],
+    hasWebhookSecret: false,
+  };
+
+  beforeEach(() => {
+    responder = (url, init) => {
+      if (url.endsWith('/api/operator/stores/mystore') && (init?.method ?? 'GET') === 'GET') {
+        return { status: 200, json: async () => PREFILL };
+      }
+      return { status: 200, json: async () => ({}) };
+    };
+  });
+
+  it('disables the OFF direction for a platform already ON in the DB (Meta) with an honest hint', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" />);
+    await screen.findByDisplayValue('My Store');
+    // Meta is ON server-side → its switch is checked AND disabled (the PATCH
+    // would silently discard a removal — P1-27a).
+    const metaSwitch = screen.getByRole('switch', { name: 'Meta' });
+    expect(metaSwitch.getAttribute('data-state')).toBe('checked');
+    expect((metaSwitch as HTMLButtonElement).disabled).toBe(true);
+    // The honest hint renders.
+    expect(screen.getByText(/הסרת פלטפורמה מחוברת אינה נתמכת/)).toBeDefined();
+    // Google is OFF server-side → freely togglable.
+    const googleSwitch = screen.getByRole('switch', { name: 'Google' });
+    expect((googleSwitch as HTMLButtonElement).disabled).toBe(false);
+    // TikTok round-trips via PATCH hasTiktok → never locked.
+    const ttSwitch = screen.getByRole('switch', { name: 'TikTok' });
+    expect((ttSwitch as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('ADD mode keeps all platform toggles enabled (regression)', () => {
+    render(<AddStoreWizard onDone={vi.fn()} />);
+    for (const name of ['Meta', 'Google', 'TikTok']) {
+      expect((screen.getByRole('switch', { name }) as HTMLButtonElement).disabled).toBe(false);
+    }
+    expect(screen.queryByText(/הסרת פלטפורמה מחוברת אינה נתמכת/)).toBeNull();
+  });
+});
+
+describe('AddStoreWizard — credential-matrix focus jump (P2-43)', () => {
+  const PREFILL = {
+    storeId: 'mystore',
+    name: 'My Store',
+    shopDomain: 'mystore.myshopify.com',
+    isHeadless: false,
+    brandColor: 'var(--store-uzo)',
+    displayOrder: 2,
+    hasTiktok: false,
+    enableCustomerJourney: false,
+    platforms: ['shopify'],
+    hasWebhookSecret: false,
+  };
+
+  beforeEach(() => {
+    responder = (url, init) => {
+      if (url.endsWith('/api/operator/stores/mystore') && (init?.method ?? 'GET') === 'GET') {
+        return { status: 200, json: async () => PREFILL };
+      }
+      return { status: 200, json: async () => ({}) };
+    };
+  });
+
+  it('opens directly on the CREDENTIALS step when focusPlatform is set in edit mode', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" focusPlatform="meta" />);
+    // After prefill, the wizard must land on step 2 — the Meta cred block is
+    // visible WITHOUT walking through step 1 (focusPlatform pre-enables Meta).
+    const metaToken = (await screen.findByLabelText(/Meta access[_ ]?token/i)) as HTMLInputElement;
+    expect(metaToken.value).toBe('');
+    // Step-1-only fields are NOT rendered.
+    expect(screen.queryByLabelText(/שם תצוגה/)).toBeNull();
+  });
+
+  it('opens on step 1 in edit mode WITHOUT focusPlatform (regression)', async () => {
+    render(<AddStoreWizard onDone={vi.fn()} editStoreId="mystore" />);
+    await screen.findByDisplayValue('My Store');
+    expect(screen.getByLabelText(/שם תצוגה/)).toBeDefined();
+    expect(screen.queryByLabelText(/Shopify client_id/i)).toBeNull();
   });
 });

@@ -175,3 +175,61 @@ describe('buildHealthByKey — ads-off guard', () => {
     expect(health!.insufficient).toBe(false);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// P1-7 (audit 2026-06-10) — the health-trajectory input must exclude the
+// in-progress Israel day. dailyByCampaign (built component-side from the
+// visible range) includes today, whose lagged-attribution ROAS understates
+// the day every morning; analyzeCpmVsRoas then read a fake "ROAS collapsing"
+// recent half and the grade swung B↔C by time of day. Chart display keeps
+// today — only the trajectory feed drops it.
+// ─────────────────────────────────────────────────────────────────────────
+
+describe('buildHealthByKey — partial-day trajectory exclusion (P1-7)', () => {
+  function todayInIsrael(): string {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jerusalem',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  }
+  function addDays(dateStr: string, n: number): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+  }
+  const agg = [
+    { key: 'uzo|meta|c1', storeId: 'uzoshop', platform: 'Meta' as const, campaignId: 'c1', campaignName: 'A', spend: 500, conversions: 10, conversionValue: 1500 } as never,
+  ];
+
+  it("today's partial-day crash point does NOT drag the trajectory below neutral", () => {
+    const today = todayInIsrael();
+    // 5 completed healthy days (flat CPM 10 / ROAS 3) + today's partial day
+    // with ROAS 0 (orders not yet attributed). Pre-fix the 6-point series
+    // read FLAT+DOWN (warning → trajectory 40); post-fix the 5 completed
+    // flat days read FLAT+FLAT (neutral → trajectory 60).
+    const series = [
+      ...[6, 5, 4, 3, 2].map((n) => ({ date: addDays(today, -n), cpm: 10, roas: 3 })),
+      { date: addDays(today, -1), cpm: 10, roas: 3 },
+      { date: today, cpm: 10, roas: 0 },
+    ];
+    const result = buildHealthByKey(
+      inputs({ aggregated: agg, dailyByCampaign: new Map([['uzo|meta|c1', series]]) }),
+    );
+    expect(result.get('uzo|meta|c1')!.components.trajectory).toBe(60);
+  });
+
+  it('a COMPLETED-day crash still drags the trajectory (no over-suppression)', () => {
+    const today = todayInIsrael();
+    // Same shape but the crash day is YESTERDAY (completed) — must still
+    // read as a real decline (warning → trajectory 40).
+    const series = [
+      ...[7, 6, 5, 4, 3, 2].map((n) => ({ date: addDays(today, -n), cpm: 10, roas: 3 })),
+      { date: addDays(today, -1), cpm: 10, roas: 0 },
+    ];
+    const result = buildHealthByKey(
+      inputs({ aggregated: agg, dailyByCampaign: new Map([['uzo|meta|c1', series]]) }),
+    );
+    expect(result.get('uzo|meta|c1')!.components.trajectory).toBeLessThan(60);
+  });
+});

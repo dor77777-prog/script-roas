@@ -4,7 +4,8 @@ import { forwardRef, type ReactNode } from 'react';
 import * as RadixTooltip from '@radix-ui/react-tooltip';
 import { cn } from '@/lib/utils';
 import { isValidElement, type ReactElement } from 'react';
-import { useIsMobile } from '@/lib/hooks/useIsMobile';
+import { markEscHandledByInnerLayer } from '@/lib/drawerStack';
+import { useTouchTooltipMode } from './tooltip/useTouchTooltipMode';
 import { RichPopover } from './tooltip/RichPopover';
 import { Toggletip } from './tooltip/Toggletip';
 import { RichSheet } from './tooltip/RichSheet';
@@ -16,12 +17,19 @@ export const TooltipTrigger = RadixTooltip.Trigger;
 export const TooltipContent = forwardRef<
   React.ElementRef<typeof RadixTooltip.Content>,
   React.ComponentPropsWithoutRef<typeof RadixTooltip.Content>
->(({ className, sideOffset = 6, children, ...props }, ref) => (
+>(({ className, sideOffset = 6, children, onEscapeKeyDown, ...props }, ref) => (
   <RadixTooltip.Portal>
     <RadixTooltip.Content
       ref={ref}
       sideOffset={sideOffset}
       collisionPadding={8}
+      // Esc dismisses the hover tooltip ONLY (WCAG 1.4.13 dismissible) —
+      // mark it consumed so the shared drawer stack doesn't also close a
+      // drawer underneath (2026-06-10 audit: Esc double-dismiss).
+      onEscapeKeyDown={(e) => {
+        markEscHandledByInnerLayer(e);
+        onEscapeKeyDown?.(e);
+      }}
       className={cn(
         // Mode A chrome (desktop simple) — glass-2 bubble, AA in both themes.
         // text-2xs → text-xs for legibility; rounded-md → rounded-chip.
@@ -111,6 +119,7 @@ export function HelpTooltip({
   title,
   withinDrawer = false,
   richTouch = 'auto',
+  touchTrigger = 'auto',
 }: {
   content: ReactNode | null | undefined;
   children: ReactNode;
@@ -132,9 +141,24 @@ export function HelpTooltip({
    * Force one with 'sheet' / 'popover'. Ignored on desktop.
    */
   richTouch?: 'auto' | 'sheet' | 'popover';
+  /**
+   * Touch-only knob for WHO the tap trigger is (2026-06-10 audit, touch
+   * double-ⓘ). 'auto' (default): phrasing children get the paired sibling ⓘ
+   * glyph; non-phrasing children tap themselves. 'child': the child ITSELF is
+   * the tap trigger even when phrasing — for call-sites whose child already
+   * IS a dedicated help affordance (the column-header violet ⓘ Button), so
+   * the touch path doesn't render a second, duplicate gray ⓘ. Ignored on
+   * desktop (the child is always the asChild trigger there).
+   */
+  touchTrigger?: 'auto' | 'child';
 }) {
-  // Hooks rule: call useIsMobile() UNCONDITIONALLY, before any early return.
-  const isMobile = useIsMobile();
+  // Hooks rule: call the mode hook UNCONDITIONALLY, before any early return.
+  // 2026-06-10 audit fix: gate on POINTER CAPABILITY ((hover: none) /
+  // (pointer: coarse)) per the §4.1 matrix — NOT viewport width — so a
+  // coarse-pointer tablet ≥768px gets tap-openable help instead of
+  // hover-only tooltips it can never open. Width survives only as the
+  // no-matchMedia fallback inside the hook.
+  const isTouch = useTouchTooltipMode();
 
   if (content === null || content === undefined || content === '') {
     // children is ReactNode (potentially a string / number / fragment), so a
@@ -161,14 +185,19 @@ export function HelpTooltip({
   // column-paragraph cases). A SHORT rich body (a bare inline node, no title —
   // the refund 2-liner, cohort verdict) stays the tap-Popover. The `richTouch`
   // knob can force 'sheet'/'popover' regardless.
-  if (isMobile) {
+  if (isTouch) {
     const isLong =
       richTouch === 'sheet' ||
       (richTouch === 'auto' && isRich && (title != null || isBlockContent(content)));
 
     if (isRich && isLong) {
       return (
-        <RichSheet content={content} title={title} className={className}>
+        <RichSheet
+          content={content}
+          title={title}
+          className={className}
+          forceChildTrigger={touchTrigger === 'child'}
+        >
           {children}
         </RichSheet>
       );
@@ -182,6 +211,7 @@ export function HelpTooltip({
         sideOffset={sideOffset}
         className={className}
         withinDrawer={withinDrawer}
+        forceChildTrigger={touchTrigger === 'child'}
       >
         {children}
       </Toggletip>
