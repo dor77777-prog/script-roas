@@ -148,11 +148,24 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
       // data.rows upstream; salaries via salariesForRange) so the report's
       // "רווח נקי אמיתי" equals the hero's true net profit by construction.
       const curRows = filterRows(data.rows, filters.range, filters.store);
+      // P1-31b parity (2026-06-10, D4): mirror the Dashboard hero's store-scope
+      // threading EXACTLY — when the report is store-filtered, All-scoped fixed
+      // costs must charge only this store's fair share (full universe +
+      // unfiltered per-store revenue split), or the report's "רווח נקי אמיתי"
+      // diverges from the hero it promises to match.
+      const scopedStoreNames = filters.store === 'All' ? undefined : data.stores;
+      const revenueByStore = (() => {
+        if (filters.store === 'All') return undefined;
+        const allRows = filterRows(data.rows, filters.range, 'All');
+        const out: Record<string, number> = {};
+        for (const r of allRows) out[r.storeName] = (out[r.storeName] ?? 0) + r.revenue;
+        return out;
+      })();
       const agg = aggregate(
         curRows,
         filters.range,
-        undefined,
-        undefined,
+        scopedStoreNames,
+        revenueByStore,
         salariesForRange(salarySettings, curRows, filters.range),
       );
       const md = generateAiReport({

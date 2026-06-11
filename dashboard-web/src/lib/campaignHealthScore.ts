@@ -394,12 +394,15 @@ function scoreAttributionClarity(info: TrueRevenueInfo | undefined): {
   }
   const trust = info.attribution.trust;
   if (trust.level === 'unknown') {
-    // Reconciled with the Attribution panel's verdict (e.g. "לא ניתן לקבוע").
-    // Platform-neutral copy — the actionable tagging hint lives in the panel's
-    // recommendation, which is already per-platform (ValueTrack for Google).
+    // Reconciled with the Attribution panel's verdict — use the verdict's OWN
+    // score, not a hardcoded 30: since P1-8 (2026-06-10) there are TWO
+    // 'unknown' verdicts ('לא ניתן לקבוע' = 30, 'הפלטפורמה מדווחת 0' = 40),
+    // and pinning 30 here re-created the exact panel-vs-health mismatch class
+    // Problem A eliminated. Platform-neutral copy — the actionable tagging
+    // hint lives in the panel's recommendation, which is already per-platform.
     return {
-      score: 30,
-      reason: `${trust.label} — 0 הזמנות תויגו ב-click-id (לא ניתן לאמת)`,
+      score: Math.round(trust.score),
+      reason: `${trust.label} — לא ניתן לאמת דרך click-id (${trust.score.toFixed(0)}/100)`,
     };
   }
   // P1-9c (audit 2026-06-10): under the evidence floor (< 3 tagged orders AND
