@@ -256,10 +256,19 @@ async function main(): Promise<void> {
     console.log(`  ledger rows (earliest order per customer): ${ledgerRows.length}`);
     console.log(`  full-history orders with a customer:       ${orderToCustomer.size}`);
 
-    if (admin) {
+    // SKIP_CUSTOMER_ID_BACKFILL=1 — re-seed runs (2026-06-11, D5 restatement):
+    // customer_id was fully populated by the 2026-06-04 run and every new order
+    // gets it from the crons/webhooks, but this stage is ONE sequential HTTP
+    // UPDATE PER CUSTOMER — ~20k+ no-op round-trips per big store since the
+    // deep backfill (≈30-60 min of rewriting identical values). The flag lets
+    // a re-seed go straight to the work that actually changes (ledger upsert +
+    // flag recompute).
+    if (admin && process.env.SKIP_CUSTOMER_ID_BACKFILL !== '1') {
       const n = await backfillCustomerIds(admin, store, orderToCustomer, DRY_RUN);
       grandUpdated += n;
       console.log(`  ${DRY_RUN ? 'would set' : '✓ set'} customer_id on ${n} existing orders_attribution rows`);
+    } else if (admin) {
+      console.log('  (customer_id backfill SKIPPED — SKIP_CUSTOMER_ID_BACKFILL=1)');
     }
 
     if (DRY_RUN) {
