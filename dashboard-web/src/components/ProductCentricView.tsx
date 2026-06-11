@@ -907,7 +907,18 @@ function ColHelp({
       )}
     >
       <span>{label}</span>
-      <HelpTooltip variant="rich" title={label} content={body} align={align}>
+      <HelpTooltip
+        variant="rich"
+        title={label}
+        content={body}
+        align={align}
+        // 2026-06-11 adversarial-review fix (wave-8A item 2 parity, touch
+        // double-ⓘ): the violet ⓘ Button below IS the help affordance — on
+        // touch it becomes the tap trigger itself instead of being paired
+        // with a duplicate gray ⓘ (which left the violet one dead — its only
+        // handler is stopPropagation). Mirrors CampaignsTable's header help.
+        touchTrigger="child"
+      >
         <Button
           type="button"
           variant="ghost"

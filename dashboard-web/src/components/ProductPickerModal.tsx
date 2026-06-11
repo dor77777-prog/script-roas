@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Heading } from '@/components/ui/Typography';
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetFooter, SheetTitle } from '@/components/ui/Sheet';
+import { markEscHandledByInnerLayer } from '@/lib/drawerStack';
 import type { ProductRow } from '@/lib/products';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { ProductCatalogResponse } from '@/app/api/product-catalog/route';
@@ -247,6 +248,16 @@ export function ProductPickerModal({
         // We render a bespoke close X inside the header (start-aligned, next
         // to the title block) — suppress the Sheet's auto-injected one.
         hideDefaultClose
+        // 2026-06-11 adversarial-review fix (Esc one-keystroke-one-dismissal):
+        // the picker is a nested Radix dialog OVER the CampaignDrawer. Radix
+        // (capture phase, highest layer = this picker) dismisses the picker,
+        // but the same keydown then bubbles to the shared drawer-stack window
+        // listener, which closed the CampaignDrawer too — one Esc collapsed
+        // BOTH layers. Mark the event as consumed by this inner layer so the
+        // stack listener skips it; the NEXT Esc addresses the drawer. No
+        // preventDefault — Radix must still dismiss the picker itself. Same
+        // contract as ui/tooltip/RichSheet.tsx + lib/drawerStack.ts.
+        onEscapeKeyDown={markEscHandledByInnerLayer}
         // Picker opens OVER the campaign modal (Sheet z-50). Lift the overlay
         // + content to z-[60] so the parent's scrim can't cover it — identical
         // to AdsDrawer. Routing through Sheet is also what makes the picker a

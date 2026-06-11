@@ -245,6 +245,46 @@ describe('aggregateByStore pre-splits All-scoped billing (CRIT-1 / O3-CR-01)', (
     expect(perStore).toHaveLength(0);
   });
 
+  it('STORE-SCOPED aggregate with EMPTY rows charges ZERO fixed costs (2026-06-11 review — empty-bucket fallback)', () => {
+    // 2026-06-11 adversarial review (confirmed, empirically reproduced):
+    // the D4 threading passes scopedStoreNames = FULL store universe for any
+    // single-store filter. With ZERO rows in range (store filter + a window
+    // predating that store's data), rowStoreNames.length === 0 used to fall
+    // through to `fixedCosts = billing.total` — charging the ENTIRE
+    // business's All-scoped fixed costs to one empty single-store view
+    // (trueNetProfit = −fullFixedCosts on the hero, P&L, and AI report).
+    // Pre-D4 the same state passed scopedStoreNames=undefined →
+    // billingStoreNames=[] → $0. Decision: empty bucket charges NOTHING —
+    // consistent with fair-share-by-revenue → 0 revenue → 0 share.
+    seedRecurring(mem, [
+      { id: 'r1', store: 'All', name: 'Klaviyo', source: 'email', monthlyCAD: 60, active: true },
+    ]);
+    const scoped = aggregate(
+      [],
+      RANGE,
+      ['uzoshop', 'Zol Plus', '360usmile'],
+      { uzoshop: 100, 'Zol Plus': 200, '360usmile': 300 },
+    );
+    expect(scoped.fixedCosts).toBe(0);
+    // trueNetProfit = 0 − salaries(0) = 0 — never −(business fixed costs).
+    expect(scoped.trueNetProfit).toBe(0);
+    // Pre-fix pin: the fallthrough returned billing.total = 60 → trueNet −60.
+    expect(scoped.trueNetProfit).not.toBeCloseTo(-60, 6);
+
+    // The billing.total fallback for length > 1 (global/multi-store path)
+    // stays UNCHANGED — pin it so the new branch can't over-reach.
+    const multi = aggregate(
+      [
+        row({ storeName: 'uzoshop', storeId: 'uzoshop', revenue: 1000 }),
+        row({ storeName: 'Zol Plus', storeId: 'zolplus', revenue: 2000 }),
+      ],
+      RANGE,
+      ['uzoshop', 'Zol Plus', '360usmile'],
+      { uzoshop: 1000, 'Zol Plus': 2000, '360usmile': 0 },
+    );
+    expect(multi.fixedCosts).toBeCloseTo(60, 6);
+  });
+
   it('global aggregate path is UNCHANGED — no scopedStoreNames arg means row-derived store set', () => {
     // Pin that the new third arg is opt-in: a call with no third arg uses
     // the row-derived set (same as pre-fix). The global aggregate path

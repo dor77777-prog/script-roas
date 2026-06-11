@@ -565,6 +565,14 @@ export function Dashboard() {
       // per-store and RoasChart's `connectNulls={false}` shows the gap.
       series: dailySeries(cur, stores, filters.range),
       visibleStores: stores,
+      // 2026-06-11 adversarial review (D4 internal reconciliation): expose the
+      // EXACT store-scope threading values curAgg was built with so downstream
+      // consumers (PnLBreakdown's by-source fixed-costs table) can call
+      // billingForRange with the SAME universe + revenue split — keeping the
+      // per-source rows reconciling to curAgg.fixedCosts in single-store view.
+      // Both are undefined in the 'All' view (byte-identical behavior).
+      scopedStoreNames,
+      revenueByStore: revenueByStoreFor(filters.range),
     };
     // billingTick: re-aggregate on billing edits so live values stay in sync.
     // salarySettings/salaryTick: re-aggregate on salary edits (business-level
@@ -907,6 +915,16 @@ type FilteredView = {
   series: ReturnType<typeof dailySeries>;
   visibleStores: string[];
   cur: DashboardData['rows'];
+  /**
+   * 2026-06-11 adversarial review (D4 internal reconciliation) — the exact
+   * store-scope threading values `curAgg` was aggregated with (P1-31b D4):
+   * the FULL store universe + the UNFILTERED per-store revenue split for the
+   * current range. Threaded into PnLBreakdown so its by-source fixed-costs
+   * table reconciles to `curAgg.fixedCosts` under a single-store filter.
+   * Both undefined in the 'All' view.
+   */
+  scopedStoreNames?: string[];
+  revenueByStore?: Record<string, number>;
 };
 
 // ----------------------------------------------------------------------------
@@ -1189,14 +1207,33 @@ function HomeTab({
     // salary-deducted upstream). toHeroDelta computes the Net-Profit delta as
     // `cur.trueNetProfit − prev.trueNetProfit`; mismatched deduction here would
     // overstate the prev baseline and skew the delta.
+    //
+    // 2026-06-11 adversarial review (D4 cur/prev threading parity): the same
+    // parity requirement holds for FIXED COSTS. `filtered.curAgg` is built
+    // with the P1-31b D4 store-scope threading (scopedStoreNames = full store
+    // universe + unfiltered per-store revenue split → a store-filtered view
+    // carries only its fair share of All-scoped fixed costs). This prev
+    // baseline used to pass `undefined, undefined` — full-burden convention —
+    // so the trueNetProfit delta mixed fair-share cur with full-burden prev
+    // under a store filter. Mirror the EXACT convention from the `filtered`
+    // memo: same scopedStoreNames expression, and the revenue split computed
+    // over the UNFILTERED dataPrev rows for prevRange.
+    const scopedStoreNames = filters.store === 'All' ? undefined : data.stores;
+    const revenueByStorePrev = (() => {
+      if (filters.store === 'All') return undefined;
+      const allRows = filterRows(dataPrev.rows, prevRange, 'All');
+      const out: Record<string, number> = {};
+      for (const r of allRows) out[r.storeName] = (out[r.storeName] ?? 0) + r.revenue;
+      return out;
+    })();
     return aggregate(
       prevCur,
       prevRange,
-      undefined,
-      undefined,
+      scopedStoreNames,
+      revenueByStorePrev,
       salariesForRange(salarySettings, prevCur, prevRange),
     );
-  }, [dataPrev, prevRange, filters.store, salarySettings]);
+  }, [dataPrev, prevRange, filters.store, salarySettings, data.stores]);
   // Mobile B1 — previous-range ROAS per store, for the per-store card delta
   // chip. Reuses the SAME `dataPrev` SWR payload the hero delta already
   // fetched (no extra network call); `aggregateByStore` gives us each store's
@@ -1731,6 +1768,12 @@ function PnLTab({
       <PnLBreakdown
         current={filtered.curAgg}
         storeNames={filtered.visibleStores}
+        // 2026-06-11 adversarial review (D4 internal reconciliation): the SAME
+        // store-scope threading curAgg was aggregated with, so the by-source
+        // fixed-costs table reconciles to the cascade's fixedCosts line under
+        // a single-store filter. Both undefined in the 'All' view.
+        scopedStoreNames={filtered.scopedStoreNames}
+        revenueByStore={filtered.revenueByStore}
         rangeFrom={filters.range.from}
         rangeTo={filters.range.to}
         rows={filtered.cur}

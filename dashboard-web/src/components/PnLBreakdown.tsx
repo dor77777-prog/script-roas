@@ -42,6 +42,20 @@ import {
 type Props = {
   current: Aggregate;
   storeNames: string[];
+  /**
+   * 2026-06-11 adversarial review (D4 internal reconciliation) — the SAME
+   * store-scope threading values `current` was aggregated with (P1-31b D4):
+   * the FULL store universe (`data.stores`) + the UNFILTERED per-store
+   * revenue split for the range. Provided ONLY when the dashboard is
+   * filtered to a single store; both undefined in the 'All' view (behavior
+   * byte-identical to pre-D4). Without these, the by-source fixed-costs
+   * table computed its own `billingForRange` over the singleton store —
+   * charging All-scoped rows their FULL business-wide amount while the
+   * cascade line above it showed the fair share (two contradicting totals
+   * on the same card).
+   */
+  scopedStoreNames?: string[];
+  revenueByStore?: Record<string, number>;
   /** First/last day of the aggregate — used to scope the billing data. */
   rangeFrom?: string;
   rangeTo?: string;
@@ -79,6 +93,8 @@ const SOURCE_COLOR: Record<CostSource, string> = {
 export function PnLBreakdown({
   current,
   storeNames,
+  scopedStoreNames,
+  revenueByStore,
   rangeFrom,
   rangeTo,
   rows = [],
@@ -127,13 +143,56 @@ export function PnLBreakdown({
   // the breakdown table reflects the new entry without a manual refresh.
   const billing = useMemo(() => {
     if (!rangeFrom || !rangeTo) return null;
-    return billingForRange({
+    // 2026-06-11 adversarial review (D4 internal reconciliation): when the
+    // dashboard threads a store scope (single-store filter), call
+    // billingForRange with the SAME universe + revenue split `aggregate()`
+    // used for `current.fixedCosts` — then scale the by-source rows down to
+    // this store's fair share so they show the store's amounts and their sum
+    // reconciles EXACTLY to the cascade's fixed-costs line. Scaling target is
+    // `current.fixedCosts` itself (same billingForRange inputs → same total,
+    // and it stays exact even in the empty-rows edge where aggregate charges
+    // 0). The per-source MIX uses a uniform fraction — exact when all rows
+    // are All-scoped (e.g. one $60 Klaviyo across 3 stores → the email row
+    // shows $20); an approximation only when other stores' store-specific
+    // rows are mixed in (totals stay truthful either way).
+    // Unscoped ('All' view) path is byte-identical to pre-D4.
+    const raw = billingForRange({
       from: rangeFrom,
       to: rangeTo,
-      storeNames,
-      revenue: current.revenue,
+      storeNames: scopedStoreNames ?? storeNames,
+      ...(scopedStoreNames && revenueByStore
+        ? {
+            revenue: Object.values(revenueByStore).reduce((a, b) => a + b, 0),
+            revenueByStore,
+          }
+        : { revenue: current.revenue }),
     });
-  }, [rangeFrom, rangeTo, storeNames, current.revenue, recurring, oneTime]);
+    if (!scopedStoreNames) return raw;
+    const factor = raw.total > 0 ? current.fixedCosts / raw.total : 0;
+    const bySource = Object.fromEntries(
+      (Object.keys(raw.bySource) as CostSource[]).map(s => [
+        s,
+        raw.bySource[s] * factor,
+      ]),
+    ) as Record<CostSource, number>;
+    return {
+      ...raw,
+      total: current.fixedCosts,
+      bySource,
+      recurringInPeriod: raw.recurringInPeriod * factor,
+      oneTimeInPeriod: raw.oneTimeInPeriod * factor,
+    };
+  }, [
+    rangeFrom,
+    rangeTo,
+    storeNames,
+    scopedStoreNames,
+    revenueByStore,
+    current.revenue,
+    current.fixedCosts,
+    recurring,
+    oneTime,
+  ]);
 
   // Active recurring entries scoped to the visible stores (or "All").
   const activeForScope = useMemo(() => {
@@ -325,7 +384,13 @@ export function PnLBreakdown({
               tone="cost"
               note={
                 hasConfiguredFixed
-                  ? `${activeForScope.length} מנויים פעילים${oneTimeInScope.length > 0 ? ` + ${oneTimeInScope.length} חד-פעמיים` : ''} · ${current.daysCovered} ימים מתוך 30`
+                  // 2026-06-11 adversarial review (stale copy): "X ימים מתוך 30"
+                  // documented the retired days/30 proration. D3 (P1-31a) moved
+                  // billing to TRUE calendar-month proration (each overlapped
+                  // month contributes monthlyCAD × overlapDays/daysInThatMonth),
+                  // so the note now states the calendar convention — accurate
+                  // for cross-month ranges too.
+                  ? `${activeForScope.length} מנויים פעילים${oneTimeInScope.length > 0 ? ` + ${oneTimeInScope.length} חד-פעמיים` : ''} · ${current.daysCovered} ימי נתונים · פרורציה לפי החודש הקלנדרי`
                   : 'לא הוגדרו עלויות — לחץ על "עלויות חודשיות" למעלה'
               }
               running={afterFixed}

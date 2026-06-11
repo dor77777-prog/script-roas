@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NC-ROAS לפי ערוץ — מוקאפ</title>
+<style>
+  :root{
+    --bg:#0a0e1a;--mesh1:#15172e;--mesh2:#0c1430;
+    --card:rgba(22,26,46,.72);--edge:rgba(255,255,255,.08);
+    --ink:#eef1f8;--ink2:#aab3cc;--ink3:#727c97;--glass2:rgba(255,255,255,.05);
+    --green:#34d399;--greenBg:rgba(52,211,153,.14);--amberC:#f0a93b;--amberBg:rgba(240,169,59,.16);
+    --red:#fb7185;--redBg:rgba(251,113,133,.14);
+    --meta:#4c8bf5;--google:#f5a623;--tiktok:#ff4d6d;
+  }
+  [data-theme="light"]{
+    --bg:#eef1f8;--mesh1:#e6ebff;--mesh2:#f3eefe;
+    --card:rgba(255,255,255,.85);--edge:rgba(20,28,60,.10);
+    --ink:#161c34;--ink2:#4a5374;--ink3:#8089a6;--glass2:rgba(20,28,60,.04);
+    --green:#0f9d6b;--greenBg:rgba(15,157,107,.12);--amberC:#b9791a;--amberBg:rgba(185,121,26,.12);
+    --red:#d63a55;--redBg:rgba(214,58,85,.10);
+    --meta:#2f6fe0;--google:#c8821a;--tiktok:#e23459;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,'Heebo',sans-serif;color:var(--ink);min-height:100vh;padding:28px;
+    background:radial-gradient(1200px 700px at 85% -10%,var(--mesh1),transparent 60%),radial-gradient(1000px 600px at 0% 110%,var(--mesh2),transparent 55%),var(--bg);transition:background .4s}
+  .wrap{max-width:1020px;margin:0 auto}
+  h1{font-size:18px;font-weight:800;margin:0 0 4px}.sub{color:var(--ink2);font-size:13px;margin:0 0 22px}
+  .toggle{position:fixed;top:18px;left:18px;background:var(--card);border:1px solid var(--edge);color:var(--ink);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;backdrop-filter:blur(12px)}
+  .card{background:var(--card);border:1px solid var(--edge);border-radius:18px;padding:18px 20px;margin-bottom:20px;backdrop-filter:blur(16px);box-shadow:0 8px 30px rgba(0,0,0,.18)}
+  .card h2{font-size:11px;font-weight:800;letter-spacing:.4px;color:var(--ink2);text-transform:uppercase;margin:0 0 4px}
+  .card .desc{font-size:12.5px;color:var(--ink3);margin:0 0 16px}
+  .num{font-variant-numeric:tabular-nums;font-weight:800}
+  .chgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:680px){.chgrid{grid-template-columns:1fr}}
+  .ch{border:1px solid var(--edge);border-radius:14px;padding:14px;background:var(--glass2);position:relative;overflow:hidden}
+  .ch::before{content:"";position:absolute;inset-block-start:0;inset-inline:0;height:3px;background:var(--c)}
+  .ch .name{font-size:13px;font-weight:800;display:flex;align-items:center;gap:7px;margin-bottom:10px}
+  .ch .dot{width:9px;height:9px;border-radius:3px;background:var(--c)}
+  .roas{font-size:30px;line-height:1;font-weight:900}
+  .roaslbl{font-size:10.5px;color:var(--ink3);margin-bottom:10px}
+  .kv{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--edge);font-size:12.5px}
+  .kv:last-of-type{border-bottom:0}.kv .k{color:var(--ink2)}.kv .v{color:var(--ink)}
+  .chip{font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;display:inline-block;margin-top:9px}
+  .blend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;border:1px dashed var(--edge);border-radius:14px;padding:13px 16px;margin-top:16px;background:var(--glass2)}
+  .blend .big{font-size:13px}.blend b{color:var(--ink)}
+  .insight{font-size:12.5px;color:var(--ink);background:var(--amberBg);border-radius:10px;padding:9px 12px;margin-top:6px;font-weight:600}
+  .note{font-size:11px;color:var(--ink3);margin-top:12px}
+</style></head>
+<body data-theme="dark">
+<button class="toggle" onclick="document.body.dataset.theme=document.body.dataset.theme==='dark'?'light':'dark'">◐ החלף תֵמה</button>
+<div class="wrap">
+  <h1>גל 2 · NC-ROAS לפי ערוץ — מוקאפ לאישור</h1>
+  <p class="sub">פיצול גיוס-לקוחות-חדשים לפי Meta / Google / TikTok. שני המצבים, RTL, צבעים מותאמי-מותג. <b>מוקאפ סטטי</b> — לא הקוד.</p>
+
+  <div class="card">
+    <h2>מי מגייס לקוחות חדשים — ברווח?</h2>
+    <p class="desc">NC-ROAS = הכנסת לקוחות-חדשים ÷ הוצאת-הערוץ · nCAC = הוצאת-הערוץ ÷ הזמנות-חדשות. כל הקלט כבר קיים (תווית-ערוץ על כל הזמנה + הוצאה פר-פלטפורמה, mapping-aware).</p>
+    <div class="chgrid">
+      <!-- META -->
+      <div class="ch" style="--c:var(--meta)">
+        <div class="name"><span class="dot"></span>Meta</div>
+        <div class="roas" style="color:var(--green)">4.1×</div>
+        <div class="roaslbl">NC-ROAS</div>
+        <div class="kv"><span class="k">nCAC</span><span class="v num">$38</span></div>
+        <div class="kv"><span class="k">הכנסת לקוחות-חדשים</span><span class="v num">$24,600</span></div>
+        <div class="kv"><span class="k">הוצאה</span><span class="v num">$6,000</span></div>
+        <div class="kv"><span class="k">הזמנות חדשות</span><span class="v num">158</span></div>
+        <span class="chip" style="background:var(--greenBg);color:var(--green)">בריא · כיסוי 88%</span>
+      </div>
+      <!-- GOOGLE -->
+      <div class="ch" style="--c:var(--google)">
+        <div class="name"><span class="dot"></span>Google</div>
+        <div class="roas" style="color:var(--green)">3.3×</div>
+        <div class="roaslbl">NC-ROAS</div>
+        <div class="kv"><span class="k">nCAC</span><span class="v num">$45</span></div>
+        <div class="kv"><span class="k">הכנסת לקוחות-חדשים</span><span class="v num">$9,900</span></div>
+        <div class="kv"><span class="k">הוצאה</span><span class="v num">$3,000</span></div>
+        <div class="kv"><span class="k">הזמנות חדשות</span><span class="v num">67</span></div>
+        <span class="chip" style="background:var(--greenBg);color:var(--green)">בריא · כיסוי 81%</span>
+      </div>
+      <!-- TIKTOK -->
+      <div class="ch" style="--c:var(--tiktok)">
+        <div class="name"><span class="dot"></span>TikTok</div>
+        <div class="roas" style="color:var(--red)">1.2×</div>
+        <div class="roaslbl">NC-ROAS</div>
+        <div class="kv"><span class="k">nCAC</span><span class="v num">$74</span></div>
+        <div class="kv"><span class="k">הכנסת לקוחות-חדשים</span><span class="v num">$2,400</span></div>
+        <div class="kv"><span class="k">הוצאה</span><span class="v num">$2,000</span></div>
+        <div class="kv"><span class="k">הזמנות חדשות</span><span class="v num">27</span></div>
+        <span class="chip" style="background:var(--redBg);color:var(--red)">חלש · כיסוי 64%</span>
+      </div>
+    </div>
+
+    <div class="blend">
+      <span class="big">בלנדי (כל הערוצים): <b class="num">NC-ROAS 3.3×</b> · <b class="num">nCAC $47</b></span>
+      <span style="font-size:11px;color:var(--ink3)">31% מההזמנות לא-מסווגות — לא נכללות בפיצול</span>
+    </div>
+    <div class="insight">⚠️ הבלנדי 3.3× מסתיר את האמת: <b>Meta 4.1×</b> מסבסד את <b>TikTok 1.2×</b>. המנוף היומי: להזיז תקציב מ-TikTok ל-Meta.</div>
+    <p class="note">כיסוי = אחוז ההזמנות עם תווית-ערוץ ברורה; מתחת ל-60% הערך מסומן "כיסוי נמוך". (פער-overcount פר-ערוץ + רווח-נטו פר-ערוץ = הפיצ'רים הבאים בגל 2.)</p>
+  </div>
+
+  <p class="sub" style="margin-top:6px">איפה למקם? אפשרויות: (א) כרטיס-משנה ב-Hero ליד ה-NC-ROAS הבלנדי הקיים · (ב) שורה ב-StoreDetailModal · (ג) שניהם. אישור / שינויים?</p>
+</div>
+</body></html>

@@ -98,36 +98,58 @@ export async function getMetaAccessTokenForStore(storeId: StoreId): Promise<stri
  * ROAS until cron-daily repaired it. The throttled notifyFxFailure alert (DQ-2)
  * is preserved.
  *
- * The per-currency result (rate OR null failure sentinel) is cached inside the
- * adapter closure so (a) one worker invocation produces a CONSISTENT
- * null-vs-number answer for every row of the same currency (heterogeneous
- * upsert batches would fail PostgREST's uniform-keys rule), and (b) a flapping
- * Frankfurter isn't hammered once per row. Mirrors cronDaily's `fxCache`.
+ * The per-currency IN-FLIGHT Promise (resolving to rate OR null failure
+ * sentinel) is cached inside the adapter closure so (a) one worker invocation
+ * produces a CONSISTENT null-vs-number answer for every row of the same
+ * currency (heterogeneous upsert batches would fail PostgREST's uniform-keys
+ * rule), and (b) a flapping Frankfurter isn't hammered once per row.
+ *
+ * 2026-06-11 (adversarial review, fx-pipeline MEDIUM) — the cache MUST hold
+ * the Promise, not the resolved value: metaHotMetrics builds ALL rows via
+ * `Promise.all(...)`, so a check-then-act value cache (`get` → `await
+ * getFxRate` → `set`) let every concurrent row miss the still-empty cache and
+ * fire its own Frankfurter call. Under a flapping outage some rows resolved
+ * to a number and some to null → mixed *_cad key sets → PostgREST rejected
+ * the ENTIRE bulk upsert ('All object keys must match') and the whole tick
+ * was lost, including the non-CAD metrics the P1-11 doctrine promises still
+ * refresh. Caching the in-flight Promise makes the FIRST caller's resolution
+ * authoritative for the whole invocation: all concurrent callers await the
+ * SAME promise → exactly ONE getFxRate call + ONE notifyFxFailure alert per
+ * currency, and batch-uniform upsert keys are guaranteed even under
+ * Promise.all.
  */
 export async function getFxCadAdapterForStore(
   _storeId: StoreId,
 ): Promise<(amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number | null>> {
   const dateStr = new Date().toISOString().slice(0, 10);
-  const rateCache = new Map<string, number | null>();
+  const ratePromiseCache = new Map<string, Promise<number | null>>();
+  // Never rejects — failures resolve to the null sentinel (P1-11 contract),
+  // so a cached promise can be awaited by any number of rows safely.
+  const resolveRate = async (currency: string): Promise<number | null> => {
+    try {
+      const fetched = await getFxRate(currency, 'CAD', dateStr);
+      if (!Number.isFinite(fetched) || fetched <= 0) {
+        // DQ-2: alert instead of silently corrupting CAD spend.
+        await notifyFxFailure({ currency, dateStr, errorMsg: `invalid rate ${fetched}` });
+        return null;
+      }
+      return fetched;
+    } catch (e) {
+      await notifyFxFailure({ currency, dateStr, errorMsg: e instanceof Error ? e.message : String(e) });
+      return null;
+    }
+  };
   return async (amount, currency) => {
     if (currency === 'CAD') return amount;
-    let rate = rateCache.get(currency);
-    if (rate === undefined) {
-      try {
-        const fetched = await getFxRate(currency, 'CAD', dateStr);
-        if (!Number.isFinite(fetched) || fetched <= 0) {
-          // DQ-2: alert instead of silently corrupting CAD spend.
-          await notifyFxFailure({ currency, dateStr, errorMsg: `invalid rate ${fetched}` });
-          rate = null;
-        } else {
-          rate = fetched;
-        }
-      } catch (e) {
-        await notifyFxFailure({ currency, dateStr, errorMsg: e instanceof Error ? e.message : String(e) });
-        rate = null;
-      }
-      rateCache.set(currency, rate);
+    let ratePromise = ratePromiseCache.get(currency);
+    if (ratePromise === undefined) {
+      // The map is populated SYNCHRONOUSLY (no await between get and set), so
+      // concurrent callers scheduled in the same microtask turn (Promise.all)
+      // all observe and share this single promise.
+      ratePromise = resolveRate(currency);
+      ratePromiseCache.set(currency, ratePromise);
     }
+    const rate = await ratePromise;
     if (rate === null) return null;
     return amount * rate;
   };

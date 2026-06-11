@@ -1099,17 +1099,31 @@ async function runDailyForStoreInner(
         dataDailyRow.ga_spend_cad = merged.gaSpendCad;
         dataDailyRow.ga_impressions = google.spend.impressions;
       }
-      if (ttSpendCad !== null && totalSpendCadAll !== null) {
+      // P1-11 follow-up (2026-06-11, adversarial review): the tt pair is
+      // gated ONLY on TikTok's own FX success, mirroring the independent
+      // fb/ga pairs above. The previous combined gate
+      // (`ttSpendCad !== null && totalSpendCadAll !== null`) discarded a
+      // successfully computed fresh TikTok CAD value whenever an UNRELATED
+      // Meta/Google merge-FX leg failed (asymmetric: ga_spend_cad still
+      // landed when only fb failed). The derived totals keep their own
+      // stricter gate below — any null component → preserved prior values.
+      if (ttSpendCad !== null) {
         dataDailyRow.tt_spend_cad = ttSpendCad;
+        // Mirror the tt_spend_cad gating: when TikTok FX failed we can't
+        // write a tt_impressions count either, so we leave it absent and
+        // ON CONFLICT preserves whatever cron-live or the prior nightly
+        // run already had.
+        dataDailyRow.tt_impressions = tiktok.spend.impressions;
+      }
+      // total_spend_cad + the metrics derived from it stay gated on ALL
+      // three spend components being non-null (totalSpendCadAll computed
+      // above) so we never persist a partial sum that contradicts a
+      // preserved per-platform column.
+      if (totalSpendCadAll !== null) {
         dataDailyRow.total_spend_cad = totalSpendCadAll;
         dataDailyRow.roas = roas;
         dataDailyRow.gross_profit_cad = grossProfitCad;
         dataDailyRow.net_profit_cad = netProfitCad;
-        // Mirror the tt_spend_cad gating: when TikTok FX failed (above) we
-        // can't write a tt_impressions count either, so we leave it absent
-        // and ON CONFLICT preserves whatever cron-live or the prior nightly
-        // run already had.
-        dataDailyRow.tt_impressions = tiktok.spend.impressions;
       }
       const { error } = await admin.from('data_daily').upsert(dataDailyRow, {
         onConflict: 'date,store_id',

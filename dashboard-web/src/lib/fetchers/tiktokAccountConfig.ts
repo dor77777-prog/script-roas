@@ -170,33 +170,48 @@ export async function getTikTokAccountForStore(
  * failure. Callers OMIT the `*_cad` keys from the upsert payload when the
  * conversion is null so ON CONFLICT preserves the last good value, instead of
  * overwriting real intraday spend with $0 every 10-min tick. The throttled
- * notifyFxFailure alert (DQ-2) is preserved. Per-currency result cached in
- * the closure for batch-uniform keys + fewer Frankfurter hits.
+ * notifyFxFailure alert (DQ-2) is preserved.
+ *
+ * 2026-06-11 (adversarial review, fx-pipeline MEDIUM) — caches the per-currency
+ * IN-FLIGHT Promise (not the resolved value) so concurrent callers all await
+ * the SAME promise: exactly ONE getFxRate call + ONE alert per currency, and
+ * every row of one upsert batch gets an identical null-vs-number answer
+ * (batch-uniform *_cad keys; PostgREST bulk upserts reject mixed key sets).
+ * tiktokHotMetrics builds rows sequentially today, so the old check-then-act
+ * value cache happened to be safe here — this mirrors metaAccountConfig.ts so
+ * the guarantee survives a future Promise.all refactor.
  */
 export async function getTikTokFxCadAdapterForStore(
   _storeId: StoreId,
 ): Promise<(amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number | null>> {
   const dateStr = new Date().toISOString().slice(0, 10);
-  const rateCache = new Map<string, number | null>();
+  const ratePromiseCache = new Map<string, Promise<number | null>>();
+  // Never rejects — failures resolve to the null sentinel (P1-11 contract),
+  // so a cached promise can be awaited by any number of rows safely.
+  const resolveRate = async (currency: string): Promise<number | null> => {
+    try {
+      const fetched = await getFxRate(currency, 'CAD', dateStr);
+      if (!Number.isFinite(fetched) || fetched <= 0) {
+        // DQ-2: alert instead of silently corrupting CAD spend.
+        await notifyFxFailure({ currency, dateStr, errorMsg: `invalid rate ${fetched}` });
+        return null;
+      }
+      return fetched;
+    } catch (e) {
+      await notifyFxFailure({ currency, dateStr, errorMsg: e instanceof Error ? e.message : String(e) });
+      return null;
+    }
+  };
   return async (amount, currency) => {
     if (currency === 'CAD') return amount;
-    let rate = rateCache.get(currency);
-    if (rate === undefined) {
-      try {
-        const fetched = await getFxRate(currency, 'CAD', dateStr);
-        if (!Number.isFinite(fetched) || fetched <= 0) {
-          // DQ-2: alert instead of silently corrupting CAD spend.
-          await notifyFxFailure({ currency, dateStr, errorMsg: `invalid rate ${fetched}` });
-          rate = null;
-        } else {
-          rate = fetched;
-        }
-      } catch (e) {
-        await notifyFxFailure({ currency, dateStr, errorMsg: e instanceof Error ? e.message : String(e) });
-        rate = null;
-      }
-      rateCache.set(currency, rate);
+    let ratePromise = ratePromiseCache.get(currency);
+    if (ratePromise === undefined) {
+      // Populated SYNCHRONOUSLY (no await between get and set) so concurrent
+      // callers in the same microtask turn share this single promise.
+      ratePromise = resolveRate(currency);
+      ratePromiseCache.set(currency, ratePromise);
     }
+    const rate = await ratePromise;
     if (rate === null) return null;
     return amount * rate;
   };

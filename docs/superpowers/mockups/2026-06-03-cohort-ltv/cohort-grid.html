@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wave 2 — Cohorts & LTV (mockup)</title>
+<style>
+  /* ---- tokens (light default; [data-theme=dark] overrides) ---- */
+  :root{
+    --canvas:#f6f7fb; --surface:#ffffff; --surface-2:#f0f2f8; --edge:rgba(20,24,40,.10);
+    --ink:#13182b; --ink-2:#5b6479; --ink-3:#8b93a7;
+    --accent:#6d4aff; --accent-soft:rgba(109,74,255,.12);
+    --good:#1f9d6b; --warn:#ef9331; --bad:#e0445b; --info:#2f7bd6;
+    --heat-0:rgba(31,157,107,0); --heat-fg:#0c3d2a;
+    --shadow:0 1px 2px rgba(20,24,40,.06),0 8px 24px rgba(20,24,40,.06);
+    --mesh:radial-gradient(1200px 600px at 85% -10%,rgba(109,74,255,.10),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(47,123,214,.08),transparent 55%);
+  }
+  [data-theme=dark]{
+    --canvas:#0b0e18; --surface:#141a2b; --surface-2:#1c2438; --edge:rgba(255,255,255,.10);
+    --ink:#eef1f8; --ink-2:#a6afc6; --ink-3:#6d7791;
+    --accent:#8c6bff; --accent-soft:rgba(140,107,255,.18);
+    --good:#3fd49a; --warn:#ef9331; --bad:#ff6b81; --info:#5aa6ff;
+    --heat-fg:#d9ffe9;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45);
+    --mesh:radial-gradient(1200px 600px at 85% -10%,rgba(140,107,255,.16),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(47,123,214,.12),transparent 55%);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,"Segoe UI",Heebo,Arial,sans-serif;color:var(--ink);
+    background:var(--canvas);background-image:var(--mesh);background-attachment:fixed;min-height:100vh;padding:20px}
+  .wrap{max-width:1180px;margin:0 auto}
+  header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}
+  h1{font-size:20px;margin:0;font-weight:800;letter-spacing:-.01em}
+  .sub{color:var(--ink-2);font-size:12.5px;margin-top:2px}
+  .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--edge);border-radius:10px;padding:3px;gap:2px}
+  .seg button{border:0;background:transparent;color:var(--ink-2);padding:6px 12px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer}
+  .seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+  .seg button.on.accent{background:var(--accent);color:#fff}
+  select{font:inherit;font-weight:600;color:var(--ink);background:var(--surface);border:1px solid var(--edge);border-radius:10px;padding:7px 10px}
+  .card{background:var(--surface);border:1px solid var(--edge);border-radius:16px;box-shadow:var(--shadow);padding:16px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  @media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi .label{color:var(--ink-2);font-size:12px;font-weight:600;display:flex;gap:6px;align-items:center}
+  .kpi .val{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-top:4px;font-variant-numeric:tabular-nums}
+  .kpi .delta{font-size:12px;font-weight:700;margin-top:2px}
+  .up{color:var(--good)} .down{color:var(--bad)} .neutral{color:var(--ink-3)}
+  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+  .gridcard h2{font-size:14px;margin:0 0 2px;font-weight:800}
+  .gridcard .hint{color:var(--ink-2);font-size:12px;margin-bottom:12px}
+  table.cohort{border-collapse:separate;border-spacing:3px;width:100%;font-variant-numeric:tabular-nums}
+  table.cohort th{font-size:11px;color:var(--ink-3);font-weight:700;padding:4px 2px;text-align:center;white-space:nowrap}
+  table.cohort td.rowhead{font-size:11.5px;color:var(--ink-2);font-weight:700;text-align:right;white-space:nowrap;padding-inline-end:8px}
+  table.cohort td.cell{height:34px;min-width:54px;text-align:center;border-radius:7px;font-size:12px;font-weight:700;color:var(--heat-fg)}
+  td.cell.empty{background:repeating-linear-gradient(45deg,var(--surface-2),var(--surface-2) 5px,transparent 5px,transparent 10px);color:var(--ink-3);font-weight:500;opacity:.5}
+  td.cell.m0{outline:2px solid var(--accent);outline-offset:-2px}
+  .legend{display:flex;gap:10px;align-items:center;color:var(--ink-2);font-size:11.5px;margin-top:12px;flex-wrap:wrap}
+  .swatch{display:inline-block;width:48px;height:12px;border-radius:4px;background:linear-gradient(90deg,var(--surface-2),var(--good))}
+  .note{color:var(--ink-3);font-size:11.5px;margin-top:14px;line-height:1.6}
+  .footrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .tag{font-size:11px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--edge);border-radius:999px;padding:3px 9px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>לקוחות לאורך זמן — Cohorts &amp; LTV <span class="pill">mockup · גל 2</span></h1>
+      <div class="sub">רשת שימור לפי חודש-הזמנה-ראשונה × חודשים-מאז (M0–M11) · בסיס נטו (מתואם refunds, גל 1) · CAPI-safe (Shopify בלבד)</div>
+    </div>
+    <div class="controls">
+      <select id="store">
+        <option value="all">כל העסק</option>
+        <option value="uzoshop">uzoshop</option>
+        <option value="zolplus">zolplus</option>
+        <option value="usmile360">usmile360</option>
+      </select>
+      <div class="seg" id="basis">
+        <button data-v="profit" class="on accent">רווח</button>
+        <button data-v="revenue">הכנסה</button>
+      </div>
+      <div class="seg" id="metric">
+        <button data-v="retention" class="on">שימור %</button>
+        <button data-v="ltv">LTV מצטבר</button>
+      </div>
+      <div class="seg" id="theme">
+        <button data-v="light" class="on">☀︎</button>
+        <button data-v="dark">☾</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="kpis">
+    <div class="card kpi"><div class="label">LTV ל-12 חודשים <span title="ממוצע משוקלל על cohorts בוגרים">ⓘ</span></div><div class="val" id="k_ltv">$78</div><div class="delta up" id="k_ltv_d">▲ 6% מול הרבעון הקודם</div></div>
+    <div class="card kpi"><div class="label">LTV : nCAC</div><div class="val" id="k_ratio">2.4×</div><div class="delta neutral">יעד בריא ≥ 3×</div></div>
+    <div class="card kpi"><div class="label">החזר עלות-רכישה (payback)</div><div class="val" id="k_payback">4.1 ח׳</div><div class="delta up">▲ מהיר מ-6 ח׳</div></div>
+    <div class="card kpi"><div class="label">שיעור חזרה (repeat)</div><div class="val" id="k_repeat">24%</div><div class="delta up">▲ 2pp</div></div>
+  </div>
+
+  <div class="card gridcard">
+    <h2 id="gtitle">שימור % לפי cohort</h2>
+    <div class="hint" id="ghint">כל שורה = הלקוחות שהזמינו לראשונה באותו חודש. M0 = חודש הרכישה (100%). כל תא = % מהם שהזמינו שוב באותו חודש-מאז.</div>
+    <div style="overflow-x:auto">
+      <table class="cohort" id="grid"></table>
+    </div>
+    <div class="legend"><span>נמוך</span><span class="swatch"></span><span>גבוה</span><span style="margin-inline-start:14px">▦ עתיד (טרם הבשיל)</span><span class="tag">M0 = מסומן בסגול</span></div>
+    <div class="footrow">
+      <span class="tag">מקור: היסטוריית Shopify מלאה (Bulk) → טבלת cohort מצטברת + תחזוקת cron</span>
+      <span class="tag">רווח = הכנסה נטו − COGS − עמלות</span>
+      <span class="tag">FX-null → שמירת ערך קודם</span>
+    </div>
+    <div class="note" id="note"></div>
+  </div>
+</div>
+
+<script>
+// ---- sample data: 12 cohorts (oldest→newest). retention[m], ltvRev[m], ltvProfit[m]; nulls = future ----
+const MONTHS = ['M0','M1','M2','M3','M4','M5','M6','M7','M8','M9','M10','M11'];
+const COHORTS = ['2025-07','2025-08','2025-09','2025-10','2025-11','2025-12','2026-01','2026-02','2026-03','2026-04','2026-05','2026-06'];
+// base retention curve (%), decays then stabilizes
+const baseRet = [100,23,16,13,11,10,9,8.5,8,7.6,7.3,7];
+// per-order net AOV (rev) and profit (~62% margin after COGS+fees)
+const AOV_REV = 52, MARGIN = 0.40;
+function mk(storeMult, ageMonths){
+  const ret=[], ltvRev=[], ltvPro=[]; let cumRev=0,cumPro=0;
+  for(let m=0;m<12;m++){
+    if(m>ageMonths){ret.push(null);ltvRev.push(null);ltvPro.push(null);continue;}
+    const r = Math.max(0, baseRet[m]*storeMult.ret*(0.96+0.08*((m*7)%5)/5));
+    ret.push(+r.toFixed(1));
+    // repeat orders this month ≈ retention% of cohort; revenue per retained customer
+    const revPerCust = (r/100)*AOV_REV*storeMult.aov*(m===0?1:1.05);
+    cumRev += revPerCust; cumPro += revPerCust*MARGIN;
+    ltvRev.push(+cumRev.toFixed(0)); ltvPro.push(+cumPro.toFixed(0));
+  }
+  return {ret,ltvRev,ltvPro};
+}
+const STORE_MULT={
+  all:{ret:1,aov:1,ltv:78,ratio:2.4,pay:4.1,rep:24},
+  uzoshop:{ret:1.05,aov:1.02,ltv:84,ratio:2.6,pay:3.7,rep:26},
+  zolplus:{ret:.9,aov:.95,ltv:64,ratio:2.0,pay:5.2,rep:19},
+  usmile360:{ret:.85,aov:1.1,ltv:71,ratio:1.8,pay:5.9,rep:17},
+};
+const data={};
+for(const s in STORE_MULT){
+  data[s]=COHORTS.map((c,i)=>{const age=COHORTS.length-1-i; return {cohort:c, ...mk(STORE_MULT[s], age)};});
+}
+
+let store='all', basis='profit', metric='retention';
+
+function heat(t){ // t in 0..1 -> mix surface-2 -> good
+  return `color-mix(in srgb, var(--good) ${Math.round(t*100)}%, var(--surface-2))`;
+}
+function render(){
+  const rows=data[store];
+  // determine max for scaling
+  let vals=[];
+  rows.forEach(r=>r.ret.forEach((v,m)=>{ if(v==null)return; vals.push(metric==='retention'?v:(basis==='profit'?r.ltvPro[m]:r.ltvRev[m])); }));
+  const max=Math.max(...vals), min=Math.min(...vals);
+  let html='<tr><th></th>'+MONTHS.map(m=>`<th>${m}</th>`).join('')+'</tr>';
+  rows.forEach(r=>{
+    html+='<tr><td class="rowhead">'+r.cohort+'</td>';
+    for(let m=0;m<12;m++){
+      const ret=r.ret[m];
+      if(ret==null){html+='<td class="cell empty">·</td>';continue;}
+      let v, disp;
+      if(metric==='retention'){v=ret; disp=ret+'%';}
+      else {v=basis==='profit'?r.ltvPro[m]:r.ltvRev[m]; disp='$'+v;}
+      const t=max>min?(v-min)/(max-min):.5;
+      const cls='cell'+(m===0?' m0':'');
+      html+=`<td class="${cls}" style="background:${heat(0.12+0.88*t)}">${disp}</td>`;
+    }
+    html+='</tr>';
+  });
+  document.getElementById('grid').innerHTML=html;
+  // titles
+  const gt=document.getElementById('gtitle'), gh=document.getElementById('ghint');
+  if(metric==='retention'){gt.textContent='שימור % לפי cohort';gh.textContent='כל שורה = הלקוחות שהזמינו לראשונה באותו חודש. M0 = חודש הרכישה (100%). כל תא = % מהם שחזרו להזמין באותו חודש-מאז.';}
+  else{gt.textContent=(basis==='profit'?'LTV מצטבר (רווח) ':'LTV מצטבר (הכנסה) ')+'לפי cohort';gh.textContent='כל תא = '+(basis==='profit'?'רווח':'הכנסה')+' מצטבר/לקוח עד אותו חודש-מאז. M11 = LTV ל-12 חודשים.';}
+  // kpis
+  const sm=STORE_MULT[store];
+  document.getElementById('k_ltv').textContent='$'+sm.ltv+(basis==='revenue'?' ':'');
+  document.getElementById('k_ltv').textContent='$'+(basis==='profit'?sm.ltv:Math.round(sm.ltv/MARGIN));
+  document.getElementById('k_ratio').textContent=sm.ratio+'×';
+  document.getElementById('k_payback').textContent=sm.pay+' ח׳';
+  document.getElementById('k_repeat').textContent=sm.rep+'%';
+  document.getElementById('k_ratio').parentElement.querySelector('.delta').className='delta '+(sm.ratio>=3?'up':sm.ratio>=2?'neutral':'down');
+  document.getElementById('note').textContent = metric==='ltv'
+    ? 'קריאה: ככל שעקומת ה-LTV עולה מהר יותר ויציבה — אפשר לשלם יותר על רכישה. LTV:nCAC מתחת ל-3× = הרכישה לא משתלמת מספיק לטווח שנה.'
+    : 'קריאה: השוואת שורות חושפת אם cohorts חדשים שומרים טוב יותר/פחות — אות מוקדם לאיכות הרכישה לאורך זמן.';
+}
+function bindSeg(id,setter){const el=document.getElementById(id);el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;[...el.children].forEach(x=>x.classList.remove('on'));b.classList.add('on');setter(b.dataset.v);if(id!=='theme')render();});}
+bindSeg('basis',v=>basis=v);
+bindSeg('metric',v=>metric=v);
+bindSeg('theme',v=>document.documentElement.setAttribute('data-theme',v==='dark'?'dark':''));
+document.getElementById('store').addEventListener('change',e=>{store=e.target.value;render();});
+render();
+</script>
+</body>
+</html>

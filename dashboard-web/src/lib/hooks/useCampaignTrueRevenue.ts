@@ -240,12 +240,88 @@ export function buildUnmappedAttributionInfo(
     spend: a.spend,
     mappedCount: 0,
     sharedCampaigns: 0,
-    confidence: computeConfidence(det, a.conversionValue, a.spend, 0, 0),
+    // 2026-06-11 adversarial review: thread the platform (P1-25 sweep updated
+    // only the mapped call site) so the gap reason names the actual platform
+    // instead of the generic 'מול הפלטפורמה'.
+    confidence: computeConfidence(det, a.conversionValue, a.spend, 0, 0, a.platform),
     attribution,
     productTotals: { revenue: 0, units: 0, orders: 0 },
     deterministicRevenue: det,
     deterministicUnits: 0,
   };
+}
+
+/**
+ * Phase 05.7.9c — Two-method-agreement trust upgrade.
+ *
+ * The attribution analyzer's trust is computed from click-id coverage alone
+ * (% of the platform's claim that we could match to a tagged order). When
+ * coverage is low it labels the chip "לא אמין" even if the Shopify
+ * product-mapping ALSO confirms the platform's claim.
+ *
+ * Two independent methods (click-id + product mapping) agreeing is STRONGER
+ * evidence than either alone, so a small gap between platformClaim and
+ * trueRevenue (via mapping) deserves a trust bump:
+ *
+ *   - gap < 10% → high (override low/medium)
+ *   - gap < 20% → at least medium (override low)
+ *
+ * Operator feedback 2026-05-22: "if both methods agree to within a few
+ * percent and the chip still says 'not trusted', that's wrong — the
+ * agreement IS the trust signal."
+ *
+ * 2026-06-11 adversarial review: the upgrade must NOT undo the P1-8b
+ * broken-pixel cap. A coverage>2 verdict (coverageExceedsClamp) is capped at
+ * medium with a check-the-pixel recommendation; promoting it back to
+ * 'אמין 9x' here put a trusted chip beside the broken-pixel banner AND split
+ * the table from the drawer (whose raw analyzeAttribution call has no
+ * upgrade). When the clamp flag is up, the mapping agreement does not redeem
+ * the platform's reporting — the verdict stays medium with its
+ * tracking-check recommendation. Exported (pure) so that gate is
+ * unit-testable without rendering the hook.
+ */
+export function applyTwoMethodAgreementUpgrade(
+  attribution: AttributionAnalysis | null,
+  platformClaim: number,
+  trueRevenue: number,
+  platform: string,
+): AttributionAnalysis | null {
+  if (!attribution) return attribution;
+  if (attribution.coverageExceedsClamp) return attribution; // P1-8b cap stays
+  if (platformClaim <= 0 || trueRevenue <= 0) return attribution;
+  const gap =
+    Math.abs(trueRevenue - platformClaim) / Math.max(platformClaim, trueRevenue);
+  if (gap < 0.1 && attribution.trust.level !== 'high') {
+    return {
+      ...attribution,
+      trust: {
+        level: 'high',
+        label: 'אמין',
+        // Score = 100 - gap%. With gap=5% the score is 95, etc.
+        // Always >= 90 in this branch by construction.
+        score: Math.round(100 - gap * 100),
+      },
+      reasons: [
+        `הסכמה בין ${platform} ל-Shopify mapping בתוך ${(gap * 100).toFixed(1)}% — שתי שיטות עצמאיות חופפות, סיגנל חזק`,
+        ...attribution.reasons,
+      ],
+    };
+  }
+  if (gap < 0.2 && attribution.trust.level === 'low') {
+    return {
+      ...attribution,
+      trust: {
+        level: 'medium',
+        label: 'חלקי',
+        score: Math.max(attribution.trust.score, Math.round(70 - gap * 100)),
+      },
+      reasons: [
+        `${platform} ↔ Shopify mapping מסכימים בתוך ${(gap * 100).toFixed(0)}% — חיזוק חלקי לאמינות, גם ש-click-id coverage נמוך`,
+        ...attribution.reasons,
+      ],
+    };
+  }
+  return attribution;
 }
 
 export function useCampaignTrueRevenue(opts: {
@@ -523,57 +599,15 @@ export function useCampaignTrueRevenue(opts: {
       }
       const shared = sharedKeys.size;
 
-      // Phase 05.7.9c — Two-method-agreement trust upgrade.
-      //
-      // The attribution analyzer's trust is computed from click-id
-      // coverage alone (% of Meta's claim that we could match to a
-      // tagged order). When coverage is low it labels the chip "לא אמין"
-      // even if the Shopify product-mapping ALSO confirms Meta's claim.
-      //
-      // Two independent methods (click-id + product mapping) agreeing is
-      // STRONGER evidence than either alone, so a small gap between
-      // metaClaim and trueRevenue (via mapping) deserves a trust bump:
-      //
-      //   - gap < 10% → high (override low/medium)
-      //   - gap < 20% → at least medium (override low)
-      //
-      // Operator feedback 2026-05-22: "if both methods agree to within
-      // a few percent and the chip still says 'not trusted', that's
-      // wrong — the agreement IS the trust signal."
-      if (attribution && a.conversionValue > 0 && trueRevenue > 0) {
-        const gap =
-          Math.abs(trueRevenue - a.conversionValue) /
-          Math.max(a.conversionValue, trueRevenue);
-        if (gap < 0.1 && attribution.trust.level !== 'high') {
-          attribution = {
-            ...attribution,
-            trust: {
-              level: 'high',
-              label: 'אמין',
-              // Score = 100 - gap%. With gap=5% the score is 95, etc.
-              // Always >= 90 in this branch by construction.
-              score: Math.round(100 - gap * 100),
-            },
-            reasons: [
-              `הסכמה בין ${a.platform} ל-Shopify mapping בתוך ${(gap * 100).toFixed(1)}% — שתי שיטות עצמאיות חופפות, סיגנל חזק`,
-              ...attribution.reasons,
-            ],
-          };
-        } else if (gap < 0.2 && attribution.trust.level === 'low') {
-          attribution = {
-            ...attribution,
-            trust: {
-              level: 'medium',
-              label: 'חלקי',
-              score: Math.max(attribution.trust.score, Math.round(70 - gap * 100)),
-            },
-            reasons: [
-              `${a.platform} ↔ Shopify mapping מסכימים בתוך ${(gap * 100).toFixed(0)}% — חיזוק חלקי לאמינות, גם ש-click-id coverage נמוך`,
-              ...attribution.reasons,
-            ],
-          };
-        }
-      }
+      // Phase 05.7.9c — Two-method-agreement trust upgrade (extracted to the
+      // exported pure helper applyTwoMethodAgreementUpgrade so the 2026-06-11
+      // P1-8b gate is unit-testable without rendering the hook).
+      attribution = applyTwoMethodAgreementUpgrade(
+        attribution,
+        a.conversionValue,
+        trueRevenue,
+        a.platform,
+      );
       // Phase 05.7.9 — sum the totals across this campaign's mapped
       // products. A campaign mapped to [P1, P2] gets `productTotals =
       // P1.totals + P2.totals`. Provides the tooltip denominator.

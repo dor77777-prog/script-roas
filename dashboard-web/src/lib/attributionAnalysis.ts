@@ -69,8 +69,11 @@ const MAD_FALLBACK_FRACTION = 0.05;
  *
  *  The threshold's new role: when `coverage > COVERAGE_WARNING_THRESHOLD`,
  *  the AttributionAnalysis.coverageExceedsClamp flag fires, and the UI
- *  surfaces a "halo exceeded — check the pixel" chip. */
-const COVERAGE_WARNING_THRESHOLD = 2;
+ *  surfaces a "halo exceeded — check the pixel" chip.
+ *
+ *  Exported (2026-06-11 adversarial review) so aiReport's synthetic trust
+ *  ladder mirrors the SAME P1-8b cap threshold instead of hardcoding 2. */
+export const COVERAGE_WARNING_THRESHOLD = 2;
 
 export type AttributionAnalysis = {
   /** Sum of order totals where the order is provably from this campaign. */
@@ -1303,6 +1306,26 @@ function buildAnalysis(opts: {
     trust = { level: 'unknown', label: 'לא ניתן לקבוע', score: 30 };
     reasons.push('אף הזמנה לא תויגה — סביר שחסר utm parameter רלוונטי');
     recommendation = advice.misconfigured;
+  } else if (metaClaim === 0 && deterministicOrders > 0) {
+    // P1-8a parity (adversarial review 2026-06-11): the campaign-grain ladder
+    // gained this branch in the 2026-06-10 batch but the ad-set/ad ladder did
+    // not — so a drill-down row with platform-claim 0 + real tagged orders
+    // fell through computeCoverage's claim=0→1 fallback into the high-trust
+    // branch and recommended SCALING ('שקול גידול תקציב' / 'שקול הרחבת
+    // ה-creative') during the exact tracking outage the campaign panel flags
+    // with 'הפלטפורמה מדווחת 0 — בדוק תגית'. Mirror the campaign verdict:
+    // unknown-40, check-the-tag copy adapted to the grain, never goodHalo.
+    // (Ad-set/ad grains are Meta/TikTok only — both have a Pixel/CAPI.)
+    trust = { level: 'unknown', label: 'הפלטפורמה מדווחת 0', score: 40 };
+    reasons.push(
+      `${platformLabel} מדווח 0 המרות ל-${hebLabel} הזה בזמן ש-Shopify רשם ${deterministicOrders} הזמנות מתויגות (${fmtMoneyString(deterministicRevenue)})`,
+    );
+    reasons.push(
+      'כשהפלטפורמה מדווחת 0 והזמנות אמיתיות נכנסות — כנראה תקלה בדיווח-ההמרות של הפלטפורמה, לא ביצועים יוצאי-דופן',
+    );
+    recommendation =
+      `בדוק את תגית-ההמרות/החיבור (Pixel/CAPI) של ${platformLabel}. ` +
+      `אל תקבל החלטות תקציב על ה-${hebLabel} הזה על בסיס הדיווח של ${platformLabel} עד שהדיווח חוזר.`;
   } else if (coverage >= 0.8) {
     const pct = Math.round(coverage * 100);
     trust = { level: 'high', label: 'אמין', score: Math.min(100, 70 + pct / 5) };
@@ -1338,6 +1361,24 @@ function buildAnalysis(opts: {
       reasons.push(`רק ${pct}% מההמרות (${deterministicOrders} הזמנות) תויגו`);
     }
     recommendation = advice.bad;
+  }
+
+  // P1-8b parity (adversarial review 2026-06-11): coverage > 2 is the
+  // documented broken-pixel signature (the SAME condition drives the red
+  // coverageExceedsClamp banner). The campaign-grain ladder caps trust at
+  // medium and swaps the scale advice for a tracking check; the ad-set/ad
+  // ladder previously kept 'אמין' + goodHalo in the same card. Mirror the cap
+  // so the drill-down panels tell ONE story with the campaign panel.
+  if (coverage > COVERAGE_WARNING_THRESHOLD) {
+    if (trust.level === 'high') {
+      trust = { level: 'medium', label: 'חלקי', score: Math.min(trust.score, 65) };
+    }
+    reasons.push(
+      `coverage ${coverage.toFixed(1)}× — Shopify רואה יותר מפי 2 ממה ש-${platformLabel} מדווח; חשד לתקלת מעקב בצד הפלטפורמה`,
+    );
+    recommendation =
+      `בדוק את ה-Pixel/CAPI ואת תיוג ה-${hebLabel} לפני כל החלטת תקציב — ` +
+      `הפער החריג מעיד על דיווח-חסר של ${platformLabel}, לא בהכרח על ביצועים.`;
   }
 
   // Stability augmentations (downgrade if volatile).

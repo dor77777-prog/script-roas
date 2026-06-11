@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>פעילות › סטטיסטיקות והתפלגויות — מוקאפ</title>
+<style>
+  /* ============ TOKENS (light + dark, both first-class) ============ */
+  :root{
+    --bg:#0a0e1a; --bg-mesh1:#16203b; --bg-mesh2:#1a1330; --bg-mesh3:#0d1a24;
+    --card:rgba(255,255,255,.045); --card-edge:rgba(255,255,255,.10); --card-2:rgba(255,255,255,.025);
+    --ink:#eef2fb; --ink-muted:#9aa6c4; --ink-subtle:#6b7794;
+    --accent:#8b6cff; --accent-soft:rgba(139,108,255,.16);
+    /* brand-mirrored chart palette */
+    --meta:#4f86ff; --google:#f5a623; --tiktok:#ff4d8d;
+    --organic:#34d399; --direct:#7a8aa8; --email:#22c3c3; --referral:#b07cff;
+    --good:#34d399; --shadow:0 8px 30px rgba(0,0,0,.35);
+  }
+  [data-theme="light"]{
+    --bg:#f4f6fc; --bg-mesh1:#e7ecfb; --bg-mesh2:#f0eafe; --bg-mesh3:#e6f3fa;
+    --card:rgba(255,255,255,.72); --card-edge:rgba(20,30,60,.10); --card-2:rgba(255,255,255,.55);
+    --ink:#16203b; --ink-muted:#566184; --ink-subtle:#8a93ad;
+    --accent:#6d4aff; --accent-soft:rgba(109,74,255,.12);
+    --meta:#2f6bff; --google:#d8860b; --tiktok:#e83673;
+    --organic:#0f9e6e; --direct:#6b7794; --email:#0a9c9c; --referral:#8a4cf0;
+    --shadow:0 8px 30px rgba(40,60,120,.12);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Rubik,Arial,sans-serif;
+    color:var(--ink); min-height:100vh;
+    background:
+      radial-gradient(1200px 600px at 85% -5%, var(--bg-mesh2), transparent 60%),
+      radial-gradient(1000px 700px at 5% 10%, var(--bg-mesh1), transparent 55%),
+      radial-gradient(900px 600px at 50% 110%, var(--bg-mesh3), transparent 60%),
+      var(--bg);
+    background-attachment:fixed;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 18px 60px}
+  /* header */
+  .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;flex-wrap:wrap}
+  .crumbs{font-size:13px;color:var(--ink-subtle)}
+  .crumbs b{color:var(--ink)}
+  h1{font-size:22px;margin:2px 0 2px;font-weight:800;letter-spacing:-.3px}
+  .sub{color:var(--ink-muted);font-size:13.5px;margin-bottom:18px}
+  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .pill{background:var(--card);border:1px solid var(--card-edge);border-radius:999px;padding:7px 13px;font-size:12.5px;color:var(--ink-muted);cursor:pointer;backdrop-filter:blur(8px)}
+  .seg{display:inline-flex;background:var(--card);border:1px solid var(--card-edge);border-radius:999px;padding:3px;backdrop-filter:blur(8px)}
+  .seg button{border:0;background:transparent;color:var(--ink-muted);padding:6px 14px;border-radius:999px;font-size:12.5px;cursor:pointer;font-weight:600}
+  .seg button.on{background:var(--accent);color:#fff}
+  /* sub-tabs row inside פעילות */
+  .subtabs{display:flex;gap:4px;margin:0 0 20px;border-bottom:1px solid var(--card-edge);padding-bottom:0}
+  .subtabs a{padding:9px 15px;font-size:13.5px;color:var(--ink-muted);text-decoration:none;border-bottom:2px solid transparent;font-weight:600}
+  .subtabs a.on{color:var(--ink);border-bottom-color:var(--accent)}
+  /* cards */
+  .grid{display:grid;gap:16px}
+  .row2{grid-template-columns:1fr 1fr}
+  @media(max-width:760px){.row2{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--card-edge);border-radius:18px;padding:18px 18px 16px;backdrop-filter:blur(12px);box-shadow:var(--shadow)}
+  .card h3{margin:0 0 2px;font-size:15px;font-weight:700}
+  .card .hint{color:var(--ink-subtle);font-size:12px;margin-bottom:14px}
+  /* donut */
+  .donut-wrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .donut{width:152px;height:152px;border-radius:50%;position:relative;flex:0 0 auto}
+  .donut::after{content:"";position:absolute;inset:26px;border-radius:50%;background:var(--card-2);backdrop-filter:blur(4px)}
+  .donut .ctr{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:2}
+  .donut .ctr b{font-size:23px;font-weight:800;font-variant-numeric:tabular-nums}
+  .donut .ctr span{font-size:11px;color:var(--ink-muted)}
+  .legend{display:flex;flex-direction:column;gap:9px;flex:1;min-width:160px}
+  .lg{display:flex;align-items:center;gap:9px;font-size:13px}
+  .dot{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+  .lg .nm{flex:1;color:var(--ink-muted)}
+  .lg .vl{font-weight:700;font-variant-numeric:tabular-nums}
+  .lg .pc{color:var(--ink-subtle);font-size:12px;width:46px;text-align:left;font-variant-numeric:tabular-nums}
+  /* per-product table */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:right;color:var(--ink-subtle);font-weight:600;font-size:11.5px;padding:8px 8px;border-bottom:1px solid var(--card-edge);white-space:nowrap}
+  th.num,td.num{text-align:left;font-variant-numeric:tabular-nums}
+  td{padding:11px 8px;border-bottom:1px solid var(--card-edge);vertical-align:middle}
+  .prod{font-weight:600}
+  .stack{display:flex;height:13px;border-radius:7px;overflow:hidden;min-width:120px;background:var(--card-2)}
+  .stack i{display:block;height:100%}
+  .barlabel{display:flex;gap:10px;flex-wrap:wrap;margin-top:5px}
+  .barlabel span{font-size:10.5px;color:var(--ink-subtle);display:flex;align-items:center;gap:4px}
+  .barlabel .d{width:8px;height:8px;border-radius:2px}
+  .big{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+  .muted{color:var(--ink-muted)}
+  .note{margin-top:22px;font-size:12px;color:var(--ink-subtle);background:var(--card-2);border:1px dashed var(--card-edge);border-radius:12px;padding:12px 14px;line-height:1.65}
+  .kpis{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px}
+  .kpi{background:var(--card);border:1px solid var(--card-edge);border-radius:14px;padding:12px 16px;flex:1;min-width:130px;backdrop-filter:blur(10px)}
+  .kpi .v{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums}
+  .kpi .l{font-size:11.5px;color:var(--ink-muted);margin-top:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div>
+      <div class="crumbs">פעילות › <b>סטטיסטיקות והתפלגויות</b></div>
+      <h1>סטטיסטיקות והתפלגויות</h1>
+    </div>
+    <div class="controls">
+      <span class="seg"><button class="on">לפי הזמנות</button><button>לפי הכנסה</button></span>
+      <span class="pill">📅 30 ימים אחרונים ▾</span>
+      <span class="pill">כל החנויות ▾</span>
+      <span class="pill" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">◐ מצב</span>
+    </div>
+  </div>
+  <div class="sub">פילוח הייחוס (attribution) של ההזמנות וההוספות-לעגלה — ממומן מול אורגני, לפי פלטפורמה וערוץ, וירידה לרמת המוצר.</div>
+
+  <!-- sub-tabs within פעילות -->
+  <div class="subtabs">
+    <a href="#">פיד חי</a>
+    <a class="on" href="#">סטטיסטיקות והתפלגויות</a>
+  </div>
+
+  <!-- top KPIs -->
+  <div class="kpis">
+    <div class="kpi"><div class="v">11,506</div><div class="l">הזמנות בטווח</div></div>
+    <div class="kpi"><div class="v" style="color:var(--accent)">79.4%</div><div class="l">מיוחס לפרסום ממומן</div></div>
+    <div class="kpi"><div class="v">1,002</div><div class="l">הוספות לעגלה</div></div>
+    <div class="kpi"><div class="v">8.5%</div><div class="l">כיסוי קליק-ראשון</div></div>
+  </div>
+
+  <!-- two donuts -->
+  <div class="grid row2">
+
+    <div class="card">
+      <h3>ממומן מול לא-ממומן</h3>
+      <div class="hint">חלוקת ההזמנות לפי מקור בתשלום (meta/google/tiktok-paid) מול אורגני/ישיר/אימייל/הפניות</div>
+      <div class="donut-wrap">
+        <div class="donut" style="background:conic-gradient(var(--accent) 0 79.4%, var(--direct) 79.4% 100%)">
+          <div class="ctr"><b>79.4%</b><span>ממומן</span></div>
+        </div>
+        <div class="legend">
+          <div class="lg"><span class="dot" style="background:var(--accent)"></span><span class="nm">ממומן</span><span class="vl">9,141</span><span class="pc">79.4%</span></div>
+          <div class="lg"><span class="dot" style="background:var(--direct)"></span><span class="nm">לא-ממומן (אורגני/ישיר/אימייל/הפניות)</span><span class="vl">2,365</span><span class="pc">20.6%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>התפלגות לפי פלטפורמה</h3>
+      <div class="hint">כל מקור משויך לפלטפורמה/ערוץ שלו (ממומן + אורגני יחד)</div>
+      <div class="donut-wrap">
+        <div class="donut" style="background:conic-gradient(
+            var(--meta) 0 76.1%,
+            var(--google) 76.1% 82.0%,
+            var(--direct) 82.0% 91.7%,
+            var(--referral) 91.7% 96.7%,
+            var(--email) 96.7% 97.4%,
+            var(--tiktok) 97.4% 97.6%,
+            var(--organic) 97.6% 100%)">
+          <div class="ctr"><b>Meta</b><span>76% מהמקור</span></div>
+        </div>
+        <div class="legend">
+          <div class="lg"><span class="dot" style="background:var(--meta)"></span><span class="nm">Meta</span><span class="vl">8,746</span><span class="pc">76.1%</span></div>
+          <div class="lg"><span class="dot" style="background:var(--google)"></span><span class="nm">Google</span><span class="vl">676</span><span class="pc">5.9%</span></div>
+          <div class="lg"><span class="dot" style="background:var(--direct)"></span><span class="nm">ישיר</span><span class="vl">1,113</span><span class="pc">9.7%</span></div>
+          <div class="lg"><span class="dot" style="background:var(--referral)"></span><span class="nm">הפניות (אתר/אפליקציה/חיפוש)</span><span class="vl">567</span><span class="pc">4.9%</span></div>
+          <div class="lg"><span class="dot" style="background:var(--email)"></span><span class="nm">אימייל</span><span class="vl">78</span><span class="pc">0.7%</span></div>
+          <div class="lg"><span class="dot" style="background:var(--tiktok)"></span><span class="nm">TikTok</span><span class="vl">18</span><span class="pc">0.2%</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- per-product -->
+  <div class="card" style="margin-top:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <h3>לפי מוצר — מאיפה מגיעים</h3>
+        <div class="hint">לכל מוצר: כמה הוספות-לעגלה וכמה רכישות, והפילוח לפי פלטפורמה/ערוץ</div>
+      </div>
+      <span class="seg"><button class="on">רכישות</button><button>הוספות לעגלה</button></span>
+    </div>
+
+    <div class="barlabel" style="margin:6px 0 14px">
+      <span><i class="d" style="background:var(--meta)"></i>Meta</span>
+      <span><i class="d" style="background:var(--google)"></i>Google</span>
+      <span><i class="d" style="background:var(--tiktok)"></i>TikTok</span>
+      <span><i class="d" style="background:var(--direct)"></i>ישיר</span>
+      <span><i class="d" style="background:var(--referral)"></i>הפניות</span>
+      <span><i class="d" style="background:var(--email)"></i>אימייל</span>
+    </div>
+
+    <table>
+      <thead><tr>
+        <th>מוצר</th>
+        <th class="num">הוספות לעגלה</th>
+        <th class="num">רכישות</th>
+        <th class="num">המרה</th>
+        <th style="width:42%">פילוח מקור (רכישות)</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td class="prod">Uzo Hair Dryer Pro</td>
+          <td class="num big">418</td><td class="num big">132</td><td class="num muted">31.6%</td>
+          <td>
+            <div class="stack">
+              <i style="background:var(--meta);width:82%"></i><i style="background:var(--google);width:7%"></i>
+              <i style="background:var(--direct);width:8%"></i><i style="background:var(--referral);width:3%"></i>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td class="prod">Zol Plus Serum 50ml</td>
+          <td class="num big">236</td><td class="num big">61</td><td class="num muted">25.8%</td>
+          <td>
+            <div class="stack">
+              <i style="background:var(--meta);width:64%"></i><i style="background:var(--google);width:12%"></i>
+              <i style="background:var(--email);width:9%"></i><i style="background:var(--direct);width:11%"></i><i style="background:var(--referral);width:4%"></i>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td class="prod">360 Smile Whitening Kit</td>
+          <td class="num big">189</td><td class="num big">44</td><td class="num muted">23.3%</td>
+          <td>
+            <div class="stack">
+              <i style="background:var(--meta);width:55%"></i><i style="background:var(--tiktok);width:14%"></i>
+              <i style="background:var(--direct);width:18%"></i><i style="background:var(--referral);width:13%"></i>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td class="prod">Uzo Travel Case</td>
+          <td class="num big">97</td><td class="num big">38</td><td class="num muted">39.2%</td>
+          <td>
+            <div class="stack">
+              <i style="background:var(--meta);width:71%"></i><i style="background:var(--google);width:9%"></i>
+              <i style="background:var(--direct);width:16%"></i><i style="background:var(--email);width:4%"></i>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <b>מבוסס על דאטה אמיתי שלך</b> — האחוזים בעוגות לקוחים מההתפלגות שמדדנו עכשיו (meta-paid 75.8%, direct 9.7%, google 5.9%, email 0.7%, tiktok 0.2%…). מספרי המוצרים לדוגמה בלבד.<br>
+    מקורות: <b>עוגות</b> = <code>orders_attribution.source</code> · <b>לפי מוצר</b> = <code>orders_attribution.lineItems</code> (רכישות) + <code>store_events</code> add_to_cart (עגלה), שניהם נושאים את אותו סיווג. הכל קריא — אין מספר שנחתך, פלטת המותגים עומדת ב-AA בשני המצבים.
+  </div>
+
+</div>
+</body>
+</html>

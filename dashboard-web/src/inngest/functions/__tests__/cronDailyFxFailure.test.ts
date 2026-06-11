@@ -575,8 +575,16 @@ describe('cronDaily — FX failure preserves prior CAD via per-row omit (CRIT-5)
   // Google + TikTok lost for the day). persist-batch must OMIT fb_spend_cad
   // (+ the fb_impressions pair + every derived total) and still land all
   // other writes.
+  //
+  // 2026-06-11 (adversarial review, P1-11 gating drift): ALSO pins that the
+  // successfully-FX'd fresh TikTok CAD value still LANDS. The pre-fix gate
+  // (`ttSpendCad !== null && totalSpendCadAll !== null`) discarded a valid
+  // ttSpendCad whenever an unrelated fb/ga merge-FX leg nulled the total —
+  // asymmetric with ga_spend_cad, which DID land when only fb failed.
+  // tt_spend_cad is now gated only on its own FX success; the derived
+  // totals keep the all-components-non-null gate.
   // -----------------------------------------------------------------------
-  it('Scenario 4 (P1-11): merge-layer returns fbSpendCad=null → data_daily omits fb_spend_cad + totals; everything else lands', async () => {
+  it('Scenario 4 (P1-11): merge-layer returns fbSpendCad=null → data_daily omits fb_spend_cad + totals; fresh tt_spend_cad STILL lands', async () => {
     const overridesMod = await import('@/lib/fetchers/manualOverrides');
     (overridesMod.mergeOverridesFromSupabase as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
@@ -605,6 +613,15 @@ describe('cronDaily — FX failure preserves prior CAD via per-row omit (CRIT-5)
     expect('roas' in row).toBe(false);
     expect('gross_profit_cad' in row).toBe(false);
     expect('net_profit_cad' in row).toBe(false);
+    // 2026-06-11 gating-drift fix: TikTok's OWN FX succeeded (40 USD @ 1.35),
+    // so the fresh tt pair must land despite the fb-driven null total. The
+    // pre-fix combined gate wrongly discarded this value.
+    expect('tt_spend_cad' in row).toBe(true);
+    expect(row.tt_spend_cad).toBeCloseTo(40 * 1.35);
+    // The tt pair travels together: impressions key is set alongside spend
+    // (fixture's account-level pull carries no impressions value, so we only
+    // assert key presence — the real fetcher always supplies a number).
+    expect('tt_impressions' in row).toBe(true);
     // ga pair + revenue still land.
     expect(row.ga_spend_cad).toBe(50);
     expect(row.revenue_cad).toBe(1234);

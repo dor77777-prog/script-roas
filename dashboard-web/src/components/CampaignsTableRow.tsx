@@ -581,21 +581,33 @@ export function CampaignsTableRow({
           const attrAvailable = info.attribution !== null;
           const attrUnknown =
             attrAvailable && info.attribution!.trust.level === 'unknown';
-          const useAttr = attrAvailable && !attrUnknown;
+          // 2026-06-11 adversarial review: P1-8a's 'הפלטפורמה מדווחת 0'
+          // verdict (claim=0 + tagged orders > 0) broke the pre-batch
+          // invariant that unknown ⇒ no click-id evidence. For that verdict
+          // the click-id side IS the trusted evidence — routing it to the
+          // mapping-fallback tooltip produced three false claims at once
+          // ('מבוסס מיפוי מוצרים' on a possibly-unmapped row, 'לא מספיק
+          // לסיגנל' about the orders that ARE the signal, 'חוזרים למיפוי'
+          // when nothing falls back). Route it through the click-id (useAttr)
+          // presentation so the tooltip carries the verdict's own story:
+          // platform reports 0, value from click-id tagged orders, check the
+          // conversion tag (the analysis reasons + recommendation).
+          const attrPlatformZero =
+            attrUnknown && info.attribution!.deterministicOrders > 0;
+          const useAttr = attrAvailable && (!attrUnknown || attrPlatformZero);
           const trustLabel = useAttr ? info.attribution!.trust.label : info.confidence.label;
-          // WR-06: the 'unknown' branch is statically unreachable here.
-          // `useAttr === true` implies info.attribution!.trust.level is one
-          // of 'high' | 'medium' | 'low' (we explicitly excluded 'unknown'
-          // via `!attrUnknown` above). When `useAttr === false`, trustLevel
-          // is sourced from info.confidence.level whose type union is
-          // 'high' | 'medium' | 'low' (no 'unknown'). The unknown branch
-          // was dead code masking the actual fallback rule — dropped.
+          // WR-06: the 'unknown' branch is statically unreachable here for
+          // the NARROWED tone path: `useAttr && !attrPlatformZero` implies
+          // info.attribution!.trust.level is one of 'high'|'medium'|'low'.
+          // The attrPlatformZero row's trust.level IS 'unknown' (no tone of
+          // its own — the retired chip never renders), so it falls back to
+          // info.confidence.level whose union is 'high'|'medium'|'low'.
           //
           // WR-02 (5.2.2.1): the narrowed level + tone-string mapping is now
           // exported (CampaignsTableRowTrustLevel + computeTrustTone) so
           // TEST-07 asserts against this exact production binding.
           const trustLevel: CampaignsTableRowTrustLevel =
-            useAttr
+            useAttr && !attrPlatformZero
               ? (info.attribution!.trust.level as Exclude<AttributionTrust['level'], 'unknown'>)
               : info.confidence.level;
           const confTone = computeTrustTone(trustLevel);

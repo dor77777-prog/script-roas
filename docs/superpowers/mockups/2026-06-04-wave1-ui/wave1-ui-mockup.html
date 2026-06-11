@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wave 1 UI — mockup</title>
+<style>
+  :root{
+    --bg:#0a0e1a; --mesh1:#15172e; --mesh2:#0c1430;
+    --card:rgba(22,26,46,.72); --edge:rgba(255,255,255,.08);
+    --ink:#eef1f8; --ink2:#aab3cc; --ink3:#727c97;
+    --accent:#7c6cff; --accentBtn:#6457e6; --onAccent:#fff;
+    --green:#34d399; --greenBg:rgba(52,211,153,.14);
+    --red:#fb7185; --redBg:rgba(251,113,133,.14);
+    --amber:#f0a93b; --amberBg:rgba(240,169,59,.16);
+    --glass2:rgba(255,255,255,.05);
+  }
+  [data-theme="light"]{
+    --bg:#eef1f8; --mesh1:#e6ebff; --mesh2:#f3eefe;
+    --card:rgba(255,255,255,.82); --edge:rgba(20,28,60,.10);
+    --ink:#161c34; --ink2:#4a5374; --ink3:#8089a6;
+    --accent:#6457e6; --accentBtn:#5446d8; --onAccent:#fff;
+    --green:#0f9d6b; --greenBg:rgba(15,157,107,.12);
+    --red:#d63a55; --redBg:rgba(214,58,85,.10);
+    --amber:#b9791a; --amberBg:rgba(185,121,26,.12);
+    --glass2:rgba(20,28,60,.04);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,'Heebo',sans-serif;
+    background:
+      radial-gradient(1200px 700px at 85% -10%, var(--mesh1), transparent 60%),
+      radial-gradient(1000px 600px at 0% 110%, var(--mesh2), transparent 55%),
+      var(--bg);
+    color:var(--ink); min-height:100vh; padding:28px; transition:background .4s;}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:18px;font-weight:800;margin:0 0 4px}
+  .sub{color:var(--ink2);font-size:13px;margin:0 0 22px}
+  .toggle{position:fixed;top:18px;left:18px;background:var(--card);border:1px solid var(--edge);
+    color:var(--ink);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;backdrop-filter:blur(12px)}
+  .card{background:var(--card);border:1px solid var(--edge);border-radius:18px;padding:18px 20px;margin-bottom:20px;
+    backdrop-filter:blur(16px);box-shadow:0 8px 30px rgba(0,0,0,.18)}
+  .card h2{font-size:11px;font-weight:800;letter-spacing:.4px;color:var(--ink2);text-transform:uppercase;margin:0 0 14px}
+  .lbl{font-size:11px;color:var(--ink3);font-weight:700;margin-bottom:6px}
+  .tag{font-size:10.5px;font-weight:800;border-radius:999px;padding:2px 9px;display:inline-block}
+  .num{font-variant-numeric:tabular-nums;font-weight:800}
+
+  /* 1 — goal + net run-rate */
+  .goalgrid{display:grid;grid-template-columns:1.3fr 1fr;gap:22px;align-items:center}
+  @media(max-width:680px){.goalgrid{grid-template-columns:1fr}}
+  .bigpct{font-size:40px;font-weight:900;line-height:1}
+  .bar{height:12px;border-radius:999px;background:var(--glass2);overflow:hidden;margin:12px 0 6px}
+  .bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--green))}
+  .runrate{border:1px dashed var(--edge);border-radius:14px;padding:14px 16px;background:var(--glass2)}
+  .runrate .rr-h{font-size:12px;font-weight:800;color:var(--ink);margin-bottom:12px;display:flex;gap:7px;align-items:center}
+  .rr-row{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--edge)}
+  .rr-row:last-child{border-bottom:0}
+  .rr-row .k{font-size:12.5px;color:var(--ink2)}
+  .rr-row .v{font-size:17px}
+  .pill{font-size:11px;color:var(--ink3);margin-top:10px}
+
+  /* 2 — table toolbar: search + export */
+  .toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap}
+  .search{display:flex;align-items:center;gap:8px;background:var(--glass2);border:1px solid var(--edge);
+    border-radius:11px;padding:9px 13px;flex:1;min-width:220px;color:var(--ink2);font-size:13px}
+  .search input{border:0;background:transparent;color:var(--ink);font-size:13.5px;outline:none;width:100%;font-family:inherit}
+  .btn{display:inline-flex;align-items:center;gap:7px;background:var(--accentBtn);color:var(--onAccent);
+    border:0;border-radius:11px;padding:9px 16px;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap}
+  .btn.ghost{background:var(--glass2);color:var(--ink);border:1px solid var(--edge)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:10px 8px;text-align:center}
+  th{font-size:10.5px;color:var(--ink3);font-weight:800;text-transform:uppercase;border-bottom:1px solid var(--edge)}
+  td{border-bottom:1px solid var(--edge)}
+  td.name{text-align:start;font-weight:700}
+  tr.dim{opacity:.28}
+  .hl{background:var(--amberBg);border-radius:5px;padding:0 3px}
+  .note{font-size:11.5px;color:var(--ink3);margin-top:10px}
+</style>
+</head>
+<body data-theme="dark">
+<button class="toggle" onclick="document.body.dataset.theme=document.body.dataset.theme==='dark'?'light':'dark'">◐ החלף תֵמה</button>
+<div class="wrap">
+  <h1>Wave 1 · 3 תוספות UI — מוקאפ לאישור</h1>
+  <p class="sub">קצב רווח-נטו ב-GoalTracker · חיפוש בטבלה · ייצוא CSV. שני המצבים (כהה/בהיר), RTL, token-driven. <b>זה מוקאפ סטטי</b> — לא הקוד.</p>
+
+  <!-- 1. NET RUN-RATE -->
+  <div class="card">
+    <h2>1 · יעד חודשי + קצב רווח-נטו לסוף החודש  <span class="tag" style="background:var(--greenBg);color:var(--green)">חדש</span></h2>
+    <div class="goalgrid">
+      <div>
+        <div class="lbl">יעד הכנסה חודשי · מתחילת החודש</div>
+        <div class="bigpct">63%</div>
+        <div class="bar"><span style="width:63%"></span></div>
+        <div class="pill">‏$94,180 מתוך $150,000 · נותרו 11 ימים</div>
+      </div>
+      <div class="runrate">
+        <div class="rr-h">↗ בקצב הנוכחי, סוף החודש:</div>
+        <div class="rr-row"><span class="k">הכנסה צפויה</span><span class="v num" style="color:var(--ink)">$141,500</span></div>
+        <div class="rr-row"><span class="k">רווח-נטו צפוי</span><span class="v num" style="color:var(--green)">$18,240</span></div>
+        <div class="rr-row"><span class="k">הוצאת-פרסום צפויה</span><span class="v num" style="color:var(--ink2)">$47,900</span></div>
+        <div class="rr-row"><span class="k">ROAS צפוי</span><span class="v num" style="color:var(--ink)">3.0×</span></div>
+        <div class="pill">מבוסס על בפועל-מתחילת-החודש + ממוצע 7 הימים האחרונים. הרווח-נטו כבר אחרי COGS+עמלות+הוצאות-קבועות.</div>
+      </div>
+    </div>
+    <div class="note">⚠️ למה זה חשוב: פס-ההכנסה יכול להיות ירוק בזמן שהרווח-נטו מתדרדר לאיזון — זה הסימן שמונע over-spend באמצע-חודש. (כל המספרים כבר מחושבים ב-forecastMonthEnd, פשוט לא מוצגים היום.)</div>
+  </div>
+
+  <!-- 2+3. SEARCH + CSV -->
+  <div class="card">
+    <h2>2+3 · חיפוש בטבלה + ייצוא CSV  <span class="tag" style="background:var(--greenBg);color:var(--green)">חדש</span></h2>
+    <div class="toolbar">
+      <div class="search">🔍 <input value="winter" placeholder="חיפוש קמפיין / מוצר…" /></div>
+      <button class="btn ghost">⤓ ייצוא CSV</button>
+    </div>
+    <table>
+      <thead><tr><th class="name">קמפיין</th><th>פלטפורמה</th><th>הוצאה</th><th>המרות</th><th>ROAS</th></tr></thead>
+      <tbody>
+        <tr><td class="name"><span class="hl">Winter</span> Sale · Prospecting</td><td>Meta</td><td class="num">$1,240</td><td class="num">38</td><td class="num" style="color:var(--green)">3.4×</td></tr>
+        <tr><td class="name"><span class="hl">Winter</span> Retargeting</td><td>Google</td><td class="num">$610</td><td class="num">21</td><td class="num" style="color:var(--green)">4.1×</td></tr>
+        <tr class="dim"><td class="name">Spring Launch · Broad</td><td>TikTok</td><td class="num">$0</td><td class="num">0</td><td class="num">—</td></tr>
+        <tr class="dim"><td class="name">Evergreen · Brand</td><td>Meta</td><td class="num">$0</td><td class="num">0</td><td class="num">—</td></tr>
+      </tbody>
+    </table>
+    <div class="note">החיפוש מסנן שורות לפי שם (מודגש). כפתור ה-CSV מוריד את הטבלה הנוכחית (אחרי הסינון/הטווח) — לכל טבלה: קמפיינים, מוצרים, מודעות. דפוס סטנדרטי, מתלבש על ה-chrome הקיים.</div>
+  </div>
+
+  <p class="sub" style="margin-top:6px">אישור? אגיד אילו שינויים תרצה (מיקום פאנל-הקצב, אילו מספרים, נוסח), ואז אבנה TDD + אפרוס. אפשר גם לבחור רק חלק.</p>
+</div>
+</body>
+</html>

@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WS7 · קירוב אינקרמנטליות (organic-baseline) — מוקאפ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Rubik:wght@400;500;600;700;800&family=Geist+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* MOCKUP-ONLY token mirror — EXACT hex from dashboard-web/src/app/globals.css (mirrored from 2026-06-04-ux-workflow). */
+:root{
+  --canvas-1:#0d0f1e; --canvas-2:#0a0c18;
+  --glass-1:#171a2e; --glass-2:#1d2138; --glass-3:#20243a;
+  --glass-edge:rgba(255,255,255,0.08); --glass-edge-hot:rgba(124,108,255,0.5);
+  --surface-sunken:#191d31;
+  --text:#eef1ff; --text-2:#b3b9d8; --text-muted:#8c96ba; --text-subtle:#8c93bf;
+  --status-red:#ef4d5b; --status-red-bg:rgba(239,77,91,0.18); --status-red-fg:#ff9aa8;
+  --status-warning:#ef9331; --status-warning-bg:rgba(239,147,49,0.16); --status-warning-fg:#f7c897;
+  --status-green:#0fb37a; --status-green-bg:rgba(15,179,122,0.16); --status-green-fg:#5cf0c3;
+  --status-blue:#3b82f6; --status-blue-bg:rgba(59,130,246,0.18); --status-blue-fg:#8bbcff;
+  --accent:#7c6cff; --accent-link:#a99cff; --accent-bg:rgba(124,108,255,0.12); --accent-soft:rgba(124,108,255,0.16); --accent-fg:#fff; --accent-btn:#6354e6;
+  --pf-meta:#1877f2; --pf-google:#f4a200; --pf-tiktok:#ff2e7e;
+  --shadow-glass:0 1px 2px rgba(0,0,0,0.35),0 12px 32px rgba(0,0,0,0.42);
+  --radius-card:1.125rem; --radius-chip:0.6875rem; --radius-pill:9999px; --radius-control:0.625rem;
+}
+[data-theme="light"]{
+  --canvas-1:#edf0f8; --canvas-2:#f4f6fc;
+  --glass-1:#ffffff; --glass-2:#f6f7fb; --glass-3:#eef1f8;
+  --glass-edge:rgba(22,26,48,0.08); --glass-edge-hot:rgba(14,165,183,0.4);
+  --surface-sunken:#f1f3f9;
+  --text:#171a2b; --text-2:#565d78; --text-muted:#666b84; --text-subtle:#696b7d;
+  --status-red:#ef4d5b; --status-red-bg:#ffe9ec; --status-red-fg:#c62333;
+  --status-warning:#ef9331; --status-warning-bg:#fbe6d0; --status-warning-fg:#8e4f0b;
+  --status-green:#0fb37a; --status-green-bg:#effaf5; --status-green-fg:#00734e;
+  --status-blue:#3b82f6; --status-blue-bg:#e9f1ff; --status-blue-fg:#1f5fdb;
+  --accent:#0ea5b7; --accent-link:#0c8090; --accent-bg:rgba(14,165,183,0.10); --accent-soft:#def5f7; --accent-fg:#fff; --accent-btn:#0c8090;
+  --shadow-glass:0 1px 2px rgba(22,26,48,0.06),0 12px 28px rgba(22,26,48,0.10);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background-color:var(--canvas-1)}
+body{color:var(--text); font-family:'Rubik','Heebo',system-ui,sans-serif; background:linear-gradient(180deg,var(--canvas-1),var(--canvas-2)); min-height:100vh; padding-bottom:80px; -webkit-font-smoothing:antialiased;}
+.tnum{font-variant-numeric:tabular-nums lining-nums; white-space:nowrap}
+.ltr{direction:ltr; unicode-bidi:isolate}
+.money{font-variant-numeric:tabular-nums lining-nums; white-space:nowrap; direction:ltr; unicode-bidi:isolate; letter-spacing:-.2px}
+
+.topbar{position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 20px; backdrop-filter:blur(8px); background:color-mix(in srgb,var(--canvas-1) 80%,transparent); border-bottom:1px solid var(--glass-edge);}
+.topbar h1{font-size:15px; font-weight:800; margin:0}
+.topbar .sub{color:var(--text-muted); font-size:12px; font-weight:500}
+.toggle{display:inline-flex; align-items:center; gap:7px; cursor:pointer; border:1px solid var(--glass-edge); background:var(--glass-2); color:var(--text); border-radius:var(--radius-pill); padding:7px 14px; font:inherit; font-size:13px; font-weight:600;}
+
+.wrap{max-width:960px; margin:0 auto; padding:22px 16px 0}
+.mount{display:flex; align-items:center; gap:9px; margin:6px 2px 16px; color:var(--text-muted); font-size:12px; font-weight:600}
+.mount .crumb{background:var(--surface-sunken); border:1px solid var(--glass-edge); border-radius:var(--radius-chip); padding:3px 9px; font-weight:700; color:var(--text-2)}
+.mount .arr{opacity:.55}
+
+.statelabel{font-size:11px; font-weight:800; color:var(--text-muted); margin:2px 2px 8px; text-transform:uppercase; letter-spacing:.5px}
+.grid2{display:grid; grid-template-columns:1fr; gap:18px}
+@media(min-width:760px){ .grid2{grid-template-columns:1fr 1fr} }
+
+/* ── Panel shell ── */
+.panel{background:var(--glass-1); border:1px solid var(--glass-edge); border-radius:var(--radius-card); box-shadow:var(--shadow-glass); padding:16px 16px 14px; display:flex; flex-direction:column; min-width:0}
+.panel-head{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:4px}
+.panel-title{display:flex; align-items:center; gap:8px; min-width:0}
+.panel-title .dot{width:9px;height:9px;border-radius:var(--radius-pill);flex:none}
+.panel-title h3{font-size:14px; font-weight:800; margin:0}
+.panel-title .store-sub{font-size:11px; color:var(--text-muted); font-weight:600}
+.kicker{font-size:10.5px; font-weight:800; color:var(--accent-link); background:var(--accent-bg); border:1px solid var(--glass-edge); border-radius:var(--radius-chip); padding:2px 8px; letter-spacing:.3px; white-space:nowrap}
+
+/* help / caveat tooltip */
+.help{position:relative; display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:var(--radius-pill); border:1px solid var(--glass-edge); background:var(--surface-sunken); color:var(--text-muted); font-size:10px; font-weight:800; cursor:help; flex:none; margin-inline-start:6px}
+.help:hover, .help:focus-visible{color:var(--text); border-color:var(--glass-edge-hot); outline:none}
+.help .tip{position:absolute; bottom:calc(100% + 8px); inset-inline-end:-6px; width:240px; background:var(--glass-3); color:var(--text); border:1px solid var(--glass-edge); border-radius:var(--radius-control); box-shadow:var(--shadow-glass); padding:10px 11px; font-size:11.5px; line-height:1.6; font-weight:500; text-align:start; opacity:0; transform:translateY(4px); pointer-events:none; transition:opacity .14s ease, transform .14s ease; z-index:30}
+.help:hover .tip, .help:focus-visible .tip{opacity:1; transform:translateY(0)}
+.help .tip b{color:var(--status-warning-fg)}
+
+/* big incremental share */
+.share-wrap{display:flex; align-items:baseline; gap:8px; margin:12px 0 4px}
+.share-val{font-size:40px; font-weight:800; letter-spacing:-1px; line-height:1; color:var(--status-green-fg)}
+.share-cap{font-size:12px; font-weight:600; color:var(--text-2)}
+.share-bar{height:9px; border-radius:var(--radius-pill); background:var(--surface-sunken); overflow:hidden; margin:10px 0 2px; border:1px solid var(--glass-edge)}
+.share-bar > i{display:block; height:100%; border-radius:var(--radius-pill); background:linear-gradient(90deg,var(--status-green),#3ee0a8)}
+.bar-legend{display:flex; justify-content:space-between; font-size:10.5px; color:var(--text-muted); font-weight:600; margin-top:5px}
+
+/* breakdown rows */
+.breakdown{margin-top:14px; border-top:1px solid var(--glass-edge); padding-top:12px; display:flex; flex-direction:column; gap:2px}
+.brow{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 8px; border-radius:9px}
+.brow:hover{background:var(--surface-sunken)}
+.brow .bl{display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:var(--text-2)}
+.brow .bl .swatch{width:10px;height:10px;border-radius:3px;flex:none}
+.brow .bv{font-size:14px; font-weight:800}
+.brow .bv .unit{font-size:10.5px; font-weight:600; color:var(--text-muted); margin-inline-start:3px}
+.sw-organic{background:var(--status-blue)}
+.sw-spend{background:var(--accent)}
+
+.footer-meta{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:13px; padding-top:11px; border-top:1px solid var(--glass-edge)}
+.metachip{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:var(--text-2); background:var(--surface-sunken); border:1px solid var(--glass-edge); border-radius:var(--radius-chip); padding:4px 9px}
+.metachip .k{color:var(--text-muted); font-weight:600}
+.metachip.ok{color:var(--status-green-fg); background:var(--status-green-bg); border-color:transparent}
+
+/* ── ABSTAIN state ── */
+.panel.abstain{background:var(--glass-2); border-style:dashed; box-shadow:none; opacity:.96}
+.panel.abstain .panel-title h3{color:var(--text-2)}
+.abstain-body{display:flex; gap:13px; margin-top:14px; align-items:flex-start}
+.abstain-icon{width:38px; height:38px; border-radius:12px; flex:none; display:grid; place-items:center; font-size:18px; background:var(--surface-sunken); border:1px solid var(--glass-edge); color:var(--text-muted)}
+.abstain-copy{flex:1; min-width:0}
+.abstain-copy .h{font-size:13.5px; font-weight:800; color:var(--text-2); margin:0 0 5px}
+.abstain-copy .p{font-size:12px; line-height:1.65; color:var(--text-muted); font-weight:500; margin:0}
+.gauge{margin-top:14px}
+.gauge-track{height:10px; border-radius:var(--radius-pill); background:var(--surface-sunken); overflow:hidden; border:1px solid var(--glass-edge); position:relative}
+.gauge-track > i{display:block; height:100%; border-radius:var(--radius-pill); background:linear-gradient(90deg,var(--status-warning),#f6b35e)}
+.gauge-track .need{position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--text-muted); opacity:.75}
+.gauge-legend{display:flex; justify-content:space-between; font-size:11px; font-weight:700; margin-top:7px}
+.gauge-legend .have{color:var(--status-warning-fg)}
+.gauge-legend .need-lbl{color:var(--text-muted)}
+
+.statenote{color:var(--text-subtle); font-size:11.5px; line-height:1.6; margin:14px 2px 0; max-width:780px}
+.statenote b{color:var(--text-2)}
+
+/* full-width explainer card */
+.explainer{margin-top:24px; background:var(--glass-1); border:1px solid var(--glass-edge); border-radius:var(--radius-card); box-shadow:var(--shadow-glass); padding:15px 16px}
+.explainer h4{margin:0 0 8px; font-size:13px; font-weight:800; display:flex; align-items:center; gap:7px}
+.explainer h4 .n{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:11px;font-weight:800;background:var(--accent-bg);color:var(--accent-link)}
+.explainer p{margin:0; color:var(--text-subtle); font-size:11.5px; line-height:1.7}
+.explainer p b{color:var(--text-2)}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div><h1>WS7 · קירוב אינקרמנטליות — IncrementalityProxyPanel</h1>
+  <div class="sub">מוקאפ סטטי · שני המצבים (הערכה + הימנעות) · יושב בטאב מגמות, פר-חנות · לא נבנה עד אישורך</div></div>
+  <button class="toggle" onclick="tg()"><span id="ico">☀︎</span><span id="lbl">מצב בהיר</span></button>
+</div>
+<div class="wrap">
+
+  <div class="mount">
+    <span class="arr">היכן זה יושב:</span>
+    <span class="crumb">מגמות</span><span class="arr">←</span>
+    <span class="crumb">פר-חנות</span><span class="arr">←</span>
+    <span>פאנל "קירוב אינקרמנטליות (בסיס אורגני)" · מתחת לגרף-המגמה של כל חנות</span>
+  </div>
+
+  <div class="grid2">
+
+    <!-- ════ (1) ESTIMATE STATE ════ -->
+    <div>
+      <div class="statelabel">מצב א׳ · הערכה זמינה (estimate)</div>
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <span class="dot" style="background:var(--pf-meta)"></span>
+            <div>
+              <h3>uzoshop
+                <span class="help" tabindex="0">ⓘ
+                  <span class="tip"><b>הערכה גסה, לא מבחן holdout.</b> משווים הכנסה בימים ללא הוצאה (בסיס אורגני) להכנסה בימי-הוצאה. אינו מבדל סיבתיות אמיתית כמו ניסוי geo-holdout מבוקר.</span>
+                </span>
+              </h3>
+              <span class="store-sub">קירוב אינקרמנטליות · 30 הימים האחרונים</span>
+            </div>
+          </div>
+          <span class="kicker">קירוב</span>
+        </div>
+
+        <div class="share-wrap">
+          <span class="share-val tnum">~75%</span>
+          <span class="share-cap">מההכנסה בימי-הוצאה מיוחסת לפרסום (אינקרמנטלי)</span>
+        </div>
+        <div class="share-bar"><i style="width:75%"></i></div>
+        <div class="bar-legend"><span>אינקרמנטלי ~75%</span><span>בסיס אורגני ~25%</span></div>
+
+        <div class="breakdown">
+          <div class="brow">
+            <span class="bl"><span class="swatch sw-organic"></span>בסיס אורגני · הכנסה/יום</span>
+            <span class="bv money">$214<span class="unit">/יום</span></span>
+          </div>
+          <div class="brow">
+            <span class="bl"><span class="swatch sw-spend"></span>ימי-הוצאה · הכנסה/יום</span>
+            <span class="bv money">$863<span class="unit">/יום</span></span>
+          </div>
+          <div class="brow">
+            <span class="bl"><span class="swatch" style="background:var(--status-green)"></span>הפרש אינקרמנטלי</span>
+            <span class="bv money" style="color:var(--status-green-fg)">+$649<span class="unit">/יום</span></span>
+          </div>
+        </div>
+
+        <div class="footer-meta">
+          <span class="metachip ok"><span class="k">ימי-בסיס נקיים:</span>&nbsp;9</span>
+          <span class="metachip"><span class="k">מינ׳ נדרש:</span>&nbsp;7</span>
+          <span class="metachip"><span class="k">ימי-הוצאה:</span>&nbsp;21</span>
+        </div>
+      </div>
+      <p class="statenote"><b>הערה:</b> "ימי-בסיס נקיים" = ימים עם 0 הוצאת-מדיה בכל הפלטפורמות לאותה חנות. בסיס אורגני = ממוצע הכנסה/יום באותם ימים. <b>זהו אומדן, לא הוכחה סיבתית.</b></p>
+    </div>
+
+    <!-- ════ (2) ABSTAIN STATE ════ -->
+    <div>
+      <div class="statelabel">מצב ב׳ · הימנעות (abstain) — מחלקה-ראשונה, לא שגיאה</div>
+      <div class="panel abstain">
+        <div class="panel-head">
+          <div class="panel-title">
+            <span class="dot" style="background:var(--pf-tiktok)"></span>
+            <div>
+              <h3>Zol Plus</h3>
+              <span class="store-sub">קירוב אינקרמנטליות · 30 הימים האחרונים</span>
+            </div>
+          </div>
+          <span class="kicker" style="color:var(--text-muted); background:var(--surface-sunken)">לא זמין</span>
+        </div>
+
+        <div class="abstain-body">
+          <div class="abstain-icon">∅</div>
+          <div class="abstain-copy">
+            <p class="h">אין מספיק ימים ללא הוצאה כדי להעריך בסיס אורגני</p>
+            <p class="p">החנות פרסמה כמעט בכל יום בטווח הנבחר, אז אין מספיק "ימי-בסיס נקיים" (0 הוצאה) שמהם אפשר לאמוד הכנסה אורגנית. נציג הערכה ברגע שיצטברו מספיק ימים — או הרחב את הטווח.</p>
+          </div>
+        </div>
+
+        <div class="gauge">
+          <div class="gauge-track">
+            <i style="width:42.8%"></i>
+            <span class="need" style="inset-inline-start:auto; inset-inline-end:0; left:auto; right:0;"></span>
+          </div>
+          <div class="gauge-legend">
+            <span class="have">נמצאו 3 ימים נקיים</span>
+            <span class="need-lbl">צריך לפחות 7</span>
+          </div>
+        </div>
+
+        <div class="footer-meta">
+          <span class="metachip"><span class="k">ימי-בסיס נקיים:</span>&nbsp;3</span>
+          <span class="metachip"><span class="k">מינ׳ נדרש:</span>&nbsp;7</span>
+          <span class="metachip"><span class="k">חסר:</span>&nbsp;4 ימים</span>
+        </div>
+      </div>
+      <p class="statenote"><b>הימנעות היא תשובה לגיטימית:</b> כשאין בסיס מהימן הפאנל <b>לא ממציא אחוז</b>. אין מספר אינקרמנטליות, אין סרגל ירוק — רק הסבר רגוע + ספירת ההתקדמות. עדיף "לא יודעים" על-פני מספר מטעה.</p>
+    </div>
+
+  </div>
+
+  <!-- third store, also estimate, to show the per-store stacking -->
+  <div style="margin-top:22px">
+    <div class="statelabel">חנות שלישית · מצב הערכה (כדי להראות את הסטאקינג פר-חנות)</div>
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">
+          <span class="dot" style="background:var(--pf-google)"></span>
+          <div>
+            <h3>360usmile
+              <span class="help" tabindex="0">ⓘ
+                <span class="tip"><b>הערכה גסה, לא מבחן holdout.</b> משווים הכנסה בימים ללא הוצאה (בסיס אורגני) להכנסה בימי-הוצאה. אינו מבדל סיבתיות אמיתית כמו ניסוי geo-holdout מבוקר.</span>
+              </span>
+            </h3>
+            <span class="store-sub">קירוב אינקרמנטליות · 30 הימים האחרונים</span>
+          </div>
+        </div>
+        <span class="kicker">קירוב</span>
+      </div>
+
+      <div class="share-wrap">
+        <span class="share-val tnum" style="color:var(--status-warning-fg)">~58%</span>
+        <span class="share-cap">מההכנסה בימי-הוצאה מיוחסת לפרסום (אינקרמנטלי)</span>
+      </div>
+      <div class="share-bar"><i style="width:58%; background:linear-gradient(90deg,var(--status-warning),#f6b35e)"></i></div>
+      <div class="bar-legend"><span>אינקרמנטלי ~58%</span><span>בסיס אורגני ~42%</span></div>
+
+      <div class="breakdown">
+        <div class="brow">
+          <span class="bl"><span class="swatch sw-organic"></span>בסיס אורגני · הכנסה/יום</span>
+          <span class="bv money">$72<span class="unit">/יום</span></span>
+        </div>
+        <div class="brow">
+          <span class="bl"><span class="swatch sw-spend"></span>ימי-הוצאה · הכנסה/יום</span>
+          <span class="bv money">$171<span class="unit">/יום</span></span>
+        </div>
+        <div class="brow">
+          <span class="bl"><span class="swatch" style="background:var(--status-warning)"></span>הפרש אינקרמנטלי</span>
+          <span class="bv money" style="color:var(--status-warning-fg)">+$99<span class="unit">/יום</span></span>
+        </div>
+      </div>
+
+      <div class="footer-meta">
+        <span class="metachip ok"><span class="k">ימי-בסיס נקיים:</span>&nbsp;8</span>
+        <span class="metachip"><span class="k">מינ׳ נדרש:</span>&nbsp;7</span>
+        <span class="metachip"><span class="k">ימי-הוצאה:</span>&nbsp;22</span>
+      </div>
+    </div>
+    <p class="statenote">בסיס אורגני יחסית-גבוה (42%) → חלק ניכר מההכנסה היה מגיע גם בלי פרסום. מסומן בכתום כדי לסמן "אינקרמנטליות בינונית" — לא אדום (עדיין חיובי) ולא ירוק.</p>
+  </div>
+
+  <!-- explainer -->
+  <div class="explainer">
+    <h4><span class="n">i</span>מה זה הפאנל הזה — וההגנות שמובנות מהיום-הראשון</h4>
+    <p><b>הרעיון:</b> במקום מבחן holdout יקר, מסתכלים על ימים בהם החנות לא הוציאה כלום על מדיה (בסיס אורגני) ומשווים להכנסה בימי-הוצאה. ההפרש הוא קירוב להכנסה האינקרמנטלית שהפרסום הוסיף. <b>שני מצבים בלבד:</b> (1) <b>הערכה</b> כשיש ≥7 ימי-בסיס נקיים — מציג אחוז + פירוק; (2) <b>הימנעות</b> כשאין מספיק — אין אחוז, רק הסבר וספירה. הימנעות היא מצב מחלקה-ראשונה, מעוצב ורגוע, לא הודעת-שגיאה. כל המספרים דרך &lt;Money&gt; (tabular-nums, ללא חיתוך). הקאוויאט "<b>הערכה גסה, לא מבחן holdout</b>" צמוד לכותרת בכל מצב-הערכה. אור+חושך, WCAG-AA, RTL/logical — מובנה מההתחלה.</p>
+  </div>
+
+</div>
+<script>
+function tg(){const r=document.documentElement,n=r.getAttribute('data-theme')==='dark'?'light':'dark';r.setAttribute('data-theme',n);document.getElementById('ico').textContent=n==='dark'?'☀︎':'☾';document.getElementById('lbl').textContent=n==='dark'?'מצב בהיר':'מצב כהה';}
+</script>
+</body>
+</html>

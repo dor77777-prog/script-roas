@@ -277,6 +277,13 @@ describe('aiReport coverage clamp removal (Phase 12.2.1 — ALG-07)', () => {
     // Post-fix MUST preserve this fallback (only the Math.min clamp is
     // removed) so we don't accidentally introduce a divide-by-zero or
     // produce Infinity.
+    //
+    // 2026-06-11 adversarial review: this signature is now ALSO the P1-8a
+    // tracking-outage verdict ('הפלטפורמה מדווחת 0', unknown-40) — the
+    // synthetic ladder mirrors the dashboard, so the clarity cell is the
+    // verdict's 40, no longer the coverage-fallback 'high'/100 tier. The
+    // exact pin lives in the parity suite below; here we keep the original
+    // no-division-by-zero guarantee.
     const daily: DailyRow[] = [makeDaily({})];
     const campaigns: CampaignRow[] = [
       makeCampaign({
@@ -304,9 +311,105 @@ describe('aiReport coverage clamp removal (Phase 12.2.1 — ALG-07)', () => {
 
     // Must be a finite number (not Infinity, not NaN).
     expect(Number.isFinite(attr)).toBe(true);
-    // Coverage fallback = 1 → trustScore = 100 → attributionClarity
-    // reflects "high" tier. Just assert it's a positive finite value.
+    // Positive finite value (post-2026-06-11 it is the unknown-40 verdict's
+    // 40, pinned exactly in the parity suite below).
     expect(attr).toBeGreaterThan(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// 2026-06-11 adversarial review — P1-8a/P1-8b parity for the SYNTHETIC trust
+// ladder. The wave-4 batch (commits 7518423/e290dc4/c39fcc8) changed
+// analyzeAttribution + campaignHealthScore but missed aiReport's synthetic
+// coverage→trust mirror, so the report's Health Score contradicted the
+// dashboard for the exact outage signatures the wave targeted. These tests
+// pin the report-side clarity cell to the dashboard verdict's score.
+// ─────────────────────────────────────────────────────────────────────────
+
+describe('aiReport synthetic trust ladder — P1-8a/P1-8b parity (2026-06-11 review)', () => {
+  it('claim=0/det>0 → clarity cell carries the unknown-40 verdict (NOT the coverage-fallback 100)', () => {
+    // Platform reports ZERO conversion_value while Shopify has a tagged
+    // order — the TikTok conversions=0 outage signature. Dashboard verdict:
+    // unknown-40 'הפלטפורמה מדווחת 0'. Pre-fix the synthetic ladder scored
+    // it high/100 via the claim=0→coverage=1 fallback.
+    const md = generateAiReport({
+      storeName: STORE_NAME,
+      storeId: STORE_ID,
+      range: RANGE,
+      dailyRows: [makeDaily({})],
+      productRows: [],
+      campaignRows: [
+        makeCampaign({
+          campaignId: 'm-pz', campaignName: 'Meta PlatformZero',
+          adSetId: 'as-pz', conversionValue: 0, spend: 150, conversions: 0,
+        }),
+      ],
+      ordersRows: [
+        makeOrder({ orderId: 'o-pz', utmId: 'm-pz', utmCampaign: 'Meta PlatformZero', totalCad: 100 }),
+      ],
+      adsRows: [],
+    });
+
+    const row = extractHealthRow(md, 'Meta PlatformZero');
+    expect(row).toBeTruthy();
+    // Same score the dashboard's scoreAttributionClarity emits for the
+    // unknown-40 verdict (Math.max(30, 40) = 40).
+    expect(attributionCell(row!)).toBe(40);
+  });
+
+  it('coverage 2.5 → clarity cell capped at the P1-8b medium 65 (NOT an uncapped 250)', () => {
+    // Claim $100, deterministic $250 → coverage 2.5 > COVERAGE_WARNING_THRESHOLD.
+    // Dashboard caps trust at medium/65; the synthetic ladder must match.
+    const md = generateAiReport({
+      storeName: STORE_NAME,
+      storeId: STORE_ID,
+      range: RANGE,
+      dailyRows: [makeDaily({})],
+      productRows: [],
+      campaignRows: [
+        makeCampaign({
+          campaignId: 'm-bh', campaignName: 'Meta BigHalo',
+          adSetId: 'as-bh', conversionValue: 100, spend: 150, conversions: 3,
+        }),
+      ],
+      ordersRows: [
+        makeOrder({ orderId: 'o-bh1', utmId: 'm-bh', utmCampaign: 'Meta BigHalo', totalCad: 120 }),
+        makeOrder({ orderId: 'o-bh2', utmId: 'm-bh', utmCampaign: 'Meta BigHalo', totalCad: 130 }),
+      ],
+      adsRows: [],
+    });
+
+    const row = extractHealthRow(md, 'Meta BigHalo');
+    expect(row).toBeTruthy();
+    expect(attributionCell(row!)).toBe(65);
+  });
+
+  it('coverage 2.0 exactly (test-1 halo fixture) stays UNcapped — strict > threshold', () => {
+    // Symmetry guard mirroring the dashboard's boundary semantics: the cap
+    // fires only ABOVE 2, so the original ALG-07 halo differential (test 1)
+    // keeps holding at exactly 2.0.
+    const md = generateAiReport({
+      storeName: STORE_NAME,
+      storeId: STORE_ID,
+      range: RANGE,
+      dailyRows: [makeDaily({})],
+      productRows: [],
+      campaignRows: [
+        makeCampaign({
+          campaignId: 'm-h2', campaignName: 'Meta HaloTwo',
+          adSetId: 'as-h2', conversionValue: 50, spend: 100, conversions: 2,
+        }),
+      ],
+      ordersRows: [
+        makeOrder({ orderId: 'o-h2', utmId: 'm-h2', utmCampaign: 'Meta HaloTwo', totalCad: 100 }),
+      ],
+      adsRows: [],
+    });
+
+    const row = extractHealthRow(md, 'Meta HaloTwo');
+    expect(row).toBeTruthy();
+    // coverage = 100/50 = 2.0 → trustScore 200, level high, no cap.
+    expect(attributionCell(row!)).toBe(200);
   });
 });
 

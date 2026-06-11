@@ -59,6 +59,27 @@ describe('Dashboard salaries wiring (T7 — dynamic salaries %)', () => {
     );
   });
 
+  it('threads the SAME D4 store-scope into the hero prev baseline (prevAggFromPrevData) — cur/prev parity', () => {
+    // 2026-06-11 adversarial review (D4 threading missed prevAggFromPrevData):
+    // `filtered.curAgg` carries the fair-share fixed-cost convention
+    // (scopedStoreNames + unfiltered revenue split), so the hero delta's prev
+    // baseline MUST use the same convention — args 3+4 pinned by NAME, never
+    // `undefined`. A mixed pair makes toHeroDelta's netProfit
+    // (cur.trueNetProfit − prev.trueNetProfit) systematically overstated in
+    // store-filtered views whenever All-scoped fixed costs exist.
+    expect(src).toMatch(
+      // `,?` — the call is multi-line at the call site, so a trailing comma
+      // after the salariesForRange arg is allowed.
+      /aggregate\(\s*prevCur\s*,\s*prevRange\s*,\s*scopedStoreNames\s*,\s*revenueByStorePrev\s*,\s*salariesForRange\(\s*salarySettings\s*,\s*prevCur\s*,\s*prevRange\s*\)\s*,?\s*\)/,
+    );
+    // The prev revenue split must come from the UNFILTERED dataPrev rows for
+    // prevRange (mirror of revenueByStoreFor in the `filtered` memo) — NOT
+    // from data.rows (those only span filters.range).
+    expect(src).toMatch(
+      /filterRows\(\s*dataPrev\.rows\s*,\s*prevRange\s*,\s*['"]All['"]\s*\)/,
+    );
+  });
+
   it('adds salarySettings + salaryTick to the filtered memo dependency array', () => {
     expect(src).toMatch(/\}\s*,\s*\[\s*data\s*,\s*filters\s*,\s*billingTick\s*,\s*salarySettings\s*,\s*salaryTick\s*\]\)/);
   });

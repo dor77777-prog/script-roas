@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wave 2 — כמה שווה לך לקוח (mockup v3c · zones)</title>
+<style>
+  :root{
+    --canvas:#f6f7fb; --surface:#ffffff; --surface-2:#eef1f8; --edge:rgba(20,24,40,.10);
+    --ink:#13182b; --ink-2:#5b6479; --ink-3:#8b93a7;
+    --accent:#6d4aff; --accent-soft:rgba(109,74,255,.12);
+    --good:#1f9d6b; --good-soft:rgba(31,157,107,.14); --warn:#ef9331; --warn-soft:rgba(239,147,49,.16); --bad:#e0445b; --info:#2f7bd6;
+    --shadow:0 1px 2px rgba(20,24,40,.06),0 8px 24px rgba(20,24,40,.06);
+    --mesh:radial-gradient(1200px 600px at 85% -10%,rgba(109,74,255,.10),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(47,123,214,.08),transparent 55%);
+    /* chart-specific tokens (light) */
+    --chart-grid:rgba(20,24,40,.07);
+    --chart-plot:rgba(20,24,40,.015);
+    --chart-glow:rgba(109,74,255,.45);
+    --tip-bg:rgba(255,255,255,.92); --tip-edge:rgba(20,24,40,.12); --tip-shadow:0 6px 22px rgba(20,24,40,.18);
+  }
+  [data-theme=dark]{
+    --canvas:#0b0e18; --surface:#141a2b; --surface-2:#1c2438; --edge:rgba(255,255,255,.10);
+    --ink:#eef1f8; --ink-2:#a6afc6; --ink-3:#6d7791;
+    --accent:#8c6bff; --accent-soft:rgba(140,107,255,.18);
+    --good:#3fd49a; --good-soft:rgba(63,212,154,.16); --warn:#ef9331; --warn-soft:rgba(239,147,49,.2); --bad:#ff6b81; --info:#5aa6ff;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45);
+    --mesh:radial-gradient(1200px 600px at 85% -10%,rgba(140,107,255,.16),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(47,123,214,.12),transparent 55%);
+    --chart-grid:rgba(255,255,255,.08);
+    --chart-plot:rgba(255,255,255,.018);
+    --chart-glow:rgba(140,107,255,.55);
+    --tip-bg:rgba(20,26,43,.94); --tip-edge:rgba(255,255,255,.14); --tip-shadow:0 8px 26px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14.5px/1.55 -apple-system,"Segoe UI",Heebo,Arial,sans-serif;color:var(--ink);
+    background:var(--canvas);background-image:var(--mesh);background-attachment:fixed;min-height:100vh;padding:20px}
+  .wrap{max-width:960px;margin:0 auto}
+  header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px}
+  h1{font-size:20px;margin:0;font-weight:800}
+  .controls{display:flex;gap:8px;flex-wrap:wrap}
+  select{font:inherit;font-weight:600;color:var(--ink);background:var(--surface);border:1px solid var(--edge);border-radius:10px;padding:7px 10px}
+  .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--edge);border-radius:10px;padding:3px;gap:2px}
+  .seg button{border:0;background:transparent;color:var(--ink-2);padding:6px 12px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer}
+  .seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+  .seg button.on.accent{background:var(--accent);color:#fff}
+  .card{background:var(--surface);border:1px solid var(--edge);border-radius:16px;box-shadow:var(--shadow);padding:18px;margin-bottom:14px}
+  /* verdict */
+  .verdict{font-size:17px;line-height:1.7;font-weight:600}
+  .verdict b{font-weight:800}
+  .num{font-variant-numeric:tabular-nums;font-weight:800;padding:0 2px}
+  .num.good{color:var(--good)} .num.warn{color:var(--warn)} .num.bad{color:var(--bad)} .num.accent{color:var(--accent)}
+  .badge{display:inline-block;font-size:12.5px;font-weight:800;border-radius:999px;padding:3px 11px;margin-inline-start:6px}
+  .badge.good{background:var(--good-soft);color:var(--good)} .badge.warn{background:var(--warn-soft);color:var(--warn)}
+  /* kpis */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media(max-width:720px){.kpis{grid-template-columns:repeat(2,1fr)}.verdict{font-size:15.5px}}
+  .kpi .label{color:var(--ink-2);font-size:12px;font-weight:600}
+  .kpi .val{font-size:24px;font-weight:800;letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+  .kpi .hint{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+  /* chart */
+  .charttitle{font-size:15px;font-weight:800;margin:0 0 2px}
+  .chartsub{color:var(--ink-2);font-size:12.5px;margin-bottom:10px}
+  .chartwrap{position:relative}
+  svg{width:100%;height:auto;display:block}
+  .axislbl{fill:var(--ink-3);font-size:11px}
+  .zonelbl{font-size:12px;font-weight:800}
+  .leg{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--ink-2)}
+  .leg i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-inline-end:5px}
+  .leg i.sw{height:11px;border-radius:3px}
+  /* hover tooltip */
+  .ctip{position:absolute;pointer-events:none;opacity:0;transform:translate(-50%,-118%);
+    background:var(--tip-bg);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    border:1px solid var(--tip-edge);border-radius:10px;box-shadow:var(--tip-shadow);
+    padding:7px 10px;font-size:12px;white-space:nowrap;color:var(--ink);transition:opacity .12s ease;z-index:5;line-height:1.45}
+  .ctip.show{opacity:1}
+  .ctip .tm{color:var(--ink-2);font-weight:600;font-size:11px}
+  .ctip .tv{font-weight:800;font-variant-numeric:tabular-nums;font-size:14px}
+  .ctip .tst{font-weight:700;font-size:11px}
+  .ctip .tst.good{color:var(--good)} .ctip .tst.warn{color:var(--warn)}
+  /* compare */
+  .cmp{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .cmp .bar{flex:1;min-width:180px}
+  .bar .track{height:14px;background:var(--surface-2);border-radius:999px;overflow:hidden}
+  .bar .fill{height:100%;border-radius:999px;background:var(--accent)}
+  .bar .cap{font-size:12px;color:var(--ink-2);margin-bottom:4px;display:flex;justify-content:space-between}
+  details{margin-top:4px}
+  details>summary{cursor:pointer;font-weight:700;color:var(--accent);font-size:13.5px;list-style:none}
+  details>summary::-webkit-details-marker{display:none}
+  .adv{margin-top:12px}
+  table.cohort{border-collapse:separate;border-spacing:3px;width:100%;font-variant-numeric:tabular-nums}
+  table.cohort th{font-size:10.5px;color:var(--ink-3);font-weight:700;padding:3px 1px;text-align:center}
+  table.cohort td.rowhead{font-size:11px;color:var(--ink-2);font-weight:700;text-align:right;padding-inline-end:6px;white-space:nowrap}
+  table.cohort td.cell{height:28px;min-width:42px;text-align:center;border-radius:6px;font-size:11px;font-weight:700;color:#0c3d2a}
+  [data-theme=dark] table.cohort td.cell{color:#d9ffe9}
+  td.cell.empty{background:repeating-linear-gradient(45deg,var(--surface-2),var(--surface-2) 5px,transparent 5px,transparent 10px);opacity:.45}
+  .tip{color:var(--ink-3);font-size:11.5px;margin-top:8px;line-height:1.6}
+  /* ===== chart animations ===== */
+  @keyframes drawline{to{stroke-dashoffset:0}}
+  @keyframes fadezone{from{opacity:0}to{opacity:1}}
+  @keyframes popmark{0%{opacity:0;transform:scale(.2)}70%{transform:scale(1.15)}100%{opacity:1;transform:scale(1)}}
+  @keyframes pulsering{0%{r:6;opacity:.55}70%{r:18;opacity:0}100%{r:18;opacity:0}}
+  @keyframes risecallout{from{opacity:0}to{opacity:1}}
+  .anim-line{stroke-dasharray:var(--len);stroke-dashoffset:var(--len);animation:drawline 1.5s cubic-bezier(.22,.61,.36,1) .25s forwards}
+  .anim-zone{opacity:0;animation:fadezone .9s ease 1.1s forwards}
+  .anim-area{opacity:0;animation:fadezone 1.2s ease .4s forwards}
+  .anim-mark{transform-box:fill-box;transform-origin:center;opacity:0;animation:popmark .55s cubic-bezier(.34,1.56,.64,1) 1.55s forwards}
+  .pulse{transform-box:fill-box;transform-origin:center;animation:pulsering 2.1s ease-out 1.9s infinite}
+  .anim-callout{opacity:0;animation:risecallout .6s ease 1.85s forwards}
+  @media(prefers-reduced-motion:reduce){
+    .anim-line{animation:none;stroke-dashoffset:0}
+    .anim-zone,.anim-area,.anim-mark,.anim-callout{animation:none;opacity:1}
+    .pulse{animation:none;opacity:0}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>כמה שווה לך לקוח 💎 <span style="font-size:12px;font-weight:700;color:var(--accent)">mockup v3c · אזורים</span></h1>
+    <div class="controls">
+      <select id="store">
+        <option value="all">כל העסק</option><option value="uzoshop">uzoshop</option><option value="zolplus">zolplus</option><option value="usmile360">usmile360</option>
+      </select>
+      <div class="seg" id="theme"><button data-v="light" class="on">☀︎</button><button data-v="dark">☾</button></div>
+    </div>
+  </header>
+
+  <!-- 1. THE BOTTOM LINE -->
+  <div class="card">
+    <div class="verdict" id="verdict"></div>
+  </div>
+
+  <!-- 2. KPIs -->
+  <div class="card">
+    <div class="kpis">
+      <div class="kpi"><div class="label">שווי לקוח (12 ח׳, רווח)</div><div class="val" id="k_ltv"></div><div class="hint">כמה רווח נקי לקוח ממוצע מכניס לאורך שנה</div></div>
+      <div class="kpi"><div class="label">עלות גיוס לקוח (nCAC)</div><div class="val" id="k_cac"></div><div class="hint">כמה שילמת בפרסום לכל לקוח חדש</div></div>
+      <div class="kpi"><div class="label">החזר עלות (payback)</div><div class="val" id="k_pay"></div><div class="hint">תוך כמה חודשים הרווח מכסה את הגיוס</div></div>
+      <div class="kpi"><div class="label">חוזרים לקנות (repeat)</div><div class="val" id="k_rep"></div><div class="hint">אחוז שמזמינים שוב אחרי הראשונה</div></div>
+    </div>
+  </div>
+
+  <!-- 3. THE CURVE (the one intuitive visual) -->
+  <div class="card">
+    <div class="charttitle">העקומה: כמה לקוח מחזיר ככל שעובר הזמן</div>
+    <div class="chartsub">הקו עולה ככל שלקוחות חוזרים לקנות. כשהוא חוצה את <b>קו עלות-הגיוס</b> — הלקוח הפך לרווחי. משם זה רווח נקי.</div>
+    <div class="chartwrap">
+      <svg id="chart" viewBox="0 0 720 320" role="img" aria-label="עקומת שווי לקוח לאורך זמן"></svg>
+      <div class="ctip" id="ctip"></div>
+    </div>
+    <div class="leg">
+      <span><i style="background:var(--accent)"></i> רווח מצטבר ללקוח</span>
+      <span><i style="background:var(--warn);height:0;border-top:2px dashed var(--warn)"></i> עלות גיוס (קו האיזון)</span>
+      <span><i class="sw" style="background:var(--warn-soft)"></i> עדיין מחזיר עלות</span>
+      <span><i class="sw" style="background:var(--good-soft)"></i> רווח</span>
+    </div>
+  </div>
+
+  <!-- 4. NEW vs OLD (simple) -->
+  <div class="card">
+    <div class="charttitle">הלקוחות החדשים — טובים יותר או פחות מהוותיקים?</div>
+    <div class="chartsub" id="cmpsub"></div>
+    <div class="cmp" id="cmp"></div>
+  </div>
+
+  <!-- 5. ADVANCED (the triangle, hidden) -->
+  <div class="card">
+    <details>
+      <summary>▸ תצוגה מתקדמת — רשת ה-cohorts המלאה (לחובבי דאטה)</summary>
+      <div class="adv">
+        <div class="chartsub">שורה = חודש הזמנה-ראשונה · עמודה = חודשים-מאז (M0=הרכישה). תא = % שחזרו לקנות. כלי לאנליסט — לא חובה ליומיום.</div>
+        <div style="overflow-x:auto"><table class="cohort" id="grid"></table></div>
+      </div>
+    </details>
+  </div>
+</div>
+
+<script>
+const STORES={
+  all:{ltv:78,cac:32,pay:4.1,rep:24,ratio:2.4,recent3:38,old3:34},
+  uzoshop:{ltv:84,cac:31,pay:3.7,rep:26,ratio:2.7,recent3:42,old3:36},
+  zolplus:{ltv:64,cac:33,pay:5.2,rep:19,ratio:1.9,recent3:30,old3:33},
+  usmile360:{ltv:71,cac:39,pay:5.9,rep:17,ratio:1.8,recent3:33,old3:35},
+};
+// cumulative profit/customer over M0..M12 (concave), scaled to store ltv
+function curve(ltv){const shape=[0,.11,.21,.30,.39,.47,.55,.62,.69,.78,.86,.93,1];return shape.map(s=>Math.round(s*ltv));}
+let store='all';
+
+function money(n){return '$'+n;}
+function render(){
+  const d=STORES[store], cur=curve(d.ltv);
+  const net=d.ltv-d.cac;
+  // verdict
+  const ratioCls=d.ratio>=3?'good':d.ratio>=2?'warn':'bad';
+  const ratioBadge=d.ratio>=3?'<span class="badge good">בריא ✓</span>':'<span class="badge warn">מתחת ליעד 3×</span>';
+  document.getElementById('verdict').innerHTML=
+    `לקוח חדש שווה לך <span class="num good">${money(d.ltv)}</span> רווח לאורך שנה, ועולה <span class="num">${money(d.cac)}</span> לגייס — `+
+    `כלומר כל לקוח מכניס לך <span class="num ${net>=0?'good':'bad'}">${money(net)}</span> נטו. `+
+    `הוא מחזיר את עלות הגיוס תוך <span class="num accent">${d.pay}</span> חודשים, ו-<span class="num">${d.rep}%</span> חוזרים לקנות שוב.<br>`+
+    `על כל <span class="num">$1</span> פרסום אתה מקבל <span class="num ${ratioCls}">${d.ratio}×</span> בערך-לקוח (LTV:nCAC) ${ratioBadge}`;
+  // kpis
+  document.getElementById('k_ltv').textContent=money(d.ltv);
+  document.getElementById('k_cac').textContent=money(d.cac);
+  document.getElementById('k_pay').textContent=d.pay+' ח׳';
+  document.getElementById('k_rep').textContent=d.rep+'%';
+  drawChart(cur,d.cac);
+  // compare
+  const diff=Math.round((d.recent3-d.old3)/d.old3*100);
+  document.getElementById('cmpsub').innerHTML = diff>=0
+    ? `הלקוחות שגייסת לאחרונה שווים <b style="color:var(--good)">${diff}% יותר</b> ב-3 החודשים הראשונים מהוותיקים — איכות הגיוס משתפרת.`
+    : `הלקוחות שגייסת לאחרונה שווים <b style="color:var(--bad)">${Math.abs(diff)}% פחות</b> ב-3 החודשים הראשונים מהוותיקים — שווה לבדוק את איכות הגיוס.`;
+  const mx=Math.max(d.recent3,d.old3);
+  document.getElementById('cmp').innerHTML=
+    `<div class="bar"><div class="cap"><span>חדשים (3 ח׳ אחרונים)</span><b>${money(d.recent3)}</b></div><div class="track"><div class="fill" style="width:${d.recent3/mx*100}%;background:var(--good)"></div></div></div>`+
+    `<div class="bar"><div class="cap"><span>ותיקים</span><b>${money(d.old3)}</b></div><div class="track"><div class="fill" style="width:${d.old3/mx*100}%;background:var(--ink-3)"></div></div></div>`;
+  drawGrid();
+}
+
+// ---- interpolate cumulative profit at fractional month (linear between integer points) ----
+function valAt(cur,m){
+  if(m<=0) return cur[0];
+  if(m>=12) return cur[12];
+  const i=Math.floor(m), f=m-i;
+  return cur[i]+(cur[i+1]-cur[i])*f;
+}
+
+let CHART=null; // shared geometry for hover
+
+function drawChart(cur,cac){
+  const W=720,H=320,pad={l:48,r:18,t:22,b:36};
+  const maxY=Math.max(...cur, cac)*1.12;
+  const x=m=>pad.l+(m/12)*(W-pad.l-pad.r);
+  const y=v=>H-pad.b-(v/maxY)*(H-pad.t-pad.b);
+  const plotL=pad.l, plotR=W-pad.r, plotT=pad.t, plotB=H-pad.b;
+
+  // smooth line path (Catmull-Rom -> cubic bezier)
+  const P=cur.map((v,m)=>[x(m),y(v)]);
+  function smoothPath(pts){
+    let dd=`M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)}`;
+    for(let i=0;i<pts.length-1;i++){
+      const p0=pts[i-1]||pts[i], p1=pts[i], p2=pts[i+1], p3=pts[i+2]||p2;
+      const c1x=p1[0]+(p2[0]-p0[0])/6, c1y=p1[1]+(p2[1]-p0[1])/6;
+      const c2x=p2[0]-(p3[0]-p1[0])/6, c2y=p2[1]-(p3[1]-p1[1])/6;
+      dd+=` C ${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2[0].toFixed(2)} ${p2[1].toFixed(2)}`;
+    }
+    return dd;
+  }
+  const linePath=smoothPath(P);
+  const areaPath=linePath+` L ${x(12).toFixed(2)} ${plotB.toFixed(2)} L ${x(0).toFixed(2)} ${plotB.toFixed(2)} Z`;
+
+  // payback x where curve crosses cac (linear interp on integer points)
+  let pbx=12; for(let m=1;m<cur.length;m++){if(cur[m]>=cac){const t=(cac-cur[m-1])/(cur[m]-cur[m-1]);pbx=(m-1)+t;break;}}
+  const pbX=x(pbx), cacY=y(cac);
+
+  // build clip rects: warn zone = left of payback (still recovering), good zone = right of payback (profit)
+  const u=Math.random().toString(36).slice(2,8); // unique-ish id per render to avoid stale defs
+  const gid=`gline_${u}`, gid2=`garea_${u}`, glow=`glow_${u}`, cwarn=`cwarn_${u}`, cgood=`cgood_${u}`, cprofit=`cprofit_${u}`;
+
+  // profit clip = region ABOVE cac line AND below curve, only right of payback -> we just clip area to y<=cacY band right of pbX
+  let g='';
+  g+=`<defs>`;
+  // line gradient (accent vivid)
+  g+=`<linearGradient id="${gid}" x1="0" y1="1" x2="0" y2="0">`+
+       `<stop offset="0" stop-color="var(--accent)" stop-opacity=".75"/>`+
+       `<stop offset="1" stop-color="var(--accent)" stop-opacity="1"/>`+
+     `</linearGradient>`;
+  // area fill under line: accent -> transparent
+  g+=`<linearGradient id="${gid2}" x1="0" y1="0" x2="0" y2="1">`+
+       `<stop offset="0" stop-color="var(--accent)" stop-opacity=".32"/>`+
+       `<stop offset=".55" stop-color="var(--accent)" stop-opacity=".10"/>`+
+       `<stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>`+
+     `</linearGradient>`;
+  // soft glow filter for the line
+  g+=`<filter id="${glow}" x="-20%" y="-40%" width="140%" height="180%">`+
+       `<feGaussianBlur stdDeviation="5" result="b"/>`+
+       `<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>`+
+     `</filter>`;
+  // zone clips
+  g+=`<clipPath id="${cwarn}"><rect x="${plotL}" y="${plotT}" width="${(pbX-plotL).toFixed(2)}" height="${(plotB-plotT).toFixed(2)}"/></clipPath>`;
+  g+=`<clipPath id="${cgood}"><rect x="${pbX.toFixed(2)}" y="${plotT}" width="${(plotR-pbX).toFixed(2)}" height="${(plotB-plotT).toFixed(2)}"/></clipPath>`;
+  // profit clip = right of payback AND above cac line (the wedge between curve and cac)
+  g+=`<clipPath id="${cprofit}"><rect x="${pbX.toFixed(2)}" y="${plotT}" width="${(plotR-pbX).toFixed(2)}" height="${(cacY-plotT).toFixed(2)}"/></clipPath>`;
+  g+=`</defs>`;
+
+  // plot scrim (neutral) so colored zones never collide with the card surface
+  g+=`<rect x="${plotL}" y="${plotT}" width="${(plotR-plotL).toFixed(2)}" height="${(plotB-plotT).toFixed(2)}" rx="10" fill="var(--chart-plot)"/>`;
+
+  // ===== background zones (full-height tint, split at payback) =====
+  // warn zone (still recovering acquisition cost) — left
+  g+=`<rect class="anim-zone" x="${plotL}" y="${plotT}" width="${(pbX-plotL).toFixed(2)}" height="${(plotB-plotT).toFixed(2)}" fill="var(--warn-soft)" opacity="0"/>`;
+  // good zone (profit) — right
+  g+=`<rect class="anim-zone" x="${pbX.toFixed(2)}" y="${plotT}" width="${(plotR-pbX).toFixed(2)}" height="${(plotB-plotT).toFixed(2)}" fill="var(--good-soft)" opacity="0"/>`;
+
+  // y gridlines + labels
+  for(let i=0;i<=4;i++){const v=maxY*i/4;g+=`<line x1="${plotL}" y1="${y(v).toFixed(2)}" x2="${plotR}" y2="${y(v).toFixed(2)}" stroke="var(--chart-grid)"/><text class="axislbl" x="${plotL-7}" y="${(y(v)+3).toFixed(2)}" text-anchor="end">$${Math.round(v)}</text>`;}
+  // x labels
+  for(let m=0;m<=12;m+=2){g+=`<text class="axislbl" x="${x(m).toFixed(2)}" y="${(plotB+17).toFixed(2)}" text-anchor="middle">${m===0?'רכישה':'ח׳ '+m}</text>`;}
+
+  // ===== zone labels (RTL Hebrew) =====
+  // warn label centred in left band, near top
+  const warnCx=(plotL+pbX)/2;
+  if(pbX-plotL>70){
+    g+=`<text class="zonelbl anim-zone" x="${warnCx.toFixed(2)}" y="${(plotT+16).toFixed(2)}" text-anchor="middle" fill="var(--warn)" opacity="0">עדיין מחזיר עלות</text>`;
+  }
+  const goodCx=(pbX+plotR)/2;
+  g+=`<text class="zonelbl anim-zone" x="${goodCx.toFixed(2)}" y="${(plotT+16).toFixed(2)}" text-anchor="middle" fill="var(--good)" opacity="0">רווח 🟢</text>`;
+
+  // ===== gradient area UNDER the whole curve (accent -> transparent) =====
+  g+=`<path class="anim-area" d="${areaPath}" fill="url(#${gid2})"/>`;
+
+  // ===== profit wedge: emphasize area between curve and cac, right of payback, in green =====
+  // build the wedge polygon: from payback along curve to M12, down to cac line, back to payback
+  let wedge=`M ${pbX.toFixed(2)} ${cacY.toFixed(2)} `;
+  // sample curve from pbx..12 for a clean top edge
+  for(let mm=pbx; mm<12; mm+=0.5){ wedge+=`L ${x(mm).toFixed(2)} ${y(valAt(cur,mm)).toFixed(2)} `; }
+  wedge+=`L ${x(12).toFixed(2)} ${y(cur[12]).toFixed(2)} `;
+  wedge+=`L ${x(12).toFixed(2)} ${cacY.toFixed(2)} Z`;
+  g+=`<path class="anim-zone" d="${wedge}" fill="var(--good)" opacity="0" style="--dummy:0" fill-opacity=".16"/>`;
+
+  // ===== cost-of-acquisition dashed break-even line =====
+  g+=`<line x1="${plotL}" y1="${cacY.toFixed(2)}" x2="${plotR}" y2="${cacY.toFixed(2)}" stroke="var(--warn)" stroke-width="2" stroke-dasharray="6 5"/>`;
+  g+=`<text class="axislbl" x="${plotR}" y="${(cacY-7).toFixed(2)}" text-anchor="end" fill="var(--warn)" font-weight="800">קו עלות-גיוס $${cac}</text>`;
+
+  // ===== the glowing animated line =====
+  // measure path length for draw-in animation via JS after insert (set --len)
+  g+=`<path id="theline_${u}" class="anim-line" d="${linePath}" fill="none" stroke="url(#${gid})" stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round" filter="url(#${glow})"/>`;
+
+  // ===== payback marker: vertical guide + pulsing point + callout =====
+  g+=`<line x1="${pbX.toFixed(2)}" y1="${cacY.toFixed(2)}" x2="${pbX.toFixed(2)}" y2="${plotB.toFixed(2)}" stroke="var(--accent)" stroke-dasharray="3 4" opacity=".5"/>`;
+  // pulsing ring (animated radius)
+  g+=`<circle class="pulse" cx="${pbX.toFixed(2)}" cy="${cacY.toFixed(2)}" r="6" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
+  // solid marker
+  g+=`<circle class="anim-mark" cx="${pbX.toFixed(2)}" cy="${cacY.toFixed(2)}" r="6" fill="var(--accent)" stroke="var(--surface)" stroke-width="2.5"/>`;
+
+  // callout pill above the marker (kept inside plot)
+  const calloutText='נקודת החזר';
+  const subText=`חודש ${ (Math.round(pbx*10)/10) }`.replace('.', '.');
+  const pillW=120, pillH=38;
+  let pillX=pbX-pillW/2;
+  pillX=Math.max(plotL+4, Math.min(pillX, plotR-pillW-4));
+  let pillY=cacY-pillH-18;
+  if(pillY<plotT+2) pillY=cacY+16; // flip below if no room
+  const pcx=pillX+pillW/2;
+  g+=`<g class="anim-callout">`;
+  g+=`<rect x="${pillX.toFixed(2)}" y="${pillY.toFixed(2)}" width="${pillW}" height="${pillH}" rx="9" fill="var(--accent)"/>`;
+  g+=`<text x="${pcx.toFixed(2)}" y="${(pillY+15).toFixed(2)}" text-anchor="middle" fill="#fff" font-size="11.5" font-weight="800">↩ ${calloutText}</text>`;
+  g+=`<text x="${pcx.toFixed(2)}" y="${(pillY+29).toFixed(2)}" text-anchor="middle" fill="rgba(255,255,255,.9)" font-size="10.5" font-weight="700">${subText}</text>`;
+  // little tail from pill toward marker
+  const tailY = (pillY>cacY)? pillY : pillY+pillH;
+  g+=`<line x1="${pcx.toFixed(2)}" y1="${tailY.toFixed(2)}" x2="${pbX.toFixed(2)}" y2="${cacY.toFixed(2)}" stroke="var(--accent)" stroke-width="1.5" opacity=".55"/>`;
+  g+=`</g>`;
+
+  // ===== invisible hover hit-areas (one per month) + hover dot/line placeholders =====
+  g+=`<g id="hoverlayer_${u}">`;
+  g+=`<line id="hline_${u}" x1="0" y1="${plotT}" x2="0" y2="${plotB.toFixed(2)}" stroke="var(--accent)" stroke-width="1" opacity="0"/>`;
+  g+=`<circle id="hdot_${u}" cx="0" cy="0" r="5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2" opacity="0"/>`;
+  g+=`</g>`;
+  // big transparent capture rect on top
+  g+=`<rect id="capture_${u}" x="${plotL}" y="${plotT}" width="${(plotR-plotL).toFixed(2)}" height="${(plotB-plotT).toFixed(2)}" fill="transparent" style="cursor:crosshair"/>`;
+
+  const svg=document.getElementById('chart');
+  svg.innerHTML=g;
+
+  // set path length for draw animation
+  const lineEl=document.getElementById('theline_'+u);
+  try{const len=lineEl.getTotalLength(); lineEl.style.setProperty('--len', len);}catch(e){lineEl.style.setProperty('--len', 1200);}
+
+  // stash geometry for hover
+  CHART={cur,cac,maxY,x,y,pbx,pbX,cacY,plotL,plotR,plotT,plotB,W,H,
+         hline:document.getElementById('hline_'+u), hdot:document.getElementById('hdot_'+u),
+         capture:document.getElementById('capture_'+u)};
+  wireHover();
+}
+
+// ---- hover tooltip ----
+function wireHover(){
+  if(!CHART) return;
+  const {capture,hline,hdot}=CHART;
+  const svg=document.getElementById('chart');
+  const tip=document.getElementById('ctip');
+  function moveTo(evt){
+    const rect=svg.getBoundingClientRect();
+    // map client px -> svg viewBox coords
+    const sx=(evt.clientX-rect.left)/rect.width*CHART.W;
+    let m=(sx-CHART.plotL)/(CHART.plotR-CHART.plotL)*12;
+    m=Math.max(0,Math.min(12,m));
+    const v=valAt(CHART.cur,m);
+    const px=CHART.x(m), py=CHART.y(v);
+    hline.setAttribute('x1',px); hline.setAttribute('x2',px); hline.setAttribute('opacity','.45');
+    hdot.setAttribute('cx',px); hdot.setAttribute('cy',py); hdot.setAttribute('opacity','1');
+    // tooltip position (convert svg coords -> css px)
+    const cssX=px/CHART.W*rect.width;
+    const cssY=py/CHART.H*rect.height;
+    tip.style.left=cssX+'px';
+    tip.style.top=cssY+'px';
+    const profitable=v>=CHART.cac;
+    const mLabel = m<0.5 ? 'רכישה' : ('חודש '+Math.round(m));
+    tip.innerHTML=`<div class="tm">${mLabel}</div>`+
+      `<div class="tv">$${Math.round(v)}</div>`+
+      `<div class="tst ${profitable?'good':'warn'}">${profitable?'מעל קו האיזון — רווח':'מתחת לקו — מחזיר עלות'}</div>`;
+    tip.classList.add('show');
+  }
+  capture.addEventListener('mousemove',moveTo);
+  capture.addEventListener('mouseleave',()=>{
+    tip.classList.remove('show');
+    hline.setAttribute('opacity','0'); hdot.setAttribute('opacity','0');
+  });
+  // touch support (basic)
+  capture.addEventListener('touchstart',e=>{if(e.touches[0]){moveTo(e.touches[0]);}},{passive:true});
+  capture.addEventListener('touchmove',e=>{if(e.touches[0]){moveTo(e.touches[0]);e.preventDefault();}},{passive:false});
+  capture.addEventListener('touchend',()=>{tip.classList.remove('show');hline.setAttribute('opacity','0');hdot.setAttribute('opacity','0');});
+}
+
+// advanced grid (compact triangle)
+function drawGrid(){
+  const COH=['2025-07','2025-08','2025-09','2025-10','2025-11','2025-12','2026-01','2026-02','2026-03','2026-04','2026-05','2026-06'];
+  const base=[100,23,16,13,11,10,9,8.5,8,7.6,7.3,7];
+  let html='<tr><th></th>'+Array.from({length:12},(_,m)=>`<th>M${m}</th>`).join('')+'</tr>';
+  COH.forEach((c,i)=>{const age=COH.length-1-i;html+=`<tr><td class="rowhead">${c}</td>`;
+    for(let m=0;m<12;m++){if(m>age){html+='<td class="cell empty"></td>';continue;}const v=base[m];const t=Math.min(1,v/100);html+=`<td class="cell" style="background:color-mix(in srgb,var(--good) ${Math.round(12+78*Math.pow(t,.5))}%,var(--surface-2))">${v}%</td>`;}
+    html+='</tr>';});
+  document.getElementById('grid').innerHTML=html;
+}
+document.getElementById('store').addEventListener('change',e=>{store=e.target.value;render();});
+document.getElementById('theme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;[...e.currentTarget.children].forEach(x=>x.classList.remove('on'));b.classList.add('on');document.documentElement.setAttribute('data-theme',b.dataset.v==='dark'?'dark':'');render();});
+render();
+</script>
+</body>
+</html>

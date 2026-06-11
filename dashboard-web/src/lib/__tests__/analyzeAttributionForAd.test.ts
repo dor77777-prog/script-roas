@@ -128,4 +128,62 @@ describe('analyzeAttributionForAd', () => {
     expect(result).not.toBeNull();
     expect(result!.roasInterval).toBeNull();
   });
+
+  // ----------------------------------------------------------------
+  // P1-8a/P1-8b parity at AD grain (adversarial review 2026-06-11).
+  // Mirrors the campaign-grain branches the 2026-06-10 batch added; the
+  // shared buildAnalysis ladder previously rewarded claim=0/det>0 with
+  // 'אמין 90' + 'שקול הרחבת ה-creative' (goodHalo) — scale advice during
+  // a tracking outage.
+  // ----------------------------------------------------------------
+
+  describe('trust-ladder outage honesty parity (2026-06-11 review)', () => {
+    it('claim=0 + det>0 → unknown-40 "הפלטפורמה מדווחת 0", NOT creative-expansion advice', () => {
+      const ad = makeAd({ adId: 'ad-1', metaClaim: 0, spend: 100 });
+      const orders = Array.from({ length: 2 }, (_, i) =>
+        makeOrder({ orderId: `o-${i}`, utmContent: 'ad-1', totalCad: 100, date: '2026-05-10' }),
+      );
+      const result = analyzeAttributionForAd(ad, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      // Coverage VALUE keeps the legacy claim=0→1 fallback; only the verdict changes.
+      expect(result!.coverage).toBe(1);
+      expect(result!.trust.level).toBe('unknown');
+      expect(result!.trust.score).toBe(40);
+      expect(result!.trust.label).toBe('הפלטפורמה מדווחת 0');
+      const reasonsJoined = result!.reasons.join(' ');
+      expect(reasonsJoined).toMatch(/0 המרות/);
+      expect(reasonsJoined).toMatch(/2 הזמנות/);
+      // Recommendation = check the tag — never the goodHalo creative-scale copy.
+      expect(result!.recommendation).toMatch(/Pixel|CAPI|תגית/);
+      expect(result!.recommendation).not.toMatch(/הרחבת ה-creative|ad-sets נוספים/);
+    });
+
+    it('coverage 2.5 → trust capped at medium + tracking-check recommendation (no goodHalo)', () => {
+      const ad = makeAd({ adId: 'ad-1', metaClaim: 100, spend: 100 });
+      const orders = [
+        makeOrder({ orderId: 'o-0', utmContent: 'ad-1', totalCad: 120, date: '2026-05-10' }),
+        makeOrder({ orderId: 'o-1', utmContent: 'ad-1', totalCad: 130, date: '2026-05-11' }),
+      ];
+      const result = analyzeAttributionForAd(ad, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.coverage).toBeCloseTo(2.5, 4);
+      expect(result!.coverageExceedsClamp).toBe(true);
+      expect(result!.trust.level).toBe('medium');
+      expect(result!.trust.score).toBeLessThanOrEqual(65);
+      expect(result!.recommendation).not.toMatch(/הרחבת ה-creative|ad-sets נוספים/);
+      expect(result!.recommendation).toMatch(/Pixel|CAPI|תגית|תיוג/);
+    });
+
+    it('normal halo (coverage 2.0 exactly, not > 2) keeps the high-trust goodHalo advice', () => {
+      const ad = makeAd({ adId: 'ad-1', metaClaim: 200, spend: 100 });
+      const orders = Array.from({ length: 4 }, (_, i) =>
+        makeOrder({ orderId: `o-${i}`, utmContent: 'ad-1', totalCad: 100, date: '2026-05-10' }),
+      );
+      const result = analyzeAttributionForAd(ad, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.coverageExceedsClamp).toBe(false);
+      expect(result!.trust.level).toBe('high');
+      expect(result!.recommendation).toContain('ad-sets נוספים');
+    });
+  });
 });

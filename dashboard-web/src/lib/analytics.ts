@@ -256,6 +256,16 @@ export function aggregate(
     const byStore =
       (billing as { byStore?: Record<string, number> }).byStore ?? {};
     fixedCosts = byStore[bucketStore] ?? 0;
+  } else if (scopedStoreNames && rowStoreNames.length === 0) {
+    // 2026-06-11 adversarial review (empty-bucket fallback): a store-scoped
+    // call with ZERO rows in range (store filter + a window predating the
+    // store's data) used to fall through to `billing.total` — charging the
+    // ENTIRE business's All-scoped fixed costs to one empty single-store
+    // view (pre-D4 the same state passed scopedStoreNames=undefined →
+    // billingStoreNames=[] → $0). An empty view charges nothing: consistent
+    // with fair-share-by-revenue → 0 revenue → 0 share. The length > 1
+    // global path below keeps the billing.total fallback unchanged.
+    fixedCosts = 0;
   } else {
     fixedCosts = billing.total;
   }

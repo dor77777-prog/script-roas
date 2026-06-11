@@ -16,7 +16,7 @@ import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
 import { netAdjustFactor } from './home/revenueBasis';
 import { isAdsEnabled, isStoreFullyOff, type AdStateMap, type AdPlatform } from './adState';
 import { SOURCE_LABEL } from './sourceLabels';
-import { orderMatchesCampaign } from './attributionAnalysis';
+import { orderMatchesCampaign, COVERAGE_WARNING_THRESHOLD } from './attributionAnalysis';
 import { getTodayInIsraelTz } from './dateRange';
 
 /**
@@ -1405,9 +1405,40 @@ export function generateAiReport({
       // Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
       //   lib_algorithm_aiReport.json (ALG-07).
       const coverage = c.value > 0 ? det / c.value : det > 0 ? 1 : 0;
-      const trustScore = Math.round(coverage * 100);
-      const trustLevel =
+      // 2026-06-11 adversarial review — P1-8a/P1-8b parity. The wave-4 batch
+      // changed analyzeAttribution's trust ladder but this synthetic mirror
+      // was missed, so the report's Health Score contradicted the dashboard
+      // for the exact tracking-outage signatures the wave targeted:
+      //   (a) claim=0/det>0 → dashboard verdict is unknown-40 'הפלטפורמה
+      //       מדווחת 0' (check the conversion tag, never budget decisions);
+      //       the raw coverage=1 fallback used to score it high/100 here.
+      //   (b) coverage > COVERAGE_WARNING_THRESHOLD (2) → dashboard caps
+      //       trust at medium/65 (broken-pixel signature); the raw mapping
+      //       used to emit an uncapped high (e.g. 250).
+      // The synthetic trust object must carry the SAME level/label/score the
+      // dashboard verdict would — and always a NUMERIC score, because
+      // campaignHealthScore now passes Math.round(trust.score) through.
+      let trustScore = Math.round(coverage * 100);
+      let trustLevel: 'high' | 'medium' | 'low' | 'unknown' =
         trustScore >= 80 ? 'high' : trustScore >= 40 ? 'medium' : 'low';
+      // Label defaults to the level string (legacy synthetic behavior);
+      // the two mirrored branches override it with the dashboard's label.
+      let trustLabel: string = trustLevel;
+      if (c.value === 0 && det > 0) {
+        // (a) platform reports 0 while tagged orders flow — P1-8a verdict.
+        trustLevel = 'unknown';
+        trustLabel = 'הפלטפורמה מדווחת 0';
+        trustScore = 40;
+      } else if (coverage > COVERAGE_WARNING_THRESHOLD && trustLevel === 'high') {
+        // (b) broken-pixel halo — P1-8b medium cap.
+        trustLevel = 'medium';
+        trustLabel = 'חלקי';
+        trustScore = Math.min(trustScore, 65);
+      }
+      // ConfidenceLevel's union has no 'unknown' — map the outage verdict to
+      // 'low' for the (unused-on-this-shape) combined-branch modulator.
+      const confidenceLevel: 'high' | 'medium' | 'low' =
+        trustLevel === 'unknown' ? 'low' : trustLevel;
 
       // Synthesise a minimal TrueRevenueInfo so computeCampaignHealth's
       // priority chain (deterministic → trueRevenue → platform) picks
@@ -1430,9 +1461,11 @@ export function generateAiReport({
               spend: c.spend,
               mappedCount: 1,
               sharedCampaigns: 0,
-              confidence: { level: trustLevel as 'high' | 'medium' | 'low', label: trustLevel, reasons: [] },
+              confidence: { level: confidenceLevel, label: confidenceLevel, reasons: [] },
               attribution: {
-                trust: { level: trustLevel as 'high' | 'medium' | 'low', label: trustLevel, score: trustScore },
+                // Mirrors the dashboard ladder incl. the P1-8a/P1-8b branches
+                // above (2026-06-11 review) — level may be 'unknown' now.
+                trust: { level: trustLevel, label: trustLabel, score: trustScore },
               } as unknown as ReturnType<typeof analyzeCpmVsRoas>['details'] extends infer X ? X : never,
               productTotals: { revenue: det, units: 0 },
               deterministicRevenue: det,

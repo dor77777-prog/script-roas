@@ -526,8 +526,55 @@ describe('attribution clarity', () => {
     expect(out.components.attributionClarity).toBe(30);
     // Reconciled with the Attribution panel's verdict; platform-neutral copy
     // (the per-platform tagging hint lives in the panel recommendation now).
+    // 2026-06-11 adversarial review: the old 'לא ניתן לאמת דרך click-id'
+    // assertion was dropped — that claim is FALSE for the 'הפלטפורמה מדווחת 0'
+    // verdict (click-id IS the verified side there), so the reason copy is
+    // now neutral per-verdict: `${label} (${score}/100) — ודאות החלוקה מוגבלת`.
     expect(out.reasons[3]).toContain('לא ניתן לקבוע');
-    expect(out.reasons[3]).toContain('לא ניתן לאמת');
+    expect(out.reasons[3]).toContain('ודאות החלוקה מוגבלת');
+    expect(out.reasons[3]).not.toContain('לא ניתן לאמת');
+  });
+
+  // 2026-06-11 adversarial review — pin ALL THREE unknown verdicts' clarity
+  // scores. The c39fcc8 raw passthrough silently re-scored the THIRD verdict
+  // ('אין המרות', score 0) from the neutral 30 to 0 — recreating the false
+  // 0/100 untrusted badge on every zero-conversion campaign. The passthrough
+  // now floors at 30: 30→30, 40→40, 0→30.
+  describe('unknown-verdict passthrough floor (2026-06-11 review)', () => {
+    function clarityFor(label: string, score: number) {
+      const tr = makeTrueRevenue({
+        attribution: {
+          ...makeTrueRevenue().attribution,
+          trust: { level: 'unknown', label, score },
+        } as TrueRevenueInfo['attribution'],
+      });
+      return computeCampaignHealth(buildInputs({ trueRevenueInfo: tr }));
+    }
+
+    it("'לא ניתן לקבוע' (30) passes through as 30", () => {
+      const out = clarityFor('לא ניתן לקבוע', 30);
+      expect(out.components.attributionClarity).toBe(30);
+      expect(out.reasons[3]).toContain('לא ניתן לקבוע');
+      expect(out.reasons[3]).toContain('(30/100)');
+    });
+
+    it("'הפלטפורמה מדווחת 0' (40) passes through as 40, with NO false click-id-failure claim", () => {
+      const out = clarityFor('הפלטפורמה מדווחת 0', 40);
+      expect(out.components.attributionClarity).toBe(40);
+      expect(out.reasons[3]).toContain('הפלטפורמה מדווחת 0');
+      expect(out.reasons[3]).toContain('(40/100)');
+      // The 40-verdict fires precisely BECAUSE click-id orders exist — the
+      // platform side is what's broken, so the reason must not claim a
+      // click-id verification failure.
+      expect(out.reasons[3]).not.toContain('לא ניתן לאמת דרך click-id');
+    });
+
+    it("'אין המרות' (0) floors at the neutral 30 — never a false 0/100 badge", () => {
+      const out = clarityFor('אין המרות', 0);
+      expect(out.components.attributionClarity).toBe(30);
+      expect(out.reasons[3]).toContain('אין המרות');
+      expect(out.reasons[3]).toContain('(30/100)');
+    });
   });
 
   it('returns 50 (neutral) when no attribution data (e.g. Google)', () => {

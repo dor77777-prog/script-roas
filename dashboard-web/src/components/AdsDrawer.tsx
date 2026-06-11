@@ -823,7 +823,14 @@ function AdSortHeader({
     <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-60 transition-opacity" />
   );
   return (
-    <th className={cn('font-medium px-3 py-2', textAlign)}>
+    <th
+      className={cn('font-medium px-3 py-2', textAlign)}
+      // 2026-06-11 adversarial-review fix (wave-8A item 6 parity) — aria-sort
+      // moved from the inner <Button> (invalid ARIA: the attribute is only
+      // defined for header cells, so AT never announced sort state) onto the
+      // <th>. Same relocation CampaignsTable + AdSetTable received.
+      aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
       <Button
         type="button"
         variant="ghost"
@@ -835,7 +842,6 @@ function AdSortHeader({
             ? 'text-accent font-semibold'
             : 'text-ink-secondary hover:text-ink',
         )}
-        aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
         {align === 'end' ? (
           <>
