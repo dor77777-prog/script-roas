@@ -28,9 +28,15 @@ export async function notifyFxFailure(input: {
       storeId: 'global',
       operation: 'fx_rate_failure',
       errorMsg: `FX ${input.currency}->CAD on ${input.dateStr} failed: ${input.errorMsg}`,
+      // P1-11 (2026-06-10) changed the failure behavior: adapters return null
+      // and the writers OMIT the *_cad keys, so the dashboard PRESERVES the
+      // last good CAD numbers (stale > wrong) while non-CAD metrics keep
+      // refreshing. The old "fell back to 0 / understated" copy predated that
+      // contract and misdescribed the impact (2026-06-11 incident).
       advice:
-        'The FX rate provider (Frankfurter) failed — CAD conversion fell back to 0 ' +
-        'for this run, so spend/ROAS/net may be understated until it recovers. ' +
+        'The FX rate provider (Frankfurter) failed — CAD conversion is paused ' +
+        'for this run and the dashboard keeps showing the LAST GOOD CAD values ' +
+        '(slightly stale, never zeroed); non-CAD metrics keep refreshing. ' +
         'Usually transient; if it persists, check the FX provider status.',
     });
   } catch {

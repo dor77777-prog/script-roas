@@ -18,6 +18,12 @@ describe('notifyFxFailure (DQ-2 — FX outage alert)', () => {
     expect(calls[0].errorMsg).toContain('USD->CAD');
     expect(calls[0].errorMsg).toContain('Frankfurter 503');
     expect(calls[0].advice).toBeTruthy();
+    // 2026-06-11 incident: the advice must describe the P1-11 null-contract
+    // (last good CAD values preserved), NOT the pre-contract zero-fallback —
+    // the operator read "fell back to 0" during a real outage while the
+    // dashboard was correctly preserving values.
+    expect(calls[0].advice).toMatch(/LAST GOOD/);
+    expect(calls[0].advice).not.toMatch(/fell back to 0|understated/);
   });
 
   it('never throws even if the underlying notifier rejects', async () => {
