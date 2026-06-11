@@ -358,7 +358,15 @@ export async function POST(req: Request): Promise<NextResponse> {
       customer_label: null,
       source,
       occurred_at: safeIso(body.occurred_at),
-      dedupe_key: `cart:${eventId}`,
+      // MT-0 (2026-06-11): store-scoped — eventId is CLIENT-generated (pixel
+      // event.id / Lovable beacon), so without the store prefix two stores
+      // emitting the same id collided on the global UNIQUE and the second
+      // event was silently dropped (and ids were cross-store poisonable).
+      // The webhook path needs no prefix: its id is Shopify's own per-delivery
+      // UUID behind a per-store HMAC. Old-format rows are unaffected; a pixel
+      // replay across the deploy boundary may duplicate one display-only
+      // feed event — acceptable.
+      dedupe_key: `cart:${store.store_id}:${eventId}`,
       // raw carries NO PII — display-safe fields + the PII-free `diag` probe above.
       // first_touch_source is a non-secret platform label (null = no signal) that
       // T3's first-click lens reads back via /api/store-events (no new column).

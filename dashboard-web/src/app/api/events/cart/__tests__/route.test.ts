@@ -98,7 +98,10 @@ describe('POST /api/events/cart', () => {
     const arg = insertSpy.mock.calls[0][0];
     expect(arg.store_id).toBe('uzoshop');
     expect(arg.type).toBe('add_to_cart');
-    expect(arg.dedupe_key).toBe('cart:evt-1');
+    // MT-0 (2026-06-11): store-scoped — eventId is client-generated, so an
+    // unprefixed key let two stores' identical ids collide on the global
+    // UNIQUE (second event silently dropped, cross-store poisonable).
+    expect(arg.dedupe_key).toBe('cart:uzoshop:evt-1');
     expect(arg.product_title).toBe('Blue Widget');
     expect(arg.quantity).toBe(2);
     expect(arg.amount_cad).toBeNull();
@@ -227,8 +230,8 @@ describe('POST /api/events/cart', () => {
     await POST(makeReq({ body: { store_token: TOKEN, event_id: 'evt-dup' }, origin: ORIGIN }));
     await POST(makeReq({ body: { store_token: TOKEN, event_id: 'evt-dup' }, origin: ORIGIN }));
     expect(insertSpy).toHaveBeenCalledTimes(2);
-    expect(insertSpy.mock.calls[0][0].dedupe_key).toBe('cart:evt-dup');
-    expect(insertSpy.mock.calls[1][0].dedupe_key).toBe('cart:evt-dup');
+    expect(insertSpy.mock.calls[0][0].dedupe_key).toBe('cart:uzoshop:evt-dup');
+    expect(insertSpy.mock.calls[1][0].dedupe_key).toBe('cart:uzoshop:evt-dup');
   });
 
   it('insert throwing (DB blip) → STILL 204 (never block the storefront), CORS present', async () => {
