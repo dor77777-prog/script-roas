@@ -50,7 +50,12 @@ export type TokenFailureProvider =
   | 'shopify'
   | 'fx';
 
-export type TokenFailureStore = 'uzoshop' | 'zolplus' | 'usmile360' | 'global';
+/** Any store id from the (dynamic, self-serve) stores table, or the reserved
+ *  'global' pseudo-store for platform-wide failures (FX, WhatsApp Cloud).
+ *  2026-06-11 (MT-0): was a hardcoded 3-store union predating self-serve —
+ *  together with the DB CHECK (dropped in migration 20260611120000) it made a
+ *  4th store's failure alerts silently disappear. Do NOT re-narrow this. */
+export type TokenFailureStore = string;
 
 export type TokenFailureInput = {
   /** Which upstream platform failed. Matches the CHECK constraint on the table. */

@@ -31,7 +31,7 @@ import { fetchGoogleAdsSpendForDay } from '@/lib/fetchers/googleAds';
 import { fetchMetaSpendForDayLight } from '@/lib/fetchers/meta';
 import { fetchTikTokAdvertiserInfo } from '@/lib/fetchers/tiktok';
 import { captureStepError } from '@/lib/sentry/capture';
-import { notifyTokenFailure, type TokenFailureStore } from '@/lib/notifications/tokenFailures';
+import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
 import { loadActiveStoreIds } from '@/lib/getStores';
 
 // Phase 4a: store ids now flow from the DB (loadActiveStoreIds) at runtime, so
@@ -84,10 +84,10 @@ async function runCheck(
       );
       await notifyTokenFailure({
         provider: spec.provider,
-        // Phase 4a: storeId now flows from the DB (runtime string). It is only
-        // used as a throttle-key / store_id DB value, so widening to string is
-        // safe — cast to the narrower alert-store type at this boundary.
-        storeId: spec.storeId as TokenFailureStore,
+        // 2026-06-11 (MT-0): cast removed — TokenFailureStore is now string
+        // (the narrow 3-store union + DB CHECK silently dropped alerts for
+        // self-serve stores; migration 20260611120000 dropped the CHECK).
+        storeId: spec.storeId,
         operation: 'canary',
         errorMsg,
         advice: spec.advice,

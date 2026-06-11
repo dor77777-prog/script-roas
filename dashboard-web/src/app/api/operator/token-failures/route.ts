@@ -21,7 +21,6 @@ import { createClient } from '@supabase/supabase-js';
 import {
   resolveTokenFailure,
   type TokenFailureProvider,
-  type TokenFailureStore,
 } from '@/lib/notifications/tokenFailures';
 import { userFacingError } from '@/lib/apiErrors';
 import { captureRouteError } from '@/lib/sentry/capture';
@@ -165,7 +164,7 @@ export async function POST(req: Request) {
       );
     }
     const provider = String(body.provider ?? '').trim() as TokenFailureProvider;
-    const storeId = String(body.store_id ?? '').trim() as TokenFailureStore;
+    const storeId = String(body.store_id ?? '').trim();
     const operation = String(body.operation ?? '').trim();
     const validProviders: TokenFailureProvider[] = [
       'meta',
@@ -175,17 +174,15 @@ export async function POST(req: Request) {
       'shopify',
       'fx',
     ];
-    const validStores: TokenFailureStore[] = [
-      'uzoshop',
-      'zolplus',
-      'usmile360',
-      'global',
-    ];
     if (!validProviders.includes(provider)) {
       return NextResponse.json({ error: `invalid provider: ${provider}` }, { status: 400 });
     }
-    if (!validStores.includes(storeId)) {
-      return NextResponse.json({ error: `invalid store_id: ${storeId}` }, { status: 400 });
+    // 2026-06-11 (MT-0): store_id is no longer validated against a hardcoded
+    // 3-store list — stores are self-serve/dynamic, and the old list meant a
+    // 4th store's failure rows could never be RESOLVED from the console.
+    // Shape-only check; resolve is a keyed UPDATE, a nonexistent key no-ops.
+    if (!storeId) {
+      return NextResponse.json({ error: 'store_id is required' }, { status: 400 });
     }
     if (!operation) {
       return NextResponse.json({ error: 'operation is required' }, { status: 400 });
