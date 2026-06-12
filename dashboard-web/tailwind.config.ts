@@ -31,6 +31,39 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // ---- Horizon UI base palette (reskin Wave 0, Task 0.1). Raw scale
+        //      from horizon-ui/horizon-tailwind-react (MIT). These are the
+        //      SOURCE values the token layer in globals.css maps onto the
+        //      existing --canvas/--glass/--accent/--text names; components
+        //      should keep consuming the semantic tokens — brand/navy exist
+        //      for Horizon-recipe surfaces (sidebar indicator, widget icon
+        //      circles, segmented pills) that quote the scale directly.
+        brand: {
+          50:  '#E9E3FF',
+          100: '#C0B8FE',
+          200: '#A195FD',
+          300: '#8171FC',
+          400: '#7551FF',
+          500: '#422AFB',
+          600: '#3311DB',
+          700: '#2111A5',
+          800: '#190793',
+          900: '#11047A',
+        },
+        navy: {
+          50:  '#d0dcfb',
+          100: '#aac0fe',
+          200: '#a3b9f8',
+          300: '#728fea',
+          400: '#3652ba',
+          500: '#1b3bbb',
+          600: '#24388a',
+          700: '#1B254B',
+          800: '#111c44',
+          900: '#0b1437',
+        },
+        lightPrimary: '#F4F7FE',
+
         // ---- Canvas: fixed body background. Dual-mode — deep blue-violet on
         //      dark (:root), near-white cool wash on light ([data-theme="light"]).
         canvas: {
@@ -243,6 +276,10 @@ const config: Config = {
         sheet:   'var(--shadow-sheet)',
         // Wave 0 — lighter button/pill drop. Flips per theme via --shadow-soft.
         soft:    'var(--shadow-soft)',
+        // Horizon reskin Wave 0 — Horizon's signature card shadow (their
+        // `shadow-3xl shadow-shadow-500` pair, light mode only; dark mode is
+        // shadowless per the Horizon recipe — pair with `dark:shadow-none`).
+        hz:      '14px 17px 40px 4px rgba(112,144,176,0.08)',
       },
 
       borderRadius: {
@@ -274,6 +311,9 @@ const config: Config = {
         card:    'var(--radius-card)',
         hero:    'var(--radius-hero)',
         pill:    'var(--radius-pill)',
+        // Horizon reskin Wave 0 — Horizon's 20px card radius (`rounded-[20px]`
+        // in their recipes; exposed as `rounded-hz`).
+        hz:      '20px',
       },
 
       transitionDuration: {

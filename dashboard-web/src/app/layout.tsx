@@ -45,12 +45,12 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  // Dual-mode browser-chrome tint: dark matches --canvas-1 (deep blue-violet);
-  // light (#f3f4f8) is provisional light-canvas chrome — will be reconciled
-  // with the real light canvas token in a later phase.
+  // Dual-mode browser-chrome tint — matches the Horizon canvas tokens
+  // (--canvas-1): navy-900 #0b1437 dark / lightPrimary #F4F7FE light.
+  // Keep IN SYNC with --canvas-1 in globals.css.
   themeColor: [
-    { media: '(prefers-color-scheme: dark)',  color: '#0a0c1d' },
-    { media: '(prefers-color-scheme: light)', color: '#f3f4f8' },
+    { media: '(prefers-color-scheme: dark)',  color: '#0b1437' },
+    { media: '(prefers-color-scheme: light)', color: '#F4F7FE' },
   ],
 };
 

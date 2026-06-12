@@ -3,14 +3,15 @@
 @tailwind utilities;
 
 /* ===========================================================================
-   Design Tokens — DUAL-MODE, flat MESH re-skin.
+   Design Tokens — DUAL-MODE, Horizon UI re-skin (Wave 0, 2026-06-12).
    `:root` IS the DARK token set; `[data-theme="light"]` (immediately after)
    re-declares every token with light values. (Naming is inverted vs a normal
-   app: dark lives in :root, light is the override.) This is a flat mesh
-   surface system — opaque cards, no backdrop glass — NOT the prior glass+neon
-   pass. Source-of-truth:
-   docs/superpowers/mockups/2026-05-31-light-reskin/dashboard-mockups.html
-   (the `mesh` light variant + `dark-mesh` dark variant).
+   app: dark lives in :root, light is the override.) Values are the Horizon UI
+   base palette (brand/navy/lightPrimary — see tailwind.config.ts) injected
+   into the EXISTING token names so every CI guard keeps working unchanged.
+   Source-of-truth:
+   docs/superpowers/mockups/2026-06-12-horizon-reskin/home-approved.html
+   (+ value table in docs/superpowers/specs/2026-06-12-horizon-reskin-design.md §2).
    Tailwind reads these via the CSS-variable color strategy in
    tailwind.config.ts. ROAS status tokens map 1-to-1 to the existing
    roasLabel() tones (red < 2.0, orange 2.0–2.7, green 2.7–3.0, blue > 3.0,
@@ -47,54 +48,48 @@
   --store-7:   oklch(70% 0.17 20);  /* coral   */
   --store-8:   oklch(72% 0.14 165); /* teal    */
 
-  /* Brand accent — violet on dark (mockup --accent / --accent-ink).
-     --accent-deep used for buttons/logo gradients, --accent-fg for
-     text-on-accent. NOTE: on DARK the second gradient stop LIGHTENS
-     (#a99cff > #7c6cff) per the mockup, so the primary-button gradient
-     (from-accent to-accent-deep) reads lighter-at-bottom by design. */
-  --accent:      #7c6cff;
-  --accent-deep: #a99cff;
+  /* Brand accent — Horizon brand scale (reskin Wave 0). Dark mode uses
+     brand-400 #7551FF (Horizon's own dark-mode accent — brand-500 is too deep
+     against navy-800 cards); --accent-deep is brand-500 #422AFB so the
+     primary-button gradient (from-accent to-accent-deep) deepens toward the
+     bottom. --accent-fg stays white. */
+  --accent:      #7551FF;
+  --accent-deep: #422AFB;
   --accent-fg:   oklch(100% 0 0);
-  /* A11y (2026-06-01): white-on-accent is only 3.86:1 on the brand violet, so
-     the text-bearing primary BUTTON surface uses a deepened on-hue violet that
-     clears WCAG-AA (white = 5.33:1). The brand --accent stays untouched for
-     rings / glows / links / non-text accent usages. -hover deepens further
-     (white = 6.00:1) so the hover state also clears AA. */
-  --accent-btn:       #6354e6;
-  --accent-btn-hover: #5a4dd9;
-  /* Mesh re-skin (Wave 0) — accent tints.
+  /* A11y: white on brand-400 #7551FF = 4.80:1 (AA pass); hover deepens to
+     brand-500 #422AFB where white = 7.10:1. Locked by contrastGuard. */
+  --accent-btn:       #7551FF;
+  --accent-btn-hover: #422AFB;
+  /* Accent tints (Horizon brand-400 base on dark).
      --accent-soft : icon-chip bg, operator accent-panel, mapped-product pill.
      --accent-bg   : alpha-safe replacement for the bg-accent/NN tint sites. */
-  --accent-soft: rgba(124,108,255,0.16);
-  --accent-bg:   rgba(124,108,255,0.12);
-  /* AA-safe accent for small TEXT/links on a card/glass surface (raw --accent
-     is too light as text — 4.48:1 dark / 2.96:1 light). In dark the lighter
-     --accent-deep clears (7.30:1); in light the deeper --accent-btn clears
-     (4.66:1). Locked by contrastGuard. */
-  --accent-link: #a99cff; /* = --accent-deep (dark); 7.30:1 on --glass-1 */
+  --accent-soft: rgba(117,81,255,0.16);
+  --accent-bg:   rgba(117,81,255,0.12);
+  /* AA-safe accent for small TEXT/links on a card/glass surface. In dark the
+     lighter brand-200 #A195FD clears 6.47:1 on the navy-800 card (--glass-1);
+     raw --accent lands under the 4.5 text bar. Locked by contrastGuard. */
+  --accent-link: #A195FD; /* = brand-200 (dark); 6.47:1 on --glass-1 */
 
-  /* Mobile A3 — sliding range-pill bar (2026-06-01).
+  /* Mobile A3 — sliding range-pill bar (Horizon segmented recipe).
      pill-track  = recessed bar surface (= the sunken-well token).
-     pill-thumb  = the sliding indicator slab. The mockup used the brand
-       accent (#7c6cff) but white on it is only 3.86:1 (FAIL light @2.96:1),
-       so the thumb paints the DEEPENED on-hue accent (= accent-btn #6354e6),
-       which keeps the violet/teal accent identity AND clears WCAG-AA for the
-       on-thumb white (5.33:1 dark / 4.66:1 light — locked by contrastGuard).
+     pill-thumb  = the sliding indicator slab — Horizon's active segmented
+       pill is brand-500 #422AFB with white text (7.10:1, AA — locked by
+       contrastGuard in both themes).
      pill-ink    = inactive (off-thumb) muted label.
      pill-ink-on = active (on-thumb) white label. */
   --pill-track:  var(--surface-sunken);
-  --pill-thumb:  #6354e6;
+  --pill-thumb:  #422AFB;
   --pill-ink:    var(--text-muted);
   --pill-ink-on: oklch(100% 0 0);
 
-  /* Sidebar — dark slim rail in BOTH themes (mockup keeps it dark on light too).
-     The logo gradient stays violet in BOTH themes (mockup .sb-logo
-     #7c6cff→#5a49f0) regardless of the theme accent. */
-  --sidebar:           #15182a;
-  --sidebar-fg:        #8b91ad;
+  /* Sidebar — Horizon recipe: navy-800 surface in dark (white in light — see
+     the light block). The logo gradient is the brand ramp brand-400→brand-500
+     in BOTH themes. */
+  --sidebar:           #111c44;
+  --sidebar-fg:        #A3AED0;
   --sidebar-fg-active: #ffffff;
-  --sidebar-logo-1:    #7c6cff;
-  --sidebar-logo-2:    #5a49f0;
+  --sidebar-logo-1:    #7551FF;
+  --sidebar-logo-2:    #422AFB;
 
   /* V4 band signal — see Task 1.3.
      Round-6 tuning (2026-05-31): orange hue shifted 55→45 (true orange,
@@ -112,6 +107,20 @@
   --band-green:  #34e2ad;  /* mockup-locked band stop (bright ::before top-bar glow) */
   --band-blue:   #5b8df0;  /* mockup-locked band stop (bright ::before top-bar glow) */
   --band-gray:   #828aae;  /* mockup-locked band stop (bright ::before top-bar glow) */
+
+  /* Horizon reskin (Wave 0) — lively v11 band-card GRADIENTS, the approved
+     semantic layer on top of the Horizon base (canonical mockup
+     docs/superpowers/mockups/2026-06-12-horizon-reskin/home-approved.html).
+     White text on every band is operator-locked; alarm = spend over the
+     threshold with ZERO sales, paired with the alarmPulse keyframes defined
+     after the theme blocks. Theme-independent (declared identically in the
+     light block for the themeParity guard). */
+  --band-blue-grad:   linear-gradient(135deg,#2f6bff,#4d8dff 52%,#85b8ff);
+  --band-orange-grad: linear-gradient(135deg,#f08316,#F89C42 52%,#ffc278);
+  --band-green-grad:  linear-gradient(135deg,#0ca678,#1ed29b 52%,#5fe9bd);
+  --band-red-grad:    linear-gradient(135deg,#f43f47,#ff5a60 52%,#ff8a8e);
+  --band-gray-grad:   linear-gradient(135deg,#5b6373,#7c8597 52%,#a6aebd);
+  --band-alarm-grad:  linear-gradient(135deg,#d40b14,#f81b25 48%,#ff4d55);
 
   /* Deepened band-card SURFACE stops (vibrant-AA, 2026-06-01). The colored
      ROAS-band cards now paint a DEEPENED vibrant gradient (OKLCH hue+chroma
@@ -221,50 +230,47 @@
   --radius-hero:    1.125rem;  /* 18 — hero / dialog / sheet surfaces */
   --radius-pill:    9999px;    /* fully rounded — avatars, status dots */
 
-  /* Canvas — deep blue-violet. Used as fixed body background + linear
-     gradient endpoints. */
-  --canvas-1: #0d0f1e;
-  --canvas-2: #0a0c18;
+  /* Canvas — Horizon dark: flat navy-900. Both gradient endpoints carry the
+     same value so the body background reads flat, per the Horizon recipe. */
+  --canvas-1: #0b1437;
+  --canvas-2: #0b1437;
 
-  /* Page-wash glow — single subtle radial over the flat canvas (matches the
-     mockup's `.dash` radial). Dark = subtle violet. */
-  --bg-glow: rgba(124,108,255,0.13);
+  /* Page-wash glow — kept as a barely-there brand radial (Horizon dark is
+     flat; near-zero alpha keeps the token functional without fighting it). */
+  --bg-glow: rgba(117,81,255,0.07);
 
-  /* Mesh surfaces — opaque card stops + 2 edge tones.
-     --glass-edge-hot is the accent rim (violet dark / teal light) used on
-     hover / focus / active surfaces. */
-  --glass-1: #171a2e;        /* opaque navy card surface (mesh) */
-  --glass-2: #1d2138;
-  --glass-3: #20243a;        /* slightly elevated — sticky headers */
+  /* Horizon surfaces — opaque card stops + 2 edge tones.
+     --glass-1 = navy-800 card · --glass-2 = mid stop (hover / elevated /
+     tooltips) · --glass-3 = navy-700 (sticky headers).
+     --glass-edge-hot is the brand rim used on hover / focus / active. */
+  --glass-1: #111c44;        /* Horizon navy-800 card surface */
+  --glass-2: #162048;
+  --glass-3: #1B254B;        /* Horizon navy-700 — sticky headers */
   --glass-edge:     rgba(255,255,255,0.08);
-  --glass-edge-hot: rgba(124,108,255,0.5);
+  --glass-edge-hot: rgba(117,81,255,0.5);
 
   /* Elevated surface alias — consumed by CampaignsTable / TodayLive card
      backgrounds + chart-dot strokes (CampaignDrawerDaily). Aliases the
      mid glass stop so it themes automatically. */
   --surface-elevated-1: var(--glass-2);
 
-  /* Recessed well surface (Wave 0) — seg/goalbar/health tracks + kstrip inset.
-     Sits BELOW the card surface so insets read as carved-in, not raised. */
-  --surface-sunken: #191d31;
+  /* Recessed well surface — Horizon dark insets are navy-700: seg/goalbar/
+     health tracks + kstrip inset (their `dark:bg-navy-700` widget circles). */
+  --surface-sunken: #1B254B;
 
-  /* Foreground stack (4 stops — see Task 1.6).
-     --text          → body / numbers / headings
-     --text-2        → secondary labels, subtitle text
-     --text-muted    → metadata, axis labels
-     --text-subtle   → least-prominent meta (e.g. timestamps in tooltips)
-     A11y re-base (2026-06-01): muted/subtle deepened again to clear WCAG-AA
-     4.5:1 on the REAL worst dark surface these inks render on — the
-     chart-tooltip bg (#16323a) per the axe prod scan, which is stricter than
-     --glass-3 (#20243a). The first deepening targeted glass-3 only and landed
-     ~4.0–4.3 on the tinted tooltip/glass surfaces.
-     text 16.8:1 · text-2 7.9:1 · text-muted 4.63:1 (#16323a; 5.23 on glass-3)
-     · text-subtle 4.54:1 (#16323a; 5.12 on glass-3).
-     Hue (cool-gray) preserved; locked by contrastGuard.test.ts. */
-  --text:        #eef1ff;
-  --text-2:      #b3b9d8;
-  --text-muted:  #8c96ba;
-  --text-subtle: #8c93bf;
+  /* Foreground stack (4 stops — see Task 1.6), Horizon dark mapping:
+     --text          → body / numbers / headings — Horizon dark text = white
+     --text-2        → secondary labels (mockup dark:text-gray-300)
+     --text-muted    → metadata, axis labels — Horizon's own secondary gray
+                       #A3AED0 (fails on WHITE, fine on dark — see light block)
+     --text-subtle   → least-prominent meta (timestamps in tooltips)
+     A11y: held against the hardcoded worst dark surface #16323a (chart
+     tooltip, per the axe prod scan) by contrastGuard.test.ts:
+     text 13.54:1 · text-2 9.19:1 · text-muted 6.14:1 · text-subtle 5.14:1. */
+  --text:        #ffffff;
+  --text-2:      #d1d5db;
+  --text-muted:  #A3AED0;
+  --text-subtle: #94a0b8;
 
   /* Blur + saturate filter stacks (see Task 1.7). Cards are now OPAQUE mesh
      surfaces (no backdrop-filter on .glass), so these serve ONLY the few
@@ -283,11 +289,14 @@
      Focus rings live on the global :focus-visible rule near line 222,
      so the legacy `focus:shadow-focus` is no longer needed at consumer
      sites. */
-  --shadow-glass:   0 1px 2px rgba(0,0,0,0.35), 0 12px 32px rgba(0,0,0,0.42);
+  /* Horizon dark is SHADOWLESS on cards/buttons (their `dark:shadow-none`),
+     so glass + soft resolve to a no-op transparent shadow — a valid <shadow>
+     value (NOT `none`) so it stays composable with Tailwind's ring shadows.
+     Overlay/sheet keep real depth: floating modals still need separation. */
+  --shadow-glass:   0 0 rgba(0,0,0,0);
   --shadow-overlay: 0 8px 24px rgba(0,0,0,0.5);
   --shadow-sheet:   0 24px 48px rgba(0,0,0,0.6);
-  /* Mesh re-skin (Wave 0) — lighter button/pill drop shadow. */
-  --shadow-soft:    0 1px 2px rgba(0,0,0,0.3);
+  --shadow-soft:    0 0 rgba(0,0,0,0);
 
   /* Modal / overlay scrim (Wave 0) — tokenised replacement for raw bg-black/60
      so the dim layer flips per theme instead of always being pure black. */
@@ -445,38 +454,37 @@
   --store-7:   oklch(57% 0.17 20);  /* coral   */
   --store-8:   oklch(58% 0.14 165); /* teal    */
 
-  /* Brand accent — TEAL on light (mesh accent; dark uses violet). --accent-deep
-     is a darker teal so the primary-button gradient deepens toward the bottom. */
-  --accent:      #0ea5b7;        /* TEAL (mesh accent) */
-  --accent-deep: #0e8a99;
+  /* Brand accent — Horizon brand-500 #422AFB on light. --accent-deep is
+     brand-600 #3311DB so the primary-button gradient deepens toward the
+     bottom. */
+  --accent:      #422AFB;       /* Horizon brand-500 */
+  --accent-deep: #3311DB;       /* Horizon brand-600 */
   --accent-fg:   oklch(100% 0 0);
-  /* A11y (2026-06-01): white on the brand teal is only 2.96:1, so the
-     text-bearing primary BUTTON surface uses a deepened on-hue teal that
-     clears WCAG-AA (white = 4.66:1). Brand --accent stays for rings/links.
-     -hover deepens further (white = 5.94:1). */
-  --accent-btn:       #0c8090;
-  --accent-btn-hover: #0a6e7c;
-  /* Mesh re-skin (Wave 0) — accent tints (light). */
-  --accent-soft: #def5f7;
-  --accent-bg:   rgba(14,165,183,0.10);
-  /* AA-safe accent text/link (light) — the deeper --accent-btn teal clears
-     4.66:1 on white; raw --accent is only 2.96:1. See dark note. */
-  --accent-link: #0c8090; /* = --accent-btn (light); 4.66:1 on white */
+  /* A11y: white on brand-500 #422AFB = 7.10:1; hover deepens to brand-600
+     #3311DB where white = 9.36:1. Locked by contrastGuard. */
+  --accent-btn:       #422AFB;
+  --accent-btn-hover: #3311DB;
+  /* Accent tints (light) — brand-50 chip bg + alpha brand tint. */
+  --accent-soft: #E9E3FF;       /* Horizon brand-50 */
+  --accent-bg:   rgba(66,42,251,0.08);
+  /* AA-safe accent text/link (light) — brand-500 itself clears 7.10:1 on the
+     white card. Locked by contrastGuard. */
+  --accent-link: #422AFB; /* = brand-500 (light); 7.10:1 on white */
 
-  /* Mobile A3 — sliding range-pill bar (light). Thumb = deepened on-hue teal
-     (= --accent-btn #0c8090); white on it = 4.66:1 (AA). See dark note above. */
+  /* Mobile A3 — sliding range-pill bar (light). Thumb = Horizon brand-500
+     active segmented pill; white on it = 7.10:1 (AA). See dark note above. */
   --pill-track:  var(--surface-sunken);
-  --pill-thumb:  #0c8090;
+  --pill-thumb:  #422AFB;
   --pill-ink:    var(--text-muted);
   --pill-ink-on: oklch(100% 0 0);
 
-  /* Sidebar — dark slim rail in BOTH themes (mockup keeps it dark on light too).
-     Logo stays violet in BOTH themes (mockup .sb-logo) regardless of accent. */
-  --sidebar:           #15182a;
-  --sidebar-fg:        #8b91ad;
-  --sidebar-fg-active: #ffffff;
-  --sidebar-logo-1:    #7c6cff;
-  --sidebar-logo-2:    #5a49f0;
+  /* Sidebar — Horizon recipe: WHITE rail on light (navy-800 in dark), dark
+     navy ink, brand-ramp logo gradient in both themes. */
+  --sidebar:           #ffffff;
+  --sidebar-fg:        #5b6478;
+  --sidebar-fg-active: #1B254B;
+  --sidebar-logo-1:    #7551FF;
+  --sidebar-logo-2:    #422AFB;
 
   /* V4 band signal — same hues as dark; mid-tone L for the bright ::before bar. */
   --band-red:    #e11d48;  /* mockup-locked band stop (light, top-bar glow) */
@@ -487,6 +495,16 @@
   --band-green:  #0f9d6b;  /* mockup-locked band stop (light, top-bar glow) */
   --band-blue:   #3b82f6;  /* mockup-locked band stop (light, top-bar glow) */
   --band-gray:   #949ab4;  /* mockup-locked band stop (light, top-bar glow) */
+
+  /* Horizon reskin (Wave 0) — lively v11 band-card gradients. THEME-
+     INDEPENDENT (white text on the vivid slab in both themes); re-declared
+     identically here for the themeParity guard. See the :root block. */
+  --band-blue-grad:   linear-gradient(135deg,#2f6bff,#4d8dff 52%,#85b8ff);
+  --band-orange-grad: linear-gradient(135deg,#f08316,#F89C42 52%,#ffc278);
+  --band-green-grad:  linear-gradient(135deg,#0ca678,#1ed29b 52%,#5fe9bd);
+  --band-red-grad:    linear-gradient(135deg,#f43f47,#ff5a60 52%,#ff8a8e);
+  --band-gray-grad:   linear-gradient(135deg,#5b6373,#7c8597 52%,#a6aebd);
+  --band-alarm-grad:  linear-gradient(135deg,#d40b14,#f81b25 48%,#ff4d55);
 
   /* Deepened band-card SURFACE stops — THEME-INDEPENDENT (same deep gradient as
      dark; the band card is identical in both themes by design). Re-declared
@@ -570,55 +588,54 @@
   --radius-hero:    1.125rem;
   --radius-pill:    9999px;
 
-  /* Canvas — near-white cool wash (calm light mesh). */
-  --canvas-1: #edf0f8;
-  --canvas-2: #f4f6fc;
+  /* Canvas — Horizon lightPrimary #F4F7FE, flat (both endpoints equal). */
+  --canvas-1: #F4F7FE;
+  --canvas-2: #F4F7FE;
 
-  /* Page-wash glow — single subtle radial over the flat canvas (matches the
-     mockup's `.dash` radial). Light = subtle teal. */
-  --bg-glow: rgba(14,165,183,0.10);
+  /* Page-wash glow — barely-there brand radial (Horizon light is flat). */
+  --bg-glow: rgba(66,42,251,0.04);
 
-  /* Mesh surfaces — opaque white-ish cards on light + a soft cool edge.
-     --glass-edge-hot is the accent rim (teal on light / violet on dark). */
+  /* Horizon surfaces — WHITE cards on the lightPrimary canvas.
+     --glass-2 = lightPrimary (Horizon's hover/inset tone on white cards);
+     --glass-3 = a step deeper for sticky headers.
+     --glass-edge-hot is the brand rim. */
   --glass-1: #ffffff;
-  --glass-2: #f6f7fb;
-  --glass-3: #eef1f8;
-  --glass-edge:     rgba(22,26,48,0.08);
-  --glass-edge-hot: rgba(14,165,183,0.4);
+  --glass-2: #F4F7FE;
+  --glass-3: #E9EDF7;
+  --glass-edge:     rgba(27,37,75,0.08);
+  --glass-edge-hot: rgba(66,42,251,0.4);
 
   /* Elevated surface alias — resolves per-theme via --glass-2. */
   --surface-elevated-1: var(--glass-2);
 
-  /* Recessed well surface (Wave 0, light) — seg/goalbar/health tracks +
-     kstrip inset. A cool near-white tint just below the white card surface. */
-  --surface-sunken: #f1f3f9;
+  /* Recessed well surface (light) — Horizon insets on white cards are
+     lightPrimary (their `bg-lightPrimary` widget circles / segmented track). */
+  --surface-sunken: #F4F7FE;
 
-  /* Foreground stack — inverted to dark inks on the light canvas.
-     A11y re-base (2026-06-01): muted/subtle deepened again to clear WCAG-AA
-     4.5:1 on the REAL worst light surface — glass-3 (#edf0f8 per axe prod
-     scan), the darkest light card surface — NOT white. The first deepening
-     targeted white only and landed ~4.6 on white but ~4.0 on the tinted
-     glass-3/status-bg surfaces.
-     text 16.5:1 · text-2 6.5:1 · text-muted 4.60:1 (#edf0f8; 5.25 on white)
-     · text-subtle 4.61:1 (#edf0f8; 5.25 on white). Hue (cool-gray) preserved.
-     Locked by contrastGuard.test.ts. */
-  --text:        #171a2b;
-  --text-2:      #565d78;
-  --text-muted:  #666b84;
-  --text-subtle: #696b7d;
+  /* Foreground stack — Horizon light mapping: navy-700 body ink + AA-safe
+     secondary grays. Horizon's own secondary #A3AED0 FAILS WCAG-AA on white
+     (2.1:1), so the secondary tiers are darkened to the gray-600/gray-500
+     family the approved mockup uses, all clearing ≥4.5:1 on the hardcoded
+     worst light surface #edf0f8 (locked by contrastGuard.test.ts):
+     text 13.04:1 · text-2 6.63:1 · text-muted 5.21:1 · text-subtle 4.98:1. */
+  --text:        #1B254B;
+  --text-2:      #4b5563;
+  --text-muted:  #5b6478;
+  --text-subtle: #5f6680;
 
   /* Blur + saturate — cards are opaque in light so blur is mostly inert;
      keep modest values for the few translucent sheets/overlays. */
   --blur-glass: blur(20px) saturate(120%);
   --blur-sheet: blur(36px) saturate(130%);
 
-  /* Shadow stack — cool soft drops; the dark white-inset highlight is
-     dropped (it only reads on dark). */
-  --shadow-glass:   0 1px 2px rgba(22,26,48,0.04), 0 8px 24px rgba(22,26,48,0.06);
+  /* Shadow stack — Horizon's signature soft card shadow on light
+     (their `shadow-3xl shadow-shadow-500`); overlay/sheet keep deeper
+     navy-tinted drops for floating layers. */
+  --shadow-glass:   14px 17px 40px 4px rgba(112,144,176,0.08);
   --shadow-overlay: 0 8px 24px rgba(22,26,48,0.12);
   --shadow-sheet:   0 24px 48px rgba(22,26,48,0.16);
-  /* Mesh re-skin (Wave 0) — lighter button/pill drop shadow (light). */
-  --shadow-soft:    0 1px 2px rgba(22,26,48,0.05);
+  /* Lighter button/pill drop shadow (light) — Horizon shadow tint. */
+  --shadow-soft:    0 1px 2px rgba(112,144,176,0.24);
 
   /* Modal / overlay scrim (Wave 0, light) — a cool ink dim rather than pure
      black so light-mode overlays don't slam to a harsh black backdrop. */
@@ -701,6 +718,18 @@
   --annotation-creative: oklch(58% 0.14 180);
   --annotation-supplier: oklch(56% 0.16 240);
   --annotation-other:    oklch(60% 0.018 250);
+}
+
+/* ===========================================================================
+   Horizon reskin (Wave 0) — alarm-band pulse. Pairs with --band-alarm-grad:
+   the "spend over threshold, ZERO sales" card breathes a hot-red box-shadow
+   ring (1.8s, from the approved mockup). The project-wide
+   prefers-reduced-motion sweep collapses animation durations, freezing the
+   pulse at rest for accessibility-sensitive sessions.
+   =========================================================================== */
+@keyframes alarmPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248,27,37,.45); }
+  50%      { box-shadow: 0 0 0 9px rgba(248,27,37,0); }
 }
 
 /* ===========================================================================
