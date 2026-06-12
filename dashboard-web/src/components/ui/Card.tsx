@@ -42,11 +42,33 @@ import { cn } from '@/lib/utils';
  */
 
 const cardVariants = cva(
-  /* Plan-spec default: `glass rounded-card p-5`. The `glass` token is the
-   * literal class name; CSS rule lives in globals.css. `text-ink` is added
-   * so cards have a body-coloured default text fill (was on the previous
-   * implementation; no consumer relies on it but removing it would silently
-   * change foreground colour on every card).
+  /* Horizon re-skin Wave 1 (Task 1.1) — canonical Card recipe.
+   * Mockup source: docs/superpowers/mockups/2026-06-12-horizon-reskin/
+   * home-approved.html (KPI card, the `!z-5 relative flex flex-col
+   * rounded-[20px] bg-white bg-clip-border shadow-3xl shadow-shadow-500
+   * dark:!bg-navy-800 dark:text-white dark:shadow-none` recipe). Expressed
+   * through OUR token utilities rather than Horizon's raw class names:
+   *   • surface (`bg-white` / `dark:bg-navy-800`) + theme-aware shadow
+   *     (`shadow-3xl shadow-shadow-500` light / `dark:shadow-none`) +
+   *     `position: relative` already come from the `.glass` rule in
+   *     globals.css — it sets `background: var(--glass-1)` (#fff light /
+   *     navy-800 dark), `box-shadow: var(--shadow-glass)` (Horizon drop in
+   *     light, `0 0 transparent` in dark) and `position: relative`. Because
+   *     `--shadow-glass` is ALREADY shadowless in dark, a separate
+   *     `dark:shadow-none` would be redundant — so it is intentionally NOT
+   *     present here (W0 follow-up note).
+   *   • `flex flex-col` + `bg-clip-border` mirror the Horizon container
+   *     chassis (flex items stretch to full width by default, so block-flow
+   *     children are unaffected; `bg-clip-border` is Tailwind's default
+   *     border-box clip — restated to match the canonical recipe).
+   *   • `rounded-hz` is the exact Horizon 20px radius (was `rounded-card`
+   *     = 18px). `shadow-hz` is the alias for the same `--shadow-glass`
+   *     token `.glass` already applies, so it is not restated to avoid a
+   *     duplicate box-shadow declaration.
+   *
+   * `text-ink` is kept so cards have a body-coloured default text fill (no
+   * consumer relies on it, but removing it would silently change foreground
+   * colour on every card).
    *
    * Wave-6 Task 6.1 — `card-hover` adds the universal hover lift
    * (translateY(-2px) over --motion-snap). The `.card-hover` class hook
@@ -54,7 +76,7 @@ const cardVariants = cva(
    * can collapse the transform back to none. We pair it with
    * `transition-transform duration-snap` so the lift uses the semantic
    * motion vocabulary (120 ms) instead of an arbitrary number. */
-  'glass rounded-card p-5 text-ink transition-colors card-hover transition-transform duration-snap hover:-translate-y-0.5',
+  'glass flex flex-col bg-clip-border rounded-hz p-5 text-ink transition-colors card-hover transition-transform duration-snap hover:-translate-y-0.5',
   {
     variants: {
       variant: {

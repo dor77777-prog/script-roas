@@ -22,12 +22,18 @@ describe('Card primitive', () => {
     expect(screen.getByText('Footer')).toBeInTheDocument();
   });
 
-  // Task 2.4 — default Card applies the canonical glass treatment.
-  it('default Card applies the `glass` class + plan-spec default chassis', () => {
+  // Task 2.4 / Horizon reskin Wave-1 Task 1.1 — default Card applies the
+  // canonical glass treatment with the Horizon chassis (rounded-hz 20px +
+  // flex flex-col + bg-clip-border). The surface + theme-aware shadow come
+  // from the `.glass` rule (background: --glass-1, box-shadow: --shadow-glass).
+  it('default Card applies the `glass` class + Horizon chassis', () => {
     render(<Card data-testid="card">x</Card>);
     const cls = screen.getByTestId('card').className;
     expect(cls).toMatch(/\bglass\b/);
-    expect(cls).toMatch(/\brounded-card\b/);
+    expect(cls).toMatch(/\brounded-hz\b/);
+    expect(cls).toMatch(/\bflex\b/);
+    expect(cls).toMatch(/\bflex-col\b/);
+    expect(cls).toMatch(/\bbg-clip-border\b/);
     expect(cls).toMatch(/\bp-5\b/);
   });
 
