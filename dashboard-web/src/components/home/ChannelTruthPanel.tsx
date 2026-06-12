@@ -9,16 +9,29 @@
 import { Money } from '@/components/ui/Money';
 import { CHART_COLORS } from '@/lib/chartColors';
 import { cn } from '@/lib/utils';
+import { bandForRoas } from '@/lib/roasBands';
 import type { Channel, ChannelMetric } from '@/lib/home/channelTruth';
 
 const CHANNEL_LABEL: Record<Channel, string> = { meta: 'Meta', google: 'Google', tiktok: 'TikTok' };
 
-/** ROAS bands (same anchors as the dashboard ROAS bands): ≥3 healthy, ≥2 warn, <2 weak. */
+/**
+ * Channel-card health tone. Classification delegates to the single source of
+ * truth (`bandForRoas`, lib/roasBands.ts) — this panel previously carried its
+ * OWN 3-band scale (≥3/≥2/<2) that DROPPED the 2.7 orange boundary and the blue
+ * band, so a 2.9× channel read "תקין" here but orange everywhere else. The
+ * canonical 5 bands fold into this panel's 4-tone presentation: blue/green →
+ * good, orange → warn, red → bad, gray/null → none. Gray-guard for null/NaN
+ * at the call site (the bandForRoas precondition).
+ */
 function roasBand(roas: number | null): 'good' | 'warn' | 'bad' | 'none' {
   if (roas == null || !Number.isFinite(roas)) return 'none';
-  if (roas >= 3) return 'good';
-  if (roas >= 2) return 'warn';
-  return 'bad';
+  switch (bandForRoas(roas)) {
+    case 'blue':
+    case 'green':  return 'good';
+    case 'orange': return 'warn';
+    case 'red':    return 'bad';
+    default:       return 'none';
+  }
 }
 const bandFg = (b: ReturnType<typeof roasBand>) =>
   b === 'good' ? 'text-status-greenFg' : b === 'warn' ? 'text-status-warningFg' : b === 'bad' ? 'text-status-redFg' : 'text-ink-muted';
