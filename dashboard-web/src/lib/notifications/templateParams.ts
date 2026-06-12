@@ -32,6 +32,7 @@
 
 import type { DaySummary, StoreSummary } from './summary';
 import { adDisplayState } from '@/lib/adState';
+import { bandForRoas } from '@/lib/roasBands';
 
 function formatRoas(roas: number): string {
   if (!Number.isFinite(roas) || roas === 0) return '—';
@@ -167,13 +168,19 @@ function totalsBlock(t: DaySummary['totals']): string {
 
 export const V2_TEMPLATE_NAME = 'roas_daily_summary_v2';
 
-/** ROAS health band → status dot, mirroring the dashboard bands
- *  (<2 red, 2–3 orange, 3+ green; ⚪ when the store had no sales). */
+/** ROAS health band → status dot, mirroring the dashboard bands. Classification
+ *  delegates to the single source of truth (`bandForRoas`, lib/roasBands.ts);
+ *  the 5 canonical bands fold into 3 WhatsApp dots: blue/green → 🟢, orange →
+ *  🟠, red → 🔴; ⚪ when the store had no sales. Gray-guard for null/NaN/≤0 at
+ *  the call site (the bandForRoas precondition). */
 function bandEmoji(roas: number, hasSales: boolean): string {
   if (!hasSales || !Number.isFinite(roas) || roas <= 0) return '⚪';
-  if (roas >= 3) return '🟢';
-  if (roas >= 2) return '🟠';
-  return '🔴';
+  switch (bandForRoas(roas)) {
+    case 'blue':
+    case 'green':  return '🟢';
+    case 'orange': return '🟠';
+    default:       return '🔴';
+  }
 }
 
 /** Per-source order breakdown, omitting zero buckets. TikTok gets its OWN
