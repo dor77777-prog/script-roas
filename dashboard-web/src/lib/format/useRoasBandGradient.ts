@@ -14,15 +14,8 @@
  * It does not call into React's hook machinery and is therefore safe
  * to invoke from any context — server components, loops, conditionals.
  *
- * Thresholds (locked, must stay in lock-step with roasLabel() tones):
- *   zeroSalesWithSpend  → red-alarm   (TOP priority — wins over everything,
- *                                      incl. a null roas; the worst outcome:
- *                                      real ad spend, ZERO revenue)
- *   roas < 2.0          → red
- *   2.0 ≤ roas < 2.7    → orange
- *   2.7 ≤ roas ≤ 3.0    → green  (3.0 = at target)
- *   roas > 3.0          → blue   (above target)
- *   roas null/undefined → gray
+ * Threshold ladder lives in lib/roasBands.ts (operator-locked) — this module
+ * owns only red-alarm priority, null/NaN→gray, and the gradient/label layer.
  *
  * The `red-alarm` band is the operator-locked "spent money, made zero sales"
  * state (`spend > 0 && revenue === 0`). The caller derives this boolean and
@@ -39,7 +32,7 @@
  * classification. This module keeps owning the gradient/desaturate/label layer
  * plus the red-alarm + null/NaN handling on top of it.
  */
-import { bandForRoas, type RoasBand as CoreRoasBand } from '../roasBands';
+import { bandForRoas, type CoreRoasBand } from '@/lib/roasBands';
 
 export type RoasBand = CoreRoasBand | 'red-alarm';
 

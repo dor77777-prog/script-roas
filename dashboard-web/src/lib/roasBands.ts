@@ -11,8 +11,15 @@
  *   2.7 ≤ roas ≤ 3.0    → green   (3.00 inclusive = AT target)
  *   roas > 3.0          → blue    (above target)
  *   spend === 0         → gray    (no ad activity — a ratio is meaningless)
+ *
+ * PRECONDITION: callers own null/NaN/≤0 normalization (see useRoasBandGradient,
+ * roasLabel in analytics.ts). bandForRoas assumes a finite positive ratio —
+ * NaN or a bare 0 without {spend: 0} falls through to 'red'.
+ *
+ * Lock-step guard: see roasBandConsistency.guard.test.ts — roasLabel in
+ * analytics.ts must move in lock-step until it too delegates.
  */
-export type RoasBand = 'red' | 'orange' | 'green' | 'blue' | 'gray';
+export type CoreRoasBand = 'red' | 'orange' | 'green' | 'blue' | 'gray';
 
 /**
  * Operator-locked alarm threshold (CAD). The alarm fires only once spend
@@ -23,7 +30,7 @@ export type RoasBand = 'red' | 'orange' | 'green' | 'blue' | 'gray';
 export const ALARM_SPEND_THRESHOLD_CAD = 100;
 
 /** Classify a ROAS value into its operator-locked band. `spend === 0` → gray. */
-export function bandForRoas(roas: number, opts?: { spend?: number }): RoasBand {
+export function bandForRoas(roas: number, opts?: { spend?: number }): CoreRoasBand {
   if (opts && opts.spend === 0) return 'gray';
   if (roas > 3.0) return 'blue';
   if (roas >= 2.7) return 'green';
@@ -34,7 +41,13 @@ export function bandForRoas(roas: number, opts?: { spend?: number }): RoasBand {
 /**
  * Alarm state: real money out (> $100 CAD), zero sales back.
  * Strictly ABOVE the threshold — $99 spend with no sales is still "morning".
+ *
+ * SUPERSEDES the legacy zeroSalesWithSpend = spend > 0 derivation in
+ * PerStoreRow.tsx/storeDetail.ts — those call sites MUST switch to this
+ * predicate during the band-drain migration (W0.3/W3). Deliberate visible
+ * change: stores with ≤$100 spend and zero sales drop from red-alarm to
+ * plain red.
  */
-export function alarmState(i: { spend: number; revenue: number }): boolean {
-  return i.spend > ALARM_SPEND_THRESHOLD_CAD && i.revenue === 0;
+export function isSpendAlarm(m: { spend: number; revenue: number }): boolean {
+  return m.spend > ALARM_SPEND_THRESHOLD_CAD && m.revenue === 0;
 }
