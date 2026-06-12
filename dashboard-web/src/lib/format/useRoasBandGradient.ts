@@ -33,8 +33,15 @@
  *
  * NaN is treated as null (defensive — guards against bad math
  * upstream where a 0/0 divide produced NaN instead of null).
+ *
+ * 2026-06 re-skin (Task 0.2): the numeric threshold ladder itself now lives in
+ * lib/roasBands.ts (`bandForRoas`) — the SINGLE SOURCE OF TRUTH for band
+ * classification. This module keeps owning the gradient/desaturate/label layer
+ * plus the red-alarm + null/NaN handling on top of it.
  */
-export type RoasBand = 'red' | 'red-alarm' | 'orange' | 'green' | 'blue' | 'gray';
+import { bandForRoas, type RoasBand as CoreRoasBand } from '../roasBands';
+
+export type RoasBand = CoreRoasBand | 'red-alarm';
 
 /**
  * Canonical Hebrew band-tag wording — ONE source of truth so every ROAS-band
@@ -68,13 +75,8 @@ export function useRoasBandGradient(
   if (roas == null || Number.isNaN(roas)) {
     return { band: 'gray', desaturate: isStale };
   }
-  if (roas < 2.0) return { band: 'red', desaturate: isStale };
-  if (roas < 2.7) return { band: 'orange', desaturate: isStale };
-  // 2026-06-09 (Task 11): exactly 3.0 = "at target" = green, in lock-step with
-  // analytics.ts roasLabel (`roas <= 3 → green`). The business target is 3.0×;
-  // a value sitting exactly on target must read the same band everywhere
-  // (a StoreDetailModal badge used roasLabel = green while the gradient said
-  // blue at 3.00). >3.0 is "above target" = blue.
-  if (roas <= 3.0) return { band: 'green', desaturate: isStale };
-  return { band: 'blue', desaturate: isStale };
+  // Threshold ladder is delegated to the single source of truth
+  // (lib/roasBands.ts). 2026-06-09 Task 11 lock preserved there: exactly 3.0 =
+  // "at target" = green, in lock-step with analytics.ts roasLabel; >3.0 = blue.
+  return { band: bandForRoas(roas), desaturate: isStale };
 }
