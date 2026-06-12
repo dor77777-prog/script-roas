@@ -18,19 +18,21 @@ const CHANNEL_LABEL: Record<Channel, string> = { meta: 'Meta', google: 'Google',
  * Channel-card health tone. Classification delegates to the single source of
  * truth (`bandForRoas`, lib/roasBands.ts) — this panel previously carried its
  * OWN 3-band scale (≥3/≥2/<2) that DROPPED the 2.7 orange boundary and the blue
- * band, so a 2.9× channel read "תקין" here but orange everywhere else. The
+ * band, so a 2.9× channel read "תקין" here but "בריא" (green) everywhere else. The
  * canonical 5 bands fold into this panel's 4-tone presentation: blue/green →
  * good, orange → warn, red → bad, gray/null → none. Gray-guard for null/NaN
  * at the call site (the bandForRoas precondition).
  */
 function roasBand(roas: number | null): 'good' | 'warn' | 'bad' | 'none' {
   if (roas == null || !Number.isFinite(roas)) return 'none';
-  switch (bandForRoas(roas)) {
+  const band = bandForRoas(roas);
+  switch (band) {
     case 'blue':
     case 'green':  return 'good';
     case 'orange': return 'warn';
     case 'red':    return 'bad';
-    default:       return 'none';
+    case 'gray':   return 'none';
+    default: { const _exhaustive: never = band; return 'none'; }
   }
 }
 const bandFg = (b: ReturnType<typeof roasBand>) =>

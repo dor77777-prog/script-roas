@@ -175,11 +175,14 @@ export const V2_TEMPLATE_NAME = 'roas_daily_summary_v2';
  *  the call site (the bandForRoas precondition). */
 function bandEmoji(roas: number, hasSales: boolean): string {
   if (!hasSales || !Number.isFinite(roas) || roas <= 0) return '⚪';
-  switch (bandForRoas(roas)) {
+  const band = bandForRoas(roas);
+  switch (band) {
     case 'blue':
     case 'green':  return '🟢';
     case 'orange': return '🟠';
-    default:       return '🔴';
+    case 'red':    return '🔴';
+    case 'gray':   return '⚪';
+    default: { const _exhaustive: never = band; return '🔴'; }
   }
 }
 
