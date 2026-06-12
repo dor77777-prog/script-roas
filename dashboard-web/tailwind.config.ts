@@ -279,7 +279,8 @@ const config: Config = {
         // Horizon reskin Wave 0 — Horizon's signature card shadow (their
         // `shadow-3xl shadow-shadow-500` pair, light mode only; dark mode is
         // shadowless per the Horizon recipe — pair with `dark:shadow-none`).
-        hz:      '14px 17px 40px 4px rgba(112,144,176,0.08)',
+        // hz = var(--shadow-glass): theme-aware (light Horizon shadow / dark shadowless). Single source of truth for the Horizon card shadow.
+        hz:      'var(--shadow-glass)',
       },
 
       borderRadius: {
@@ -313,6 +314,7 @@ const config: Config = {
         pill:    'var(--radius-pill)',
         // Horizon reskin Wave 0 — Horizon's 20px card radius (`rounded-[20px]`
         // in their recipes; exposed as `rounded-hz`).
+        // 2px above --radius-card (18px) by design; use rounded-card for token-flippable surfaces, rounded-hz only for exact Horizon-recipe quotes.
         hz:      '20px',
       },
 

@@ -120,6 +120,7 @@
   --band-green-grad:  linear-gradient(135deg,#0ca678,#1ed29b 52%,#5fe9bd);
   --band-red-grad:    linear-gradient(135deg,#f43f47,#ff5a60 52%,#ff8a8e);
   --band-gray-grad:   linear-gradient(135deg,#5b6373,#7c8597 52%,#a6aebd);
+  /* naming note: 'alarm' is a state, not a color — kept in the color slot deliberately for grep-symmetry with the band-grad family. */
   --band-alarm-grad:  linear-gradient(135deg,#d40b14,#f81b25 48%,#ff4d55);
 
   /* Deepened band-card SURFACE stops (vibrant-AA, 2026-06-01). The colored
@@ -480,6 +481,7 @@
 
   /* Sidebar — Horizon recipe: WHITE rail on light (navy-800 in dark), dark
      navy ink, brand-ramp logo gradient in both themes. */
+  /* INTERIM (Wave 0): token value flips now; the rail layout/indicator/spacing is reworked in the Wave-2 sidebar task — expect visual seams until then. */
   --sidebar:           #ffffff;
   --sidebar-fg:        #5b6478;
   --sidebar-fg-active: #1B254B;
@@ -504,6 +506,7 @@
   --band-green-grad:  linear-gradient(135deg,#0ca678,#1ed29b 52%,#5fe9bd);
   --band-red-grad:    linear-gradient(135deg,#f43f47,#ff5a60 52%,#ff8a8e);
   --band-gray-grad:   linear-gradient(135deg,#5b6373,#7c8597 52%,#a6aebd);
+  /* naming note: 'alarm' is a state, not a color — kept in the color slot deliberately for grep-symmetry with the band-grad family. */
   --band-alarm-grad:  linear-gradient(135deg,#d40b14,#f81b25 48%,#ff4d55);
 
   /* Deepened band-card SURFACE stops — THEME-INDEPENDENT (same deep gradient as
