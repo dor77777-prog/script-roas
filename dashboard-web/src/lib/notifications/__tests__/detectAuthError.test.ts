@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isRateLimitError } from '../detectAuthError';
+import { isAuthError, isRateLimitError } from '../detectAuthError';
 
 describe('isRateLimitError', () => {
   it('detects Meta 429 from message body', () => {
@@ -29,5 +29,50 @@ describe('isRateLimitError', () => {
   it('isRateLimitError returns false for META_BUDGET_HIGH against non-meta provider', () => {
     expect(isRateLimitError('google', 'META_BUDGET_HIGH: ...')).toBe(false);
     expect(isRateLimitError('tiktok', 'META_BUDGET_HIGH: ...')).toBe(false);
+  });
+});
+
+// 2026-06-12 — production incident: Meta wraps EVERY Graph error in
+// "type":"OAuthException", so a transient code=2 "Service temporarily
+// unavailable" (subcode 1504044) was classified auth → operator paged with
+// "refresh the token" while the same tick's next batch part succeeded 32s
+// later. Transient-service signatures must NOT classify as auth unless a
+// hard auth signature (190/102/460/401/403/session) is also present.
+describe('isAuthError — Meta transient-service exclusion (2026-06-12)', () => {
+
+  const PROD_TRANSIENT_BODY =
+    'Meta hot-metrics batch part failed (code=400): {"error":{"message":"Service temporarily unavailable","type":"OAuthException","is_transient":false,"code":2,"error_subcode":1504044,"error_user_title":"x","error_user_msg":"y"}}';
+
+  it('the exact production transient body is NOT an auth error', () => {
+    expect(isAuthError('meta', PROD_TRANSIENT_BODY)).toBe(false);
+  });
+
+  it('code 1 (API Unknown) with OAuthException wrapper is NOT auth', () => {
+    expect(
+      isAuthError('meta', '{"error":{"message":"An unknown error occurred","type":"OAuthException","code":1}}'),
+    ).toBe(false);
+  });
+
+  it('is_transient:true is NOT auth even with OAuthException', () => {
+    expect(
+      isAuthError('meta', '{"error":{"type":"OAuthException","is_transient":true,"code":368}}'),
+    ).toBe(false);
+  });
+
+  it('REAL auth errors still detected: code 190 wins over a transient phrase', () => {
+    expect(
+      isAuthError('meta', '{"error":{"message":"Service temporarily unavailable","type":"OAuthException","code": 190}}'.replace('"code": 190', '"code":190')),
+    ).toBe(true);
+    expect(isAuthError('meta', '{"error":{"type":"OAuthException","code":190,"message":"Invalid OAuth access token"}}')).toBe(true);
+    expect(isAuthError('meta', 'HTTP 401 Unauthorized')).toBe(true);
+    expect(isAuthError('meta', '{"error":{"type":"OAuthException","code":102,"message":"Session key invalid"}}')).toBe(true);
+  });
+
+  it('plain OAuthException with no transient signature still classifies auth (unchanged behavior)', () => {
+    expect(isAuthError('meta', 'OAuthException: something about access')).toBe(true);
+  });
+
+  it('non-meta providers unaffected by the exclusion', () => {
+    expect(isAuthError('google', 'INVALID_GRANT: token revoked')).toBe(true);
   });
 });

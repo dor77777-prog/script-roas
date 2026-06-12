@@ -45,9 +45,9 @@ const PROVIDER_PATTERNS: Record<TokenFailureProvider, RegExp[]> = {
   meta: [
     ...GENERIC_AUTH,
     /OAuth\s*(?:Exception|access)/i,
-    /\b"code":\s*190\b/, // Meta: invalid OAuth access token
-    /\b"code":\s*102\b/, // Meta: session expired
-    /\b"code":\s*460\b/, // Meta: logged out
+    /"code":\s*190\b/, // Meta: invalid OAuth access token
+    /"code":\s*102\b/, // Meta: session expired
+    /"code":\s*460\b/, // Meta: logged out
     /session\s+(?:expired|invalid)/i,
   ],
   google: [
@@ -86,8 +86,45 @@ const PROVIDER_PATTERNS: Record<TokenFailureProvider, RegExp[]> = {
  * pattern match) — the caller still warns + retries; we just don't fire
  * an operator alert.
  */
+/**
+ * 2026-06-12 — Meta transient-service exclusion. Meta wraps EVERY Graph error
+ * in `"type":"OAuthException"`, including pure service blips, so the
+ * /OAuthException/ pattern alone misclassified `code:1` (API Unknown) and
+ * `code:2` ("Service temporarily unavailable", e.g. subcode 1504044) as auth
+ * failures — paging the operator with "refresh the token" while the very
+ * next batch part succeeded (production incident 2026-06-12 14:10 IL:
+ * token_failures alert fired 32s BEFORE data_freshness recorded success on
+ * the same tick). These codes are retry-class, not auth-class.
+ *
+ * Real auth signatures (code 190/102/460, session expired, HTTP 401/403)
+ * still win: the hard-auth check runs FIRST, so a hypothetical
+ * "code 190 + service unavailable" combo still alerts.
+ */
+const META_HARD_AUTH = [
+  /"code":\s*190\b/,
+  /"code":\s*102\b/,
+  /"code":\s*460\b/,
+  /session\s+(?:expired|invalid)/i,
+  /\b401\b/,
+  /\b403\b/,
+  /\bunauthor[iz]ed\b/i,
+  /\binvalid[\s_-]+token\b/i,
+  /\btoken[\s_-]+(?:expired|invalid)\b/i,
+];
+const META_TRANSIENT_SERVICE = [
+  /service\s+temporarily\s+unavailable/i,
+  /"code":\s*1\b/,
+  /"code":\s*2\b/,
+  /"is_transient"\s*:\s*true/i,
+];
+
 export function isAuthError(provider: TokenFailureProvider, errMsg: unknown): boolean {
   if (typeof errMsg !== 'string' || errMsg.length === 0) return false;
+  if (provider === 'meta' && !META_HARD_AUTH.some((p) => p.test(errMsg))) {
+    // No hard auth signature — if it carries a transient-service signature,
+    // it's a retry-class blip, not a token problem (see note above).
+    if (META_TRANSIENT_SERVICE.some((p) => p.test(errMsg))) return false;
+  }
   const patterns = PROVIDER_PATTERNS[provider];
   for (const p of patterns) {
     if (p.test(errMsg)) return true;
