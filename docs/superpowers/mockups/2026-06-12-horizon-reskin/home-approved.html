@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" class="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>הבית · Horizon UI</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: { extend: {
+    colors: {
+      brand: {50:"#E9E3FF",100:"#C0B8FE",200:"#A195FD",300:"#8171FC",400:"#7551FF",500:"#422AFB",600:"#3311DB",700:"#2111A5",800:"#190793",900:"#11047A"},
+      navy:  {50:"#d0dcfb",100:"#aac0fe",200:"#a3b9f8",300:"#728fea",400:"#3652ba",500:"#1b3bbb",600:"#24388a",700:"#1B254B",800:"#111c44",900:"#0b1437"},
+      lightPrimary: "#F4F7FE",
+      shadow: {500: "rgba(112, 144, 176, 0.08)"},
+      // locked ROAS bands
+      roas: {red:"#e5484d", orange:"#EF9331", green:"#10b981", blue:"#3b82f6"},
+    },
+    boxShadow: { '3xl': '14px 17px 40px 4px' },
+    fontFamily: { heebo: ['Heebo','sans-serif'], rubik: ['Rubik','Heebo','sans-serif'] },
+    borderRadius: { '20': '20px' },
+  } }
+}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&family=Rubik:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  body{font-family:'Heebo',sans-serif}
+  .num{font-family:'Rubik','Heebo',sans-serif;font-variant-numeric:tabular-nums;letter-spacing:-.015em}
+  svg.ic{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  /* locked band gradients — semantic layer on top of Horizon base */
+  .band-blue{background:linear-gradient(135deg,#2f6bff,#4d8dff 52%,#85b8ff)}
+  .band-orange{background:linear-gradient(135deg,#f08316,#F89C42 52%,#ffc278)}
+  .band-green{background:linear-gradient(135deg,#0ca678,#1ed29b 52%,#5fe9bd)}
+  .band-red{background:linear-gradient(135deg,#f43f47,#ff5a60 52%,#ff8a8e)}
+  .band-alarm{background:linear-gradient(135deg,#d40b14,#f81b25 48%,#ff4d55);animation:alarmPulse 1.8s ease-in-out infinite}
+  @keyframes alarmPulse{0%,100%{box-shadow:0 0 0 0 rgba(248,27,37,.45)}50%{box-shadow:0 0 0 9px rgba(248,27,37,0)}}
+  .band-gray{background:linear-gradient(135deg,#5b6373,#7c8597 52%,#a6aebd)}
+</style>
+</head>
+<body class="bg-lightPrimary dark:bg-navy-900 text-navy-700 dark:text-white transition-colors duration-300">
+
+<button onclick="document.documentElement.classList.toggle('dark')"
+  class="fixed bottom-6 left-6 z-50 rounded-full bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none px-5 py-3 text-sm font-bold text-navy-700 dark:text-white">
+  ☼ / ☾ החלף מצב
+</button>
+
+<div class="flex min-h-screen">
+
+  <!-- ═ Sidebar — Horizon recipe: white / dark:navy-800, brand active ═ -->
+  <aside class="sticky top-0 h-screen w-[270px] flex-none bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none hidden lg:flex flex-col">
+    <div class="px-8 pt-8 pb-6">
+      <div class="text-[24px] font-black tracking-tight text-navy-700 dark:text-white">ROAS <span class="font-medium">TRACKER</span></div>
+      <div class="mt-1 text-xs font-medium text-gray-600 dark:text-gray-300">uzoshop · zolplus · usmile</div>
+    </div>
+    <div class="mx-8 mb-5 h-px bg-gray-200 dark:bg-white/10"></div>
+    <nav class="flex flex-col gap-1 px-4 text-[15px]">
+      <a class="relative flex items-center gap-3 rounded-lg px-4 py-3 font-bold text-navy-700 dark:text-white">
+        <span class="absolute inline-start-0 top-1/2 -translate-y-1/2 h-9 w-1 rounded-full bg-brand-500"></span>
+        <svg class="ic text-brand-500 dark:text-white" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5"/></svg>בית
+      </a>
+      <a class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium text-gray-600 dark:text-gray-300 hover:text-navy-700 dark:hover:text-white"><svg class="ic" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>פעילות</a>
+      <a class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium text-gray-600 dark:text-gray-300 hover:text-navy-700 dark:hover:text-white"><svg class="ic" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>לקוחות</a>
+      <a class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium text-gray-600 dark:text-gray-300 hover:text-navy-700 dark:hover:text-white"><svg class="ic" viewBox="0 0 24 24"><path d="M3 3h18v18H3zM3 9h18M3 15h18M12 3v18"/></svg>טבלאות אופטימיזציה</a>
+      <a class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium text-gray-600 dark:text-gray-300 hover:text-navy-700 dark:hover:text-white"><svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18M7 13l4-4 4 3 5-6"/></svg>P&L</a>
+      <a class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium text-gray-600 dark:text-gray-300 hover:text-navy-700 dark:hover:text-white"><svg class="ic" viewBox="0 0 24 24"><path d="M22 7 13.5 15.5 8.5 10.5 2 17M16 7h6v6"/></svg>מגמות</a>
+      <a class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium text-gray-600 dark:text-gray-300 hover:text-navy-700 dark:hover:text-white"><svg class="ic" viewBox="0 0 24 24"><path d="M3 11l18-7-7 18-2.5-7.5z"/></svg>קמפיינים</a>
+      <a class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium text-gray-600 dark:text-gray-300 hover:text-navy-700 dark:hover:text-white"><svg class="ic" viewBox="0 0 24 24"><path d="M21 8v8l-9 5-9-5V8l9-5zM3.3 8.3 12 13l8.7-4.7M12 22V13"/></svg>מוצרים</a>
+      <a class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium text-gray-600 dark:text-gray-300 hover:text-navy-700 dark:hover:text-white"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>תשלומים</a>
+      <a class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium text-gray-600 dark:text-gray-300 hover:text-navy-700 dark:hover:text-white"><svg class="ic" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>פירוט</a>
+    </nav>
+    <div class="mt-auto p-6">
+      <div class="rounded-20 band-green p-4 text-white">
+        <div class="text-xs font-bold opacity-90">יעד חודשי · יוני</div>
+        <div class="num mt-1 text-2xl font-extrabold">64%</div>
+        <div class="mt-2 h-1.5 rounded-full bg-black/20"><div class="h-full w-[64%] rounded-full bg-white"></div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═ Main ═ -->
+  <main class="flex-1 min-w-0 px-5 md:px-9 pb-16">
+
+    <!-- Horizon floating navbar -->
+    <div class="mt-4 flex items-center gap-3 rounded-full bg-white/80 dark:bg-navy-800/80 backdrop-blur-xl shadow-3xl shadow-shadow-500 dark:shadow-none px-5 py-2.5">
+      <div>
+        <div class="text-xs font-medium text-gray-600 dark:text-gray-300">עמודים / <b class="text-navy-700 dark:text-white">בית</b></div>
+        <div class="text-xl font-black text-navy-700 dark:text-white -mt-0.5">בית</div>
+      </div>
+      <div class="flex-1"></div>
+      <div class="hidden md:flex items-center gap-2 rounded-full bg-lightPrimary dark:bg-navy-900 px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">
+        <svg class="ic" style="width:14px;height:14px" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+        חיפוש <span class="text-[10px] rounded border border-gray-300 dark:border-white/20 px-1.5">⌘K</span>
+      </div>
+      <span class="hidden md:inline-flex items-center gap-2 rounded-full bg-lightPrimary dark:bg-navy-900 px-4 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300"><span class="h-2 w-2 rounded-full bg-green-500"></span>עודכן לפני 1 דק׳</span>
+      <button class="rounded-full bg-brand-500 hover:bg-brand-600 px-5 py-2.5 text-sm font-bold text-white transition-colors">ייצא דוח ל-AI</button>
+    </div>
+
+    <!-- filters -->
+    <div class="mt-6 rounded-20 bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none p-5 flex flex-col gap-4">
+      <div class="flex flex-wrap items-center gap-3">
+        <span class="text-xs font-bold text-gray-600 dark:text-gray-300">טווח מהיר</span>
+        <div class="flex rounded-full bg-lightPrimary dark:bg-navy-900 p-1">
+          <span class="rounded-full bg-brand-500 px-5 py-2 text-sm font-bold text-white">היום</span>
+          <span class="px-5 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 cursor-pointer hover:text-navy-700 dark:hover:text-white">אתמול</span>
+          <span class="px-5 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 cursor-pointer hover:text-navy-700 dark:hover:text-white">7 ימים</span>
+          <span class="px-5 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 cursor-pointer hover:text-navy-700 dark:hover:text-white">מתחילת החודש</span>
+        </div>
+        <span class="inline-flex items-center gap-2 rounded-full bg-lightPrimary dark:bg-navy-900 px-4 py-2 text-xs font-bold text-gray-600 dark:text-gray-300">12/06/2026 · 1 יום</span>
+        <span class="inline-flex items-center gap-2 rounded-full bg-lightPrimary dark:bg-navy-900 px-4 py-2 text-xs font-bold text-gray-600 dark:text-gray-300">כל החנויות ▾</span>
+        <span class="inline-flex items-center gap-2 rounded-full bg-lightPrimary dark:bg-navy-900 px-4 py-2 text-xs font-bold text-gray-600 dark:text-gray-300">תצוגות שמורות ▾</span>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <span class="text-xs font-bold text-gray-600 dark:text-gray-300">בסיס השוואה</span>
+        <div class="flex rounded-full bg-lightPrimary dark:bg-navy-900 p-1">
+          <span class="rounded-full bg-brand-500 px-4 py-1.5 text-xs font-bold text-white">תקופה קודמת</span>
+          <span class="px-4 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300">7 ימים קודמים</span>
+          <span class="px-4 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300">חודש קודם</span>
+          <span class="px-4 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300">שנה שעברה</span>
+          <span class="px-4 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300">ללא השוואה</span>
+        </div>
+      </div>
+    </div>
+
+
+    <div class="mt-5 rounded-20 bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none p-4 flex items-center gap-4">
+      <div class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-lightPrimary dark:bg-navy-700 text-brand-500 dark:text-white">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 10.8 7.5 12.3a1 1 0 0 0 .7 1.7h7.6a1 1 0 0 0 .7-1.7L15 10.8V5l1-2H8l1 2z"/></svg>
+      </div>
+      <div><div class="text-sm font-bold text-navy-700 dark:text-white">יומן אירועים</div><div class="text-[11px] font-medium text-gray-600 dark:text-gray-300">שינויים שהוצעו (השקות, מבצעים, שינויי תקציב) — מוצגים כסיכות על הגרף</div></div>
+      <div class="flex-1"></div>
+      <span class="rounded-full bg-lightPrimary dark:bg-navy-900 px-3.5 py-1.5 text-[11px] font-bold text-gray-600 dark:text-gray-300">📌 ‎12/06 · הרמת תקציב UZ ‏+20%</span>
+      <span class="rounded-full bg-lightPrimary dark:bg-navy-900 px-3.5 py-1.5 text-[11px] font-bold text-gray-600 dark:text-gray-300">📌 ‎09/06 · השקת קולקציית קיץ</span>
+      <button class="rounded-full bg-brand-500 px-4 py-1.5 text-xs font-bold text-white">+ הוסף</button>
+    </div>
+
+    <!-- Widget row — EXACT Horizon Widget recipe + your home metric rules -->
+    <div class="mt-5 grid grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-6">
+      <!-- widget template: Card !flex-row items-center + icon circle bg-lightPrimary -->
+      <div class="!z-5 relative flex !flex-row flex-grow items-center rounded-20 bg-white bg-clip-border shadow-3xl shadow-shadow-500 dark:!bg-navy-800 dark:text-white dark:shadow-none">
+        <div class="mr-[18px] flex h-[90px] w-auto flex-row items-center">
+          <div class="rounded-full bg-lightPrimary p-3 dark:bg-navy-700"><svg class="ic text-brand-500 dark:text-white" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        </div>
+        <div class="ml-4 flex w-auto flex-col justify-center py-3">
+          <p class="text-sm font-medium text-gray-600 dark:text-gray-300">הוצאת פרסום</p>
+          <h4 class="num text-xl font-bold text-navy-700 dark:text-white">$960</h4>
+          <p class="num text-xs font-bold text-roas-red">↓ ‎−40%</p>
+        </div>
+      </div>
+      <div class="!z-5 relative flex !flex-row flex-grow items-center rounded-20 bg-white bg-clip-border shadow-3xl shadow-shadow-500 dark:!bg-navy-800 dark:text-white dark:shadow-none">
+        <div class="mr-[18px] flex h-[90px] w-auto flex-row items-center">
+          <div class="rounded-full bg-lightPrimary p-3 dark:bg-navy-700"><svg class="ic text-brand-500 dark:text-white" viewBox="0 0 24 24"><path d="M22 7 13.5 15.5 8.5 10.5 2 17M16 7h6v6"/></svg></div>
+        </div>
+        <div class="ml-4 flex w-auto flex-col justify-center py-3">
+          <p class="text-sm font-medium text-gray-600 dark:text-gray-300">הכנסות</p>
+          <h4 class="num text-xl font-bold text-navy-700 dark:text-white">$2,675</h4>
+          <p class="num text-xs font-bold text-emerald-500">↑ ‎+12% מול אתמול</p>
+        </div>
+      </div>
+      <div class="!z-5 relative flex !flex-row flex-grow items-center rounded-20 bg-white bg-clip-border shadow-3xl shadow-shadow-500 dark:!bg-navy-800 dark:text-white dark:shadow-none">
+        <div class="mr-[18px] flex h-[90px] w-auto flex-row items-center">
+          <div class="rounded-full bg-lightPrimary p-3 dark:bg-navy-700"><svg class="ic text-brand-500 dark:text-white" viewBox="0 0 24 24"><path d="M3 3v18h18M7 13l4-4 4 3 5-6"/></svg></div>
+        </div>
+        <div class="ml-4 flex w-auto flex-col justify-center py-3">
+          <p class="text-sm font-medium text-gray-600 dark:text-gray-300">רווח תפעולי <span class="text-[9px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 rounded-full px-1.5 py-0.5">LIVE</span></p>
+          <h4 class="num text-xl font-bold text-navy-700 dark:text-white">$1,047</h4>
+          <p class="num text-xs font-bold text-roas-red">↓ ‎−44%</p>
+        </div>
+      </div>
+      <div class="!z-5 relative flex !flex-row flex-grow items-center rounded-20 bg-white bg-clip-border shadow-3xl shadow-shadow-500 dark:!bg-navy-800 dark:text-white dark:shadow-none">
+        <div class="mr-[18px] flex h-[90px] w-auto flex-row items-center">
+          <div class="rounded-full p-3" style="background:rgba(16,185,129,.12)"><svg class="ic" style="color:#10b981" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg></div>
+        </div>
+        <div class="ml-4 flex w-auto flex-col justify-center py-3">
+          <p class="text-sm font-medium text-gray-600 dark:text-gray-300">MER <span class="rounded-full px-1.5 py-0.5 text-[9px] font-bold text-white" style="background:#10b981">בטווח היעד</span></p>
+          <h4 class="num text-xl font-bold" style="color:#10b981">2.79</h4>
+          <p class="num text-xs font-bold text-gray-500 dark:text-gray-400">▾ ‎−0.10 מול אתמול</p>
+        </div>
+      </div>
+      <div class="!z-5 relative flex !flex-row flex-grow items-center rounded-20 bg-white bg-clip-border shadow-3xl shadow-shadow-500 dark:!bg-navy-800 dark:text-white dark:shadow-none">
+        <div class="mr-[18px] flex h-[90px] w-auto flex-row items-center">
+          <div class="rounded-full bg-lightPrimary p-3 dark:bg-navy-700"><svg class="ic text-brand-500 dark:text-white" viewBox="0 0 24 24"><path d="M6 6h15l-1.5 9h-12zM6 6 5 3H2"/><circle cx="9" cy="19" r="1"/><circle cx="18" cy="19" r="1"/></svg></div>
+        </div>
+        <div class="ml-4 flex w-auto flex-col justify-center py-3">
+          <p class="text-sm font-medium text-gray-600 dark:text-gray-300">הזמנות</p>
+          <h4 class="num text-xl font-bold text-navy-700 dark:text-white">25</h4>
+          <p class="num text-xs font-bold text-gray-500 dark:text-gray-400">‎−18 מול אתמול</p>
+        </div>
+      </div>
+      <div class="!z-5 relative flex !flex-row flex-grow items-center rounded-20 bg-white bg-clip-border shadow-3xl shadow-shadow-500 dark:!bg-navy-800 dark:text-white dark:shadow-none">
+        <div class="mr-[18px] flex h-[90px] w-auto flex-row items-center">
+          <div class="rounded-full bg-lightPrimary p-3 dark:bg-navy-700"><svg class="ic text-brand-500 dark:text-white" viewBox="0 0 24 24"><path d="M3 3v18h18M8 17v-5M13 17V8M18 17v-9"/></svg></div>
+        </div>
+        <div class="ml-4 flex w-auto flex-col justify-center py-3">
+          <p class="text-sm font-medium text-gray-600 dark:text-gray-300">CPM עסקי</p>
+          <h4 class="num text-xl font-bold text-navy-700 dark:text-white">$19.07</h4>
+          <p class="num text-xs font-bold text-emerald-500">↓ ‎−18% זול יותר</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Store band cards — locked gradients on Horizon geometry -->
+    <div class="mt-6 mb-2 flex items-baseline gap-3 px-1">
+      <h3 class="text-lg font-bold text-navy-700 dark:text-white">לפי חנות</h3>
+      <span class="text-xs font-medium text-gray-600 dark:text-gray-300">ROAS, הוצאה, הכנסה ו-CPM של כל חנות</span>
+    </div>
+    <div class="grid gap-5 md:grid-cols-3">
+      <!-- Zol Plus -->
+      <div class="rounded-20 band-blue text-white shadow-3xl shadow-shadow-500 dark:shadow-none p-5 flex flex-col min-h-[290px]">
+        <div class="flex items-center gap-2">
+          <h4 class="text-base font-extrabold">Zol Plus</h4>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-black/25 px-2.5 py-1 text-[10px] font-bold"><span class="h-1.5 w-1.5 rounded-full bg-emerald-300"></span>LIVE · 1M</span>
+          <span class="mr-auto rounded-full bg-black/25 px-2.5 py-1 text-[10px] font-bold">מעולה</span>
+        </div>
+        <div class="num mt-5 text-[52px] font-black leading-none" dir="ltr">4.01×</div>
+        <div class="mt-1 text-[10px] font-bold tracking-[.15em] text-white/75">ROAS · היום</div>
+        <div class="mt-auto grid grid-cols-4 rounded-2xl bg-black/20 py-2.5 text-center">
+          <div><div class="text-[9px] font-bold text-white/70">הוצאה ↓</div><div class="num text-sm font-extrabold">$70</div></div>
+          <div class="border-r border-white/15"><div class="text-[9px] font-bold text-white/70">הכנסה ↑</div><div class="num text-sm font-extrabold">$281</div></div>
+          <div class="border-r border-white/15"><div class="text-[9px] font-bold text-white/70">הזמנות</div><div class="num text-sm font-extrabold">3</div></div>
+          <div class="border-r border-white/15"><div class="text-[9px] font-bold text-white/70">AOV</div><div class="num text-sm font-extrabold">$94</div></div>
+        </div>
+        <div class="mt-3 flex gap-2">
+          <div class="flex-1 rounded-xl bg-black/20 px-3 py-2"><div class="text-[9px] font-bold text-white/70">Meta · CPM</div><div class="num text-sm font-extrabold">$52</div></div>
+        </div>
+      </div>
+      <!-- uzoshop -->
+      <div class="rounded-20 band-orange text-white shadow-3xl shadow-shadow-500 dark:shadow-none p-5 flex flex-col min-h-[290px]">
+        <div class="flex items-center gap-2">
+          <h4 class="text-base font-extrabold">uzoshop</h4>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-black/25 px-2.5 py-1 text-[10px] font-bold"><span class="h-1.5 w-1.5 rounded-full bg-emerald-300"></span>LIVE · 1M</span>
+          <span class="mr-auto rounded-full bg-black/25 px-2.5 py-1 text-[10px] font-bold">סביר</span>
+        </div>
+        <div class="num mt-5 text-[52px] font-black leading-none" dir="ltr">2.69×</div>
+        <div class="mt-1 text-[10px] font-bold tracking-[.15em] text-white/75">ROAS · היום</div>
+        <div class="mt-auto grid grid-cols-4 rounded-2xl bg-black/20 py-2.5 text-center">
+          <div><div class="text-[9px] font-bold text-white/70">הוצאה ↓</div><div class="num text-sm font-extrabold">$890</div></div>
+          <div class="border-r border-white/15"><div class="text-[9px] font-bold text-white/70">הכנסה ↑</div><div class="num text-sm font-extrabold">$2.4K</div></div>
+          <div class="border-r border-white/15"><div class="text-[9px] font-bold text-white/70">הזמנות</div><div class="num text-sm font-extrabold">22</div></div>
+          <div class="border-r border-white/15"><div class="text-[9px] font-bold text-white/70">AOV</div><div class="num text-sm font-extrabold">$109</div></div>
+        </div>
+        <div class="mt-3 flex gap-2">
+          <div class="flex-1 rounded-xl bg-black/20 px-3 py-2"><div class="text-[9px] font-bold text-white/70">Meta</div><div class="num text-sm font-extrabold">$3</div></div>
+          <div class="flex-1 rounded-xl bg-black/20 px-3 py-2"><div class="text-[9px] font-bold text-white/70">Google</div><div class="num text-sm font-extrabold">$12</div></div>
+          <div class="flex-1 rounded-xl bg-black/20 px-3 py-2"><div class="text-[9px] font-bold text-white/70">TikTok</div><div class="num text-sm font-extrabold">$37</div></div>
+        </div>
+      </div>
+      <!-- 360usmile -->
+      <div class="rounded-20 band-gray text-white shadow-3xl shadow-shadow-500 dark:shadow-none p-5 flex flex-col min-h-[290px] saturate-50">
+        <div class="flex items-center gap-2">
+          <h4 class="text-base font-extrabold">360usmile</h4>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-black/25 px-2.5 py-1 text-[10px] font-bold"><span class="h-1.5 w-1.5 rounded-full bg-emerald-300"></span>LIVE · 1M</span>
+          <span class="mr-auto rounded-full bg-black/25 px-2.5 py-1 text-[10px] font-bold">כבוי</span>
+        </div>
+        <div class="num mt-5 text-[52px] font-black leading-none">0</div>
+        <div class="mt-1 text-[10px] font-bold tracking-[.15em] text-white/75">ROAS · היום · אורגני</div>
+        <div class="mt-auto grid grid-cols-4 rounded-2xl bg-black/20 py-2.5 text-center">
+          <div><div class="text-[9px] font-bold text-white/70">הוצאה ↓</div><div class="num text-sm font-extrabold">$0</div></div>
+          <div class="border-r border-white/15"><div class="text-[9px] font-bold text-white/70">הכנסה ↑</div><div class="num text-sm font-extrabold">$0</div></div>
+          <div class="border-r border-white/15"><div class="text-[9px] font-bold text-white/70">הזמנות</div><div class="num text-sm font-extrabold">0</div></div>
+          <div class="border-r border-white/15"><div class="text-[9px] font-bold text-white/70">AOV</div><div class="num text-sm font-extrabold">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TotalSpent-style chart + comparison table -->
+    <div class="mt-6 grid gap-5 xl:grid-cols-5">
+      <div class="xl:col-span-3 rounded-20 bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none p-6">
+        <div class="flex items-center gap-3">
+          <div>
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-300">ROAS מול יעד · 7 ימים</p>
+            <h4 class="num text-[32px] font-bold leading-tight" style="color:#3b82f6" dir="ltr">3.42×</h4>
+          </div>
+          <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-600"><svg class="ic" style="width:12px;height:12px" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>מעל היעד</span>
+          <div class="flex-1"></div>
+          <span class="text-xs font-medium text-gray-600 dark:text-gray-300">— יעד 3.00×</span>
+        </div>
+        <svg viewBox="0 0 760 210" class="mt-4 w-full h-[210px]" preserveAspectRatio="none">
+          <defs><linearGradient id="hz" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b82f6" stop-opacity=".22"/><stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>
+          <line x1="0" y1="102" x2="760" y2="102" stroke="#A3AED0" stroke-opacity=".55" stroke-dasharray="6 7" stroke-width="1.5"/>
+          <path d="M0,168 C60,160 95,118 155,124 C215,130 250,80 310,86 C370,92 405,134 465,124 C525,114 560,68 620,60 C680,52 720,72 760,56 L760,210 L0,210 Z" fill="url(#hz)"/>
+          <path d="M0,168 C60,160 95,118 155,124 C215,130 250,80 310,86 C370,92 405,134 465,124 C525,114 560,68 620,60 C680,52 720,72 760,56" fill="none" stroke="#3b82f6" stroke-width="4" stroke-linecap="round"/>
+          <!-- event pin 1: השקת קיץ (09/06) -->
+          <line x1="310" y1="86" x2="310" y2="30" stroke="#A3AED0" stroke-opacity=".7" stroke-width="1.5" stroke-dasharray="3 4"/>
+          <g transform="translate(310,22)"><rect x="-58" y="-13" width="116" height="21" rx="10.5" fill="#422AFB" fill-opacity=".12" stroke="#422AFB" stroke-opacity=".45"/><text x="0" y="2" text-anchor="middle" style="font:700 10px Heebo;fill:#422AFB">📌 השקת קיץ · 09/06</text></g>
+          <circle cx="310" cy="86" r="6.5" fill="#fff" stroke="#422AFB" stroke-width="3"/>
+          <!-- event pin 2: הרמת תקציב (12/06) -->
+          <line x1="620" y1="60" x2="620" y2="30" stroke="#A3AED0" stroke-opacity=".7" stroke-width="1.5" stroke-dasharray="3 4"/>
+          <g transform="translate(620,22)"><rect x="-64" y="-13" width="128" height="21" rx="10.5" fill="#10b981" fill-opacity=".12" stroke="#10b981" stroke-opacity=".5"/><text x="0" y="2" text-anchor="middle" style="font:700 10px Heebo;fill:#0a8a63">📌 תקציב UZ ‏+20% · 12/06</text></g>
+          <circle cx="620" cy="60" r="6.5" fill="#fff" stroke="#10b981" stroke-width="3"/>
+          <circle cx="760" cy="56" r="6" fill="#3b82f6"/><circle cx="760" cy="56" r="2.5" fill="#fff"/>
+        </svg>
+      </div>
+      <div class="xl:col-span-2 rounded-20 bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none p-6 overflow-hidden">
+        <h4 class="text-lg font-bold text-navy-700 dark:text-white mb-3">ניתוח השוואתי</h4>
+        <table class="w-full text-sm">
+          <thead><tr class="text-right text-xs text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-white/10">
+            <th class="pb-2 font-bold">חנות</th><th class="pb-2 font-bold">ROAS</th><th class="pb-2 font-bold">הוצאה</th><th class="pb-2 font-bold">הכנסה</th>
+          </tr></thead>
+          <tbody class="font-bold text-navy-700 dark:text-white">
+            <tr class="border-b border-gray-100 dark:border-white/5"><td class="py-3.5">Zol Plus</td><td><span class="num rounded-lg bg-roas-blue/10 px-2.5 py-1 text-roas-blue text-xs font-extrabold" dir="ltr">4.01×</span></td><td class="num text-roas-red">$70</td><td class="num text-emerald-500">$281</td></tr>
+            <tr class="border-b border-gray-100 dark:border-white/5"><td class="py-3.5">uzoshop</td><td><span class="num rounded-lg px-2.5 py-1 text-xs font-extrabold text-white" style="background:#EF9331" dir="ltr">2.69×</span></td><td class="num text-roas-red">$890</td><td class="num text-emerald-500">$2.4K</td></tr>
+            <tr><td class="py-3.5">360usmile</td><td><span class="num rounded-lg bg-gray-100 dark:bg-white/10 px-2.5 py-1 text-gray-500 dark:text-gray-400 dark:text-gray-300 text-xs font-extrabold">0</span></td><td class="num">$0</td><td class="num">$0</td></tr>
+          </tbody>
+        </table>
+        <div class="mt-4 rounded-2xl bg-lightPrimary dark:bg-navy-900 p-4 flex items-center gap-5">
+          <div><div class="text-[10px] font-bold text-gray-600 dark:text-gray-300">NC-ROAS · נטו</div><div class="num text-xl font-bold text-navy-700 dark:text-white">1.74</div></div>
+          <div class="h-8 w-px bg-gray-200 dark:bg-white/10"></div>
+          <div><div class="text-[10px] font-bold text-gray-600 dark:text-gray-300">nCAC</div><div class="num text-xl font-bold text-navy-700 dark:text-white">$64</div></div>
+          <div class="mr-auto text-[10px] font-medium text-gray-600 dark:text-gray-300 text-left leading-relaxed">15 חדשות · 10 חוזרות<br>0% לא מסווג</div>
+        </div>
+      </div>
+    </div>
+
+
+
+    <div class="mt-6 mb-2 flex items-baseline gap-3 px-1">
+      <h3 class="text-lg font-bold text-navy-700 dark:text-white">קו-הגרף — כל מצבי הצבע</h3>
+      <span class="text-xs font-medium text-gray-600 dark:text-gray-300">צבע הקו = רצועת ממוצע-ה-ROAS של התקופה המוצגת · זהה בשני המצבים</span>
+    </div>
+    <div class="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
+      <div class="rounded-20 bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none p-4">
+        <div class="flex items-center justify-between mb-1"><span class="text-[11px] font-bold text-gray-600 dark:text-gray-300">ממוצע מתחת ל-2.00</span><span class="num rounded-lg px-2 py-0.5 text-[11px] font-extrabold text-white" style="background:#e5484d" dir="ltr">1.62×</span></div>
+        <svg viewBox="0 0 280 90" class="w-full h-[88px]" preserveAspectRatio="none">
+          <defs><linearGradient id="cr" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e5484d" stop-opacity=".2"/><stop offset="100%" stop-color="#e5484d" stop-opacity="0"/></linearGradient></defs>
+          <line x1="0" y1="28" x2="280" y2="28" stroke="#A3AED0" stroke-opacity=".5" stroke-dasharray="4 5"/>
+          <path d="M0,46 C30,50 50,58 80,56 C115,54 140,66 175,62 C210,58 245,70 280,66 L280,90 L0,90 Z" fill="url(#cr)"/>
+          <path d="M0,46 C30,50 50,58 80,56 C115,54 140,66 175,62 C210,58 245,70 280,66" fill="none" stroke="#e5484d" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="rounded-20 bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none p-4">
+        <div class="flex items-center justify-between mb-1"><span class="text-[11px] font-bold text-gray-600 dark:text-gray-300">ממוצע ‏2.00–2.70</span><span class="num rounded-lg px-2 py-0.5 text-[11px] font-extrabold text-white" style="background:#EF9331" dir="ltr">2.34×</span></div>
+        <svg viewBox="0 0 280 90" class="w-full h-[88px]" preserveAspectRatio="none">
+          <defs><linearGradient id="co" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#EF9331" stop-opacity=".22"/><stop offset="100%" stop-color="#EF9331" stop-opacity="0"/></linearGradient></defs>
+          <line x1="0" y1="26" x2="280" y2="26" stroke="#A3AED0" stroke-opacity=".5" stroke-dasharray="4 5"/>
+          <path d="M0,52 C30,48 50,40 80,44 C115,48 140,36 175,40 C210,44 245,34 280,38 L280,90 L0,90 Z" fill="url(#co)"/>
+          <path d="M0,52 C30,48 50,40 80,44 C115,48 140,36 175,40 C210,44 245,34 280,38" fill="none" stroke="#EF9331" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="rounded-20 bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none p-4">
+        <div class="flex items-center justify-between mb-1"><span class="text-[11px] font-bold text-gray-600 dark:text-gray-300">ממוצע ‏2.70–3.00</span><span class="num rounded-lg px-2 py-0.5 text-[11px] font-extrabold text-white" style="background:#10b981" dir="ltr">2.88×</span></div>
+        <svg viewBox="0 0 280 90" class="w-full h-[88px]" preserveAspectRatio="none">
+          <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#10b981" stop-opacity=".2"/><stop offset="100%" stop-color="#10b981" stop-opacity="0"/></linearGradient></defs>
+          <line x1="0" y1="24" x2="280" y2="24" stroke="#A3AED0" stroke-opacity=".5" stroke-dasharray="4 5"/>
+          <path d="M0,44 C30,40 50,32 80,34 C115,36 140,26 175,28 C210,30 245,24 280,26 L280,90 L0,90 Z" fill="url(#cg)"/>
+          <path d="M0,44 C30,40 50,32 80,34 C115,36 140,26 175,28 C210,30 245,24 280,26" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="rounded-20 bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none p-4">
+        <div class="flex items-center justify-between mb-1"><span class="text-[11px] font-bold text-gray-600 dark:text-gray-300">ממוצע מעל 3.00</span><span class="num rounded-lg px-2 py-0.5 text-[11px] font-extrabold text-white" style="background:#3b82f6" dir="ltr">3.42×</span></div>
+        <svg viewBox="0 0 280 90" class="w-full h-[88px]" preserveAspectRatio="none">
+          <defs><linearGradient id="cb" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b82f6" stop-opacity=".2"/><stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>
+          <line x1="0" y1="34" x2="280" y2="34" stroke="#A3AED0" stroke-opacity=".5" stroke-dasharray="4 5"/>
+          <path d="M0,40 C30,36 50,28 80,26 C115,24 140,18 175,16 C210,14 245,20 280,14 L280,90 L0,90 Z" fill="url(#cb)"/>
+          <path d="M0,40 C30,36 50,28 80,26 C115,24 140,18 175,16 C210,14 245,20 280,14" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="rounded-20 bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none p-4">
+        <div class="flex items-center justify-between mb-1"><span class="text-[11px] font-bold text-gray-600 dark:text-gray-300">אורגני · אין פרסום</span><span class="num rounded-lg bg-gray-200 dark:bg-white/10 px-2 py-0.5 text-[11px] font-extrabold text-gray-600 dark:text-gray-300">—</span></div>
+        <svg viewBox="0 0 280 90" class="w-full h-[88px]" preserveAspectRatio="none">
+          <line x1="0" y1="30" x2="280" y2="30" stroke="#A3AED0" stroke-opacity=".4" stroke-dasharray="4 5"/>
+          <path d="M0,60 C40,58 70,62 110,60 C150,58 190,62 230,60 C250,59 270,60 280,59" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-dasharray="1 6" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- לקוחות חדשים לפי פלטפורמה -->
+    <div class="mt-6 rounded-20 bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <h4 class="text-lg font-bold text-navy-700 dark:text-white">לקוחות חדשים לפי פלטפורמה</h4>
+        <span class="text-xs font-medium text-gray-600 dark:text-gray-300">היום · 15 חדשים מתוך 25 הזמנות · ‏0% לא מסווג</span>
+        <div class="flex-1"></div>
+        <span class="rounded-full bg-lightPrimary dark:bg-navy-900 px-3.5 py-1.5 text-[11px] font-bold text-gray-600 dark:text-gray-300">NC-ROAS עסקי · <b class="num text-navy-700 dark:text-white">1.74</b></span>
+      </div>
+      <div class="grid gap-4 md:grid-cols-3">
+        <div class="rounded-2xl bg-lightPrimary dark:bg-navy-900 p-4">
+          <div class="flex items-center gap-2"><i class="h-2.5 w-2.5 rounded bg-[#1877f2]"></i><span class="text-sm font-bold text-navy-700 dark:text-white">Meta</span><span class="mr-auto num text-[11px] font-bold text-gray-600 dark:text-gray-300">9 חדשים</span></div>
+          <div class="mt-2.5 h-2 rounded-full bg-gray-200 dark:bg-white/10"><div class="h-full w-[60%] rounded-full bg-[#1877f2]"></div></div>
+          <div class="mt-2.5 flex items-baseline gap-4">
+            <div><div class="text-[9px] font-bold text-gray-600 dark:text-gray-300">nCAC</div><div class="num text-base font-bold text-navy-700 dark:text-white">$58</div></div>
+            <div><div class="text-[9px] font-bold text-gray-600 dark:text-gray-300">NC-ROAS</div><div class="num text-base font-bold text-emerald-500">1.92</div></div>
+            <div class="mr-auto text-left"><div class="text-[9px] font-bold text-gray-600 dark:text-gray-300">חוזרים</div><div class="num text-base font-bold text-navy-700 dark:text-white">8</div></div>
+          </div>
+        </div>
+        <div class="rounded-2xl bg-lightPrimary dark:bg-navy-900 p-4">
+          <div class="flex items-center gap-2"><i class="h-2.5 w-2.5 rounded bg-[#f9ab00]"></i><span class="text-sm font-bold text-navy-700 dark:text-white">Google</span><span class="mr-auto num text-[11px] font-bold text-gray-600 dark:text-gray-300">4 חדשים</span></div>
+          <div class="mt-2.5 h-2 rounded-full bg-gray-200 dark:bg-white/10"><div class="h-full w-[27%] rounded-full bg-[#f9ab00]"></div></div>
+          <div class="mt-2.5 flex items-baseline gap-4">
+            <div><div class="text-[9px] font-bold text-gray-600 dark:text-gray-300">nCAC</div><div class="num text-base font-bold text-navy-700 dark:text-white">$71</div></div>
+            <div><div class="text-[9px] font-bold text-gray-600 dark:text-gray-300">NC-ROAS</div><div class="num text-base font-bold text-emerald-500">1.61</div></div>
+            <div class="mr-auto text-left"><div class="text-[9px] font-bold text-gray-600 dark:text-gray-300">חוזרים</div><div class="num text-base font-bold text-navy-700 dark:text-white">2</div></div>
+          </div>
+        </div>
+        <div class="rounded-2xl bg-lightPrimary dark:bg-navy-900 p-4">
+          <div class="flex items-center gap-2"><i class="h-2.5 w-2.5 rounded bg-[#fe2c55]"></i><span class="text-sm font-bold text-navy-700 dark:text-white">TikTok</span><span class="mr-auto num text-[11px] font-bold text-gray-600 dark:text-gray-300">2 חדשים</span></div>
+          <div class="mt-2.5 h-2 rounded-full bg-gray-200 dark:bg-white/10"><div class="h-full w-[13%] rounded-full bg-[#fe2c55]"></div></div>
+          <div class="mt-2.5 flex items-baseline gap-4">
+            <div><div class="text-[9px] font-bold text-gray-600 dark:text-gray-300">nCAC</div><div class="num text-base font-bold text-navy-700 dark:text-white">$96</div></div>
+            <div><div class="text-[9px] font-bold text-gray-600 dark:text-gray-300">NC-ROAS</div><div class="num text-base font-bold" style="color:#EF9331">1.12</div></div>
+            <div class="mr-auto text-left"><div class="text-[9px] font-bold text-gray-600 dark:text-gray-300">חוזרים</div><div class="num text-base font-bold text-navy-700 dark:text-white">0</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- intelligence + feed -->
+    <div class="mt-6 grid gap-5 xl:grid-cols-2">
+      <div class="rounded-20 bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none p-6">
+        <div class="flex items-center gap-2 mb-4">
+          <h4 class="text-lg font-bold text-navy-700 dark:text-white">פעולות דחופות כרגע</h4>
+          <span class="rounded-full bg-red-50 dark:bg-red-500/10 px-2.5 py-1 text-[10px] font-bold text-red-500">2 קריטיות</span>
+        </div>
+        <div class="space-y-3">
+          <div class="flex items-start gap-3 rounded-2xl bg-lightPrimary dark:bg-navy-900 p-4">
+            <span class="mt-1.5 h-2.5 w-2.5 flex-none rounded-full bg-red-500"></span>
+            <div><p class="text-sm font-bold text-navy-700 dark:text-white leading-snug">קמפיין UZ · Advantage+ צנח ל-ROAS ‏1.4× ב-6 שעות</p><p class="text-xs font-medium text-gray-600 dark:text-gray-300 mt-0.5">הוצאה $96 מאז · CTR ירד 38% · חשד לעייפות קריאייטיב</p></div>
+            <button class="mr-auto self-center rounded-full bg-brand-500 px-4 py-1.5 text-xs font-bold text-white">פתח</button>
+          </div>
+          <div class="flex items-start gap-3 rounded-2xl bg-lightPrimary dark:bg-navy-900 p-4">
+            <span class="mt-1.5 h-2.5 w-2.5 flex-none rounded-full" style="background:#EF9331"></span>
+            <div><p class="text-sm font-bold text-navy-700 dark:text-white leading-snug">ZP · רימרקטינג חורף — CPM קפץ ‎+62%</p><p class="text-xs font-medium text-gray-600 dark:text-gray-300 mt-0.5">$67 היום · שקול רענון קהל</p></div>
+            <button class="mr-auto self-center rounded-full bg-brand-500 px-4 py-1.5 text-xs font-bold text-white">פתח</button>
+          </div>
+          <div class="flex items-start gap-3 rounded-2xl bg-lightPrimary dark:bg-navy-900 p-4">
+            <span class="mt-1.5 h-2.5 w-2.5 flex-none rounded-full bg-emerald-500"></span>
+            <div><p class="text-sm font-bold text-navy-700 dark:text-white leading-snug">PMax · כללי שומר ‏3.1× יציב — מועמד להרחבה</p><p class="text-xs font-medium text-gray-600 dark:text-gray-300 mt-0.5">7 ימים רצופים מעל היעד</p></div>
+            <button class="mr-auto self-center rounded-full bg-white dark:bg-navy-700 px-4 py-1.5 text-xs font-bold text-navy-700 dark:text-white shadow-3xl shadow-shadow-500 dark:shadow-none">פתח</button>
+          </div>
+        </div>
+      </div>
+      <div class="rounded-20 bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none p-6">
+        <h4 class="text-lg font-bold text-navy-700 dark:text-white mb-4">פעילות בזמן אמת</h4>
+        <div class="divide-y divide-gray-100 dark:divide-white/5">
+          <div class="flex items-center gap-3 py-3">
+            <span class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500"><svg class="ic" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-200"><b class="text-navy-700 dark:text-white">מכירה · $94</b> — uzoshop · 2 פריטים</p>
+            <span class="rounded-full bg-roas-blue/10 px-2 py-0.5 text-[9px] font-bold text-roas-blue">meta-paid</span>
+            <span class="mr-auto text-[11px] font-medium text-gray-500 dark:text-gray-400">לפני 4 דק׳</span>
+          </div>
+          <div class="flex items-center gap-3 py-3">
+            <span class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-brand-50 dark:bg-brand-400/10 text-brand-500 dark:text-brand-300"><svg class="ic" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-200"><b class="text-navy-700 dark:text-white">הוספה לעגלה</b> — Zol Plus · מסיר אבנית</p>
+            <span class="rounded-full px-2 py-0.5 text-[9px] font-bold text-white" style="background:#EF9331">google-paid</span>
+            <span class="mr-auto text-[11px] font-medium text-gray-500 dark:text-gray-400">לפני 9 דק׳</span>
+          </div>
+          <div class="flex items-center gap-3 py-3">
+            <span class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500"><svg class="ic" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-200"><b class="text-navy-700 dark:text-white">מכירה · $281</b> — Zol Plus · 3 פריטים</p>
+            <span class="rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.5 text-[9px] font-bold text-gray-500 dark:text-gray-400 dark:text-gray-300">direct</span>
+            <span class="mr-auto text-[11px] font-medium text-gray-500 dark:text-gray-400">לפני 21 דק׳</span>
+          </div>
+          <div class="flex items-center gap-3 py-3">
+            <span class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10 text-red-500"><svg class="ic" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></span>
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-200"><b class="text-navy-700 dark:text-white">החזר · ‎−$58</b> — uzoshop</p>
+            <span class="mr-auto text-[11px] font-medium text-gray-500 dark:text-gray-400">לפני 47 דק׳</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ═══ כל מצבי-הצבע של כרטיס-חנות ═══ -->
+    <div class="mt-10 mb-2 flex items-baseline gap-3 px-1">
+      <h3 class="text-lg font-bold text-navy-700 dark:text-white">כרטיס חנות — כל מצבי הצבע</h3>
+      <span class="text-xs font-medium text-gray-600 dark:text-gray-300">לפי רצועות ה-ROAS הנעולות + מצב כבוי · מצב-האזעקה מופיע רק כשההוצאה עברה ‎$100 בלי אף מכירה (תחילת-יום רגילה לא מזעיקה)</span>
+    </div>
+    <div class="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <div class="rounded-20 band-alarm text-white shadow-3xl shadow-shadow-500 dark:shadow-none p-4">
+        <div class="flex items-center gap-2"><h4 class="text-sm font-extrabold">חנות לדוגמה</h4><span class="mr-auto rounded-full bg-black/35 px-2 py-0.5 text-[9px] font-black">⚠ ללא מכירות</span></div>
+        <div class="num mt-3 text-[38px] font-black leading-none">0</div>
+        <div class="mt-0.5 text-[9px] font-bold tracking-[.14em] text-white/85">ROAS · ‏$148 הוצאה · ‏0 מכירות</div>
+        <div class="mt-3 rounded-xl bg-black/30 px-3 py-1.5 text-[10px] font-bold">הוצאה מעל ‎$100 ללא מכירות — בדוק את הקמפיינים</div>
+      </div>
+      <div class="rounded-20 band-red text-white shadow-3xl shadow-shadow-500 dark:shadow-none p-4">
+        <div class="flex items-center gap-2"><h4 class="text-sm font-extrabold">חנות לדוגמה</h4><span class="mr-auto rounded-full bg-black/25 px-2 py-0.5 text-[9px] font-bold">הפסד</span></div>
+        <div class="num mt-3 text-[38px] font-black leading-none" dir="ltr">1.42×</div>
+        <div class="mt-0.5 text-[9px] font-bold tracking-[.14em] text-white/75">ROAS · מתחת ל-2.00</div>
+        <div class="mt-3 rounded-xl bg-black/20 px-3 py-1.5 text-[10px] font-bold">🔻 שורף כסף — דורש פעולה</div>
+      </div>
+      <div class="rounded-20 band-orange text-white shadow-3xl shadow-shadow-500 dark:shadow-none p-4">
+        <div class="flex items-center gap-2"><h4 class="text-sm font-extrabold">חנות לדוגמה</h4><span class="mr-auto rounded-full bg-black/25 px-2 py-0.5 text-[9px] font-bold">סביר</span></div>
+        <div class="num mt-3 text-[38px] font-black leading-none" dir="ltr">2.31×</div>
+        <div class="mt-0.5 text-[9px] font-bold tracking-[.14em] text-white/75">ROAS · ‏2.00–2.70</div>
+        <div class="mt-3 rounded-xl bg-black/20 px-3 py-1.5 text-[10px] font-bold">מעל איזון, מתחת ליעד</div>
+      </div>
+      <div class="rounded-20 band-green text-white shadow-3xl shadow-shadow-500 dark:shadow-none p-4">
+        <div class="flex items-center gap-2"><h4 class="text-sm font-extrabold">חנות לדוגמה</h4><span class="mr-auto rounded-full bg-black/25 px-2 py-0.5 text-[9px] font-bold">בטווח היעד</span></div>
+        <div class="num mt-3 text-[38px] font-black leading-none" dir="ltr">2.91×</div>
+        <div class="mt-0.5 text-[9px] font-bold tracking-[.14em] text-white/75">ROAS · ‏2.70–3.00</div>
+        <div class="mt-3 rounded-xl bg-black/20 px-3 py-1.5 text-[10px] font-bold">בריא — קרוב ליעד</div>
+      </div>
+      <div class="rounded-20 band-blue text-white shadow-3xl shadow-shadow-500 dark:shadow-none p-4">
+        <div class="flex items-center gap-2"><h4 class="text-sm font-extrabold">חנות לדוגמה</h4><span class="mr-auto rounded-full bg-black/25 px-2 py-0.5 text-[9px] font-bold">מעולה</span></div>
+        <div class="num mt-3 text-[38px] font-black leading-none" dir="ltr">4.01×</div>
+        <div class="mt-0.5 text-[9px] font-bold tracking-[.14em] text-white/75">ROAS · מעל 3.00</div>
+        <div class="mt-3 rounded-xl bg-black/20 px-3 py-1.5 text-[10px] font-bold">מעל היעד — שקול הרחבה</div>
+      </div>
+      <div class="rounded-20 band-gray text-white shadow-3xl shadow-shadow-500 dark:shadow-none p-4 saturate-50">
+        <div class="flex items-center gap-2"><h4 class="text-sm font-extrabold">חנות לדוגמה</h4><span class="mr-auto rounded-full bg-black/25 px-2 py-0.5 text-[9px] font-bold">כבוי</span></div>
+        <div class="num mt-3 text-[38px] font-black leading-none">0</div>
+        <div class="mt-0.5 text-[9px] font-bold tracking-[.14em] text-white/75">אורגני · אין פרסום</div>
+        <div class="mt-3 rounded-xl bg-black/20 px-3 py-1.5 text-[10px] font-bold">מכירות אורגניות בלבד</div>
+      </div>
+    </div>
+    <div class="mt-4 grid gap-4 md:grid-cols-3">
+      <div class="rounded-20 band-green text-white shadow-3xl shadow-shadow-500 dark:shadow-none p-4">
+        <div class="flex items-center justify-between"><span class="text-xs font-extrabold">טרי · עד 15 דק׳</span><span class="rounded-full bg-black/25 px-2 py-0.5 text-[9px] font-bold">רעננות 100%</span></div>
+        <div class="num mt-2 text-3xl font-black" dir="ltr">2.91×</div>
+      </div>
+      <div class="rounded-20 band-green text-white shadow-3xl shadow-shadow-500 dark:shadow-none p-4" style="filter:saturate(.6)">
+        <div class="flex items-center justify-between"><span class="text-xs font-extrabold">מתיישן · 15–30 דק׳</span><span class="rounded-full bg-black/25 px-2 py-0.5 text-[9px] font-bold">דהייה 60%</span></div>
+        <div class="num mt-2 text-3xl font-black" dir="ltr">2.91×</div>
+      </div>
+      <div class="rounded-20 band-green text-white shadow-3xl shadow-shadow-500 dark:shadow-none p-4" style="filter:saturate(.3) brightness(.95)">
+        <div class="flex items-center justify-between"><span class="text-xs font-extrabold">ישן · 30+ דק׳</span><span class="rounded-full bg-black/25 px-2 py-0.5 text-[9px] font-bold">דהייה 30%</span></div>
+        <div class="num mt-2 text-3xl font-black" dir="ltr">2.91×</div>
+      </div>
+    </div>
+
+    <!-- ═══ הכרטיס פתוח — StoreDetailModal בסגנון Horizon ═══ -->
+    <div class="mt-10 mb-2 flex items-baseline gap-3 px-1">
+      <h3 class="text-lg font-bold text-navy-700 dark:text-white">כרטיס חנות פתוח — מבפנים</h3>
+      <span class="text-xs font-medium text-gray-600 dark:text-gray-300">לחיצה על כרטיס פותחת את המודאל הזה</span>
+    </div>
+    <div class="relative rounded-20 bg-gray-400/30 dark:bg-black/40 p-6 md:p-10">
+      <div class="mx-auto max-w-[860px] rounded-20 bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none overflow-hidden">
+        <!-- band header strip -->
+        <div class="band-orange p-5 text-white">
+          <div class="flex items-center gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="text-xl font-extrabold">uzoshop</h3>
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-black/25 px-2.5 py-1 text-[10px] font-bold"><span class="h-1.5 w-1.5 rounded-full bg-emerald-300"></span>LIVE · 1M</span>
+                <span class="rounded-full bg-black/25 px-2.5 py-1 text-[10px] font-bold">סביר · מתחת ליעד</span>
+              </div>
+              <div class="mt-0.5 text-[11px] font-semibold text-white/80">היום · 12/06/2026 · מושווה לאתמול</div>
+            </div>
+            <div class="mr-auto text-left">
+              <div class="num text-[44px] font-black leading-none" dir="ltr">2.69×</div>
+              <div class="text-[10px] font-bold tracking-[.13em] text-white/75 text-center">ROAS · יעד 3.00</div>
+            </div>
+            <button class="mr-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/25 text-white text-sm">✕</button>
+          </div>
+        </div>
+        <div class="p-6 space-y-5">
+          <!-- KPI row -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div class="rounded-2xl bg-lightPrimary dark:bg-navy-900 p-3.5"><div class="text-[10px] font-bold text-gray-600 dark:text-gray-300">הוצאה ↓</div><div class="num text-lg font-bold text-roas-red">$890</div><div class="num text-[10px] font-semibold text-gray-500 dark:text-gray-400">אתמול $812</div></div>
+            <div class="rounded-2xl bg-lightPrimary dark:bg-navy-900 p-3.5"><div class="text-[10px] font-bold text-gray-600 dark:text-gray-300">הכנסה ↑</div><div class="num text-lg font-bold text-emerald-500">$2,400</div><div class="num text-[10px] font-semibold text-gray-500 dark:text-gray-400">אתמול $2,180</div></div>
+            <div class="rounded-2xl bg-lightPrimary dark:bg-navy-900 p-3.5"><div class="text-[10px] font-bold text-gray-600 dark:text-gray-300">הזמנות</div><div class="num text-lg font-bold text-navy-700 dark:text-white">22</div><div class="num text-[10px] font-semibold text-gray-500 dark:text-gray-400">AOV $109 ↑</div></div>
+            <div class="rounded-2xl bg-lightPrimary dark:bg-navy-900 p-3.5"><div class="text-[10px] font-bold text-gray-600 dark:text-gray-300">רווח תפעולי</div><div class="num text-lg font-bold text-navy-700 dark:text-white">$612</div><div class="num text-[10px] font-semibold text-gray-500 dark:text-gray-400">אחרי COGS 25%</div></div>
+          </div>
+          <!-- per-platform table -->
+          <div>
+            <div class="mb-2 text-sm font-bold text-navy-700 dark:text-white">פירוק לפי פלטפורמה</div>
+            <table class="w-full text-sm">
+              <thead><tr class="text-right text-[10px] text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-white/10">
+                <th class="pb-2 font-bold">פלטפורמה</th><th class="pb-2 font-bold">הוצאה</th><th class="pb-2 font-bold">הכנסה (פלטפורמה)</th><th class="pb-2 font-bold">ROAS</th><th class="pb-2 font-bold">CPM</th><th class="pb-2 font-bold">המרות</th>
+              </tr></thead>
+              <tbody class="font-bold text-navy-700 dark:text-white">
+                <tr class="border-b border-gray-100 dark:border-white/5">
+                  <td class="py-3"><span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded bg-[#1877f2]"></i>Meta</span></td>
+                  <td class="num">$681</td><td class="num">$1,890</td>
+                  <td><span class="num rounded-lg bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 text-emerald-600 dark:text-emerald-400 text-xs" dir="ltr">2.78×</span></td>
+                  <td class="num">$3</td><td class="num">17</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-white/5">
+                  <td class="py-3"><span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded bg-[#f9ab00]"></i>Google</span></td>
+                  <td class="num">$148</td><td class="num">$402</td>
+                  <td><span class="num rounded-lg bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 text-emerald-600 dark:text-emerald-400 text-xs" dir="ltr">2.72×</span></td>
+                  <td class="num">$12</td><td class="num">4</td>
+                </tr>
+                <tr>
+                  <td class="py-3"><span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded bg-[#fe2c55]"></i>TikTok</span></td>
+                  <td class="num">$61</td><td class="num">$108</td>
+                  <td><span class="num rounded-lg px-2 py-0.5 text-white text-xs" style="background:#EF9331" dir="ltr">1.77×</span></td>
+                  <td class="num">$37</td><td class="num">1</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- trend + hourly -->
+          <div class="grid gap-4 md:grid-cols-2">
+            <div class="rounded-2xl bg-lightPrimary dark:bg-navy-900 p-4">
+              <div class="mb-1 text-xs font-bold text-navy-700 dark:text-white">ROAS · 7 ימים</div>
+              <svg viewBox="0 0 340 90" class="w-full h-[90px]" preserveAspectRatio="none">
+                <line x1="0" y1="42" x2="340" y2="42" stroke="#A3AED0" stroke-opacity=".5" stroke-dasharray="4 5"/>
+                <path d="M0,66 C30,62 50,46 80,50 C110,54 130,30 165,34 C200,38 220,56 255,48 C285,42 315,30 340,26" fill="none" stroke="#422AFB" stroke-width="3" stroke-linecap="round"/>
+                <circle cx="255" cy="48" r="4" fill="#422AFB"/>
+              </svg>
+            </div>
+            <div class="rounded-2xl bg-lightPrimary dark:bg-navy-900 p-4">
+              <div class="mb-1 text-xs font-bold text-navy-700 dark:text-white">הכנסה לפי שעה · היום</div>
+              <svg viewBox="0 0 340 90" class="w-full h-[90px]" preserveAspectRatio="none">
+                <g fill="#422AFB" fill-opacity=".75">
+                  <rect x="6" y="64" width="9" height="26" rx="2"/><rect x="20" y="58" width="9" height="32" rx="2"/><rect x="34" y="70" width="9" height="20" rx="2"/><rect x="48" y="50" width="9" height="40" rx="2"/><rect x="62" y="60" width="9" height="30" rx="2"/><rect x="76" y="44" width="9" height="46" rx="2"/><rect x="90" y="54" width="9" height="36" rx="2"/><rect x="104" y="38" width="9" height="52" rx="2"/><rect x="118" y="48" width="9" height="42" rx="2"/><rect x="132" y="30" width="9" height="60" rx="2"/><rect x="146" y="42" width="9" height="48" rx="2"/><rect x="160" y="24" width="9" height="66" rx="2"/><rect x="174" y="36" width="9" height="54" rx="2"/><rect x="188" y="18" width="9" height="72" rx="2"/><rect x="202" y="30" width="9" height="60" rx="2"/><rect x="216" y="40" width="9" height="50" rx="2"/><rect x="230" y="26" width="9" height="64" rx="2"/><rect x="244" y="46" width="9" height="44" rx="2"/>
+                  <rect x="258" y="34" width="9" height="56" rx="2" fill-opacity="1"/>
+                </g>
+              </svg>
+            </div>
+          </div>
+          <!-- top products -->
+          <div>
+            <div class="mb-2 text-sm font-bold text-navy-700 dark:text-white">מוצרים מובילים היום</div>
+            <div class="grid gap-2 md:grid-cols-3">
+              <div class="flex items-center gap-3 rounded-2xl bg-lightPrimary dark:bg-navy-900 p-3"><span class="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/10 text-brand-500 dark:text-brand-300 text-xs font-black">1</span><div><div class="text-xs font-bold text-navy-700 dark:text-white">מסיר אבנית Pro</div><div class="num text-[10px] font-semibold text-gray-500 dark:text-gray-400">8 הזמנות · $872</div></div></div>
+              <div class="flex items-center gap-3 rounded-2xl bg-lightPrimary dark:bg-navy-900 p-3"><span class="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/10 text-brand-500 dark:text-brand-300 text-xs font-black">2</span><div><div class="text-xs font-bold text-navy-700 dark:text-white">סט מברשות חכמות</div><div class="num text-[10px] font-semibold text-gray-500 dark:text-gray-400">6 הזמנות · $654</div></div></div>
+              <div class="flex items-center gap-3 rounded-2xl bg-lightPrimary dark:bg-navy-900 p-3"><span class="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/10 text-brand-500 dark:text-brand-300 text-xs font-black">3</span><div><div class="text-xs font-bold text-navy-700 dark:text-white">באנדל קיץ</div><div class="num text-[10px] font-semibold text-gray-500 dark:text-gray-400">4 הזמנות · $498</div></div></div>
+            </div>
+          </div>
+          <!-- footer actions -->
+          <div class="flex items-center gap-3 border-t border-gray-100 dark:border-white/5 pt-4">
+            <button class="rounded-full bg-brand-500 hover:bg-brand-600 px-5 py-2.5 text-sm font-bold text-white">פתח קמפיינים של uzoshop</button>
+            <button class="rounded-full bg-lightPrimary dark:bg-navy-900 px-5 py-2.5 text-sm font-bold text-navy-700 dark:text-white">דוח AI לחנות</button>
+            <span class="mr-auto text-[10px] font-semibold text-gray-500 dark:text-gray-400">עודכן לפני 1 דק׳ · רעננות 100%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+</body>
+</html>
