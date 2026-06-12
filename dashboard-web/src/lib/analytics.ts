@@ -2,6 +2,8 @@ import type { DailyRow, DateRange } from './types';
 import { TRANSACTION_FEES_RATE } from './costs';
 import { billingForRange } from './billing';
 import { enumerateDateRange } from './dateRange';
+import { bandForRoas, type CoreRoasBand } from './roasBands';
+import { BAND_TAG_LABEL } from './format/useRoasBandGradient';
 
 /**
  * הערכת עלות סחורה (COGS) — אחוז קבוע מההכנסה היומית.
@@ -455,12 +457,16 @@ export function dailySeries(
   return dateList.map((date) => map.get(date)!);
 }
 
-export function roasLabel(roas: number): { text: string; tone: 'red' | 'orange' | 'green' | 'blue' | 'gray' } {
-  if (!roas || roas <= 0) return { text: 'אין נתונים', tone: 'gray' };
-  if (roas < 2) return { text: 'דורש בחינה', tone: 'red' };
-  if (roas < 2.7) return { text: 'סביר', tone: 'orange' };
-  if (roas <= 3) return { text: 'טוב', tone: 'green' };
-  return { text: 'מעולה', tone: 'blue' };
+export function roasLabel(roas: number): { text: string; tone: CoreRoasBand } {
+  // Gray-guard at the call site (the bandForRoas precondition: it assumes a
+  // finite positive ratio — a bare 0/NaN falls through to 'red'). Then delegate
+  // BOTH classification (bandForRoas) and wording (BAND_TAG_LABEL) to the single
+  // source of truth. The original strings ('אין נתונים'/'דורש בחינה'/'סביר'/
+  // 'טוב'/'מעולה') are byte-identical to BAND_TAG_LABEL, so this is text-
+  // preserving; roasBandConsistency.guard pins the lock-step.
+  if (!roas || roas <= 0) return { text: BAND_TAG_LABEL.gray, tone: 'gray' };
+  const tone = bandForRoas(roas);
+  return { text: BAND_TAG_LABEL[tone], tone };
 }
 
 export function deltaPct(cur: number, prev: number): { value: number; direction: 'up' | 'down' | 'flat' } {
