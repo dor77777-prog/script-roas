@@ -60,6 +60,9 @@ import { PageScope } from '@/components/ui/PageScope';
 import { PageSynthesis } from '@/components/ui/PageSynthesis';
 import { synthesizeDetail } from '@/lib/synthesis/detail';
 import { synthesizePnl } from '@/lib/synthesis/pnl';
+import { NetMarginTargetEditor } from './NetMarginTargetEditor';
+import { useNetMarginTarget } from '@/lib/hooks/useNetMarginTarget';
+import { monthFromRange } from '@/lib/goalSettings';
 import { CommandCenterHero } from '@/components/home/CommandCenterHero';
 import { ReconcileBanner } from '@/components/home/ReconcileBanner';
 import { SourceHealthChip } from '@/components/home/SourceHealthChip';
@@ -1793,7 +1796,13 @@ function PnLTab({
   overrideNote?: string;
   overrideLastEditedAt?: string;
 }) {
-  const pnlSynthesis = synthesizePnl({ agg: filtered.curAgg });
+  // Editable net-margin target — anchored to the range's calendar month when the
+  // range IS a single month (so the target tracks the period being analysed),
+  // else the current IL month. Threaded into synthesizePnl as `targetMargin`
+  // (replacing the hardcoded 0.35; pnl.ts keeps `?? 0.35` as a safety fallback).
+  const targetMonth = monthFromRange(filters.range) ?? getTodayInIsraelTz().slice(0, 7);
+  const { target: netMarginTarget } = useNetMarginTarget(targetMonth);
+  const pnlSynthesis = synthesizePnl({ agg: filtered.curAgg, targetMargin: netMarginTarget });
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
       <SectionIntro
@@ -1812,6 +1821,7 @@ function PnLTab({
         anchorMetric={pnlSynthesis.anchorMetric}
         confidence={pnlSynthesis.confidence}
       />
+      <NetMarginTargetEditor month={targetMonth} />
 
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
 

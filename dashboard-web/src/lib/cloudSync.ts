@@ -75,6 +75,9 @@ export const STATE_KEYS = [
   // Saved Views (2026-06-04) — named Filters snapshots (preset+range+store),
   // keyed by opaque id with createdAt/lastUsedAt. Device-synced.
   'roas-dashboard:saved-views',
+  // Editable net-profit-margin target (2026-06-13) — per-month, business-wide,
+  // carry-forward + global default 0.35. Drives the P&L synthesis "מתחת/מעל ליעד".
+  'roas-dashboard:net-margin-target',
 ] as const;
 export type StateKey = (typeof STATE_KEYS)[number];
 
@@ -93,6 +96,7 @@ const CHANGE_EVENTS: Record<StateKey, string> = {
   // Shares the legacy goal event so both writers drive one re-render signal.
   'roas-dashboard:goal-settings': 'roas-goal-changed',
   'roas-dashboard:saved-views': 'roas-saved-views-changed',
+  'roas-dashboard:net-margin-target': 'roas-net-margin-target-changed',
 };
 
 /** ms epoch of the last push we sent for each key. Used to skip stomping

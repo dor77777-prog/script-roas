@@ -6,7 +6,11 @@
  * question every operator asks first: "did I actually make money this
  * period, and by how much?". The headline anchors on the true margin
  * percent (trueNetProfit / revenue) and compares it to the configured
- * target (default 35%) — the same threshold the GoalTracker uses.
+ * target net margin. That target is operator-editable (per-month, business-
+ * wide, carry-forward + a global default) via `roas-dashboard:net-margin-target`
+ * (see lib/netMarginTarget.ts) and is threaded in here as `targetMargin` from
+ * the P&L tab. The hardcoded `0.35` below stays ONLY as a safety fallback for
+ * when no target is passed (preserving the historical default of 35%).
  *
  * Pure function: takes the already-aggregated `Aggregate` (the same
  * value PnLBreakdown receives) plus an optional target margin override.

@@ -62,4 +62,16 @@ describe('synthesizePnl', () => {
     expect(r.text).toMatch(/35%/);
     expect(r.text).toMatch(/מעל יעד/);
   });
+
+  it('honors a custom editable target — 30% target, margin 25% → "מתחת ליעד 30%"', () => {
+    const r = synthesizePnl({ agg: agg({ trueMargin: 0.25 }), targetMargin: 0.30 });
+    expect(r.text).toMatch(/רווח נטו 25%/);
+    expect(r.text).toMatch(/מתחת ליעד 30%/);
+  });
+
+  it('honors a custom editable target — 30% target, margin 32% → "מעל יעד 30%"', () => {
+    const r = synthesizePnl({ agg: agg({ trueMargin: 0.32 }), targetMargin: 0.30 });
+    expect(r.text).toMatch(/רווח נטו 32%/);
+    expect(r.text).toMatch(/מעל יעד 30%/);
+  });
 });

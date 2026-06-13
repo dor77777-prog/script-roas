@@ -48,6 +48,9 @@ export const ALLOWED_STATE_KEYS = [
   // Saved Views (2026-06-04) — named Filters snapshots, device-synced.
   // Must match cloudSync.ts:STATE_KEYS ('roas-dashboard:saved-views') for cross-device sync.
   'saved-views',
+  // Editable net-profit-margin target (2026-06-13) — per-month, business-wide.
+  // Must match cloudSync.ts:STATE_KEYS ('roas-dashboard:net-margin-target') for cross-device sync.
+  'net-margin-target',
 ] as const;
 
 export type AllowedStateKey = (typeof ALLOWED_STATE_KEYS)[number];
