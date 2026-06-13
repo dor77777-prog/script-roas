@@ -149,13 +149,13 @@ export function NcByPlatformCard({
               {/* nCAC (money via <Money>) + NC-ROAS (band chip, AA-safe) */}
               <div className="mt-2.5 flex items-baseline gap-4">
                 <div>
-                  <div className="text-[9px] font-bold text-ink-muted">nCAC</div>
+                  <div className="text-fs-2xs font-bold text-ink-muted">nCAC</div>
                   <div className="text-base font-bold text-ink tabular-nums">
                     {m.nCac == null ? '—' : <Money value={m.nCac} />}
                   </div>
                 </div>
                 <div>
-                  <div className="text-[9px] font-bold text-ink-muted">NC-ROAS</div>
+                  <div className="text-fs-2xs font-bold text-ink-muted">NC-ROAS</div>
                   <span
                     data-testid={`nc-platform-roas-${m.channel}`}
                     className={cn('band-chip mt-0.5', chipClassForBand(band))}

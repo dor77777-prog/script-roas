@@ -248,7 +248,7 @@ function NcFooter({ nc }: { nc: CommandCenterNewCustomer }) {
             </div>
           </div>
 
-          <div className="h-8 w-px bg-border-subtle" aria-hidden="true" />
+          <div className="h-8 w-px bg-glass-edge" aria-hidden="true" />
 
           <div>
             <div className="text-[10.5px] font-semibold text-ink-muted">nCAC</div>
