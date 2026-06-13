@@ -29,7 +29,7 @@
  * presentation layer.
  */
 
-import { Package, Edit3, ChevronDown } from 'lucide-react';
+import { Package, Edit3, ChevronDown, Link2, Hourglass } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -148,10 +148,10 @@ function OverviewAccordion({
   return (
     <details
       open={open}
-      className="group rounded-card border border-glass-edge bg-glass-2/40 overflow-hidden"
+      className="group rounded-card border border-glass-edge bg-pill-track overflow-hidden"
     >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 marker:hidden [&::-webkit-details-marker]:hidden">
-        <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink">
+        <span className="inline-flex items-center gap-1.5 text-fs-sm font-semibold text-ink">
           {icon}
           {title}
           {chip}
@@ -200,13 +200,13 @@ export function CampaignDrawerOverview({
   // panels read (never recomputed from raw totals).
   const trust = analysis?.trust ?? null;
   const healthMeta = health ? HEALTH_GRADE_META[health.grade] : null;
-  // Early-state grade (insufficient sample) renders the ⏳ glyph the panel
-  // also uses, instead of the letter.
-  const healthGlyph =
+  // Early-state grade (insufficient sample) renders an Hourglass glyph (the
+  // "too early to grade" signal the panel also uses), instead of the letter.
+  const healthGlyph: ReactNode =
     health == null
       ? '—'
       : health.insufficient || health.grade === 'unknown'
-        ? '⏳'
+        ? <Hourglass size={16} className="text-ink-muted" aria-label="מוקדם מדי לדירוג" />
         : health.grade;
 
   return (
@@ -232,7 +232,7 @@ export function CampaignDrawerOverview({
           value={
             <span data-testid="overview-sc-trust">
               {trust ? `${trust.score.toFixed(0)}` : '—'}
-              {trust && <span className="text-[11px] text-ink-muted">/100</span>}
+              {trust && <span className="text-fs-xs text-ink-muted">/100</span>}
             </span>
           }
           chip={
@@ -279,7 +279,7 @@ export function CampaignDrawerOverview({
       <div className="space-y-2.5">
         <Heading level="panel" className="text-ink-secondary">
           ניתוח מעמיק
-          <span className="ms-1.5 text-[11px] font-normal text-ink-muted">
+          <span className="ms-1.5 text-fs-xs font-normal text-ink-muted">
             (נפתח בלחיצה)
           </span>
         </Heading>
@@ -319,14 +319,14 @@ export function CampaignDrawerOverview({
                 variant="secondary"
                 size="sm"
                 onClick={onEditMapping}
-                className="text-[11px]"
+                className="text-fs-xs"
               >
                 <Edit3 size={12} />
                 {mappedIds.length > 0 ? 'ערוך מיפוי' : 'שייך מוצרים'}
               </Button>
             </div>
             {mappedIds.length === 0 ? (
-              <p className="text-[11px] text-ink-muted leading-relaxed bg-glass-2/40 rounded-lg px-3 py-2">
+              <p className="text-fs-xs text-ink-muted leading-relaxed bg-pill-track rounded-hz px-3 py-2">
                 לא משויכים מוצרים. לאחר שיוך, ה-ROAS יחושב מחדש לפי מכירות{' '}
                 Shopify אמיתיות במקום ערך ההמרה ש-{summary.platform} דיווחה (לרוב מנופח).
               </p>
@@ -345,15 +345,16 @@ export function CampaignDrawerOverview({
                           : id
                       }
                     >
-                      <li className="inline-flex items-center gap-1 text-[11px] bg-accent-soft text-accent px-2 py-0.5 rounded-md font-mono">
+                      <li className="inline-flex items-center gap-1 text-fs-xs bg-accent-soft text-accent px-2 py-0.5 rounded-md font-mono">
                         <Package size={10} />
                         <span className="truncate max-w-[120px]">{id}</span>
                         {others.length > 0 && (
                           <span
-                            className="text-status-warningFg text-[9px] font-sans ms-1"
+                            className="inline-flex items-center gap-0.5 text-status-warningFg text-fs-2xs font-sans ms-1"
                             aria-label={`גם משויך ל-${others.length} קמפיינים אחרים`}
                           >
-                            🔗 +{others.length}
+                            <Link2 size={9} aria-hidden />
+                            +{others.length}
                           </span>
                         )}
                       </li>
@@ -364,10 +365,13 @@ export function CampaignDrawerOverview({
             )}
             {mappedIds.length > 0 &&
               mappedIds.some(id => (otherCampaignsByProduct.get(id) ?? []).length > 0) && (
-                <p className="text-[10px] text-ink-muted leading-relaxed mt-2 bg-status-warningBg border border-status-warning rounded-lg px-3 py-1.5">
-                  🔗 חלק מהמוצרים גם משויכים לקמפיינים אחרים. ה-ROAS Shopify
-                  של הקמפיין הזה מחושב לפי <strong>חלקו של הקמפיין בהוצאה</strong>{' '}
-                  (חלוקה פרופורציונלית) — לא לפי כל ההכנסה של המוצר.
+                <p className="inline-flex items-start gap-1 text-fs-2xs text-ink-muted leading-relaxed mt-2 bg-status-warningBg border border-status-warning rounded-hz px-3 py-1.5">
+                  <Link2 size={11} className="shrink-0 mt-0.5 text-status-warningFg" aria-hidden />
+                  <span>
+                    חלק מהמוצרים גם משויכים לקמפיינים אחרים. ה-ROAS Shopify
+                    של הקמפיין הזה מחושב לפי <strong>חלקו של הקמפיין בהוצאה</strong>{' '}
+                    (חלוקה פרופורציונלית) — לא לפי כל ההכנסה של המוצר.
+                  </span>
                 </p>
               )}
           </OverviewAccordion>

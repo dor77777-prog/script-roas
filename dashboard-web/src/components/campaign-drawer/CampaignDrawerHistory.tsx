@@ -28,7 +28,7 @@ export interface CampaignDrawerHistoryProps {
 
 function Row({ label, ts }: { label: string; ts: string | null }) {
   return (
-    <li className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-glass-edge bg-glass-1">
+    <li className="flex items-center justify-between gap-3 px-3 py-2 rounded-hz border border-glass-edge bg-pill-track">
       <span className="inline-flex items-center gap-1.5 text-xs text-ink-secondary">
         <Clock size={12} className="text-ink-muted" />
         {label}
@@ -56,7 +56,7 @@ export function CampaignDrawerHistory({
           <Calendar size={14} className="text-ink-secondary" />
           ציר זמן רישומי
         </Heading>
-        <p className="text-[11px] text-ink-muted leading-relaxed bg-glass-2/40 rounded-lg px-3 py-2 mb-3">
+        <p className="text-fs-xs text-ink-muted leading-relaxed bg-pill-track rounded-hz px-3 py-2 mb-3">
           תיעוד מלא של עריכות תקציב ושינויי סטטוס יגיע בשלב מאוחר יותר (Phase E2+).
           עד אז, אלה התאריכים שה-pipeline שומר על הקמפיין הזה.
         </p>

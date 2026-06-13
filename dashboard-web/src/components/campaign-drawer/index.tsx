@@ -714,15 +714,16 @@ export function CampaignDrawer({
           <section>
             <div className="flex items-center justify-between gap-2 mb-2">
               <Heading level="panel" className="inline-flex items-center gap-1.5">
-                🏪 חנות בעלת הקמפיין
+                <StoreIcon size={14} className="text-ink-secondary" aria-hidden />
+                חנות בעלת הקמפיין
                 {isUnmapped && (
-                  <span className="text-[10px] font-medium text-status-orangeFg">
+                  <span className="text-fs-2xs font-medium text-status-orangeFg">
                     (לא ממופה · ברירת מחדל uzoshop)
                   </span>
                 )}
               </Heading>
             </div>
-            <p className="text-[11px] text-ink-muted leading-relaxed bg-glass-2/40 rounded-lg px-3 py-2 mb-2">
+            <p className="text-fs-xs text-ink-muted leading-relaxed bg-pill-track rounded-hz px-3 py-2 mb-2">
               {/* Copy-truth (2026-06-10 audit P1-26): cron-live-heavy was
                   decommissioned in Phase E1 — the hot-metrics worker (~10 דק׳)
                   is what rewrites campaigns_daily now. */}
@@ -767,7 +768,7 @@ export function CampaignDrawer({
               ))}
             </NativeSelect>
             {!isUnmapped && currentValue !== storeId && (
-              <p className="text-[11px] text-status-orangeFg mt-2 inline-flex items-start gap-1">
+              <p className="text-fs-xs text-status-orangeFg mt-2 inline-flex items-start gap-1">
                 <AlertTriangle size={11} className="shrink-0 mt-0.5" aria-hidden />
                 <span>מיפוי המוצרים למטה כבר מציג את {currentValue}. שאר הפאנלים בכרטיסייה הזו עדיין מציגים נתונים של {storeId} עד שה-worker יכתוב מחדש (כ-10 דק׳).</span>
               </p>
@@ -874,7 +875,7 @@ export function CampaignDrawer({
             <TabsList className="mb-4" data-testid="campaign-drawer-tabs">
               <TabsTrigger value="overview" data-testid="campaign-drawer-tab-trigger-overview">סקירה</TabsTrigger>
               <TabsTrigger value="daily" data-testid="campaign-drawer-tab-trigger-daily">יומי</TabsTrigger>
-              <TabsTrigger value="adsets" data-testid="campaign-drawer-tab-trigger-adsets">Ad Sets</TabsTrigger>
+              <TabsTrigger value="adsets" data-testid="campaign-drawer-tab-trigger-adsets">סטים</TabsTrigger>
               <TabsTrigger value="ads" data-testid="campaign-drawer-tab-trigger-ads">מודעות</TabsTrigger>
               <TabsTrigger value="status" data-testid="campaign-drawer-tab-trigger-status">סטטוס</TabsTrigger>
               <TabsTrigger value="history" data-testid="campaign-drawer-tab-trigger-history">היסטוריה</TabsTrigger>
@@ -960,7 +961,7 @@ export function CampaignDrawer({
             </TabsContent>
           </Tabs>
 
-          <div className="text-[10px] text-ink-muted text-center pt-6">
+          <div className="text-fs-2xs text-ink-muted text-center pt-6">
             לחץ Esc או על הרקע לסגירה
           </div>
         </SheetBody>

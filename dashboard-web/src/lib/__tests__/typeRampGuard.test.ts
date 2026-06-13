@@ -71,7 +71,9 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   'AttributionAnalysisPanel.tsx': 6,
   'BillingCsvImport.tsx': 8,
   'BillingSettings.tsx': 25,
-  'CampaignDrawerStatusSection.tsx': 3,
+  // CampaignDrawerStatusSection.tsx — DRAINED to 0 in Wave 4.3 (Horizon
+  // status-section re-skin: the 3 configured/effective/delivery LTR caption
+  // literals text-[10px] → text-fs-2xs ramp token; removed from allowlist).
   'CampaignsColumnsMenu.tsx': 3,
   // Wave 4 (debt #6): the CPM-expander chart block (10 sub-floor literals) was
   // extracted to campaigns/CpmTrendChart.tsx (which clears the floor) → 34 → 24.
@@ -104,13 +106,19 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   'ProductPickerModal.tsx': 5,
   'ProductsTable.tsx': 11,
   'SectionIntro.tsx': 1,
-  'campaign-drawer/CampaignDrawerAds.tsx': 1,
+  // campaign-drawer/CampaignDrawerAds.tsx — DRAINED to 0 in Wave 4.3 (Horizon
+  // ads sub-tab re-skin: the lone ad-set spend/conversions caption literal
+  // text-[10px] → text-fs-2xs ramp token; removed from allowlist).
   // Wave 4 (debt #6): the CPM section (10 sub-floor literals) was extracted to
   // campaigns/CpmTrendChart.tsx → 11 → 1 (the lone remaining literal is the
   // spend↔value legend, which STAYS in this file).
   'campaign-drawer/CampaignDrawerDaily.tsx': 1,
-  'campaign-drawer/CampaignDrawerOverview.tsx': 2,
-  'campaign-drawer/index.tsx': 2,
+  // campaign-drawer/CampaignDrawerOverview.tsx — DRAINED to 0 in Wave 4.3
+  // (Horizon overview re-skin: the 🔗-chip text-[9px] + cross-campaign warning
+  // text-[10px] → text-fs-2xs ramp token; removed from allowlist).
+  // campaign-drawer/index.tsx — DRAINED to 0 in Wave 4.3 (Horizon drawer-root
+  // re-skin: the unmapped-store hint text-[10px] + Esc-footer text-[10px] →
+  // text-fs-2xs ramp token; removed from allowlist).
   // home/ChannelTruthPanel.tsx — DRAINED to 0 in Wave 3.8b (Horizon home-surfaces
   // re-skin: NC-ROAS caption + band-tag pill sub-floor literals → text-fs-2xs /
   // shared band-chip recipe; removed from allowlist).

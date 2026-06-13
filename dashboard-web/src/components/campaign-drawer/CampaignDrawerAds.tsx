@@ -63,7 +63,7 @@ export function CampaignDrawerAds({ adSets, platform, onDrillAds, rangeIncludesT
           <Layers size={14} className="text-ink-secondary" />
           מודעות לפי ad-set
         </Heading>
-        <p className="text-[11px] text-ink-muted leading-relaxed bg-glass-2/40 rounded-lg px-3 py-2 mb-3">
+        <p className="text-fs-xs text-ink-muted leading-relaxed bg-pill-track rounded-hz px-3 py-2 mb-3">
           נתוני מודעות נטענים לפי ad-set. בחר ad-set מהרשימה למטה כדי לפתוח את כל המודעות שלו.
           {!adDrillSupported && (
             <span className="mt-1 inline-flex items-center gap-1 text-status-orangeFg">
@@ -85,13 +85,13 @@ export function CampaignDrawerAds({ adSets, platform, onDrillAds, rangeIncludesT
             return (
               <li
                 key={set.id}
-                className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-glass-edge bg-glass-1 hover:bg-glass-2 transition-colors"
+                className="flex items-center justify-between gap-3 px-3 py-2 rounded-hz border border-glass-edge bg-pill-track hover:bg-glass-2 transition-colors"
               >
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-medium text-ink truncate">
                     <bdi dir="ltr">{set.name || '—'}</bdi>
                   </div>
-                  <div className="text-[10px] text-ink-muted tabular-nums mt-0.5">
+                  <div className="text-fs-2xs text-ink-muted tabular-nums mt-0.5">
                     {fmtMoney(set.spend)} · {formatNumber(set.conversions, 0)} המרות
                   </div>
                 </div>
@@ -103,12 +103,12 @@ export function CampaignDrawerAds({ adSets, platform, onDrillAds, rangeIncludesT
                       ? null
                       : pendingRoasLabel({ spend: set.spend, conversionValue: set.value, conversions: set.conversions, impressions: set.impressions }, rangeIncludesToday);
                     if (pend) {
-                      return <span className="text-[11px] text-ink-muted" aria-label={`ROAS ${pend}`}>{pend}</span>;
+                      return <span className="text-fs-xs text-ink-muted" aria-label={`ROAS ${pend}`}>{pend}</span>;
                     }
                     return (
                       <HelpTooltip content={`ROAS — ${info.text}`}>
                         <span
-                          className={cn(ROAS_BADGE_SHAPE, ROAS_TONE_BG[info.tone], 'text-[11px]')}
+                          className={cn(ROAS_BADGE_SHAPE, ROAS_TONE_BG[info.tone], 'text-fs-xs')}
                           aria-label={`ROAS ${set.roas > 0 ? formatNumber(set.roas) : '—'}`}
                         >
                           {set.roas > 0 ? formatNumber(set.roas) : '—'}
@@ -121,7 +121,7 @@ export function CampaignDrawerAds({ adSets, platform, onDrillAds, rangeIncludesT
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="text-[11px]"
+                      className="text-fs-xs"
                       onClick={() =>
                         onDrillAds({
                           storeId: set.storeId,
