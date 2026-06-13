@@ -12,11 +12,14 @@ import {
   AlertCircle,
   Sparkles,
   Settings as SettingsIcon,
+  ArrowLeft,
 } from 'lucide-react';
-import { cn, formatCurrency } from '@/lib/utils';
-import { fmtMoney } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Switch } from '@/components/ui/Switch';
+import { Money } from '@/components/ui/Money';
+import { SegmentedControl, type SegmentedOption } from '@/components/ui/SegmentedControl';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import {
   generateId,
@@ -86,14 +89,21 @@ export const SOURCE_LABEL: Record<CostSource, string> = {
   other:          'אחר',
 };
 
+// Horizon re-skin W6.2 — paired (surface, on-surface) token per source so every
+// chip clears WCAG-AA (≥4.5:1) in BOTH themes. The 'one-off' / 'other' entries
+// PREVIOUSLY used `bg-ink-muted text-ink-secondary` — a TEXT token painted as a
+// background, producing low-contrast gray-on-gray. Retinted to the neutral
+// inset pair (`bg-pill-track text-ink`): pill-track is the sunken surface scrim,
+// text-ink is primary ink → AA-safe. The other 5 already use proper status
+// `*Bg`/`*Fg` paired tokens.
 export const SOURCE_COLOR: Record<CostSource, string> = {
   'shopify-plan': 'bg-accent-bg text-accent',
   'shopify-app':  'bg-status-blueBg text-status-blueFg',
   'external-app': 'bg-status-grayBg text-status-grayFg',
   email:          'bg-status-warningBg text-status-warningFg',
   usage:          'bg-status-orangeBg text-status-orangeFg',
-  'one-off':      'bg-ink-muted text-ink-secondary',
-  other:          'bg-ink-muted text-ink-secondary',
+  'one-off':      'bg-pill-track text-ink',
+  other:          'bg-pill-track text-ink',
 };
 
 export function BillingSettings({ storeNames }: Props) {
@@ -185,12 +195,17 @@ export function BillingSettings({ storeNames }: Props) {
           <SettingsIcon size={14} />
           <span>עלויות חודשיות</span>
           <span className="hidden sm:inline text-ink-muted tabular-nums">
-            ({recurring.filter(r => r.active).length} פעילות · CAD {formatCurrency(totalMonthly)})
+            ({recurring.filter(r => r.active).length} פעילות ·{' '}
+            <Money value={totalMonthly} prefix="CAD" locale="he-IL" decimals={0} />)
           </span>
         </Button>
       </HelpTooltip>
 
       <Sheet open={open} onOpenChange={setOpen}>
+        {/* TODO(reskin-w7): proper centered Sheet variant — the
+            `sm:top-1/2 sm:-translate-y-1/2` translate trick below fakes a
+            centered Dialog on desktop. A real centered variant belongs in the
+            Sheet primitive (later primitive pass); left as-is here per W6.2 scope. */}
         <SheetContent
           side="bottom"
           dir="rtl"
@@ -207,7 +222,7 @@ export function BillingSettings({ storeNames }: Props) {
                 <SheetTitle id="billing-settings-title" className="text-sm sm:text-base truncate">
                   עלויות חודשיות
                 </SheetTitle>
-                <p className="text-[10px] sm:text-xs text-ink-muted mt-0.5 truncate">
+                <p className="text-fs-2xs sm:text-xs text-ink-muted mt-0.5 truncate">
                   Shopify plan, אפליקציות, שירותים — מתעדכנים ב-P&amp;L האמיתי
                 </p>
               </div>
@@ -223,33 +238,37 @@ export function BillingSettings({ storeNames }: Props) {
             </Button>
           </SheetHeader>
 
-          {/* Tabs */}
-          <nav className="px-4 sm:px-5 py-2 border-b border-glass-edge flex items-center gap-1 bg-glass-2/95 [backdrop-filter:var(--blur-glass)]">
-            {([
-              { key: 'recurring' as Tab, label: 'חודשי קבוע', count: recurring.length },
-              { key: 'onetime' as Tab, label: 'חד-פעמיים', count: oneTime.length },
-              { key: 'import' as Tab, label: 'ייבא CSV מ-Shopify', count: 0 },
-            ]).map(t => (
-              <Button
-                key={t.key}
-                variant={tab === t.key ? 'ghost' : 'ghost'}
-                size="sm"
-                onClick={() => setTab(t.key)}
-                className={cn(
-                  'h-auto px-3 py-1.5 text-xs sm:text-sm font-medium',
-                  tab === t.key
-                    ? 'bg-accent-bg text-accent'
-                    : 'text-ink-secondary',
-                )}
-              >
-                {t.label}
-                {t.count > 0 && (
-                  <span className="ms-1.5 inline-block text-[10px] tabular-nums text-ink-muted">
-                    ({t.count})
+          {/* Tabs — Horizon SegmentedControl (W6.2). Was a hand-rolled <Button>
+              row with a divergent active state; now the shared pill-track rail.
+              Per-tab count badge embedded in the option label; per-option testId
+              preserves stable per-choice hooks. */}
+          <nav className="px-4 sm:px-5 py-2 border-b border-glass-edge bg-pill-track/95 [backdrop-filter:var(--blur-glass)]">
+            <SegmentedControl
+              aria-label="עלויות חודשיות — בחירת לשונית"
+              size="sm"
+              value={tab}
+              onChange={v => setTab(v as Tab)}
+              options={(
+                [
+                  { key: 'recurring' as Tab, label: 'חודשי קבוע', count: recurring.length },
+                  { key: 'onetime' as Tab, label: 'חד-פעמיים', count: oneTime.length },
+                  { key: 'import' as Tab, label: 'ייבא CSV מ-Shopify', count: 0 },
+                ] satisfies Array<{ key: Tab; label: string; count: number }>
+              ).map(t => ({
+                value: t.key,
+                testId: `billing-tab-${t.key}`,
+                label: (
+                  <span className="inline-flex items-center gap-1.5">
+                    {t.label}
+                    {t.count > 0 && (
+                      <span className="inline-block text-fs-2xs tabular-nums opacity-70">
+                        ({t.count})
+                      </span>
+                    )}
                   </span>
-                )}
-              </Button>
-            ))}
+                ),
+              })) satisfies SegmentedOption[]}
+            />
           </nav>
 
           <SheetBody className="sm:px-5">
@@ -397,7 +416,7 @@ function RecurringTab({
               <div className="text-xs sm:text-sm font-semibold text-status-warningFg">
                 זיהוי אוטומטי של תוכניות Shopify נכשל
               </div>
-              <p className="text-[11px] sm:text-xs text-status-warningFg mt-0.5 leading-relaxed">
+              <p className="text-fs-2xs sm:text-xs text-status-warningFg mt-0.5 leading-relaxed">
                 הקריאה ל-plan דרך Shopify GraphQL Admin API נכשלה. סיבות
                 נפוצות: ה-token לא כולל את ה-scope <code>read_shop</code>,
                 ה-token פג, או החנות חסומה. תיקון נדרש בצד ה-token של החנות
@@ -407,19 +426,19 @@ function RecurringTab({
                 {planErrorStores.map(m => (
                   <li
                     key={m.storeId}
-                    className="rounded-md bg-glass-1 border border-status-warning px-2.5 py-1.5"
+                    className="rounded-md bg-pill-track border border-status-warning px-2.5 py-1.5"
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-ink shrink-0">
                         {m.storeName}
                       </span>
-                      <span className="text-[10px] text-ink-muted shrink-0">
+                      <span className="text-fs-2xs text-ink-muted shrink-0">
                         {m.updatedAt ? `עודכן ${m.updatedAt}` : ''}
                       </span>
                     </div>
                     <div
                       dir="ltr"
-                      className="text-[10px] text-status-warningFg font-mono mt-1 break-words"
+                      className="text-fs-2xs text-status-warningFg font-mono mt-1 break-words"
                     >
                       {m.lastError}
                     </div>
@@ -445,13 +464,13 @@ function RecurringTab({
                   <Button
                     variant="link"
                     onClick={addAllDetected}
-                    className="h-auto p-0 text-[11px] sm:text-xs font-semibold"
+                    className="h-auto p-0 text-fs-2xs sm:text-xs font-semibold"
                   >
                     הוסף את כולן ({missingDetected.length})
                   </Button>
                 )}
               </div>
-              <p className="text-[11px] sm:text-xs text-ink-secondary mt-0.5 leading-relaxed">
+              <p className="text-fs-2xs sm:text-xs text-ink-secondary mt-0.5 leading-relaxed">
                 שלפנו את שם התוכנית דרך GraphQL ושיערנו את העלות החודשית
                 ב-CAD. סכומים מבוססים על מחירון Shopify הציבורי.
               </p>
@@ -461,7 +480,7 @@ function RecurringTab({
                   return (
                     <li
                       key={m.storeId}
-                      className="flex items-center gap-2 rounded-md bg-glass-1 border border-glass-edge px-2.5 py-1.5"
+                      className="flex items-center gap-2 rounded-md bg-pill-track border border-glass-edge px-2.5 py-1.5"
                     >
                       <span className="text-xs text-ink-secondary shrink-0">
                         {m.storeName}
@@ -469,13 +488,19 @@ function RecurringTab({
                       <span className="text-xs font-semibold text-ink truncate">
                         {m.planDisplayName}
                       </span>
-                      <span className="text-[10px] text-ink-muted tabular-nums shrink-0">
-                        {cad ? <>≈ {fmtMoney(cad)}/מ</> : 'מחיר לא ידוע — הזן ידנית'}
+                      <span className="text-fs-2xs text-ink-muted tabular-nums shrink-0">
+                        {cad ? (
+                          <>
+                            ≈ <Money value={cad} prefix="CAD" locale="he-IL" decimals={0} />/מ
+                          </>
+                        ) : (
+                          'מחיר לא ידוע — הזן ידנית'
+                        )}
                       </span>
                       <Button
                         size="sm"
                         onClick={() => addDetectedPlan(m)}
-                        className="ms-auto gap-1 text-[11px] shrink-0"
+                        className="ms-auto gap-1 text-fs-2xs shrink-0"
                       >
                         <Plus size={11} />
                         הוסף
@@ -547,11 +572,10 @@ function RecurringTab({
               ) : (
                 <div className="flex items-center gap-3 p-3">
                   <HelpTooltip content={r.active ? 'פעיל' : 'מושעה'}>
-                    <Input
-                      type="checkbox"
+                    <Switch
                       checked={r.active}
-                      onChange={e => update(r.id, { active: e.target.checked })}
-                      className="w-4 h-4 rounded text-accent cursor-pointer"
+                      onCheckedChange={checked => update(r.id, { active: checked })}
+                      aria-label={r.active ? 'פעיל' : 'מושעה'}
                     />
                   </HelpTooltip>
                   <div className="flex-1 min-w-0">
@@ -561,18 +585,18 @@ function RecurringTab({
                       </span>
                       <span
                         className={cn(
-                          'inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded',
+                          'inline-block text-fs-2xs font-semibold px-1.5 py-0.5 rounded',
                           SOURCE_COLOR[r.source],
                         )}
                       >
                         {SOURCE_LABEL[r.source]}
                       </span>
-                      <span className="text-[11px] text-ink-muted">
+                      <span className="text-fs-2xs text-ink-muted">
                         {r.store === 'All' ? 'כל החנויות' : r.store}
                       </span>
                     </div>
                     {r.notes && (
-                      <div className="text-[11px] text-ink-muted mt-0.5">{r.notes}</div>
+                      <div className="text-fs-2xs text-ink-muted mt-0.5">{r.notes}</div>
                     )}
                   </div>
                   <div className="text-end shrink-0">
@@ -581,15 +605,14 @@ function RecurringTab({
                         <div className="text-sm font-bold tabular-nums text-ink">
                           {r.percentOfRevenue}%
                         </div>
-                        <div className="text-[10px] text-ink-muted">מהמחזור</div>
+                        <div className="text-fs-2xs text-ink-muted">מהמחזור</div>
                       </>
                     ) : (
                       <>
                         <div className="text-sm font-bold tabular-nums text-ink">
-                          <span className="text-[10px] text-ink-muted font-medium ms-1">CAD</span>
-                          {formatCurrency(r.monthlyCAD)}
+                          <Money value={r.monthlyCAD} prefix="CAD" locale="he-IL" decimals={0} />
                         </div>
-                        <div className="text-[10px] text-ink-muted">/חודש</div>
+                        <div className="text-fs-2xs text-ink-muted">/חודש</div>
                       </>
                     )}
                   </div>
@@ -713,7 +736,7 @@ function RecurringEditForm({
     <div className="p-3 space-y-2.5">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
-          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">שם</label>
+          <label className="text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">שם</label>
           <Input
             value={name}
             onChange={e => setName(e.target.value)}
@@ -726,7 +749,7 @@ function RecurringEditForm({
           />
         </div>
         <div>
-          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">חנות</label>
+          <label className="text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">חנות</label>
           <NativeSelect
             value={store}
             onChange={e => setStore(e.target.value)}
@@ -738,7 +761,7 @@ function RecurringEditForm({
           </NativeSelect>
         </div>
         <div>
-          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">סוג</label>
+          <label className="text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">סוג</label>
           <NativeSelect
             value={source}
             onChange={e => setSource(e.target.value as CostSource)}
@@ -749,7 +772,7 @@ function RecurringEditForm({
           </NativeSelect>
         </div>
         <div>
-          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">
+          <label className="text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">
             {kind === 'percent' ? 'אחוז מהמחזור (%)' : 'סכום חודשי (CAD)'}
           </label>
           {kind === 'percent' ? (
@@ -785,53 +808,39 @@ function RecurringEditForm({
           )}
         </div>
       </div>
-      {/* Phase 12.5.x (2026-05-24) — type toggle: fixed CAD vs % of revenue. */}
+      {/* Phase 12.5.x (2026-05-24) — type toggle: fixed CAD vs % of revenue.
+          Horizon W6.2: hand-rolled 2-button group → shared SegmentedControl
+          (role="radiogroup", single-choice). Preserves both values + the
+          editError reset on switch. */}
       <div>
-        <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">
+        <label className="text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">
           חישוב
         </label>
-        <div className="flex items-center gap-1 mt-1">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => {
-              setKind('fixed');
+        <div className="mt-1">
+          <SegmentedControl
+            role="radiogroup"
+            aria-label="חישוב — סכום קבוע או אחוז מהמחזור"
+            size="sm"
+            className="w-full"
+            value={kind}
+            onChange={v => {
+              setKind(v as 'fixed' | 'percent');
               if (editError) setEditError(null);
             }}
-            className={cn(
-              'flex-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors border h-auto',
-              kind === 'fixed'
-                ? 'bg-accent text-accent-fg border-accent hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))]'
-                : 'bg-glass-1 text-ink-secondary hover:bg-glass-2 border-glass-edge',
-            )}
-          >
-            סכום קבוע (CAD)
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => {
-              setKind('percent');
-              if (editError) setEditError(null);
-            }}
-            className={cn(
-              'flex-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors border h-auto',
-              kind === 'percent'
-                ? 'bg-accent text-accent-fg border-accent hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))]'
-                : 'bg-glass-1 text-ink-secondary hover:bg-glass-2 border-glass-edge',
-            )}
-          >
-            % מהמחזור
-          </Button>
+            options={[
+              { value: 'fixed', label: 'סכום קבוע (CAD)', testId: 'billing-kind-fixed' },
+              { value: 'percent', label: '% מהמחזור', testId: 'billing-kind-percent' },
+            ]}
+          />
         </div>
-        <p className="text-[10px] text-ink-muted mt-1 leading-relaxed">
+        <p className="text-fs-2xs text-ink-muted mt-1 leading-relaxed">
           {kind === 'percent'
             ? 'ההוצאה מחושבת כאחוז מהכנסות התקופה (לא חודשי × ימים).'
             : 'הסכום מצוטט חודשי וייפרס ביחס לאורך התקופה.'}
         </p>
       </div>
       <div>
-        <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
+        <label className="text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
         <Input
           value={notes}
           onChange={e => setNotes(e.target.value)}
@@ -919,7 +928,11 @@ function OneTimeTab({
       {sorted.length === 0 ? (
         <div className="text-center py-10 text-ink-muted text-sm">
           <Receipt size={28} className="mx-auto mb-2 text-ink-muted" />
-          <div>אין חיובים חד-פעמיים. ייבא CSV מ-Shopify ⬅️ או הוסף ידנית.</div>
+          <div className="inline-flex items-center gap-1">
+            אין חיובים חד-פעמיים. ייבא CSV מ-Shopify
+            <ArrowLeft size={14} className="shrink-0" aria-hidden="true" />
+            או הוסף ידנית.
+          </div>
         </div>
       ) : (
         <ul className="space-y-2">
@@ -947,7 +960,7 @@ function OneTimeTab({
                 />
               ) : (
                 <div className="flex items-center gap-3 p-3">
-                  <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums shrink-0 text-center min-w-[64px]">
+                  <div className="text-fs-2xs text-ink-muted tabular-nums shrink-0 text-center min-w-[64px]">
                     <div className="font-medium text-ink-secondary">{r.date.slice(5)}</div>
                     <div>{r.date.slice(0, 4)}</div>
                   </div>
@@ -958,24 +971,23 @@ function OneTimeTab({
                       </span>
                       <span
                         className={cn(
-                          'inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded',
+                          'inline-block text-fs-2xs font-semibold px-1.5 py-0.5 rounded',
                           SOURCE_COLOR[r.source],
                         )}
                       >
                         {SOURCE_LABEL[r.source]}
                       </span>
-                      <span className="text-[11px] text-ink-muted">
+                      <span className="text-fs-2xs text-ink-muted">
                         {r.store === 'All' ? 'כל החנויות' : r.store}
                       </span>
                     </div>
                     {r.notes && (
-                      <div className="text-[11px] text-ink-muted mt-0.5">{r.notes}</div>
+                      <div className="text-fs-2xs text-ink-muted mt-0.5">{r.notes}</div>
                     )}
                   </div>
                   <div className="text-end shrink-0">
                     <div className="text-sm font-bold tabular-nums text-ink">
-                      <span className="text-[10px] text-ink-muted font-medium ms-1">CAD</span>
-                      {formatCurrency(r.amountCAD)}
+                      <Money value={r.amountCAD} prefix="CAD" locale="he-IL" decimals={0} />
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
@@ -1060,7 +1072,7 @@ function OneTimeEditForm({
     <div className="p-3 space-y-2.5">
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">תאריך</label>
+          <label className="text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">תאריך</label>
           <Input
             type="date"
             value={date}
@@ -1068,7 +1080,7 @@ function OneTimeEditForm({
           />
         </div>
         <div>
-          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">חנות</label>
+          <label className="text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">חנות</label>
           <NativeSelect
             value={store}
             onChange={e => setStore(e.target.value)}
@@ -1081,7 +1093,7 @@ function OneTimeEditForm({
         </div>
       </div>
       <div>
-        <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">תיאור</label>
+        <label className="text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">תיאור</label>
         <Input
           value={description}
           onChange={e => setDescription(e.target.value)}
@@ -1095,7 +1107,7 @@ function OneTimeEditForm({
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">סוג</label>
+          <label className="text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">סוג</label>
           <NativeSelect
             value={source}
             onChange={e => setSource(e.target.value as CostSource)}
@@ -1106,7 +1118,7 @@ function OneTimeEditForm({
           </NativeSelect>
         </div>
         <div>
-          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">סכום (CAD)</label>
+          <label className="text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">סכום (CAD)</label>
           <Input
             value={amountCAD}
             onChange={e => {
@@ -1124,7 +1136,7 @@ function OneTimeEditForm({
         </div>
       </div>
       <div>
-        <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
+        <label className="text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
         <Input
           value={notes}
           onChange={e => setNotes(e.target.value)}

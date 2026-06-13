@@ -76,8 +76,17 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   // AttributionAnalysisPanel.tsx — DRAINED to 0 in W4.5 (Horizon deep-analysis
   // re-skin + AA fix: the 6 sub-floor literals — score/ROAS captions, breakdown
   // labels, reasons/footer text — → text-fs-2xs ramp token; removed from allowlist).
-  'BillingCsvImport.tsx': 8,
-  'BillingSettings.tsx': 25,
+  // BillingCsvImport.tsx — DRAINED to 0 in W6.2 (Horizon billing-CSV-import
+  // re-skin: the 8 sub-floor literals — store-target/paste labels, date cell,
+  // dup-warning, the 2-button micro-toggle wrapper + buttons, source chip —
+  // → text-fs-2xs ramp token + the micro-toggle migrated onto SegmentedControl;
+  // removed from allowlist).
+  // BillingSettings.tsx — DRAINED to 0 in W6.2 (Horizon billing-settings re-skin:
+  // all 25 sub-floor literals — header subtitle, tab-count badge, warning/detected
+  // panels, source chips, store/notes captions, CAD unit spans, both edit-form
+  // label grids + calc-toggle explainer — → text-fs-2xs ramp token; tabs +
+  // calc-toggle migrated onto SegmentedControl, money routed through <Money>;
+  // removed from allowlist).
   // CampaignDrawerStatusSection.tsx — DRAINED to 0 in Wave 4.3 (Horizon
   // status-section re-skin: the 3 configured/effective/delivery LTR caption
   // literals text-[10px] → text-fs-2xs ramp token; removed from allowlist).

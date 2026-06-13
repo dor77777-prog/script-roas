@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Upload, AlertCircle, Check } from 'lucide-react';
-import { cn, formatCurrency } from '@/lib/utils';
+import { Upload, AlertCircle, AlertTriangle, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Money } from '@/components/ui/Money';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { Textarea } from '@/components/ui/Textarea';
 import { HelpTooltip } from '@/components/ui/Tooltip';
@@ -163,7 +165,7 @@ export function BillingCsvImport({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg bg-glass-2/60 border border-glass-edge p-3 text-xs sm:text-sm text-ink-secondary leading-relaxed">
+      <div className="rounded-lg bg-pill-track border border-glass-edge p-3 text-xs sm:text-sm text-ink-secondary leading-relaxed">
         <p className="mb-1">
           <strong>איך מוציאים CSV מ-Shopify:</strong>
         </p>
@@ -183,7 +185,7 @@ export function BillingCsvImport({
 
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
         <div>
-          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">חנות יעד</label>
+          <label className="text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">חנות יעד</label>
           <NativeSelect
             value={defaultStore}
             onChange={e => {
@@ -233,7 +235,7 @@ export function BillingCsvImport({
       </div>
 
       <div>
-        <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">או הדבק כאן את ה-CSV</label>
+        <label className="text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">או הדבק כאן את ה-CSV</label>
         <Textarea
           value={csv}
           onChange={e => setCsv(e.target.value)}
@@ -264,7 +266,7 @@ export function BillingCsvImport({
 
       {preview.length > 0 && (
         <div className="rounded-lg border border-glass-edge overflow-hidden">
-          <header className="flex items-center justify-between gap-2 px-3 py-2 bg-glass-2/60 border-b border-glass-edge flex-wrap">
+          <header className="flex items-center justify-between gap-2 px-3 py-2 bg-pill-track border-b border-glass-edge flex-wrap">
             <div className="flex items-center gap-3 text-[11px] sm:text-xs text-ink-secondary tabular-nums">
               <span>
                 <strong className="text-ink">{counts.rec}</strong> חודשיים
@@ -293,8 +295,11 @@ export function BillingCsvImport({
               <li
                 key={p.id}
                 className={cn(
-                  'px-3 py-2 flex items-center gap-2',
-                  p.skip && 'opacity-50',
+                  'px-3 py-2 flex flex-wrap items-center gap-x-2 gap-y-1.5',
+                  // Skipped rows: keep them readable (no opacity dimming that
+                  // also kills the text contrast). A muted inset + a clear
+                  // "דילוג" badge below carries the state instead of opacity. (W6.2)
+                  p.skip && 'bg-pill-track',
                 )}
               >
                 <HelpTooltip content={p.skip ? 'בחר כדי לייבא' : 'בטל כדי לדלג על שורה זו'}>
@@ -305,59 +310,56 @@ export function BillingCsvImport({
                     className="w-3.5 h-3.5 rounded cursor-pointer shrink-0"
                   />
                 </HelpTooltip>
-                <span className="text-[10px] text-ink-muted tabular-nums min-w-[56px] shrink-0">
+                <span className="text-fs-2xs text-ink-muted tabular-nums min-w-[56px] shrink-0">
                   {p.date.slice(5)}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-ink truncate">
+                  <div
+                    className={cn(
+                      'text-sm truncate',
+                      p.skip ? 'text-ink-muted line-through' : 'text-ink',
+                    )}
+                  >
                     {p.description}
                   </div>
                   {p.duplicateOfId && (
-                    <div className="text-[10px] text-status-warningFg mt-0.5">
-                      ⚠️ קיים כבר במנויים הפעילים — דילוג ברירת מחדל
+                    <div className="flex items-center gap-1 text-fs-2xs text-status-warningFg mt-0.5">
+                      <AlertTriangle size={11} className="shrink-0" aria-hidden="true" />
+                      <span>קיים כבר במנויים הפעילים — דילוג ברירת מחדל</span>
+                    </div>
+                  )}
+                  {p.skip && (
+                    <div className="inline-flex items-center gap-1 mt-1 rounded bg-status-grayBg px-1.5 py-0.5 text-fs-2xs font-semibold text-status-grayFg">
+                      דילוג — לא ייובא
                     </div>
                   )}
                 </div>
-                {/* Type toggle — segmented control */}
-                <div
-                  className="inline-flex rounded-md border border-glass-edge bg-glass-1 overflow-hidden text-[10px] shrink-0"
-                  dir="ltr"
-                >
-                  <Button
-                    variant="ghost"
-                    onClick={() => setRow(p.id, { type: 'recurring' })}
-                    className={cn(
-                      'px-1.5 py-0.5 h-auto text-[10px] rounded-none transition-colors',
-                      p.type === 'recurring'
-                        ? 'bg-accent text-accent-fg hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))]'
-                        : 'text-ink-secondary hover:bg-glass-2',
-                    )}
-                  >
-                    חודשי
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => setRow(p.id, { type: 'onetime' })}
-                    className={cn(
-                      'px-1.5 py-0.5 h-auto text-[10px] rounded-none transition-colors border-e border-glass-edge',
-                      p.type === 'onetime'
-                        ? 'bg-accent text-accent-fg hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))]'
-                        : 'text-ink-secondary hover:bg-glass-2',
-                    )}
-                  >
-                    חד-פעמי
-                  </Button>
+                {/* Type toggle — Horizon SegmentedControl (W6.2). Was a sub-44px
+                    hand-rolled 2-button micro-toggle; now the shared pill-track
+                    rail (≥44px touch target). Preserves both values + testids. */}
+                <div dir="ltr" className="shrink-0">
+                  <SegmentedControl
+                    role="radiogroup"
+                    aria-label="סוג שורה — חודשי או חד-פעמי"
+                    size="md"
+                    value={p.type}
+                    onChange={v => setRow(p.id, { type: v as 'recurring' | 'onetime' })}
+                    options={[
+                      { value: 'recurring', label: 'חודשי', testId: `csv-row-${p.id}-recurring` },
+                      { value: 'onetime', label: 'חד-פעמי', testId: `csv-row-${p.id}-onetime` },
+                    ]}
+                  />
                 </div>
                 <span
                   className={cn(
-                    'text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0',
+                    'text-fs-2xs font-semibold px-1.5 py-0.5 rounded shrink-0',
                     SOURCE_COLOR[p.source],
                   )}
                 >
                   {SOURCE_LABEL[p.source]}
                 </span>
                 <span className="text-xs font-semibold tabular-nums shrink-0 min-w-[68px] text-end">
-                  CAD {formatCurrency(p.amountCAD)}
+                  <Money value={p.amountCAD} prefix="CAD" locale="he-IL" decimals={0} />
                 </span>
               </li>
             ))}
