@@ -18,8 +18,9 @@
  * TRANSITION classes: when reduce is on, the collapsed state still applies but
  * with no animated transition (matches the project motion contract).
  *
- * z-index: the app's sticky top header sits at z-30 (Dashboard.tsx). This bar
- * pins WITHIN the Home content at z-20 so it never overlaps that header.
+ * z-index: the app's TopStrip is now a NON-sticky floating navbar (reskin-w2c),
+ * so there's no sticky header above this bar — it pins at top-0 within the Home
+ * content at z-20.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -103,14 +104,14 @@ export function MobileStickyRoas({
         data-collapsed={collapsed}
         dir="rtl"
         className={cn(
-          // MOBILE-ONLY. Pinned at z-20 — BELOW the app header (z-30) so it
-          // never overlaps it; offset `top` by the slim header's height
-          // (sticky top-0 z-30, py-2 ≈ 3.25rem) so the bar pins JUST under the
-          // header instead of behind it. Frosted canvas wash + bottom hairline.
-          // The wash uses color-mix(... var(--canvas) ...) (mockup `.sticky`
-          // background) instead of a slash-alpha on the flat --canvas token,
-          // which silently drops its alpha (designColorGuard rule 5).
-          'md:hidden sticky top-[3.25rem] z-20',
+          // MOBILE-ONLY. The app's TopStrip is now a NON-sticky floating navbar
+          // (reskin-w2c) — there's no sticky header above this bar anymore, so
+          // it pins at the very top (top-0). z-20 is kept as the in-content
+          // stacking level. Frosted canvas wash + bottom hairline. The wash uses
+          // color-mix(... var(--canvas) ...) (mockup `.sticky` background)
+          // instead of a slash-alpha on the flat --canvas token, which silently
+          // drops its alpha (designColorGuard rule 5).
+          'md:hidden sticky top-0 z-20',
           'bg-[color-mix(in_oklab,var(--canvas)_86%,transparent)] backdrop-blur-xl border-b border-glass-edge',
           'px-4 py-3',
           collapsed && 'py-2',

@@ -24,8 +24,19 @@ type Props = {
   data: DashboardData;
   filters: F;
   /** Increment this number to trigger the modal from outside (e.g. command
-   *  palette). The internal click handler keeps working independently. */
+   *  palette, TopStrip navbar). The internal click handler keeps working
+   *  independently. */
   openSignal?: number;
+  /**
+   * When true, the component renders ONLY the modal (no visible trigger
+   * button) and is opened exclusively via `openSignal`. Used on the home tab
+   * where the canonical Horizon navbar (TopStrip) owns the single visible
+   * "ייצא דוח ל-AI" trigger — mounting a second trigger here would duplicate
+   * it (mockup home-approved.html:96 shows the export button exactly once, in
+   * the navbar). The modal itself — with all its loading/disabled/error/retry
+   * behaviour — still lives here; the navbar button just bumps the signal.
+   */
+  triggerless?: boolean;
 };
 
 /**
@@ -40,7 +51,7 @@ type Props = {
  *  - ad-set drill-down for the 5 highest-spend campaigns
  *  - a suggested prompt at the bottom so the user doesn't have to think
  */
-export function AiReportButton({ data, filters, openSignal }: Props) {
+export function AiReportButton({ data, filters, openSignal, triggerless = false }: Props) {
   const [open, setOpen] = useState(false);
   const [report, setReport] = useState<string>('');
   const [generating, setGenerating] = useState(false);
@@ -226,15 +237,21 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
 
   return (
     <>
-      <Button
-        type="button"
-        size="sm"
-        onClick={() => { setOpen(true); setReport(''); }}
-        className="gap-2 shadow-glass"
-      >
-        <Bot size={15} />
-        ייצא דוח ל-AI
-      </Button>
+      {/* Visible trigger — suppressed in `triggerless` mode (home tab), where
+          the Horizon navbar (TopStrip) owns the single export button per the
+          mockup. The modal below is unconditional so the navbar's openSignal
+          always has a listener to open. */}
+      {!triggerless && (
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => { setOpen(true); setReport(''); }}
+          className="gap-2 shadow-glass"
+        >
+          <Bot size={15} />
+          ייצא דוח ל-AI
+        </Button>
+      )}
 
       {open && (
         <div

@@ -120,6 +120,18 @@ describe('B3 — <MobileStickyRoas>', () => {
     expect(getByTestId('mobile-sticky-roas').className).toContain('md:hidden');
   });
 
+  it('pins at top-0 (the TopStrip is non-sticky — no header offset above)', () => {
+    // reskin-w2c: the app header became a NON-sticky floating navbar, so this
+    // bar pins at the very top instead of being offset by the old slim sticky
+    // header's height (was top-[3.25rem]).
+    const { getByTestId } = render(
+      <MobileStickyRoas roas={2.87} target={3.0} deltaRoas={null} />,
+    );
+    const cls = getByTestId('mobile-sticky-roas').className;
+    expect(cls).toContain('top-0');
+    expect(cls).not.toContain('top-[3.25rem]');
+  });
+
   it('applies size/opacity TRANSITION classes when motion is allowed', () => {
     setReducedMotion(false);
     const { getByTestId } = render(

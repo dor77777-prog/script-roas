@@ -8,7 +8,6 @@ import {
   Table,
   Megaphone,
   Receipt,
-  Menu,
   Store,
   Building2,
 } from 'lucide-react';
@@ -35,13 +34,11 @@ import {
   readAnnotations,
   type Annotation,
 } from '@/lib/annotations';
-import { CommandPalette } from './CommandPalette';
+import { TopStrip } from './TopStrip';
 import { Sidebar } from './Sidebar';
 import { FocusMode } from './FocusMode';
 import { SectionIntro } from './SectionIntro';
 import { CloudSync } from './CloudSync';
-import { SyncIndicator } from './SyncIndicator';
-import { FreshnessChip } from './FreshnessChip';
 import { TabFreshnessHeader } from './TabFreshnessHeader';
 import { readDashboardState, syncUrl, drillToCampaigns, DEFAULT_PRESET, type TabKey } from '@/lib/urlState';
 import { OPEN_CAMPAIGN_DRAWER_EVENT, type OpenCampaignDrawerDetail } from '@/components/insights/InsightActions';
@@ -720,46 +717,25 @@ export function Dashboard() {
         <CloudSync />
         <FocusMode />
 
-        {/* Top strip — freshness chip, command palette, sync indicator.
-            The full <Header> (logo, brand, deep navy gradient) is no
-            longer needed since the Sidebar carries the brand. We keep a
-            slim, theme-aware top strip so the chips that used to live
-            inside <Header> have a home. */}
-        <header
-          role="banner"
-          className="sticky top-0 z-30 bg-glass-1/85 backdrop-blur-xl border-b border-glass-edge px-4 py-2 flex items-center justify-between md:justify-end gap-2"
-        >
-          {/* Mobile-only hamburger — opens the off-canvas Sidebar drawer.
-              On md and up the Sidebar is the persistent right-rail, so the
-              hamburger is hidden via `md:hidden`. Sits on the start side
-              (right in RTL) so it's reachable with the right thumb. */}
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon"
-            onClick={() => setMobileSidebarOpen(true)}
-            className="md:hidden"
-            aria-label="פתח תפריט"
-          >
-            <Menu size={20} />
-          </Button>
-
-          <div className="flex items-center gap-2">
-            <FreshnessChip dataLastWriteAt={data?.dataLastWriteAt ?? null} />
-            {data && (
-              <CommandPalette
-                data={data}
-                filters={filters}
-                setFilters={setFilters}
-                activeTab={activeTab}
-                setActiveTab={handleTabChange}
-                onRefresh={() => mutate()}
-                onOpenAiReport={() => setAiReportSignal(n => n + 1)}
-              />
-            )}
-            <SyncIndicator />
-          </div>
-        </header>
+        {/* Top strip — Horizon floating navbar (non-sticky). The full <Header>
+            (logo, brand, deep navy gradient) is no longer needed since the
+            Sidebar carries the brand; TopStrip owns the breadcrumb/title +
+            the freshness chip, command palette, sync indicator, and AI-export.
+            It mounts the CommandPalette even while `data` is null so ⌘K + the
+            nav/preset/theme commands are usable during the first load. */}
+        <div className="max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8">
+          <TopStrip
+            activeTab={activeTab}
+            data={data ?? null}
+            filters={filters}
+            setFilters={setFilters}
+            setActiveTab={handleTabChange}
+            onRefresh={() => mutate()}
+            onOpenAiReport={() => setAiReportSignal(n => n + 1)}
+            onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
+            dataLastWriteAt={data?.dataLastWriteAt ?? null}
+          />
+        </div>
 
         <main className="max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-5">
           {/* Three error sources: (a) SWR threw (network failure, malformed JSON),
@@ -1591,8 +1567,9 @@ function HomeTab({
 
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
-      {/* B3 — MOBILE-ONLY collapsing sticky ROAS summary. Pinned to the top of
-          the Home content (z-20, below the app header at z-30). Hidden at md+. */}
+      {/* B3 — MOBILE-ONLY collapsing sticky ROAS summary. Pinned at top-0 of the
+          Home scroll area (TopStrip is non-sticky as of reskin-w2c, so there is
+          no app header to sit beneath). Hidden at md+. */}
       <MobileStickyRoas
         roas={heroPeriod.roas}
         target={3.0}
@@ -1600,7 +1577,12 @@ function HomeTab({
         rangeLabel={rangeLabel}
       />
 
-      {/* 1. Header — title + filters + AI report ----------------------------- */}
+      {/* 1. Header — title + filters --------------------------------------- */}
+      {/* AI-export trigger lives ONCE in the Horizon navbar (TopStrip), per the
+          canonical mockup (home-approved.html:96). The old TabHeader actionSlot
+          trigger was removed to dedupe; the AiReportButton below still mounts
+          (modal-only via `triggerless`) so the navbar/⌘K openSignal has a
+          listener that owns the report modal + all its data states. */}
       <TabHeader
         title="בית"
         description="שנה טווח או חנות לעדכון כל המסך."
@@ -1613,7 +1595,12 @@ function HomeTab({
             showSavedViews
           />
         }
-        actionSlot={<AiReportButton data={data} filters={filters} openSignal={aiReportSignal} />}
+      />
+      <AiReportButton
+        data={data}
+        filters={filters}
+        openSignal={aiReportSignal}
+        triggerless
       />
       <PageScope
         store={filters.store === 'All' ? 'כל החנויות' : filters.store}

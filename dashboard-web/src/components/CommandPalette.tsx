@@ -93,7 +93,15 @@ type Command = {
 };
 
 type Props = {
-  data: DashboardData;
+  /**
+   * Dashboard payload, or null while the first fetch is in flight.
+   * The palette mounts immediately (reskin-w2c) so ⌘K + the nav/preset/theme/
+   * action commands are usable during loading; the store list (`data.stores`)
+   * simply populates once data arrives — guarded with `data?.stores ?? []`.
+   * Shape matches TopStrip's `data: DashboardData | null` (its only mount site,
+   * which already normalizes via `data ?? null`).
+   */
+  data: DashboardData | null;
   filters: F;
   setFilters: (next: F) => void;
   activeTab: TabKey;
@@ -267,7 +275,7 @@ export function CommandPalette({
       search: 'כל החנויות all stores'.toLowerCase(),
       perform: () => { setFilters({ ...filters, store: 'All' }); close(); },
     });
-    for (const s of data.stores) {
+    for (const s of data?.stores ?? []) {
       cmds.push({
         id: `store-${s}`,
         kind: 'store',
@@ -595,16 +603,22 @@ export function CommandPalette({
           variant="ghost"
           onClick={() => { setOpen(true); setWarmCache(true); }}
           className={cn(
-            'gap-1.5 sm:gap-2 rounded-lg',
+            // Horizon search pill (mockup recipe: rounded-full inset rail +
+            // secondary ink + ⌘K badge). The inset surface uses --glass-2,
+            // mirroring the Filters inset pill rail (light = lightPrimary,
+            // dark = navy-700) so it re-skins per token in both themes. The
+            // ghost variant's hover:bg-glass-2 is overridden to a hover:bg-glass-3
+            // lift so the resting/hover states are distinguishable on the pill.
+            'gap-1.5 sm:gap-2 rounded-pill',
             'bg-glass-2 hover:bg-glass-3 active:bg-[color:var(--surface-elevated-1)]',
-            'border border-glass-edge text-ink-secondary',
-            'px-2.5 sm:px-3 py-1.5 sm:py-2 h-auto text-xs sm:text-sm font-medium shrink-0',
+            'text-ink-secondary',
+            'px-2.5 sm:px-4 py-1.5 sm:py-2 h-auto text-xs sm:text-sm font-medium shrink-0',
           )}
           aria-label="פתח פנל פקודות"
         >
           <Search size={14} />
           <span className="hidden sm:inline">חיפוש</span>
-          <kbd className="hidden md:inline-flex items-center gap-0.5 px-1 py-0.5 text-[10px] font-mono bg-glass-2 rounded border border-glass-edge tabular-nums">
+          <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono bg-glass-1 rounded border border-glass-edge tabular-nums">
             <CmdIcon size={9} />K
           </kbd>
         </Button>
@@ -767,7 +781,9 @@ function GroupedSection({
               onMouseMove={() => setActiveIdx(globalIdx)}
               onClick={() => item.perform()}
               className={cn(
-                'w-full justify-start gap-3 px-3 py-2 h-auto rounded-lg mx-1',
+                // Horizon soft-rounded row; active state keeps the accent tint
+                // tokens (alpha-safe, guard-allowed) per the re-skin spec.
+                'w-full justify-start gap-3 px-3 py-2 h-auto rounded-xl mx-1',
                 isActive
                   ? 'bg-accent-bg text-ink'
                   : 'text-ink-secondary hover:bg-glass-2',
@@ -775,7 +791,7 @@ function GroupedSection({
             >
               <span
                 className={cn(
-                  'inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0',
+                  'inline-flex items-center justify-center w-6 h-6 rounded-lg shrink-0',
                   isActive ? 'bg-accent-soft text-accent' : 'bg-glass-2 text-ink-muted',
                 )}
               >
