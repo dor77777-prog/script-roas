@@ -75,9 +75,11 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   'CampaignsColumnsMenu.tsx': 3,
   // Wave 4 (debt #6): the CPM-expander chart block (10 sub-floor literals) was
   // extracted to campaigns/CpmTrendChart.tsx (which clears the floor) → 34 → 24.
-  'CampaignsTable.tsx': 24,
-  'CampaignsTableRow.tsx': 8,
-  'CampaignsTopList.tsx': 1,
+  // W4.2 (Horizon CampaignsTable + Row + TopList re-skin): the remaining
+  // sub-floor literals (summary tiles → Widget, toolbar → SegmentedControl,
+  // thead stacked sub-labels, AttributionGapPanel tiles, Row status chips,
+  // TopList ROAS caption) all migrated onto the text-fs-* ramp → all three
+  // DRAINED to 0; removed from allowlist.
   'CohortComparisonPanel.tsx': 13,
   'CommandPalette.tsx': 7,
   'CustomerValueTab.tsx': 2,

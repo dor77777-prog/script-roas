@@ -246,7 +246,7 @@ export function CampaignsTableRow({
     >
     <tr
       className={cn(
-        'border-b border-glass-edge hover:bg-glass-2/40 cursor-pointer transition-opacity',
+        'border-b border-glass-edge hover:bg-pill-track cursor-pointer transition-opacity',
         // Marked rows visually retreat so the user's eye
         // anchors on the un-marked work-list. Hovering brings
         // them back to full opacity so re-reading details
@@ -316,7 +316,7 @@ export function CampaignsTableRow({
       </td>
       <td data-col-id="campaignName" className="px-3 sm:px-5 py-2 max-w-[280px] sm:max-w-[400px]">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-glass-2 text-[10px] font-bold text-ink-secondary tabular-nums shrink-0">
+          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-pill-track text-fs-2xs font-bold text-ink-secondary tabular-nums shrink-0">
             {i + 1}
           </span>
           <div className="min-w-0 flex-1">
@@ -337,14 +337,7 @@ export function CampaignsTableRow({
                   when we have a non-empty type. */}
               {a.platform === 'Meta' && a.budgetType && (
                 <HelpTooltip content={a.budgetType === 'CBO' ? 'Campaign Budget Optimization — תקציב ברמת קמפיין' : 'Ad-Set Budget Optimization — תקציב ברמת ad-set'}>
-                  <span
-                    className={cn(
-                      'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0',
-                      a.budgetType === 'CBO'
-                        ? 'bg-accent-bg text-accent'
-                        : 'bg-accent-bg text-accent',
-                    )}
-                  >
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-fs-2xs font-bold tracking-wider shrink-0 bg-accent-bg text-accent">
                     {a.budgetType}
                   </span>
                 </HelpTooltip>
@@ -356,7 +349,7 @@ export function CampaignsTableRow({
                   active one. */}
               {isCurrentlyOff && a.lastActiveDate && (
                 <HelpTooltip content={`קמפיין כבוי כרגע. הריצה האחרונה: ${formatLastActiveDate(a.lastActiveDate)}. הנתונים בשורה הם היסטוריים בלבד.`}>
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-glass-2 text-ink-muted border border-glass-edge">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-fs-2xs font-bold tracking-wider shrink-0 bg-pill-track text-ink-muted border border-glass-edge">
                     <Pause size={9} className="shrink-0" aria-hidden />
                     כבוי · {formatLastActiveDate(a.lastActiveDate)}
                   </span>
@@ -376,7 +369,7 @@ export function CampaignsTableRow({
                   campaignKey(a.storeId, a.platform, a.campaignId),
                 ) && (
                   <HelpTooltip content="הקמפיין הזה עדיין לא ממופה למוצרי Shopify. פתח את המגירה (קליק על שם הקמפיין) ובחר את המוצרים הרלוונטיים כדי שהדאשבורד יחשב ROAS Shopify אמיתי.">
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-fs-2xs font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning">
                       <Tag size={9} className="shrink-0" aria-hidden />
                       לא ממופה
                     </span>
@@ -399,7 +392,7 @@ export function CampaignsTableRow({
                   once the next orchestrator tick runs the status worker. */}
               {statusVerdict.isBackfillUnknown && (
                 <HelpTooltip content="הסטטוס המוגדר עדיין לא נדגם מה-platform — ימולא בעוד עד 10 דק׳.">
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-fs-2xs font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning">
                     <Hourglass size={9} className="shrink-0" aria-hidden />
                     טוען מ-Platform
                   </span>
@@ -413,7 +406,7 @@ export function CampaignsTableRow({
                   : `${a.platform} · ${a.storeName}`
               }
             >
-              <div className="text-[10px] sm:text-[11px] text-ink-muted truncate">
+              <div className="text-fs-2xs sm:text-fs-xs text-ink-muted truncate">
                 <bdi dir="ltr">{a.platform}</bdi>
                 {' · '}
                 <bdi dir="ltr">{a.storeName}</bdi>
@@ -739,7 +732,7 @@ export function CampaignsTableRow({
                 {d && (
                   <span
                     className={cn(
-                      'text-[10px] font-semibold tabular-nums',
+                      'text-fs-2xs font-semibold tabular-nums',
                       d.direction === 'up'   ? 'text-status-greenFg'
                     : d.direction === 'down' ? 'text-status-redFg'
                     :                          'text-ink-muted',
@@ -884,7 +877,7 @@ export function CampaignsTableRow({
               <span className="font-medium inline-flex items-center gap-0.5">
                 <span>{display}</span>
                 {isFractional && (
-                  <span aria-hidden="true" className="text-[8px] text-ink-muted">*</span>
+                  <span aria-hidden="true" className="text-fs-2xs text-ink-muted">*</span>
                 )}
               </span>
             </HelpTooltip>

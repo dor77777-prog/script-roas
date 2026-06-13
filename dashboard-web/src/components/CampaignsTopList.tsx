@@ -6,6 +6,30 @@ import { Money } from '@/components/ui/Money';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Heading } from '@/components/ui/Typography';
 import { PlatformBadge } from '@/components/ui/PlatformBadge';
+import { Card } from '@/components/ui/Card';
+import { bandForRoas, type CoreRoasBand } from '@/lib/roasBands';
+
+/**
+ * Horizon re-skin (W4.2) — the leaderboard ROAS number is coloured through the
+ * SINGLE SOURCE OF TRUTH (`bandForRoas`, lib/roasBands.ts) instead of the prior
+ * bespoke 4-tier ladder (>=4 / >=2.7 / <1 / <2). This collapses the leaderboard
+ * onto the operator-locked 4-band system: a >3.0× campaign is now `blue` (the
+ * canonical top band) — the special 4× "blue-hero" tier is intentionally
+ * dropped (operator-locked decision). Token-only: each band maps to its
+ * `--band-*` colour token (mode-aware in globals.css), mirroring the <Widget>
+ * banded-value recipe — no raw hex, re-skins + light/dark-flips automatically.
+ *
+ * NOTE: this changes ONLY the colour. The verdict TEXT ladder
+ * (verdictText / verdictColor below) is unchanged — those are the operator's
+ * actionable recommendations, pinned by the campaignsTopListArrow test.
+ */
+const BAND_VALUE_CLASS: Record<CoreRoasBand, string> = {
+  red: 'text-[var(--band-red)]',
+  orange: 'text-[var(--band-orange)]',
+  green: 'text-[var(--band-green)]',
+  blue: 'text-[var(--band-blue)]',
+  gray: 'text-[var(--band-gray)]',
+};
 
 /**
  * "Winners and Losers" view that replaces the previous QuadrantScatter
@@ -73,13 +97,11 @@ function Row({
   variant: 'winner' | 'loser';
 }) {
   const isWinner = variant === 'winner';
-  const roasColor = isWinner
-    ? campaign.roas >= 3
-      ? 'text-status-greenFg'
-      : 'text-status-blueFg'
-    : campaign.roas < 1
-      ? 'text-status-redFg'
-      : 'text-status-orangeFg';
+  // Band-drain (W4.2) — colour the ROAS number through the canonical
+  // `bandForRoas` ladder (red <2 / orange 2-2.7 / green 2.7-3 / blue >3),
+  // replacing the prior bespoke winner/loser tiers. spend===0 → gray.
+  const roasBand = bandForRoas(campaign.roas, { spend: campaign.spend });
+  const roasColor = BAND_VALUE_CLASS[roasBand];
 
   // Verdict text. The leading directional arrow used to be a Unicode "→"
   // (U+2192 RIGHTWARDS ARROW). In an RTL Hebrew row the bidi algorithm
@@ -127,7 +149,7 @@ function Row({
               <div className="text-base sm:text-lg font-semibold leading-tight">
                 {campaign.roas.toFixed(2)}
               </div>
-              <div className="text-[10px] sm:text-[11px] text-ink-muted font-normal leading-tight">
+              <div className="text-fs-2xs sm:text-fs-xs text-ink-muted font-normal leading-tight">
                 ROAS
               </div>
             </div>
@@ -165,14 +187,14 @@ export function CampaignsTopList({
 }: Props) {
   if (data.length === 0) {
     return (
-      <div className={cn('rounded-xl bg-glass-1 border border-glass-edge p-5', className)}>
+      <Card className={className}>
         {title && (
           <Heading level="section" className="mb-2">{title}</Heading>
         )}
         <div className="text-ink-muted text-sm text-center py-8">
           אין נתונים להצגה — בחר טווח עם קמפיינים פעילים.
         </div>
-      </div>
+      </Card>
     );
   }
 
@@ -193,11 +215,11 @@ export function CampaignsTopList({
   // pattern.
 
   return (
-    <div className={cn('rounded-xl bg-glass-1 border border-glass-edge p-3 sm:p-5', className)}>
+    <Card className={cn('p-3 sm:p-5', className)}>
       {title && (
         <Heading level="section" className="mb-1">{title}</Heading>
       )}
-      <p className="text-[11px] sm:text-xs text-ink-secondary mb-3 leading-relaxed">
+      <p className="text-fs-xs text-ink-secondary mb-3 leading-relaxed">
         ה-{Math.min(perSide, data.length)} מנצחים ביותר וה-{losersCount} שצריכים תשומת לב — לפי ROAS. כל קמפיין עם פלטפורמה, חנות, וההמלצה הכי קונקרטית.
         <span className="text-ink-muted"> · סה״כ {data.length} קמפיינים פעילים בטווח.</span>
       </p>
@@ -208,7 +230,7 @@ export function CampaignsTopList({
             <Trophy size={14} />
             מנצחים ({winnersCount})
           </Heading>
-          <ul className="rounded-lg border border-glass-edge bg-glass-2/40 px-2 sm:px-3">
+          <ul className="rounded-lg border border-glass-edge bg-pill-track px-2 sm:px-3">
             {winners.map((c, i) => (
               <Row key={`${c.platform}:${c.name}:${c.storeName}`} rank={i + 1} campaign={c} variant="winner" />
             ))}
@@ -220,13 +242,13 @@ export function CampaignsTopList({
             <AlertTriangle size={14} />
             לתשומת לב ({losersCount})
           </Heading>
-          <ul className="rounded-lg border border-glass-edge bg-glass-2/40 px-2 sm:px-3">
+          <ul className="rounded-lg border border-glass-edge bg-pill-track px-2 sm:px-3">
             {losers.map((c, i) => (
               <Row key={`${c.platform}:${c.name}:${c.storeName}`} rank={i + 1} campaign={c} variant="loser" />
             ))}
           </ul>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

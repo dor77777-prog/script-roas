@@ -3,21 +3,29 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import {
-  AlertCircle,
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  BarChart3,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Coins,
+  DollarSign,
   Download,
   Filter,
+  Gauge,
   Info,
+  Link2,
   Megaphone,
+  MousePointerClick,
+  Percent,
   Search,
+  ShoppingCart,
   Store as StoreIcon,
+  TrendingUp,
 } from 'lucide-react';
-import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
 import { type DailyCpmRoasPoint } from '@/lib/cpmRoasAnalysis';
 import { aggregate, type Aggregated } from '@/lib/campaignsAggregator';
 import {
@@ -57,7 +65,6 @@ import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { DateRange } from '@/lib/types';
 import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
 import { isReconciliationCoherent } from '@/lib/reconciliationCoherence';
-import { roasLabel } from '@/lib/analytics';
 import { useCampaignTrueRevenue } from '@/lib/hooks/useCampaignTrueRevenue';
 import { useStores } from '@/lib/useStores';
 import { CampaignsTableRow } from './CampaignsTableRow';
@@ -70,8 +77,10 @@ import { TableBase } from '@/components/ui/TableBase';
 import { CampaignDrawer } from './CampaignDrawer';
 import { AdsDrawer } from './AdsDrawer';
 import { readTabLocalState, syncTabLocalUrl } from '@/lib/urlState';
-import { Badge, type BadgeTone } from '@/components/ui/Badge';
-import { Stat } from '@/components/ui/Stat';
+import { Widget } from '@/components/ui/Widget';
+import { Money } from '@/components/ui/Money';
+import { SegmentedControl, type SegmentedOption } from '@/components/ui/SegmentedControl';
+import { StateBlock } from '@/components/ui/StateBlock';
 import { CpmTrendChart } from './campaigns/CpmTrendChart';
 
 type Mode = 'campaign' | 'adset';
@@ -1436,38 +1445,35 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
   }, [data, drillCampaignId, drillPlatform, drillStoreId, localRange.from, localRange.to]);
 
   // ----- Toolbar -----
+  // Horizon re-skin (W4.2) — the mode + platform toggles migrate from the
+  // hand-rolled role="tablist" Button rows onto the single <SegmentedControl>
+  // primitive (RTL-aware roving-tabindex, role="tab" + aria-selected, brand
+  // pill active state). Behaviour is identical — same setMode/setPlatform
+  // callbacks, same values; only the chrome changes. The store-picker stays a
+  // NativeSelect (a true multi-option dropdown, not a segmented toggle).
+  const modeOptions: SegmentedOption[] = [
+    { value: 'campaign', label: 'קמפיינים' },
+    { value: 'adset', label: 'אד-סטים' },
+  ];
+  const platformOptions: SegmentedOption[] = (
+    ['all', 'Meta', 'Google', 'TikTok'] as Platform[]
+  ).map(p => ({ value: p, label: p === 'all' ? 'כולם' : p }));
   const toolbar = (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-glass-2/40 border-b border-glass-edge">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-pill-track border-b border-glass-edge">
       {/* PRIMARY filters — always inline on every breakpoint.
           Order: Mode → Store → Date range. */}
       {/* Mode selector: campaign or ad-set */}
       <div className="flex items-center gap-2">
-        <span className="text-[11px] sm:text-xs text-ink-secondary font-medium shrink-0">
+        <span className="text-fs-xs text-ink-secondary font-medium shrink-0">
           תצוגה:
         </span>
-        <div
-          role="tablist"
-          className="inline-flex rounded-lg border border-glass-edge bg-glass-1 overflow-hidden divide-x divide-glass-edge"
-          dir="ltr"
-        >
-          {(['campaign', 'adset'] as Mode[]).map(m => (
-            <Button
-              key={m}
-              role="tab"
-              aria-selected={mode === m}
-              onClick={() => setMode(m)}
-              variant="ghost"
-              className={cn(
-                'px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[64px] sm:min-w-[80px] h-auto rounded-none',
-                mode === m
-                  ? 'bg-accent text-accent-fg hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))]'
-                  : 'bg-glass-1 text-ink-secondary hover:bg-glass-2',
-              )}
-            >
-              {m === 'campaign' ? 'קמפיינים' : 'אד-סטים'}
-            </Button>
-          ))}
-        </div>
+        <SegmentedControl
+          size="sm"
+          aria-label="תצוגה"
+          options={modeOptions}
+          value={mode}
+          onChange={v => setMode(v as Mode)}
+        />
       </div>
 
       {/* Store filter */}
@@ -1476,7 +1482,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
         <NativeSelect
           value={localStore}
           onChange={e => setLocalStore(e.target.value)}
-          className="text-xs sm:text-sm font-medium min-w-[120px]"
+          className="text-fs-sm font-medium min-w-[120px]"
         >
           <option value="All">כל החנויות</option>
           {stores.map(s => (
@@ -1536,29 +1542,13 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
       >
         {/* Platform filter */}
         <div className="flex items-center gap-2">
-          <div
-            role="tablist"
-            className="inline-flex rounded-lg border border-glass-edge bg-glass-1 overflow-hidden divide-x divide-glass-edge"
-            dir="ltr"
-          >
-            {(['all', 'Meta', 'Google', 'TikTok'] as Platform[]).map(p => (
-              <Button
-                key={p}
-                role="tab"
-                aria-selected={platform === p}
-                onClick={() => setPlatform(p)}
-                variant="ghost"
-                className={cn(
-                  'px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[48px] sm:min-w-[58px] h-auto rounded-none',
-                  platform === p
-                    ? 'bg-accent text-accent-fg hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))]'
-                    : 'bg-glass-1 text-ink-secondary hover:bg-glass-2',
-                )}
-              >
-                {p === 'all' ? 'כולם' : p}
-              </Button>
-            ))}
-          </div>
+          <SegmentedControl
+            size="sm"
+            aria-label="פלטפורמה"
+            options={platformOptions}
+            value={platform}
+            onChange={v => setPlatform(v as Platform)}
+          />
         </div>
 
         {/* Phase 05.7.x (2026-05-23) — multi-mapped only filter. When ON,
@@ -1566,16 +1556,19 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
             same store are shown. Useful for inspecting cohort behaviour
             + spotting cannibalization risk at a glance. */}
         <div className="flex items-center gap-2">
-          <label className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-ink-secondary cursor-pointer select-none">
+          <label className="inline-flex items-center gap-1.5 text-fs-xs text-ink-secondary cursor-pointer select-none">
             <Input
               type="checkbox"
               checked={showOnlyMultiMapped}
               onChange={e => setShowOnlyMultiMapped(e.target.checked)}
               className="rounded border-glass-edge accent-accent"
             />
-            <span>🔗 רק קמפיינים עם מיפוי משותף</span>
+            <span className="inline-flex items-center gap-1">
+              <Link2 size={12} className="shrink-0" aria-hidden />
+              רק קמפיינים עם מיפוי משותף
+            </span>
             {showOnlyMultiMapped && (
-              <span className="text-ink-muted text-[10px] tabular-nums">
+              <span className="text-ink-muted text-fs-2xs tabular-nums">
                 ({aggregatedFiltered.length} מתוך {aggregated.length})
               </span>
             )}
@@ -1603,7 +1596,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
         )}
       </div>
 
-      <span className="text-[10px] sm:text-xs text-ink-muted tabular-nums sm:me-auto">
+      <span className="text-fs-2xs sm:text-fs-xs text-ink-muted tabular-nums sm:me-auto">
         {/* Audit fix 2026-05-23 (FIND-14): when the multi-mapped filter is
             on, show the visible-row count instead of the pre-filter total so
             this headline number doesn't disagree with the table body. The
@@ -1618,22 +1611,112 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
   );
 
   // ----- Summary -----
-  const roasInfo = roasLabel(totals.roas);
+  // Horizon re-skin (W4.2) — the 7 summary tiles migrate from the local
+  // <Stat> fork onto the canonical <Widget> KPI primitive (icon-circle +
+  // muted title + bold value via <Money>). The ROAS tile is BANDED through
+  // the single source of truth (`bandRoas` → bandForRoas) instead of the
+  // hand-rolled roasLabel Badge. The summary strip's one-off
+  // `bg-gradient-to-l from-accent-bg` is replaced by a clean Horizon
+  // surface (bg-pill-track). The CPM tile stays click-to-expand (toggles
+  // the extracted CpmTrendChart) — wired through the Widget's forwarded
+  // onClick/keyboard so it remains keyboard-reachable.
+  const cpmToggle =
+    totals.impressions > 0 && cpmDaily.length >= 2
+      ? () => setCpmExpanded(v => !v)
+      : undefined;
   const summary = aggregated.length > 0 && (
-    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-accent-bg to-glass-2 border-b border-glass-edge">
-      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
-        <Stat label="ROAS" value={totals.roas > 0 ? formatNumber(totals.roas) : '—'} chip={<Badge tone={roasInfo.tone as BadgeTone}>{roasInfo.text}</Badge>} />
-        <Stat label="הוצאה" value={formatCurrency(totals.spend)} prefix="CAD" />
-        <Stat label="ערך המרות" value={formatCurrency(totals.conversionValue)} prefix="CAD" accent={totals.conversionValue >= totals.spend ? 'positive' : 'neutral'} />
-        <Stat label="המרות" value={formatNumber(totals.conversions, 0)} />
-        <Stat label="קליקים" value={formatNumber(totals.clicks, 0)} />
-        <Stat label="CTR" value={totals.impressions > 0 ? `${(totals.ctr * 100).toFixed(2)}%` : '—'} />
-        <Stat
-          label="CPM"
-          value={totals.impressions > 0 ? formatCurrency(totals.cpm, 2) : '—'}
-          prefix={totals.impressions > 0 ? 'CAD' : undefined}
-          onClick={totals.impressions > 0 && cpmDaily.length >= 2 ? () => setCpmExpanded(v => !v) : undefined}
-          active={cpmExpanded}
+    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-pill-track border-b border-glass-edge">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
+        <Widget
+          icon={<Gauge />}
+          title="ROAS"
+          value={totals.roas > 0 ? formatNumber(totals.roas) : '—'}
+          bandRoas={totals.spend > 0 ? totals.roas : undefined}
+        />
+        <Widget
+          icon={<DollarSign />}
+          title="הוצאה"
+          value={
+            <Money
+              value={totals.spend}
+              prefix="CAD"
+              locale="he-IL"
+              compactAbove={100_000}
+            />
+          }
+        />
+        <Widget
+          icon={<Coins />}
+          title="ערך המרות"
+          value={
+            <Money
+              value={totals.conversionValue}
+              prefix="CAD"
+              locale="he-IL"
+              compactAbove={100_000}
+            />
+          }
+        />
+        <Widget
+          icon={<ShoppingCart />}
+          title="המרות"
+          value={formatNumber(totals.conversions, 0)}
+        />
+        <Widget
+          icon={<MousePointerClick />}
+          title="קליקים"
+          value={formatNumber(totals.clicks, 0)}
+        />
+        <Widget
+          icon={<Percent />}
+          title="CTR"
+          value={
+            totals.impressions > 0 ? `${(totals.ctr * 100).toFixed(2)}%` : '—'
+          }
+        />
+        <Widget
+          icon={<BarChart3 />}
+          title="CPM"
+          value={
+            totals.impressions > 0 ? (
+              <Money
+                value={totals.cpm}
+                prefix="CAD"
+                locale="he-IL"
+                decimals={2}
+                compactAbove={100_000}
+              />
+            ) : (
+              '—'
+            )
+          }
+          sub={
+            cpmToggle ? (
+              <span className="inline-flex items-center gap-1 text-accent">
+                {cpmExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                {cpmExpanded ? 'הסתר מגמה' : 'הצג מגמה'}
+              </span>
+            ) : undefined
+          }
+          onClick={cpmToggle}
+          role={cpmToggle ? 'button' : undefined}
+          tabIndex={cpmToggle ? 0 : undefined}
+          aria-expanded={cpmToggle ? cpmExpanded : undefined}
+          onKeyDown={
+            cpmToggle
+              ? (e: React.KeyboardEvent) => {
+                  if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                    e.preventDefault();
+                    cpmToggle();
+                  }
+                }
+              : undefined
+          }
+          className={cn(
+            cpmToggle && 'cursor-pointer',
+            cpmExpanded &&
+              'ring-2 ring-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          )}
         />
       </div>
       {cpmExpanded && cpmDaily.length >= 2 && (
@@ -1656,10 +1739,10 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
         />
       )}
       {totals.spend > 0 && (
-        <div className="mt-3 pt-3 border-t border-glass-edge text-[10px] sm:text-xs text-ink-muted tabular-nums flex flex-wrap gap-x-3 gap-y-1">
-          <span>CPC: <span className="text-ink-secondary font-medium">CAD {formatCurrency(totals.cpc, 2)}</span></span>
+        <div className="mt-3 pt-3 border-t border-glass-edge text-fs-2xs sm:text-fs-xs text-ink-muted tabular-nums flex flex-wrap gap-x-3 gap-y-1">
+          <span>CPC: <span className="text-ink-secondary font-medium"><Money value={totals.cpc} prefix="CAD" locale="he-IL" decimals={2} compactAbove={100_000} /></span></span>
           <span className="text-ink-subtle">·</span>
-          <span>CPA: <span className="text-ink-secondary font-medium">CAD {totals.conversions > 0 ? formatCurrency(totals.cpa, 2) : '—'}</span></span>
+          <span>CPA: <span className="text-ink-secondary font-medium">{totals.conversions > 0 ? <Money value={totals.cpa} prefix="CAD" locale="he-IL" decimals={2} compactAbove={100_000} /> : '—'}</span></span>
           <span className="text-ink-subtle">·</span>
           <span>חשיפות: <span className="text-ink-secondary font-medium">{formatNumber(totals.impressions, 0)}</span></span>
         </div>
@@ -1674,29 +1757,45 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
       {attributionGap && <AttributionGapPanel gap={attributionGap} />}
       {summary}
 
-      {/* Both SWR-thrown errors and the 200+data.error degraded path (#WR-06). */}
+      {/* Both SWR-thrown errors and the 200+data.error degraded path (#WR-06).
+          Horizon re-skin (W4.2) — error / loading / empty states route through
+          the canonical <StateBlock> (shape="table"). Messages preserved
+          verbatim. */}
       {(error || data?.error) && (
-        <div className="m-4 rounded-lg bg-status-redBg border border-status-red p-3 flex items-start gap-2 text-sm">
-          <AlertCircle className="text-status-redFg shrink-0" size={18} />
-          <div>
-            <div className="font-semibold text-status-redFg">שגיאה בטעינת קמפיינים</div>
-            <div className="text-ink-secondary text-xs mt-1">
-              {error ? (error as Error).message : data?.error}
-            </div>
-          </div>
+        <div className="m-4">
+          <StateBlock
+            mode="error"
+            message={
+              <>
+                <span className="block">שגיאה בטעינת קמפיינים</span>
+                <span className="mt-1 block text-fs-xs font-normal text-ink-secondary">
+                  {error ? (error as Error).message : data?.error}
+                </span>
+              </>
+            }
+          />
         </div>
       )}
 
       {isLoading && (
-        <div className="p-8 text-center text-ink-muted text-sm">טוען נתוני קמפיינים…</div>
+        <div className="p-4">
+          <StateBlock mode="skeleton" shape="table" rows={6} message="טוען נתוני קמפיינים…" />
+        </div>
       )}
 
       {data && !error && !data.error && aggregated.length === 0 && (
-        <div className="p-8 text-center text-ink-muted text-sm">
-          <Megaphone className="mx-auto mb-2 text-ink-subtle" size={28} />
-          <div>אין קמפיינים פעילים בטווח הזה.</div>
-          <div className="text-[11px] mt-1">נסה להרחיב את טווח התאריכים או לשנות פלטפורמה.</div>
-        </div>
+        <StateBlock
+          mode="empty"
+          icon={<Megaphone />}
+          description={
+            <>
+              <span className="block">אין קמפיינים פעילים בטווח הזה.</span>
+              <span className="mt-1 block text-fs-xs">
+                נסה להרחיב את טווח התאריכים או לשנות פלטפורמה.
+              </span>
+            </>
+          }
+        />
       )}
 
       {data && display.length > 0 && (
@@ -1765,7 +1864,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
                     label={
                       <span className="inline-flex flex-col items-center leading-tight">
                         <span>ROAS</span>
-                        <span className="text-[9px] text-ink-muted font-normal">מכוון · directional</span>
+                        <span className="text-fs-2xs text-ink-muted font-normal">מכוון · directional</span>
                       </span>
                     }
                     sortKey="roas"
@@ -1798,7 +1897,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
                     label={
                       <span className="inline-flex flex-col items-center leading-tight opacity-80">
                         <span>first-click</span>
-                        <span className="text-[9px] text-ink-muted font-normal">מבוא ללקוח</span>
+                        <span className="text-fs-2xs text-ink-muted font-normal">מבוא ללקוח</span>
                       </span>
                     }
                     sortKey="firstClickRoas"
@@ -1817,7 +1916,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
                     label={
                       <span className="inline-flex flex-col items-center leading-tight">
                         <span>ROAS Shopify</span>
-                        <span className="text-[9px] text-ink-muted font-normal">פלטפורמה</span>
+                        <span className="text-fs-2xs text-ink-muted font-normal">פלטפורמה</span>
                       </span>
                     }
                     sortKey="roasShopifyPlatform"
@@ -1836,7 +1935,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
                     label={
                       <span className="inline-flex flex-col items-end leading-tight">
                         <span>ערך Shopify</span>
-                        <span className="text-[9px] text-ink-muted font-normal">פלטפורמה</span>
+                        <span className="text-fs-2xs text-ink-muted font-normal">פלטפורמה</span>
                       </span>
                     }
                     sortKey="shopifyValuePlatform"
@@ -1855,7 +1954,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
                     label={
                       <span className="inline-flex flex-col items-end leading-tight">
                         <span>ערך Shopify</span>
-                        <span className="text-[9px] text-ink-muted font-normal">מוקצה</span>
+                        <span className="text-fs-2xs text-ink-muted font-normal">מוקצה</span>
                       </span>
                     }
                     sortKey="shopifyValueAllocated"
@@ -1874,7 +1973,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
                     label={
                       <span className="inline-flex flex-col items-end leading-tight">
                         <span>יח&apos; Shopify</span>
-                        <span className="text-[9px] text-ink-muted font-normal">פלטפורמה</span>
+                        <span className="text-fs-2xs text-ink-muted font-normal">פלטפורמה</span>
                       </span>
                     }
                     sortKey="shopifyUnitsPlatform"
@@ -1893,7 +1992,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
                     label={
                       <span className="inline-flex flex-col items-end leading-tight">
                         <span>ערך Shopify</span>
-                        <span className="text-[9px] text-ink-muted font-normal">סה&quot;כ</span>
+                        <span className="text-fs-2xs text-ink-muted font-normal">סה&quot;כ</span>
                       </span>
                     }
                     sortKey="shopifyValueTotal"
@@ -1912,7 +2011,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
                     label={
                       <span className="inline-flex flex-col items-end leading-tight">
                         <span>יח&apos; Shopify</span>
-                        <span className="text-[9px] text-ink-muted font-normal">סה&quot;כ</span>
+                        <span className="text-fs-2xs text-ink-muted font-normal">סה&quot;כ</span>
                       </span>
                     }
                     sortKey="shopifyUnitsTotal"
@@ -1931,7 +2030,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
                     label={
                       <span className="inline-flex flex-col items-end leading-tight">
                         <span>הזמ&apos; Shopify</span>
-                        <span className="text-[9px] text-ink-muted font-normal">סה&quot;כ</span>
+                        <span className="text-fs-2xs text-ink-muted font-normal">סה&quot;כ</span>
                       </span>
                     }
                     sortKey="shopifyOrdersTotal"
@@ -2046,7 +2145,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
               return (
             <TableBase className="text-xs sm:text-sm" minWidth={1340} stickyHeader>
               <thead>
-                <tr className="text-ink-secondary border-b border-glass-edge bg-glass-2/40">
+                <tr className="text-ink-secondary border-b border-glass-edge bg-pill-track">
                   <ColumnHeaderTh
                     className="px-3 py-2 w-[36px]"
                     ariaLabel="סימון אופטימיזציה"
@@ -2171,7 +2270,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
           </div>
 
           {aggregated.length > TOP_N_DEFAULT && (
-            <div className="px-4 sm:px-5 py-2.5 bg-glass-2/30 border-t border-glass-edge">
+            <div className="px-4 sm:px-5 py-2.5 bg-pill-track border-t border-glass-edge">
               <Button
                 variant="ghost"
                 onClick={() => setShowAll(v => !v)}
@@ -2258,6 +2357,11 @@ function AttributionGapPanel({
     tone: 'good' | 'flag';
   };
 }) {
+  // Horizon re-skin (W4.2) — the bespoke 4-tile grid + raw formatCurrency are
+  // replaced by canonical <Widget> KPI tiles (icon-circle + <Money> values).
+  // The section keeps its trust-tone strip (operator-locked AA status palette:
+  // greenBg = aligned/under-count, redBg = over-count) so the verdict is
+  // readable from colour. All numbers + interpretation copy are preserved.
   const toneClass = {
     good: 'border-status-green bg-status-greenBg',
     flag: 'border-status-red bg-status-redBg',
@@ -2273,72 +2377,84 @@ function AttributionGapPanel({
       )}
     >
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-ink-secondary">
+        <span className="text-fs-2xs sm:text-fs-xs font-bold uppercase tracking-wider text-ink-secondary">
           התאמת שיוך · Meta &amp; Google &amp; TikTok ↔ Shopify
         </span>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <div>
-          <div className="text-[10px] text-ink-muted uppercase tracking-wide">
-            פלטפורמות מדווחות
-          </div>
-          <div className="text-base sm:text-lg font-semibold tabular-nums text-ink mt-0.5">
-            <span className="text-[10px] text-ink-muted font-medium ms-1">CAD</span>
-            {formatCurrency(gap.platformClaimed)}
-          </div>
-          <div className="text-[10px] text-ink-muted tabular-nums">
-            ROAS: {gap.platformRoas > 0 ? gap.platformRoas.toFixed(2) : '—'}
-          </div>
-        </div>
-
-        <div>
-          <div className="text-[10px] text-ink-muted uppercase tracking-wide">
-            Shopify בפועל
-          </div>
-          <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
-            <span className="text-[10px] text-ink-muted font-medium ms-1">CAD</span>
-            {formatCurrency(gap.shopifyRevenue)}
-          </div>
-          <div className="text-[10px] text-ink-muted tabular-nums">
-            ROAS: {gap.storeRoas > 0 ? gap.storeRoas.toFixed(2) : '—'}
-          </div>
-        </div>
-
-        <div>
-          <div className="text-[10px] text-ink-muted uppercase tracking-wide">
-            פער (Shopify − Platforms)
-          </div>
-          <div
-            className={cn(
-              'text-base sm:text-lg font-bold tabular-nums mt-0.5',
-              gap.absGap >= 0 ? 'text-status-greenFg' : 'text-status-redFg',
-            )}
-          >
-            <span className="text-[10px] text-ink-muted font-medium ms-1">CAD</span>
-            {gap.absGap >= 0 ? '+' : ''}{formatCurrency(gap.absGap)}
-          </div>
-          <div className="text-[10px] text-ink-muted tabular-nums">
-            {arrow} {(gap.gapPct * 100).toFixed(1)}%
-          </div>
-        </div>
-
-        <div>
-          <div className="text-[10px] text-ink-muted uppercase tracking-wide">
-            יחס אמינות
-          </div>
-          <div className="text-base sm:text-lg font-semibold tabular-nums mt-0.5">
-            {gap.shopifyRevenue > 0
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Widget
+          icon={<Megaphone />}
+          title="פלטפורמות מדווחות"
+          value={
+            <Money
+              value={gap.platformClaimed}
+              prefix="CAD"
+              locale="he-IL"
+              compactAbove={100_000}
+            />
+          }
+          sub={
+            <span className="tabular-nums">
+              ROAS: {gap.platformRoas > 0 ? gap.platformRoas.toFixed(2) : '—'}
+            </span>
+          }
+        />
+        <Widget
+          icon={<ShoppingCart />}
+          title="Shopify בפועל"
+          value={
+            <Money
+              value={gap.shopifyRevenue}
+              prefix="CAD"
+              locale="he-IL"
+              compactAbove={100_000}
+            />
+          }
+          sub={
+            <span className="tabular-nums">
+              ROAS: {gap.storeRoas > 0 ? gap.storeRoas.toFixed(2) : '—'}
+            </span>
+          }
+        />
+        <Widget
+          icon={<TrendingUp />}
+          title="פער (Shopify − Platforms)"
+          value={
+            <span
+              className={cn(
+                'inline-flex items-baseline gap-0.5 tabular-nums',
+                gap.absGap >= 0 ? 'text-status-greenFg' : 'text-status-redFg',
+              )}
+            >
+              {gap.absGap >= 0 ? '+' : ''}
+              <Money
+                value={gap.absGap}
+                prefix="CAD"
+                locale="he-IL"
+                compactAbove={100_000}
+              />
+            </span>
+          }
+          sub={
+            <span className="tabular-nums">
+              {arrow} {(gap.gapPct * 100).toFixed(1)}%
+            </span>
+          }
+        />
+        <Widget
+          icon={<Gauge />}
+          title="יחס אמינות"
+          value={
+            gap.shopifyRevenue > 0
               ? (gap.platformClaimed / gap.shopifyRevenue * 100).toFixed(0) + '%'
-              : '—'}
-          </div>
-          <div className="text-[10px] text-ink-muted">
-            Platforms ÷ Shopify
-          </div>
-        </div>
+              : '—'
+          }
+          sub="Platforms ÷ Shopify"
+        />
       </div>
 
-      <p className="mt-3 text-[11px] sm:text-xs text-ink-secondary leading-relaxed">
+      <p className="mt-3 text-fs-xs sm:text-fs-sm text-ink-secondary leading-relaxed">
         <strong className="text-ink">משמעות:</strong> {gap.interpretation}
       </p>
     </section>
