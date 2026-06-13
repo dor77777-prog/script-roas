@@ -16,6 +16,10 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
+import {
+  SegmentedControl,
+  type SegmentedOption,
+} from '@/components/ui/SegmentedControl';
 import { applyFromCandidate, applyToCandidate } from '@/lib/rangeClamp';
 import { useSavedViews } from '@/lib/hooks/useSavedViews';
 import {
@@ -115,20 +119,24 @@ export function Filters({
   const activeIsSecondary = PRESET_SECONDARY.includes(filters.preset);
   const showAdvanced = advancedOpen || activeIsSecondary || filters.preset === 'custom';
 
-  // ── A3 mobile pill bar ───────────────────────────────────────────────────
-  // The active pill index drives the absolutely-positioned thumb. When the
-  // active preset is NOT one of the 4 featured (secondary / custom), the index
-  // is -1 → the thumb hides and no pill is marked active. The advanced section
-  // + store picker stay reachable on mobile so secondary/custom remain usable.
-  const activePillIndex = PRESET_FEATURED.indexOf(filters.preset);
-  const hasActivePill = activePillIndex >= 0;
-  // RTL thumb math: 4 equal pills in a flex row. inset-inline-start tracks the
-  // start edge of pill N at (N/4 * 100%), width is a fixed 25%. Because the
-  // wrapper is dir=rtl, `inset-inline-start` resolves to the RIGHT edge, so the
-  // thumb correctly slides right→left as the index grows — matching the pills,
-  // which are laid out right→left under RTL.
-  const thumbStart = `${(Math.max(0, activePillIndex) / PRESET_FEATURED.length) * 100}%`;
-  const thumbWidth = `${100 / PRESET_FEATURED.length}%`;
+  // ── Quick-range options for the SegmentedControl ───────────────────────────
+  // Horizon re-skin Wave 2 — the hand-rolled desktop <Button> grid + mobile
+  // sliding-thumb pill bar are replaced by ONE <SegmentedControl> primitive
+  // (role="radiogroup", single-choice). The label collapses the long presets to
+  // their short forms (PILL_SHORT_LABELS) so the rail fits a phone width; the
+  // rail itself scrolls horizontally when space is tight. When the active
+  // preset is NOT one of the 4 featured (secondary / custom), no option value
+  // matches → the control shows nothing selected (graceful degradation,
+  // preserving the old "no active thumb on a secondary preset" behaviour).
+  const quickRangeOptions: SegmentedOption[] = PRESET_FEATURED.map(p => ({
+    value: p,
+    label: PILL_SHORT_LABELS[p] ?? PRESET_LABELS[p],
+  }));
+  // Empty string when the active preset isn't featured → SegmentedControl marks
+  // no segment selected (activeIndex < 0), matching the legacy hidden-thumb state.
+  const quickRangeValue = PRESET_FEATURED.includes(filters.preset)
+    ? (filters.preset as string)
+    : '';
 
   return (
     <Card className="!p-0 overflow-hidden w-full">
@@ -156,79 +164,23 @@ export function Filters({
             טווח מהיר
           </div>
 
-          {/* Featured presets — DESKTOP (md+). Wrapped `hidden md:flex` so the
-           * md+ layout is byte-identical to before; the MOBILE pill bar below
-           * (md:hidden) replaces it on small screens. */}
-          <div
-            className="hidden md:flex flex-wrap items-center gap-1.5"
-            data-testid="filters-featured-desktop"
-          >
-            {PRESET_FEATURED.map(p => (
-              <Button
-                key={p}
-                variant={filters.preset === p ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => selectPreset(p)}
-                className={cn(
-                  'rounded-lg text-xs sm:text-sm font-semibold',
-                  filters.preset === p
-                    ? 'border-accent shadow-glass'
-                    : 'hover:border-glass-edge-hot active:scale-[0.98]',
-                )}
-              >
-                {PRESET_LABELS[p]}
-              </Button>
-            ))}
-          </div>
-
-          {/* Featured presets — MOBILE (< md). Sliding-thumb pill bar. Full
-           * width so the 4 pills + thumb fill the phone row. The thumb is an
-           * absolutely-positioned slab UNDER the active pill; it animates
-           * between pills with a bouncy curve and is RTL-correct via
-           * inset-inline-start. */}
-          <div
-            className="md:hidden w-full basis-full"
-            data-testid="filters-pillbar"
-          >
-            <div className="relative flex rounded-control bg-pill-track p-1">
-              {/* Sliding thumb — hidden (opacity 0) when no featured pill is
-               * active so secondary/custom presets degrade gracefully. */}
-              <span
-                aria-hidden="true"
-                data-testid="filters-pill-thumb"
-                className="filters-pill-thumb absolute top-1 bottom-1 rounded-[0.5625rem] bg-pill-thumb shadow-soft"
-                style={{
-                  insetInlineStart: thumbStart,
-                  width: thumbWidth,
-                  opacity: hasActivePill ? 1 : 0,
-                }}
-              />
-              {PRESET_FEATURED.map(p => {
-                const isActive = filters.preset === p;
-                return (
-                  <Button
-                    key={p}
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => selectPreset(p)}
-                    aria-pressed={isActive}
-                    className={cn(
-                      // min-h-[44px] = touch target; relative+z so the label
-                      // sits above the thumb slab. Transparent so only the
-                      // sliding thumb paints the active background.
-                      'relative z-[1] flex-1 h-auto min-h-[44px] px-1 rounded-[0.5625rem]',
-                      'bg-transparent hover:bg-transparent text-xs font-bold',
-                      'transition-colors duration-DEFAULT active:scale-[0.96]',
-                      isActive ? 'text-pill-inkOn' : 'text-pill-ink',
-                    )}
-                  >
-                    {PILL_SHORT_LABELS[p] ?? PRESET_LABELS[p]}
-                  </Button>
-                );
-              })}
-            </div>
-          </div>
+          {/* Featured presets — unified SegmentedControl (Horizon re-skin
+           * Wave 2). Was a desktop <Button> grid + a separate mobile
+           * sliding-thumb pill bar; both are now ONE SegmentedControl
+           * (role="radiogroup", single-choice). The rail scrolls horizontally
+           * on narrow phones (scrollbar-hide) so all 4 segments stay reachable.
+           * `quickRangeValue` is '' when the active preset isn't one of the 4
+           * featured ones → nothing selected, mirroring the old hidden-thumb
+           * state for secondary / custom presets. */}
+          <SegmentedControl
+            role="radiogroup"
+            size="sm"
+            data-testid="filters-quickrange"
+            aria-label="טווח מהיר"
+            options={quickRangeOptions}
+            value={quickRangeValue}
+            onChange={v => selectPreset(v as PresetKey)}
+          />
 
           {/* Spacer pushes store-picker + range banner + toggle to the
            * opposite end of the row. `flex-1` only takes effect when there
@@ -253,8 +205,8 @@ export function Filters({
             </NativeSelect>
           </div>
 
-          {/* Selected range chip */}
-          <div className="flex items-center gap-2 rounded-lg bg-glass-2 px-2.5 py-1.5 text-xs sm:text-sm whitespace-nowrap">
+          {/* Selected range chip — Horizon pill (re-skinned in place) */}
+          <div className="flex items-center gap-2 rounded-full bg-glass-2 px-3 py-1.5 text-xs sm:text-sm whitespace-nowrap">
             <Calendar size={13} className="text-ink-muted" aria-hidden="true" />
             <span className="tabular-nums text-ink-secondary">
               {formatDate(filters.range.from)} — {formatDate(filters.range.to)}
@@ -284,7 +236,10 @@ export function Filters({
           )}
         </div>
 
-        {/* Compare-baseline pills — opt-in row (Wave 4) */}
+        {/* Compare-baseline row — opt-in (Wave 4). Horizon re-skin Wave 2:
+         * the hand-rolled <Button> pill row is now a SegmentedControl
+         * (role="radiogroup", single-choice). Value defaults to 'prev_period'
+         * when unset (matching the legacy default-active pill). */}
         {showCompareBaseline && (
           <div
             data-testid="filters-compare-row"
@@ -293,33 +248,33 @@ export function Filters({
             <span className="text-[11px] sm:text-xs font-medium text-ink-muted whitespace-nowrap me-1">
               בסיס השוואה:
             </span>
-            {COMPARE_BASELINE_ORDER.map(b => {
-              const isActive = (filters.compareBaseline ?? 'prev_period') === b;
-              return (
-                <Button
-                  key={b}
-                  type="button"
-                  variant={isActive ? 'primary' : 'secondary'}
-                  size="sm"
-                  onClick={() => onChange({ ...filters, compareBaseline: b })}
-                  aria-pressed={isActive}
-                  className={cn(
-                    'rounded-lg text-xs sm:text-sm font-semibold',
-                    isActive
-                      ? 'border-accent shadow-glass'
-                      : 'hover:border-glass-edge-hot active:scale-[0.98]',
-                  )}
-                >
-                  {COMPARE_BASELINE_LABELS[b]}
-                </Button>
-              );
-            })}
+            <SegmentedControl
+              role="radiogroup"
+              size="sm"
+              data-testid="filters-compare-seg"
+              aria-label="בסיס השוואה"
+              options={COMPARE_BASELINE_ORDER.map(b => ({
+                value: b,
+                label: COMPARE_BASELINE_LABELS[b],
+              }))}
+              value={filters.compareBaseline ?? 'prev_period'}
+              onChange={v =>
+                onChange({ ...filters, compareBaseline: v as CompareBaseline })
+              }
+            />
           </div>
         )}
 
         {showAdvanced && (
           <div className="space-y-2.5 pt-2.5 mt-2.5 border-t border-glass-edge animate-fade-in">
-            <div className="flex flex-wrap items-center gap-1.5">
+            {/* Secondary presets — re-skinned in place to Horizon pills (kept as
+             * a wrap-flow Button set, NOT a SegmentedControl: 'custom' here is a
+             * mode-switch that reveals the date inputs below, so it stays a
+             * standalone affordance rather than a segment). */}
+            <div
+              data-testid="filters-secondary"
+              className="flex flex-wrap items-center gap-1.5"
+            >
               {PRESET_SECONDARY.map(p => (
                 <Button
                   key={p}
@@ -327,7 +282,7 @@ export function Filters({
                   size="sm"
                   onClick={() => selectPreset(p)}
                   className={cn(
-                    'rounded-lg text-xs sm:text-sm font-medium',
+                    'rounded-full text-xs sm:text-sm font-medium',
                     filters.preset === p
                       ? 'border-accent shadow-glass'
                       : 'hover:border-glass-edge-hot active:scale-[0.98]',

@@ -103,31 +103,34 @@ describe('<ActivityTab> — global date-range + store picker on the stats sub-ta
   it('does NOT render the <Filters> range/store picker on the live-feed sub-tab', () => {
     renderTab();
     // default = feed; the shared Filters strip (quick-range label + the
-    // featured-presets container) must NOT appear so the feed is not implied
+    // quick-range SegmentedControl) must NOT appear so the feed is not implied
     // to be range-filtered. (The events feed has its OWN store picker labelled
     // "סינון לפי חנות"; we key off the Filters-only quick-range markers.)
+    // Horizon re-skin Wave 2 (2026-06-13): the featured-presets desktop grid was
+    // replaced by the unified `filters-quickrange` SegmentedControl.
     expect(screen.queryByText('טווח מהיר')).toBeNull();
-    expect(screen.queryByTestId('filters-featured-desktop')).toBeNull();
+    expect(screen.queryByTestId('filters-quickrange')).toBeNull();
   });
 
   it('renders the shared <Filters> range/store picker on the stats sub-tab', () => {
     renderTab();
     fireEvent.click(screen.getByRole('tab', { name: 'סטטיסטיקות והתפלגויות' }));
     // The shared Filters component: store <select aria-label="חנות"> + quick-
-    // range label + the featured-presets container.
+    // range label + the quick-range SegmentedControl (W2 re-skin).
     expect(screen.getByLabelText('חנות')).toBeInTheDocument();
     expect(screen.getByText('טווח מהיר')).toBeInTheDocument();
-    expect(screen.getByTestId('filters-featured-desktop')).toBeInTheDocument();
+    expect(screen.getByTestId('filters-quickrange')).toBeInTheDocument();
   });
 
   it('calls the GLOBAL onChange (setFilters) when the range preset changes on the stats sub-tab', () => {
     const { onChange } = renderTab();
     fireEvent.click(screen.getByRole('tab', { name: 'סטטיסטיקות והתפלגויות' }));
 
-    // Pick a different featured preset ("היום") via the shared Filters strip
-    // (scope to the DESKTOP featured row — the mobile pill bar duplicates it).
-    const desktopPresets = screen.getByTestId('filters-featured-desktop');
-    fireEvent.click(within(desktopPresets).getByRole('button', { name: 'היום' }));
+    // Pick a different featured preset ("היום") via the shared Filters strip.
+    // Horizon re-skin Wave 2: the desktop grid + mobile pill bar were unified
+    // into ONE SegmentedControl rail (role="radiogroup" / role="radio" items).
+    const quickRange = screen.getByTestId('filters-quickrange');
+    fireEvent.click(within(quickRange).getByRole('radio', { name: 'היום' }));
 
     expect(onChange).toHaveBeenCalledTimes(1);
     const next = onChange.mock.calls[0][0] as F;

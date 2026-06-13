@@ -34,8 +34,14 @@ beforeEach(() => {
   window.localStorage.clear();
 });
 
-describe('Wave 4 — compare-baseline pills in <Filters>', () => {
-  it('renders 5 compare pills when showCompareBaseline is true', () => {
+// Horizon re-skin Wave 2 (2026-06-13): the compare-baseline row's hand-rolled
+// <Button> pills are now a shared <SegmentedControl> (role="radiogroup" rail
+// with role="radio" children + aria-checked). These assertions were re-pointed
+// from getAllByRole('button') + aria-pressed to getAllByRole('radio') +
+// aria-checked. The wiring, canonical order, and default-active baseline are
+// unchanged.
+describe('Wave 4 — compare-baseline segmented control in <Filters>', () => {
+  it('renders 5 compare segments when showCompareBaseline is true', () => {
     const { container } = render(
       <Filters
         filters={baseFilters()}
@@ -46,7 +52,10 @@ describe('Wave 4 — compare-baseline pills in <Filters>', () => {
     );
     const row = container.querySelector('[data-testid="filters-compare-row"]');
     expect(row).toBeTruthy();
-    const pills = within(row as HTMLElement).getAllByRole('button');
+    // W2 re-skin: rail is a radiogroup with radio children (was <Button> pills).
+    const seg = within(row as HTMLElement).getByTestId('filters-compare-seg');
+    expect(seg.getAttribute('role')).toBe('radiogroup');
+    const pills = within(seg).getAllByRole('radio');
     expect(pills).toHaveLength(5);
     const labels = pills.map((b) => b.textContent?.trim());
     expect(labels).toEqual([
@@ -58,7 +67,7 @@ describe('Wave 4 — compare-baseline pills in <Filters>', () => {
     ]);
   });
 
-  it("clicking the 'month before' pill calls onChange with compareBaseline === 'prev_month'", () => {
+  it("clicking the 'month before' segment calls onChange with compareBaseline === 'prev_month'", () => {
     const onChange = vi.fn();
     const { container } = render(
       <Filters
@@ -69,8 +78,9 @@ describe('Wave 4 — compare-baseline pills in <Filters>', () => {
       />,
     );
     const row = container.querySelector('[data-testid="filters-compare-row"]') as HTMLElement;
+    // W2 re-skin: segments are role="radio" (was aria-pressed <Button>).
     const pill = within(row)
-      .getAllByRole('button')
+      .getAllByRole('radio')
       .find((b) => b.textContent?.trim() === COMPARE_BASELINE_LABELS.prev_month);
     expect(pill).toBeTruthy();
     fireEvent.click(pill!);
@@ -79,7 +89,7 @@ describe('Wave 4 — compare-baseline pills in <Filters>', () => {
     expect(next.compareBaseline).toBe('prev_month');
   });
 
-  it('marks the pill matching filters.compareBaseline as active (aria-pressed)', () => {
+  it('marks the segment matching filters.compareBaseline as active (aria-checked)', () => {
     const { container } = render(
       <Filters
         filters={{ ...baseFilters(), compareBaseline: 'prev_year' }}
@@ -89,14 +99,15 @@ describe('Wave 4 — compare-baseline pills in <Filters>', () => {
       />,
     );
     const row = container.querySelector('[data-testid="filters-compare-row"]') as HTMLElement;
+    // W2 re-skin: active state is aria-checked (radiogroup) not aria-pressed.
     const active = within(row)
-      .getAllByRole('button')
-      .filter((b) => b.getAttribute('aria-pressed') === 'true');
+      .getAllByRole('radio')
+      .filter((b) => b.getAttribute('aria-checked') === 'true');
     expect(active).toHaveLength(1);
     expect(active[0].textContent?.trim()).toBe(COMPARE_BASELINE_LABELS.prev_year);
   });
 
-  it('defaults the active pill to prev_period when compareBaseline is unset', () => {
+  it('defaults the active segment to prev_period when compareBaseline is unset', () => {
     const { container } = render(
       <Filters
         filters={baseFilters()}
@@ -107,8 +118,8 @@ describe('Wave 4 — compare-baseline pills in <Filters>', () => {
     );
     const row = container.querySelector('[data-testid="filters-compare-row"]') as HTMLElement;
     const active = within(row)
-      .getAllByRole('button')
-      .filter((b) => b.getAttribute('aria-pressed') === 'true');
+      .getAllByRole('radio')
+      .filter((b) => b.getAttribute('aria-checked') === 'true');
     expect(active).toHaveLength(1);
     expect(active[0].textContent?.trim()).toBe(COMPARE_BASELINE_LABELS.prev_period);
   });
@@ -246,5 +257,77 @@ describe('Wave 4 — defaults render none of the new UI', () => {
     );
     expect(container.querySelector('[data-testid="filters-compare-row"]')).toBeNull();
     expect(container.querySelector('[data-testid="filters-savedviews"]')).toBeNull();
+  });
+});
+
+// Horizon re-skin Wave 2 (2026-06-13) — both the quick-range toggle and the
+// compare-basis row now adopt the shared <SegmentedControl> primitive. This
+// block asserts the structural migration (both rails are role="radiogroup")
+// AND that changing a segment fires the SAME onChange contract the page wires
+// to the URL/state effect (preset+range for quick-range, compareBaseline for
+// compare-basis) — i.e. the re-skin did not alter the data flow.
+describe('Wave 2 re-skin — quick-range + compare-basis adopt SegmentedControl', () => {
+  it('renders the quick-range rail as a role=radiogroup SegmentedControl', () => {
+    const { container } = render(
+      <Filters filters={baseFilters()} stores={STORES} onChange={() => {}} />,
+    );
+    const seg = container.querySelector('[data-testid="filters-quickrange"]');
+    expect(seg).toBeTruthy();
+    expect(seg!.getAttribute('role')).toBe('radiogroup');
+    expect(within(seg as HTMLElement).getAllByRole('radio')).toHaveLength(4);
+  });
+
+  it('renders the compare-basis rail as a role=radiogroup SegmentedControl', () => {
+    const { container } = render(
+      <Filters
+        filters={baseFilters()}
+        stores={STORES}
+        onChange={() => {}}
+        showCompareBaseline
+      />,
+    );
+    const seg = container.querySelector('[data-testid="filters-compare-seg"]');
+    expect(seg).toBeTruthy();
+    expect(seg!.getAttribute('role')).toBe('radiogroup');
+    expect(within(seg as HTMLElement).getAllByRole('radio')).toHaveLength(5);
+  });
+
+  it('changing a quick-range segment fires onChange with preset + recomputed range (same as pre-W2)', () => {
+    const onChange = vi.fn();
+    const { container } = render(
+      <Filters filters={baseFilters('today')} stores={STORES} onChange={onChange} />,
+    );
+    const seg = container.querySelector('[data-testid="filters-quickrange"]') as HTMLElement;
+    const sevenDays = within(seg)
+      .getAllByRole('radio')
+      .find((b) => b.textContent?.trim() === '7 ימים'); // short label for last_7_days
+    expect(sevenDays).toBeTruthy();
+    fireEvent.click(sevenDays!);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const next = onChange.mock.calls[0][0] as F;
+    expect(next.preset).toBe('last_7_days');
+    // Same selectPreset contract that the page's URL/state effect consumes.
+    expect(next.range).toEqual(computePresetRange('last_7_days'));
+  });
+
+  it('changing a compare-basis segment fires onChange with the new compareBaseline (same as pre-W2)', () => {
+    const onChange = vi.fn();
+    const { container } = render(
+      <Filters
+        filters={baseFilters()}
+        stores={STORES}
+        onChange={onChange}
+        showCompareBaseline
+      />,
+    );
+    const seg = container.querySelector('[data-testid="filters-compare-seg"]') as HTMLElement;
+    const none = within(seg)
+      .getAllByRole('radio')
+      .find((b) => b.textContent?.trim() === COMPARE_BASELINE_LABELS.none);
+    expect(none).toBeTruthy();
+    fireEvent.click(none!);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const next = onChange.mock.calls[0][0] as F;
+    expect(next.compareBaseline).toBe('none');
   });
 });
