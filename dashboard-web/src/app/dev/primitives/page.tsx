@@ -37,6 +37,7 @@ import { PlatformBadge } from '@/components/ui/PlatformBadge';
 import { Sparkline } from '@/components/ui/Sparkline';
 import { Stat } from '@/components/ui/Stat';
 import { Switch } from '@/components/ui/Switch';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { Textarea } from '@/components/ui/Textarea';
 import {
@@ -208,6 +209,24 @@ export default function PrimitivesPage() {
             <div className="flex items-center gap-3">
               <Switch defaultChecked />
               <Text tone="muted">Switch (checked)</Text>
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="flex items-center gap-2">
+                <Checkbox checked={false} aria-label="checkbox-unchecked" />
+                <Text tone="muted">Checkbox (off)</Text>
+              </label>
+              <label className="flex items-center gap-2">
+                <Checkbox checked aria-label="checkbox-checked" />
+                <Text tone="muted">Checkbox (on)</Text>
+              </label>
+              <label className="flex items-center gap-2">
+                <Checkbox indeterminate aria-label="checkbox-indeterminate" />
+                <Text tone="muted">Checkbox (mixed)</Text>
+              </label>
+              <label className="flex items-center gap-2">
+                <Checkbox checked disabled aria-label="checkbox-disabled" />
+                <Text tone="muted">Checkbox (disabled)</Text>
+              </label>
             </div>
           </div>
         </Section>
