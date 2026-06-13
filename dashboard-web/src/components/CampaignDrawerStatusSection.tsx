@@ -12,11 +12,15 @@
 // concat), and the proper-specificity ink-secondary heading (the prior
 // `!text-ink-secondary` !important override is gone). Raw platform status
 // ENUMS stay verbatim & visible (operator-locked no-info-loss) — each chip
-// shows a Hebrew gloss plus the raw LTR enum as a muted sub-label AND in
-// `title=`; an unknown enum renders raw, never hidden.
+// shows a Hebrew gloss plus the raw LTR enum as a muted `<bdi>` sub-label;
+// an unknown enum renders raw, never hidden. (W9.1b: the redundant native
+// `title=` was dropped — the design-system tooltip rule bans it and the
+// sub-label already carries the raw enum. The BACKFILL_UNKNOWN sentinel,
+// whose chip has no sub-label, keeps its raw value via <HelpTooltip>.)
 
 import { Hourglass } from 'lucide-react';
 import { Heading } from '@/components/ui/Typography';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/utils';
 
 export type CampaignDrawerStatusSectionProps = {
@@ -46,7 +50,7 @@ function relIso(iso: string | null): string {
 // ────────────────────────────────────────────────────────────────────────
 // Raw platform status ENUM → Hebrew gloss. Operator-locked no-info-loss:
 // the chip shows the Hebrew word for at-a-glance reading, but the RAW enum
-// is ALWAYS rendered too (a muted LTR sub-label + `title=`), so nothing the
+// is ALWAYS rendered too (a muted LTR `<bdi>` sub-label), so nothing the
 // platform reported is ever hidden. An enum WITHOUT a known gloss falls
 // through to rendering the raw enum on its own (no Hebrew line) — never
 // dropped. Covers the Meta/Google/TikTok configured + effective + delivery
@@ -98,8 +102,8 @@ function statusTone(status: string | null): string {
 
 /**
  * A tinted status chip. It leads with the Hebrew gloss (when known) and ALWAYS
- * carries the raw enum — as a muted LTR sub-label and in `title=` — so the
- * exact platform value is never lost. A null value renders the em-dash. An enum
+ * carries the raw enum — as a muted LTR `<bdi>` sub-label — so the exact
+ * platform value is never lost. A null value renders the em-dash. An enum
  * without a known gloss renders the raw value alone (never hidden).
  */
 function StatusChip({ status, tone }: { status: string | null; tone: string }) {
@@ -110,7 +114,6 @@ function StatusChip({ status, tone }: { status: string | null; tone: string }) {
         'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium',
         tone,
       )}
-      title={status ?? undefined}
     >
       {status == null ? (
         '—'
@@ -157,17 +160,21 @@ export function CampaignDrawerStatusSection(p: CampaignDrawerStatusSectionProps)
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
         {/* configured — the BACKFILL_UNKNOWN sentinel takes a dedicated
             "loading from platform" treatment (Hourglass + warning tint);
-            the raw sentinel stays available via `title=` + the explainer. */}
+            the raw sentinel stays available via <HelpTooltip> + the explainer. */}
         <div className="flex flex-col items-start gap-1">
           <span className="text-fs-2xs text-ink-secondary"><bdi dir="ltr">configured</bdi></span>
           {isBackfillUnknown ? (
-            <span
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-status-warningBg text-status-warningFg border border-status-warning"
-              title="BACKFILL_UNKNOWN"
-            >
-              <Hourglass size={11} aria-hidden />
-              טוען מ-Platform
-            </span>
+            // The Hebrew chip shows "loading from platform"; the raw sentinel
+            // enum (BACKFILL_UNKNOWN) is preserved via HelpTooltip rather than
+            // a native title= (no-info-loss), and the explainer below names it.
+            <HelpTooltip content="BACKFILL_UNKNOWN">
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-status-warningBg text-status-warningFg border border-status-warning"
+              >
+                <Hourglass size={11} aria-hidden />
+                טוען מ-Platform
+              </span>
+            </HelpTooltip>
           ) : (
             <StatusChip status={p.configuredStatus} tone={statusTone(p.configuredStatus)} />
           )}

@@ -102,9 +102,11 @@ describe('ActionListPanel', () => {
     );
     // The accent-gradient header band was removed in the re-skin.
     expect(container.querySelector('[class*="bg-gradient-to-l"]')).toBeNull();
-    // The lead icon now sits in the canonical Widget icon-circle
-    // (bg-lightPrimary / dark:bg-navy-700), the same token KPI widgets use.
-    expect(container.querySelector('.bg-lightPrimary.rounded-full')).not.toBeNull();
+    // The lead icon now sits in the canonical Horizon icon-circle on the
+    // mode-aware recessed-well token (bg-pill-track = lightPrimary light /
+    // navy-700 dark), the same recipe the home cards use — token-only, no
+    // dark: variant.
+    expect(container.querySelector('.bg-pill-track.rounded-full')).not.toBeNull();
   });
 
   it('renders icon glyphs only (lucide SVGs) — no emoji characters as UI icons', () => {

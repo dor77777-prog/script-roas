@@ -24,6 +24,19 @@ const CHART_FILE_RX =
 const STATUS_FILE_RX =
   /(?:status|health|HealthScore|SyncIndicator|FreshnessChip|FreshnessBadge)/i;
 
+// ── Allowlist (Horizon re-skin spec §3.2.2, operator-approved 2026-06-12) ──
+// The ROAS target chart's LINE STROKE + AREA FILL are INTENTIONALLY the ROAS
+// *band* colour (red/orange/green/blue/gray of the period-average ROAS). This
+// supersedes the v2-plan Q1 chart↔band palette separation for this ONE surface:
+// here the chart-line IS the grading signal, by operator decision. The single
+// source of the `var(--band-*)` literals for that line is roasChartBand.ts (the
+// pure band→stroke-var mapping module), so it is exempt from the cross-palette
+// guard. Every OTHER chart file stays guarded — they may only reach band tokens
+// via this allowlisted module's exported constant, never via a raw literal.
+const BAND_LINE_EXEMPT_FILES = [
+  '/components/home/roasChartBand.',
+];
+
 const BAND_RX = /var\(\s*--band-[a-z]+\b/;
 const STATUS_RX = /var\(\s*--status-[a-z-]+\b/;
 const CHART_PLATFORM_RX = /var\(\s*--chart-platform-[a-z]+\b/;
@@ -64,6 +77,13 @@ export default {
     const isTest =
       filename.includes('.test.') || filename.includes('__tests__');
     if (isTest) return {};
+
+    // Spec §3.2.2: the band-coloured ROAS chart-line mapping module is exempt —
+    // its `var(--band-*)` literals are the operator-locked grading-as-line hue.
+    const isBandLineExempt = BAND_LINE_EXEMPT_FILES.some(p =>
+      filename.includes(p),
+    );
+    if (isBandLineExempt) return {};
 
     const inChart = isChartFile(filename);
     const inStatus = isStatusFile(filename);

@@ -323,7 +323,7 @@ export function InsightsBoard({ data }: Props) {
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-lightPrimary text-brand-500 dark:bg-navy-700 dark:text-ink shrink-0">
+            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-pill-track text-accent shrink-0">
               <Sparkles size={18} />
             </span>
             <div className="min-w-0">

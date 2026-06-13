@@ -128,7 +128,7 @@ export function NcByPlatformCard({
                 <span className="text-sm font-bold text-ink">
                   <bdi dir="ltr">{CHANNEL_LABEL[m.channel]}</bdi>
                 </span>
-                <span className="mr-auto text-[11px] font-bold text-ink-muted tabular-nums">
+                <span className="me-auto text-[11px] font-bold text-ink-muted tabular-nums">
                   <bdi dir="ltr">{m.ncOrders}</bdi> חדשים
                 </span>
               </div>

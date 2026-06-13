@@ -79,12 +79,13 @@ export function ActionListPanel({ insights, loading, error, onMark, adAccounts, 
 
   return (
     <Card data-testid="action-list-panel" className={cn('!p-0 overflow-hidden', className)}>
-      {/* Header — Horizon recipe (W3.7): a neutral icon-circle (Widget token:
-          bg-lightPrimary / dark:bg-navy-700) + title + count chip, on a hairline
-          divider. Replaces the old accent-gradient band so the surface matches
-          the consistent Horizon header used across the home cards. */}
+      {/* Header — Horizon recipe (W3.7): a neutral icon-circle (mode-aware
+          recessed-well token bg-pill-track = lightPrimary light / navy-700 dark,
+          + text-accent icon) + title + count chip, on a hairline divider.
+          Replaces the old accent-gradient band so the surface matches the
+          consistent Horizon header used across the home cards. */}
       <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-glass-edge">
-        <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-lightPrimary text-brand-500 dark:bg-navy-700 dark:text-ink shrink-0">
+        <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-pill-track text-accent shrink-0">
           <Zap size={18} />
         </span>
         <div className="min-w-0 flex-1">

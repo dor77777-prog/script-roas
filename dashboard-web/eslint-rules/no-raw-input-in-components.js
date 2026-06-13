@@ -19,7 +19,7 @@
 //
 // Exemptions:
 //   - The primitives themselves (`src/components/ui/Input.tsx`,
-//     `Textarea.tsx`, `NativeSelect.tsx`, `Select.tsx`).
+//     `Textarea.tsx`, `NativeSelect.tsx`, `Select.tsx`, `Checkbox.tsx`).
 //   - Test files (`__tests__/**`, `*.test.tsx`).
 
 const PRIMITIVE_FILES = [
@@ -27,6 +27,11 @@ const PRIMITIVE_FILES = [
   '/components/ui/Textarea.',
   '/components/ui/NativeSelect.',
   '/components/ui/Select.',
+  // Checkbox IS a primitive: it intentionally wraps a native
+  // <input type="checkbox"> (the real a11y surface — role/aria-checked/
+  // Space-to-toggle/label association for free) and paints the box + glyph
+  // with peer siblings. Like Input/Switch, it OWNS its native input.
+  '/components/ui/Checkbox.',
 ];
 
 const FORBIDDEN = {
