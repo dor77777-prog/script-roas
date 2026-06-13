@@ -98,6 +98,8 @@ export default function PrimitivesPage() {
             <Button variant="secondary">Secondary</Button>
             <Button variant="ghost">Ghost</Button>
             <Button variant="destructive">Destructive</Button>
+            <Button variant="success">Success</Button>
+            <Button variant="warning">Warning</Button>
             <Button variant="link">Link</Button>
             <Button disabled>Disabled</Button>
           </div>

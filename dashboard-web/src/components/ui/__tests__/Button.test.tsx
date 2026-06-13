@@ -25,6 +25,25 @@ describe('Button primitive', () => {
     expect(screen.getByTestId('b').className).toMatch(/status-red/);
   });
 
+  // W7-T1 (debt #13): semantic success/warning variants mirror destructive —
+  // solid status-btn bg (white-AA: green-btn #008651 = 4.64, orange-btn
+  // #b25f00 = 4.64) + a *contrast* focus ring via the paired -Fg token.
+  it('applies success variant (bg-status-greenBtn + contrast ring)', () => {
+    render(<Button variant="success" data-testid="b">x</Button>);
+    const cls = screen.getByTestId('b').className;
+    expect(cls).toMatch(/bg-status-greenBtn/);
+    expect(cls).toMatch(/text-accent-fg/);
+    expect(cls).toMatch(/focus-visible:ring-status-greenFg/);
+  });
+
+  it('applies warning variant (bg-status-orangeBtn + contrast ring)', () => {
+    render(<Button variant="warning" data-testid="b">x</Button>);
+    const cls = screen.getByTestId('b').className;
+    expect(cls).toMatch(/bg-status-orangeBtn/);
+    expect(cls).toMatch(/text-accent-fg/);
+    expect(cls).toMatch(/focus-visible:ring-status-warningFg/);
+  });
+
   it('respects disabled prop', () => {
     render(<Button disabled data-testid="b">x</Button>);
     expect(screen.getByTestId('b')).toBeDisabled();

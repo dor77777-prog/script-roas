@@ -21,6 +21,8 @@ const buttonVariants = cva(
         secondary:   'bg-glass-2 text-ink border border-glass-edge hover:bg-glass-1 focus-visible:ring-accent',
         ghost:       'text-ink hover:bg-glass-2 focus-visible:ring-accent',
         destructive: 'bg-status-redBtn text-accent-fg hover:bg-[color-mix(in_oklab,var(--status-red-btn)_88%,black)] focus-visible:ring-status-redFg',
+        success:     'bg-status-greenBtn text-accent-fg hover:bg-[color-mix(in_oklab,var(--status-green-btn)_88%,black)] focus-visible:ring-status-greenFg',
+        warning:     'bg-status-orangeBtn text-accent-fg hover:bg-[color-mix(in_oklab,var(--status-orange-btn)_88%,black)] focus-visible:ring-status-warningFg',
         link:        'text-accent underline-offset-4 hover:underline focus-visible:ring-accent',
       },
       size: {
