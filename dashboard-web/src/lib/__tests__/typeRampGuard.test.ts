@@ -140,12 +140,23 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   // unit spans, by-source thead/footnote, HeroStat CAD/sub captions, PnLLine
   // note/CAD/pct/running labels — → text-fs-2xs ramp token; money cells routed
   // through <Money>; removed from allowlist).
-  'ProductCentricView.tsx': 14,
+  // ProductCentricView.tsx — DRAINED to 0 in W6.5 (Horizon Products-pivot
+  // re-skin: all 14 sub-floor literals — error mono detail, the 🔗 multi-mapped
+  // chip, the platform-count chips, the 9 column-header labels, the
+  // pixel↔Shopify delta chip, the status chip — → text-fs-2xs ramp token;
+  // root `<section bg-glass-1>` → <Card>, insets → bg-pill-track, emoji →
+  // lucide (Link2/Medal), money → <Money>; removed from allowlist).
   // ProductPickerModal.tsx — DRAINED to 0 in W4.4 (Horizon product-picker
   // re-skin: the 5 sub-floor literals — header eyebrow, store sub-line, error
   // mono, sales stats, 🔗-chip — → text-fs-2xs ramp token; removed from
   // allowlist).
-  'ProductsTable.tsx': 11,
+  // ProductsTable.tsx — DRAINED to 0 in W6.5 (Horizon Products-table re-skin:
+  // all 11 sub-floor literals — days counter, live badge, 4 bucket-header
+  // metric labels, rank badge, units-per-order sub-line, summary days-count +
+  // run-rate caption — → text-fs-2xs / text-fs-xs ramp tokens; period rail →
+  // SegmentedControl, insets → bg-pill-track, 🏪 → lucide Store, money →
+  // <Money>, breakpoint-hidden ברוטו/נטו unhidden (no-info-loss); removed from
+  // allowlist).
   'SectionIntro.tsx': 1,
   // campaign-drawer/CampaignDrawerAds.tsx — DRAINED to 0 in Wave 4.3 (Horizon
   // ads sub-tab re-skin: the lone ad-set spend/conversions caption literal

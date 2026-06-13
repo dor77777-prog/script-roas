@@ -18,12 +18,14 @@
 
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
-import { AlertTriangle, ChevronDown, ChevronLeft, Info, Package, RefreshCw, Trophy } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronLeft, Info, Link2, Medal, Package, RefreshCw, Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchJsonStrict } from '@/lib/fetchJson';
-import { fmtMoney, fmtMoneyString } from '@/lib/format';
+import { fmtMoneyString } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { Money } from '@/components/ui/Money';
 import { TableBase } from '@/components/ui/TableBase';
 import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
@@ -404,7 +406,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
 
   if (isAllStores) {
     return (
-      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
+      <Card>
         <Heading level="section" className="inline-flex items-center gap-2 mb-1.5">
           <Package size={16} className="text-ink-secondary" />
           מוצרים → קמפיינים
@@ -413,7 +415,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
           בחר חנות ספציפית בפילטר העליון כדי לראות את הפיבוט. (מיפויים הם לפי
           חנות; ב-"All" אין דרך לאחד.)
         </div>
-      </section>
+      </Card>
     );
   }
 
@@ -423,7 +425,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
   if (campaignsError || productsError) {
     const err = campaignsError ?? productsError;
     return (
-      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
+      <Card>
         <Heading level="section" className="inline-flex items-center gap-2 mb-2">
           <Package size={16} className="text-ink-secondary" />
           מוצרים → קמפיינים
@@ -444,7 +446,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
                 </code>{' '}
                 נכשלה. זה לא אומר שאין מיפויים — זה אומר שהשרת לא ענה. נסה לרענן.
               </div>
-              <div className="text-[10px] opacity-60 mt-1 font-mono">
+              <div className="text-fs-2xs opacity-60 mt-1 font-mono">
                 {err instanceof Error ? err.message : String(err)}
               </div>
               <Button
@@ -462,21 +464,21 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
             </div>
           </div>
         </div>
-      </section>
+      </Card>
     );
   }
 
   if (!campaignsData || !productsData) {
     return (
-      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
+      <Card>
         <div className="text-sm text-ink-muted">טוען…</div>
-      </section>
+      </Card>
     );
   }
 
   if (allRows.length === 0) {
     return (
-      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
+      <Card>
         <Heading level="section" className="inline-flex items-center gap-2 mb-1.5">
           <Package size={16} className="text-ink-secondary" />
           מוצרים → קמפיינים
@@ -484,12 +486,12 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
         <div className="text-sm text-ink-muted">
           אין מיפויים פעילים. ברגע שתוסיף מיפוי דרך מגירת הקמפיין, הוא יופיע כאן.
         </div>
-      </section>
+      </Card>
     );
   }
 
   return (
-    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
+    <Card>
       <div className="flex items-center justify-between gap-3 mb-3">
         <Heading level="section" className="inline-flex items-center gap-2">
           <Package size={16} className="text-ink-secondary" />
@@ -527,7 +529,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
           ))}
         </ul>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -563,22 +565,23 @@ function ProductRow({
             <div className="text-sm font-semibold text-ink truncate">
               {row.productTitle}
               {row.isMultiMapped && (
-                <span className="inline-block text-[10px] font-bold tracking-wider align-middle bg-status-warningBg text-status-warningFg px-1.5 py-0.5 rounded ms-2">
-                  🔗 {row.members.length} קמפיינים
+                <span className="inline-flex items-center gap-1 text-fs-2xs font-bold tracking-wider align-middle bg-status-warningBg text-status-warningFg px-1.5 py-0.5 rounded ms-2">
+                  <Link2 size={11} aria-hidden="true" />
+                  {row.members.length} קמפיינים
                 </span>
               )}
             </div>
           </HelpTooltip>
           <div className="text-[11px] text-ink-muted tabular-nums">
-            הוצאת קבוצה: {fmtMoney(row.totalCohortSpend)} · הכנסות נטו:{' '}
-            {fmtMoney(row.totalNetRevenue)} · ROAS משוקלל:{' '}
-            <strong className="text-ink-secondary">{fmtRoas(row.blendedRoas)}</strong>
+            הוצאת קבוצה: <Money value={row.totalCohortSpend} /> · הכנסות נטו:{' '}
+            <Money value={row.totalNetRevenue} /> · ROAS משוקלל:{' '}
+            <strong className="text-ink-secondary"><bdi dir="ltr">{fmtRoas(row.blendedRoas)}</bdi></strong>
           </div>
         </div>
         {row.byPlatform.length > 0 && (
-          <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-ink-muted shrink-0">
+          <div className="hidden sm:flex items-center gap-1.5 text-fs-2xs text-ink-muted shrink-0">
             {row.byPlatform.map(p => (
-              <span key={p.platform} className="bg-glass-2 px-1.5 py-0.5 rounded">
+              <span key={p.platform} className="bg-pill-track px-1.5 py-0.5 rounded">
                 {p.platform}: {p.members.length}
               </span>
             ))}
@@ -587,7 +590,7 @@ function ProductRow({
       </Button>
 
       {expanded && (
-        <div className="px-3 pb-3 pt-1 space-y-3 bg-glass-2/20 rounded-b-lg">
+        <div className="px-3 pb-3 pt-1 space-y-3 bg-pill-track rounded-b-lg">
           {row.byPlatform.map(platformGroup => (
             <div key={platformGroup.platform}>
               <div className="flex items-center justify-between gap-2 mb-1.5 text-[11px]">
@@ -596,27 +599,27 @@ function ProductRow({
                   {platformGroup.platform} ({platformGroup.members.length})
                 </span>
                 <span className="text-ink-muted tabular-nums">
-                  הוצאת פלטפ.: {fmtMoney(platformGroup.intraSpend)} · הכנסה מוקצית:
-                  {' '}{fmtMoney(platformGroup.intraAllocatedRevenue)}
+                  הוצאת פלטפ.: <Money value={platformGroup.intraSpend} /> · הכנסה מוקצית:
+                  {' '}<Money value={platformGroup.intraAllocatedRevenue} />
                 </span>
               </div>
               <div className="overflow-x-auto -mx-2 sm:mx-0">
               <TableBase className="text-xs" minWidth={480} stickyHeader>
-                <thead className="bg-glass-2/60 text-ink-muted">
+                <thead className="bg-pill-track text-ink-muted">
                   <tr>
-                    <th className="px-2 py-1 text-start font-medium text-[10px]">
+                    <th className="px-2 py-1 text-start font-medium text-fs-2xs">
                       <ColHelp
                         label="קמפיין"
                         align="start"
                         body={
                           <>
-                            שם הקמפיין שמקדם את המוצר הזה בפלטפורמה הזו. אייקון 🥇 = הקמפיין עם
+                            שם הקמפיין שמקדם את המוצר הזה בפלטפורמה הזו. אייקון המדליה = הקמפיין עם
                             ההוצאה הגבוהה ביותר בתוך הקבוצה (cohort) של המוצר.
                           </>
                         }
                       />
                     </th>
-                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                    <th className="px-2 py-1 text-end font-medium text-fs-2xs">
                       <ColHelp
                         label="הוצאה"
                         body={
@@ -627,7 +630,7 @@ function ProductRow({
                         }
                       />
                     </th>
-                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                    <th className="px-2 py-1 text-end font-medium text-fs-2xs">
                       <ColHelp
                         label="חלק (פנים-פלטפ.)"
                         body={
@@ -643,7 +646,7 @@ function ProductRow({
                         }
                       />
                     </th>
-                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                    <th className="px-2 py-1 text-end font-medium text-fs-2xs">
                       <ColHelp
                         label="חלק (כללי)"
                         body={
@@ -659,7 +662,7 @@ function ProductRow({
                         }
                       />
                     </th>
-                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                    <th className="px-2 py-1 text-end font-medium text-fs-2xs">
                       <ColHelp
                         label="הכנסה מוקצית"
                         body={
@@ -676,7 +679,7 @@ function ProductRow({
                         }
                       />
                     </th>
-                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                    <th className="px-2 py-1 text-end font-medium text-fs-2xs">
                       <ColHelp
                         label="הכנסה פלטפ."
                         body={
@@ -690,7 +693,7 @@ function ProductRow({
                         }
                       />
                     </th>
-                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                    <th className="px-2 py-1 text-end font-medium text-fs-2xs">
                       <ColHelp
                         label="ROAS פלטפ."
                         body={
@@ -706,7 +709,7 @@ function ProductRow({
                         }
                       />
                     </th>
-                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                    <th className="px-2 py-1 text-end font-medium text-fs-2xs">
                       <ColHelp
                         label="פער pixel↔Shopify"
                         body={
@@ -730,7 +733,7 @@ function ProductRow({
                         }
                       />
                     </th>
-                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                    <th className="px-2 py-1 text-end font-medium text-fs-2xs">
                       <ColHelp
                         label="סטטוס"
                         body={
@@ -769,27 +772,33 @@ function ProductRow({
                       >
                         <HelpTooltip content={m.campaignName}>
                           <td className="px-2 py-1.5 truncate max-w-[200px]">
-                            {isLeader && '🥇 '}
+                            {isLeader && (
+                              <Medal
+                                size={12}
+                                aria-label="הקמפיין המוביל בקבוצה"
+                                className="inline-block align-middle me-1 text-status-warningFg"
+                              />
+                            )}
                             {m.campaignName}
                           </td>
                         </HelpTooltip>
-                        <td className="px-2 py-1.5 text-end tabular-nums">
-                          {fmtMoney(m.spend)}
+                        <td className="metric-cell px-2 py-1.5 text-end tabular-nums">
+                          <Money value={m.spend} />
                         </td>
                         <td className="px-2 py-1.5 text-end tabular-nums text-ink-muted">
-                          {fmtPct(m.intraPlatformSpendShare)}
+                          <bdi dir="ltr">{fmtPct(m.intraPlatformSpendShare)}</bdi>
                         </td>
                         <td className="px-2 py-1.5 text-end tabular-nums text-ink-muted">
-                          {fmtPct(m.totalSpendShare)}
+                          <bdi dir="ltr">{fmtPct(m.totalSpendShare)}</bdi>
                         </td>
-                        <td className="px-2 py-1.5 text-end tabular-nums">
-                          {fmtMoney(m.allocatedRevenueEstimate)}
+                        <td className="metric-cell px-2 py-1.5 text-end tabular-nums">
+                          <Money value={m.allocatedRevenueEstimate} />
                         </td>
-                        <td className="px-2 py-1.5 text-end tabular-nums text-ink-secondary">
-                          {m.conversionValue > 0 ? fmtMoney(m.conversionValue) : '—'}
+                        <td className="metric-cell px-2 py-1.5 text-end tabular-nums text-ink-secondary">
+                          {m.conversionValue > 0 ? <Money value={m.conversionValue} /> : '—'}
                         </td>
                         <td className="px-2 py-1.5 text-end tabular-nums font-semibold">
-                          {fmtRoas(m.platformRoas)}
+                          <bdi dir="ltr">{fmtRoas(m.platformRoas)}</bdi>
                         </td>
                         <td className="px-2 py-1.5 text-end">
                           {(() => {
@@ -801,7 +810,7 @@ function ProductRow({
                             const chip = (
                               <span
                                 className={cn(
-                                  'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums border cursor-help',
+                                  'inline-flex items-center px-1.5 py-0.5 rounded text-fs-2xs font-semibold tabular-nums border cursor-help',
                                   d.tone === 'good' &&
                                     'bg-status-greenBg text-status-greenFg border-status-green',
                                   d.tone === 'warn' &&
@@ -809,10 +818,10 @@ function ProductRow({
                                   d.tone === 'bad' &&
                                     'bg-status-redBg text-status-redFg border-status-red',
                                   d.tone === 'neutral' &&
-                                    'bg-glass-2 text-ink-muted border-glass-edge',
+                                    'bg-pill-track text-ink-muted border-glass-edge',
                                 )}
                               >
-                                {d.text}
+                                <bdi dir="ltr">{d.text}</bdi>
                               </span>
                             );
                             return (
@@ -827,10 +836,10 @@ function ProductRow({
                         <td className="px-2 py-1.5 text-end">
                           <span
                             className={cn(
-                              'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium border',
+                              'inline-flex items-center px-1.5 py-0.5 rounded text-fs-2xs font-medium border',
                               isActive
                                 ? 'bg-status-greenBg text-status-greenFg border-status-green'
-                                : 'bg-glass-2 text-ink-muted border-glass-edge',
+                                : 'bg-pill-track text-ink-muted border-glass-edge',
                             )}
                           >
                             {isActive ? 'פעיל' : 'כבוי'}

@@ -11,10 +11,10 @@ import {
   Store,
 } from 'lucide-react';
 import { cn, formatDate, formatNumber } from '@/lib/utils';
-import { fmtMoney } from '@/lib/format';
 import { Money } from '@/components/ui/Money';
 import { Button } from '@/components/ui/Button';
 import { NativeSelect } from '@/components/ui/NativeSelect';
+import { SegmentedControl, type SegmentedOption } from '@/components/ui/SegmentedControl';
 import { Stat } from '@/components/ui/Stat';
 import { TableBase } from '@/components/ui/TableBase';
 import { HelpTooltip } from '@/components/ui/Tooltip';
@@ -367,34 +367,28 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
     });
   }
 
+  const periodOptions: SegmentedOption[] = (Object.keys(PERIOD_LABELS) as Period[]).map(p => ({
+    value: p,
+    label: PERIOD_LABELS[p],
+    testId: `products-period-${p}`,
+  }));
+
   const toolbar = (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-glass-2/40 border-b border-glass-edge">
-      {/* Period selector */}
+    <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-pill-track border-b border-glass-edge">
+      {/* Period selector — Horizon re-skin (W6.5): hand-rolled role="tablist"
+          Button row → the shared <SegmentedControl> (RTL-aware roving-tabindex,
+          brand-pill active state). Same setPeriod callback + Period values. */}
       <div className="flex items-center gap-2">
-        <span className="text-[11px] sm:text-xs text-ink-secondary font-medium shrink-0">
+        <span className="text-fs-xs text-ink-secondary font-medium shrink-0">
           תצוגה:
         </span>
-        <div
-          role="tablist"
-          className="inline-flex rounded-lg border border-glass-edge bg-glass-1 overflow-hidden divide-x divide-glass-edge"
-          dir="ltr"
-        >
-          {(Object.keys(PERIOD_LABELS) as Period[]).map(p => (
-            <Button
-              key={p}
-              role="tab"
-              variant={period === p ? 'primary' : 'ghost'}
-              aria-selected={period === p}
-              onClick={() => setPeriod(p)}
-              className={cn(
-                'px-2.5 sm:px-3 py-1.5 h-auto text-[11px] sm:text-xs font-medium min-w-[54px] sm:min-w-[64px] rounded-none',
-                period === p ? '' : 'text-ink-secondary',
-              )}
-            >
-              {PERIOD_LABELS[p]}
-            </Button>
-          ))}
-        </div>
+        <SegmentedControl
+          size="sm"
+          aria-label="תצוגה"
+          options={periodOptions}
+          value={period}
+          onChange={v => setPeriod(v as Period)}
+        />
       </div>
 
       {/* Store filter — independent from global */}
@@ -414,7 +408,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         </NativeSelect>
       </div>
 
-      <span className="text-[10px] sm:text-xs text-ink-muted tabular-nums sm:me-auto">
+      <span className="text-fs-xs text-ink-muted tabular-nums sm:me-auto">
         {summary.days === 1
           ? `יום אחד · ${formatDate(localRange.from)}`
           : `${summary.days} ימים · ${buckets.length} ${period === 'day' ? 'ימים' : 'תקופות'}`}
@@ -497,39 +491,43 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                     </span>
                     {isLive && (
                       <HelpTooltip content="עד לרגע זה - יתעדכן עוד עד חצות">
-                        <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-status-greenFg bg-status-greenBg px-1.5 py-0.5 rounded">
+                        <span className="inline-flex items-center gap-1 text-fs-2xs font-bold text-status-greenFg bg-status-greenBg px-1.5 py-0.5 rounded">
                           <Radio size={11} /> חי · {nowLabel}
                         </span>
                       </HelpTooltip>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 sm:gap-5 text-xs sm:text-sm tabular-nums">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:gap-x-5 text-xs sm:text-sm tabular-nums">
                     {bucket.hasOrders && (
                       <div>
-                        <span className="text-ink-muted text-[10px] sm:text-xs me-1">הזמנות</span>
+                        <span className="text-ink-muted text-fs-xs me-1">הזמנות</span>
                         <span className="font-semibold text-ink">
                           {formatNumber(bucket.totalOrders, 0)}
                         </span>
                       </div>
                     )}
                     <div>
-                      <span className="text-ink-muted text-[10px] sm:text-xs me-1">יחידות</span>
+                      <span className="text-ink-muted text-fs-xs me-1">יחידות</span>
                       <span className="font-semibold text-ink">
                         {formatNumber(bucket.totalUnits, 0)}
                       </span>
                     </div>
-                    <div className="hidden sm:block">
-                      <span className="text-ink-muted text-[10px] sm:text-xs me-1">ברוטו</span>
+                    {/* W6.5 — no-info-loss: was `hidden sm:block`, which dropped
+                        the bucket-total ברוטו on phones. Always shown now (the
+                        row wraps instead of hiding the figure). */}
+                    <div className="metric-cell">
+                      <span className="text-ink-muted text-fs-xs me-1">ברוטו</span>
                       <span className="font-semibold text-ink">
-                        {fmtMoney(bucket.totalRevenue)}
+                        <Money value={bucket.totalRevenue} />
                       </span>
                     </div>
                     {bucket.hasNet && bucket.totalNetRevenue !== null && (
                       <HelpTooltip content="הכנסה אחרי הנחות והחזרים">
-                        <div className="hidden md:block">
-                          <span className="text-ink-muted text-[10px] sm:text-xs me-1">נטו</span>
+                        {/* W6.5 — was `hidden md:block` (info-loss < md). Always shown. */}
+                        <div className="metric-cell">
+                          <span className="text-ink-muted text-fs-xs me-1">נטו</span>
                           <span className="font-semibold text-status-greenFg">
-                            {fmtMoney(bucket.totalNetRevenue)}
+                            <Money value={bucket.totalNetRevenue} />
                           </span>
                         </div>
                       </HelpTooltip>
@@ -553,7 +551,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                   <div className="overflow-auto max-h-[70vh]">
                     <TableBase className="text-xs sm:text-sm" minWidth={680} stickyHeader>
                       <thead>
-                        <tr className="text-ink-secondary border-y border-glass-edge bg-glass-2/40">
+                        <tr className="text-ink-secondary border-y border-glass-edge bg-pill-track">
                           <th className="px-4 sm:px-5 py-2 text-start font-medium">מוצר</th>
                           {bucket.hasOrders && (
                             <th className="px-3 py-2 text-end font-medium w-[80px]">
@@ -594,11 +592,11 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                           return (
                             <tr
                               key={`${bucket.key}-${p.productId}-${i}`}
-                              className="border-b border-glass-edge/60 hover:bg-glass-2/40"
+                              className="border-b border-glass-edge/60 hover:bg-pill-track"
                             >
                               <td className="px-4 sm:px-5 py-2 text-ink">
                                 <div className="flex items-center gap-2">
-                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-glass-2 text-[10px] font-bold text-ink-secondary tabular-nums shrink-0">
+                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-pill-track text-fs-2xs font-bold text-ink-secondary tabular-nums shrink-0">
                                     {i + 1}
                                   </span>
                                   <span className="truncate">{p.productTitle}</span>
@@ -611,8 +609,8 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                   </span>
                                   {upo !== null && upo > 1.05 && (
                                     <HelpTooltip content={`ממוצע ${upo.toFixed(2)} יחידות להזמנה`}>
-                                      <span className="block text-[9px] sm:text-[10px] text-ink-muted leading-tight">
-                                        ×{upo.toFixed(1)}
+                                      <span className="block text-fs-2xs text-ink-muted leading-tight">
+                                        <bdi dir="ltr">×{upo.toFixed(1)}</bdi>
                                       </span>
                                     </HelpTooltip>
                                   )}
@@ -665,7 +663,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                               margin < 0.5 && 'text-status-redFg',
                                             )}
                                           >
-                                            {pctStr}
+                                            <bdi dir="ltr">{pctStr}</bdi>
                                           </span>
                                         </HelpTooltip>
                                       );
@@ -676,7 +674,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                 </td>
                               )}
                               <td className="px-3 sm:px-5 py-2 text-end tabular-nums text-ink-muted">
-                                {(pct * 100).toFixed(1)}%
+                                <bdi dir="ltr">{(pct * 100).toFixed(1)}%</bdi>
                               </td>
                             </tr>
                           );
@@ -688,7 +686,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
 
                 {/* Show more / show less */}
                 {shouldCollapse && (
-                  <div className="px-4 sm:px-5 py-2 bg-glass-2/30 border-t border-glass-edge/60">
+                  <div className="px-4 sm:px-5 py-2 bg-pill-track border-t border-glass-edge/60">
                     <Button
                       variant="ghost"
                       onClick={() => toggle(bucket.key)}
@@ -756,14 +754,15 @@ function SummaryCard({
     <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-accent-bg to-glass-2 border-b border-glass-edge">
       <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-base sm:text-lg font-bold text-ink truncate">
-            🏪 {storeLabel}
+          <span className="inline-flex items-center gap-1.5 text-base sm:text-lg font-bold text-ink truncate">
+            <Store size={18} aria-hidden="true" className="text-ink-secondary shrink-0" />
+            {storeLabel}
           </span>
           <span className="text-xs sm:text-sm text-ink-muted tabular-nums">·</span>
           <span className="text-xs sm:text-sm text-ink-secondary tabular-nums">
             {dateLabel}
           </span>
-          <span className="text-[10px] sm:text-xs text-ink-muted">({summary.days} ימים)</span>
+          <span className="text-fs-xs text-ink-muted">({summary.days} ימים)</span>
         </div>
       </div>
 
@@ -773,10 +772,10 @@ function SummaryCard({
           value={summary.orders > 0 ? formatNumber(summary.orders, 0) : '—'}
         />
         <Stat label="יחידות" value={formatNumber(summary.units, 0)} accent="attention" />
-        <Stat label="ברוטו" value={fmtMoney(summary.gross)} />
+        <Stat label="ברוטו" value={<Money value={summary.gross} />} />
         <Stat
           label="נטו"
-          value={summary.net !== null ? fmtMoney(summary.net) : '—'}
+          value={summary.net !== null ? <Money value={summary.net} /> : '—'}
           // 2026-06-09 (Task 8): neutral — was 'positive' (green) whenever net <
           // gross, i.e. on ANY haircut. The subtitle already discloses the
           // discount/refund %; the value itself shouldn't read as "good".
@@ -795,7 +794,7 @@ function SummaryCard({
       </div>
 
       {summary.days > 1 && (
-        <div className="mt-3 pt-3 border-t border-glass-edge/60 flex items-center justify-between gap-3 flex-wrap text-[10px] sm:text-xs text-ink-muted tabular-nums">
+        <div className="mt-3 pt-3 border-t border-glass-edge/60 flex items-center justify-between gap-3 flex-wrap text-fs-xs text-ink-muted tabular-nums">
           <span>
             ממוצע ליום:
             <span className="text-ink-secondary font-medium ms-1">
@@ -803,7 +802,7 @@ function SummaryCard({
             </span>
             יחידות ·
             <span className="text-ink-secondary font-medium ms-1">
-              {fmtMoney(summary.avgGrossPerDay)}
+              <Money value={summary.avgGrossPerDay} />
             </span>
             ברוטו
           </span>

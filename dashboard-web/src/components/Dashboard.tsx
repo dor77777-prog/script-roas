@@ -14,7 +14,6 @@ import {
 import type { DashboardData, Filters as F } from '@/lib/types';
 import { computePresetRange, previousRange, resolveCompare } from '@/lib/presets';
 import { aggregate, aggregateByStore, dailySeries, filterRows } from '@/lib/analytics';
-import { cn } from '@/lib/utils';
 import { Filters } from './Filters';
 import { DetailTable } from './DetailTable';
 import { ProductsTable } from './ProductsTable';
@@ -52,7 +51,7 @@ import { fetchJson, fetchJsonOrNull, fetchJsonStrict } from '@/lib/fetchJson';
 import { useAutoRefresh } from '@/lib/hooks/useAutoRefresh';
 import { CogsSettings } from '@/components/CogsSettings';
 import { SalarySettings } from '@/components/SalarySettings';
-import { Button } from '@/components/ui/Button';
+import { SegmentedControl, type SegmentedOption } from '@/components/ui/SegmentedControl';
 import { AnalysisTrendsTab } from './AnalysisTrendsTab';
 import { AnalysisArchiveTab } from './AnalysisArchiveTab';
 import { GoalTracker } from './GoalTracker';
@@ -1917,35 +1916,21 @@ function ProductsTab({
       {/* Show global filter too so user knows what date range is active */}
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
 
-      {/* Sub-tab segmented control — same visual pattern as ProductsTable's
-          period switcher so it feels native to the tab. dir="ltr" on the
-          rail keeps the divide-x borders consistent under RTL. */}
+      {/* Sub-tab segmented control — Horizon re-skin (W6.5): hand-rolled
+          role="tablist" Button row → the shared <SegmentedControl> primitive
+          (RTL-aware roving-tabindex, brand-pill active state). Same setSubTab
+          callback + ProductsSubTab values; centered as before. */}
       <div className="flex justify-center">
-        <div
-          role="tablist"
+        <SegmentedControl
           aria-label="תצוגות בטאב מוצרים"
-          className="inline-flex rounded-lg border border-glass-edge bg-glass-1 overflow-hidden divide-x divide-glass-edge"
-          dir="ltr"
-        >
-          {PRODUCTS_SUBTABS.map((t) => (
-            <Button
-              key={t.key}
-              role="tab"
-              variant={subTab === t.key ? 'primary' : 'ghost'}
-              aria-selected={subTab === t.key}
-              onClick={() => setSubTab(t.key)}
-              className={cn(
-                'px-4 sm:px-5 py-2 h-auto text-xs sm:text-sm font-medium min-w-[140px] rounded-none',
-                subTab === t.key
-                  ? ''
-                  : 'text-ink-secondary',
-              )}
-              dir="rtl"
-            >
-              {t.label}
-            </Button>
-          ))}
-        </div>
+          options={PRODUCTS_SUBTABS.map((t): SegmentedOption => ({
+            value: t.key,
+            label: t.label,
+            testId: `products-subtab-${t.key}`,
+          }))}
+          value={subTab}
+          onChange={(v) => setSubTab(v as ProductsSubTab)}
+        />
       </div>
 
       {subTab === 'table' && (
