@@ -18,7 +18,10 @@ import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
  * drop-in:
  *   • skeleton → the `.skeleton` token-shimmer placeholder + `aria-hidden`,
  *     wrapped in an `aria-busy` container (Dashboard.tsx:801,
- *     PaymentMethodsTab.tsx:481-486, CustomerValueTab.tsx:389).
+ *     PaymentMethodsTab.tsx:481-486, CustomerValueTab.tsx:389). The wrapper
+ *     layout is shape-driven: `card` → 4-up responsive grid; `table`/`list` →
+ *     single-column vertical stack of full-width rows (so a loading table/list
+ *     never renders as a grid of stubby bars).
  *   • error → the `role="alert"` red strip
  *     (border-status-red / bg-status-redBg / text-status-redFg) with an
  *     AlertTriangle icon and a "נסה שוב" retry <Button variant="secondary">
@@ -72,10 +75,26 @@ export interface StateBlockProps {
 const SHAPE_PLACEHOLDER: Record<StateBlockShape, string> = {
   // KPI/summary cards — chunky tiles (PaymentMethodsTab.tsx:484 `h-24`).
   card: 'h-24 rounded-xl',
-  // Tabular rows — slim bars (activity tabs `h-12`).
-  table: 'h-12 rounded-lg',
-  // List rows — medium bars.
-  list: 'h-20 rounded-xl',
+  // Tabular rows — slim bars (activity tabs `h-12`), full-width within the column.
+  table: 'h-12 w-full rounded-lg',
+  // List rows — taller bars, full-width within the column.
+  list: 'h-20 w-full rounded-xl',
+};
+
+/**
+ * Per-shape WRAPPER layout. The silhouette must match the surface the skeleton
+ * stands in for: KPI cards live in a 4-up responsive grid, while table/list
+ * surfaces are VERTICAL STACKS of full-width rows (a 4-column grid of stubby
+ * bars would never read as a loading table/list on the Wave 8 rollout —
+ * PaymentMethodsTab / CustomerValueTab tables etc.).
+ */
+const SHAPE_WRAPPER: Record<StateBlockShape, string> = {
+  // 4-up KPI tiles — responsive grid.
+  card: 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4',
+  // Tabular rows — single-column vertical stack of slim bars.
+  table: 'flex flex-col gap-2',
+  // List rows — single-column vertical stack of taller rows.
+  list: 'flex flex-col gap-3',
 };
 
 export function StateBlock({
@@ -103,7 +122,7 @@ export function StateBlock({
       >
         {/* sr-only loading label — never leaked into the placeholders. */}
         {message ? <span className="sr-only">{message}</span> : null}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div data-testid="state-skeleton-wrapper" className={SHAPE_WRAPPER[shape]}>
           {Array.from({ length: count }).map((_, i) => (
             <div
               key={i}

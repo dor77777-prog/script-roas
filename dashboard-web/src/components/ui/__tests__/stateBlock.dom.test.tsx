@@ -106,6 +106,57 @@ describe('StateBlock — skeleton mode', () => {
     const first = block.querySelector('.skeleton') as HTMLElement;
     expect(first.className).not.toContain('animate-shimmer');
   });
+
+  it('renders a 4-up responsive GRID wrapper for shape="card" (default)', () => {
+    render(<StateBlock mode="skeleton" rows={4} />);
+    const wrapper = screen.getByTestId('state-skeleton-wrapper');
+    // card → responsive grid (matches the 4-up KPI tile surface).
+    expect(wrapper.className).toContain('grid');
+    expect(wrapper.className).toContain('lg:grid-cols-4');
+    expect(wrapper.className).not.toContain('flex-col');
+  });
+
+  it('renders a single-column vertical STACK wrapper for shape="table" (NOT a grid)', () => {
+    render(<StateBlock mode="skeleton" rows={4} shape="table" />);
+    const wrapper = screen.getByTestId('state-skeleton-wrapper');
+    // table → flex-col vertical stack, never a multi-column grid.
+    expect(wrapper.className).toContain('flex-col');
+    expect(wrapper.className).not.toContain('grid');
+    expect(wrapper.className).not.toContain('grid-cols');
+    // slim full-width bars within the column.
+    const first = screen
+      .getByTestId('state-skeleton')
+      .querySelector('.skeleton') as HTMLElement;
+    expect(first.className).toContain('w-full');
+    expect(first.className).toContain('h-12');
+  });
+
+  it('renders a single-column vertical STACK wrapper for shape="list" (NOT a grid)', () => {
+    render(<StateBlock mode="skeleton" rows={4} shape="list" />);
+    const wrapper = screen.getByTestId('state-skeleton-wrapper');
+    // list → flex-col vertical stack of taller full-width rows.
+    expect(wrapper.className).toContain('flex-col');
+    expect(wrapper.className).not.toContain('grid');
+    expect(wrapper.className).not.toContain('grid-cols');
+    const first = screen
+      .getByTestId('state-skeleton')
+      .querySelector('.skeleton') as HTMLElement;
+    expect(first.className).toContain('w-full');
+    expect(first.className).toContain('h-20');
+  });
+
+  it('keeps aria-busy / aria-hidden / no-text-leak invariants across all shapes', () => {
+    for (const shape of ['card', 'table', 'list'] as const) {
+      render(<StateBlock mode="skeleton" rows={3} shape={shape} message="loading" />);
+      const block = screen.getByTestId('state-skeleton');
+      expect(block.getAttribute('aria-busy')).toBe('true');
+      block.querySelectorAll('.skeleton').forEach((el) => {
+        expect(el.getAttribute('aria-hidden')).toBe('true');
+        expect(el.textContent).toBe('');
+      });
+      cleanup();
+    }
+  });
 });
 
 describe('StateBlock — error mode', () => {
