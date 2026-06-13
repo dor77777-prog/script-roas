@@ -37,11 +37,22 @@ describe('Sidebar — hover state must differ from active state', () => {
     expect(cls).not.toMatch(/\bhover:bg-glass-2\b/);
   });
 
-  it('active nav item carries a 1-px ring for depth (visually distinct from hover)', () => {
+  it('active nav item carries the brand-500 vertical indicator (visually distinct from hover)', async () => {
+    // reskin-w2 Horizon recipe: the active item is signalled by a brand-500
+    // vertical indicator bar beside it (mockup `.sb-ind`) + the accent wash +
+    // bold text — replacing the old 1px ring. The indicator only renders on the
+    // EXPANDED rail (not the collapsed icon-rail), so pre-pin before render.
+    window.localStorage.setItem('sidebar:pinned', 'true');
     renderSidebar();
-    // Both rails render — grab the first Home button (desktop rail).
-    const active = screen.getAllByRole('tab', { name: /בית/ })[0];
-    expect(active.className).toMatch(/ring-1/);
+    const desktop = screen.getByTestId('desktop-sidebar');
+    await waitFor(() => {
+      expect(desktop.getAttribute('data-expanded')).toBe('true');
+    });
+    const active = within(desktop).getByRole('tab', { name: 'בית' });
+    const indicator = active.querySelector('[data-testid="sidebar-active-indicator"]');
+    expect(indicator).not.toBeNull();
+    // Token-driven (brand accent var), not a raw colour.
+    expect(indicator!.className).toContain('bg-[var(--accent)]');
   });
 });
 

@@ -4,14 +4,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Home, Zap, Users, Receipt, TrendingUp, Megaphone, Package, Table, LayoutGrid,
-  CreditCard, Cog, Sun, Moon, Monitor, Pin, PinOff, X,
+  CreditCard, Cog, Sun, Moon, Monitor, Pin, PinOff, Target,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from './ThemeProvider';
 import { Button } from '@/components/ui/Button';
 import { LogoutButton } from '@/components/LogoutButton';
 import { HelpTooltip } from '@/components/ui/Tooltip';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/Sheet';
 import { useSidebarPin } from '@/lib/hooks/useSidebarPin';
+import { useDrawerEsc } from '@/lib/drawerStack';
 import type { TabKey } from '@/lib/urlState';
 
 type NavItem = {
@@ -36,7 +38,7 @@ const NAV: NavItem[] = [
   { key: 'pnl',       label: 'P&L',                icon: <Receipt size={16} />,     slot: 5 },
   { key: 'trends',    label: 'מגמות',              icon: <TrendingUp size={16} />,  slot: 6 },
   { key: 'campaigns', label: 'קמפיינים',           icon: <Megaphone size={16} />,   slot: 7 },
-  { key: 'products',  label: 'מוצרים',             icon: <Package size={16} />,     slot: 8 },
+  { key: 'products',  label: 'מוצרים',             icon: <Package size={16} />,      slot: 8 },
   // 'תשלומים' (Payments) — per-month split of sales by payment gateway
   // (credit / PayPal / other). Sits right AFTER 'מוצרים' (its own room to grow,
   // e.g. real per-gateway processing fees later); 'פירוט' shifts down a slot.
@@ -87,6 +89,65 @@ function RailTooltip({
 }
 
 /**
+ * Bottom goal-entry card (Horizon recipe — mockup `.band-green` slab pinned at
+ * the rail foot). Uses the `band="green"` glass treatment via raw data-band so
+ * we get the green gradient + guaranteed-AA on-band white text/ink recipe from
+ * globals.css (`.glass[data-band="green"]`), token-only.
+ *
+ * It is a NAVIGATIONAL entry point — the live, editable monthly-goal pacing
+ * widget (GoalTracker) lives on the Home tab and owns the actual revenue ÷
+ * target math (it needs DashboardData, which the standalone Sidebar doesn't
+ * receive). Tapping the card jumps to Home where the real tracker renders, so
+ * no information is lost; we never fabricate a live percentage here.
+ *
+ * Hidden on the collapsed icon-rail (no room for the slab); shown on the
+ * expanded desktop rail + the mobile drawer.
+ */
+function SidebarGoalCard({
+  monthLabel,
+  onActivate,
+}: {
+  monthLabel: string;
+  onActivate: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      onClick={onActivate}
+      data-testid="sidebar-goal-card"
+      className={cn(
+        'glass w-full h-auto cursor-pointer rounded-[var(--radius-card)] p-4',
+        // Override the ghost variant defaults: full-card block layout (not the
+        // centered inline-flex row) + the band card surface. `block text-start`
+        // wins over the base inline-flex/justify-center via twMerge.
+        'block text-start',
+        // The band recipe applies on-band colours only to specific child
+        // classes, so set the guaranteed-AA white on-band foreground explicitly
+        // on the whole card (token-driven; --on-band-green is white in both
+        // themes and clears AA on the deep green slab). Drop the ghost's
+        // hover:bg-glass-2 (would wash the green) in favour of a brightness lift.
+        'text-[var(--on-band-green)] hover:bg-transparent',
+        'transition-[filter,transform] duration-base hover:brightness-105 active:scale-[0.99]',
+        'focus-visible:ring-accent',
+      )}
+      data-band="green"
+      data-band-strength="strong"
+      data-mounted="true"
+      aria-label={`יעד חודשי · ${monthLabel} — פתח את מעקב היעד`}
+    >
+      <span className="flex items-center gap-2">
+        <Target size={14} aria-hidden />
+        <span className="text-xs font-bold opacity-90">יעד חודשי · {monthLabel}</span>
+      </span>
+      <span className="mt-1.5 block text-sm font-semibold leading-tight">
+        צפה ביעד החודשי ובקצב
+      </span>
+    </Button>
+  );
+}
+
+/**
  * Renders the full nav body (brand + tabs + footer controls). Shared between
  * the desktop right-rail (`md:` and up) and the mobile off-canvas drawer
  * (below `md:`). The `collapsed` mode only applies on desktop — on mobile
@@ -99,8 +160,8 @@ function SidebarBody({
   pinned,
   onTogglePin,
   onItemClick,
-  onClose,
   variant,
+  monthLabel,
 }: {
   activeTab: TabKey;
   onTabChange: (key: TabKey) => void;
@@ -112,76 +173,65 @@ function SidebarBody({
   onTogglePin: () => void;
   /** Called after a nav item or operator link is tapped (used by mobile to close drawer). */
   onItemClick?: () => void;
-  /** Mobile-only: explicit close-X handler. Renders the X button when set. */
-  onClose?: () => void;
   /** 'desktop' = honours collapsed; 'mobile' = always expanded, no collapse toggle. */
   variant: 'desktop' | 'mobile';
+  /** Hebrew current-month label for the bottom goal card. */
+  monthLabel: string;
 }) {
   const { choice, setChoice } = useTheme();
   const isCollapsed = variant === 'desktop' && collapsed;
   const showTooltips = isCollapsed;
-  // Desktop rail is a DARK surface in BOTH themes (sidebar tokens), so its
-  // inner items render light-on-dark via the sidebar fg tokens + faint
-  // white-alpha hovers. The mobile drawer sits on bg-canvas, so it keeps the
-  // normal ink/glass classes that read correctly on the themed canvas.
-  const isDesktop = variant === 'desktop';
+  // Horizon rail is a SOLID surface — white in light, navy-800 in dark — in
+  // BOTH the desktop rail and the mobile drawer (both paint --sidebar). Inner
+  // items render through the sidebar fg tokens (dark-navy ink on white / light
+  // ink on navy) so they always clear AA against the rail surface in either
+  // theme.
   // Default (resting) text colour for an inner item.
-  const railText = isDesktop ? 'text-[var(--sidebar-fg)]' : 'text-ink-muted';
-  // Hover treatment — brighten text + faint white-alpha fill on dark rail.
-  const railHover = isDesktop
-    ? 'hover:text-[var(--sidebar-fg-active)] hover:bg-[color-mix(in_oklab,var(--sidebar-fg)_8%,transparent)]'
-    : 'hover:text-ink hover:bg-glass-2';
-  // Active / selected treatment — accent tint + active fg on dark rail.
-  // The desktop branch MUST declare its own hover:bg/hover:text: the ghost
+  const railText = 'text-[var(--sidebar-fg)]';
+  // Hover treatment — brighten text to the active fg + a faint tonal fill that
+  // works on both the white (light) and navy-800 (dark) rail.
+  const railHover =
+    'hover:text-[var(--sidebar-fg-active)] hover:bg-[color-mix(in_oklab,var(--sidebar-fg)_8%,transparent)]';
+  // Active / selected treatment — bolder active fg + a faint accent wash.
+  // The active branch MUST declare its own hover:bg/hover:text: the ghost
   // Button variant ships `hover:bg-glass-2`, and on the active item (which
-  // doesn't get railHover) that hover fill would otherwise win. In LIGHT mode
-  // --glass-2 is a near-white surface, so the white active text (--sidebar-fg
-  // -active) gets swallowed on hover. Declaring an accent-based hover:bg here
-  // lets tailwind-merge drop the ghost's glass-2 hover and keeps white-on-dark.
-  const railActive = isDesktop
-    ? 'bg-[color-mix(in_oklab,var(--accent)_22%,transparent)] text-[var(--sidebar-fg-active)] hover:bg-[color-mix(in_oklab,var(--accent)_30%,transparent)] hover:text-[var(--sidebar-fg-active)]'
-    : 'bg-glass-2 text-ink hover:bg-glass-2 hover:text-ink';
+  // doesn't get railHover) that hover fill would otherwise win — on the white
+  // light rail --glass-2 is near-white and would swallow the active ink.
+  // Declaring an accent-based hover:bg here lets tailwind-merge drop the
+  // ghost's glass-2 hover and keeps the active treatment intact.
+  const railActive =
+    'bg-[color-mix(in_oklab,var(--accent)_22%,transparent)] text-[var(--sidebar-fg-active)] hover:bg-[color-mix(in_oklab,var(--accent)_30%,transparent)] hover:text-[var(--sidebar-fg-active)]';
 
   return (
     <>
-      {/* Brand + (mobile) close button */}
+      {/* Brand block — wordmark + store list (mockup recipe). */}
       <div
         className={cn(
-          'px-3 py-3 border-b flex items-center gap-2',
-          isDesktop ? 'border-[color-mix(in_oklab,var(--sidebar-fg)_12%,transparent)]' : 'border-glass-edge',
+          'border-b border-[color-mix(in_oklab,var(--sidebar-fg)_12%,transparent)]',
+          isCollapsed ? 'px-3 py-4' : 'px-5 py-5',
         )}
       >
-        {/* Logo keeps the violet gradient in both themes (mockup .sb-logo). */}
-        <div
-          className="h-7 w-7 rounded-md shrink-0 bg-gradient-to-br from-[var(--sidebar-logo-1)] to-[var(--sidebar-logo-2)]"
-          aria-hidden
-        />
+        <div className={cn('flex items-center gap-2', isCollapsed && 'justify-center')}>
+          {/* Logo keeps the violet brand gradient in both themes (mockup .sb-logo). */}
+          <div
+            className="h-7 w-7 rounded-md shrink-0 bg-gradient-to-br from-[var(--sidebar-logo-1)] to-[var(--sidebar-logo-2)]"
+            aria-hidden
+          />
+          {!isCollapsed && (
+            <span className="text-base font-black tracking-tight truncate text-[var(--sidebar-fg-active)]">
+              ROAS <span className="font-medium">TRACKER</span>
+            </span>
+          )}
+        </div>
         {!isCollapsed && (
-          <span
-            className={cn(
-              'text-sm font-semibold truncate flex-1',
-              isDesktop && 'text-[var(--sidebar-fg-active)]',
-            )}
-          >
-            דשבורד ROAS
-          </span>
-        )}
-        {variant === 'mobile' && onClose && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            aria-label="סגור תפריט"
-            className="-me-1 shrink-0"
-          >
-            <X size={20} />
-          </Button>
+          <div className="mt-1.5 text-[11px] font-medium truncate text-[var(--sidebar-fg)]">
+            uzoshop · zolplus · usmile
+          </div>
         )}
       </div>
 
       {/* Nav items */}
-      <nav className="flex-1 px-2 py-3 space-y-0.5" role="tablist">
+      <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto" role="tablist">
         {NAV.map(item => {
           const isActive = item.key === activeTab;
           const button = (
@@ -198,15 +248,28 @@ function SidebarBody({
                 onItemClick?.();
               }}
               className={cn(
-                'flex w-full rounded-md text-sm h-auto',
+                // `relative` anchors the brand-500 vertical active indicator.
+                'relative flex w-full cursor-pointer rounded-lg text-sm h-auto',
                 isCollapsed
                   ? 'justify-center px-0 py-2'
-                  : 'justify-start gap-3 px-2.5 py-2',
+                  : 'justify-start gap-3 px-3 py-2.5',
                 isActive
-                  ? cn(railActive, 'font-medium ring-1 ring-glass-edge')
-                  : cn(railText, railHover),
+                  ? cn(railActive, 'font-bold')
+                  : cn(railText, railHover, 'font-medium'),
               )}
             >
+              {/* Brand-500 vertical indicator beside the active item (mockup
+                  `.sb-ind`). Sits on the inline-start edge (right in RTL),
+                  rounded, ~9px tall. Token-driven via the accent var. Only the
+                  active item renders it; hidden on the collapsed icon-rail
+                  where the accent wash already signals selection. */}
+              {isActive && !isCollapsed && (
+                <span
+                  aria-hidden
+                  data-testid="sidebar-active-indicator"
+                  className="absolute inline-start-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-full bg-[var(--accent)]"
+                />
+              )}
               <span className="shrink-0">{item.icon}</span>
               {/* min-w-0 + truncate: the longest label ("טבלאות אופטימיזציה")
                   fits the expanded rail today, but this gracefully ellipsizes
@@ -229,23 +292,32 @@ function SidebarBody({
         })}
       </nav>
 
+      {/* Bottom goal card (Horizon green slab) — expanded states only. */}
+      {!isCollapsed && (
+        <div className="px-4 pb-2 pt-1">
+          <SidebarGoalCard
+            monthLabel={monthLabel}
+            onActivate={() => {
+              // The live GoalTracker lives on Home; jump there.
+              onTabChange('home');
+              onItemClick?.();
+            }}
+          />
+        </div>
+      )}
+
       {/* Footer: operator + theme toggle + pin */}
-      <div
-        className={cn(
-          'border-t px-2 py-3 space-y-1',
-          isDesktop ? 'border-[color-mix(in_oklab,var(--sidebar-fg)_12%,transparent)]' : 'border-glass-edge',
-        )}
-      >
+      <div className="border-t border-[color-mix(in_oklab,var(--sidebar-fg)_12%,transparent)] px-2 py-3 space-y-1">
         <RailTooltip show={showTooltips} label="ניהול">
           <Link
             href="/operator"
             onClick={() => onItemClick?.()}
             aria-label={isCollapsed ? 'ניהול' : undefined}
             className={cn(
-              'flex w-full items-center rounded-md text-sm',
+              'flex w-full cursor-pointer items-center rounded-lg text-sm',
               isCollapsed
                 ? 'justify-center px-0 py-2'
-                : 'justify-start gap-3 px-2.5 py-2',
+                : 'justify-start gap-3 px-3 py-2.5',
               railText, railHover,
             )}
           >
@@ -300,7 +372,7 @@ function SidebarBody({
             contained ghost primitive (own LogOut icon + Hebrew label); sits
             with the other account/session controls in the footer. Inherits the
             rail's collapse state + sidebar-fg tokens so it renders icon-only on
-            the 72px rail and reads correctly on the dark surface in both themes
+            the 72px rail and reads correctly on the rail surface in both themes
             — matching the operator Link / theme-toggle / pin siblings above. */}
         <RailTooltip show={showTooltips} label="התנתק">
           <LogoutButton collapsed={isCollapsed} railText={railText} railHover={railHover} />
@@ -320,7 +392,7 @@ function SidebarBody({
               onClick={onTogglePin}
               data-testid="sidebar-pin-toggle"
               className={cn(
-                'w-full h-auto p-1.5',
+                'w-full h-auto p-1.5 cursor-pointer',
                 pinned ? railActive : cn(railText, railHover),
               )}
             >
@@ -337,6 +409,15 @@ function SidebarBody({
   );
 }
 
+/** Hebrew label for the current calendar month (e.g. "יוני"). */
+function currentMonthLabelHe(): string {
+  try {
+    return new Intl.DateTimeFormat('he-IL', { month: 'long' }).format(new Date());
+  } catch {
+    return 'החודש';
+  }
+}
+
 /**
  * Desktop sidebar interaction model (Task 5.8 — Q10):
  *
@@ -346,7 +427,10 @@ function SidebarBody({
  *   - Pin button in the footer flips the sticky `sidebar:pinned`
  *     preference (persisted via useSidebarPin → localStorage).
  *   - ⌘\ (Cmd+\ on macOS, Ctrl+\ on Windows/Linux) toggles the pinned
- *     state globally. Same convention as VS Code / Cursor.
+ *     state globally. Same convention as VS Code / Cursor. (FocusMode's
+ *     chrome-dim shortcut moved OFF this chord to ⌘. in reskin-w2 — the two
+ *     used to collide on ⌘\; the pin is the more discoverable affordance so
+ *     it keeps the chord.)
  *
  * Width math: `expanded = pinned || hoverExpanded`. Width transitions at
  * 200ms ease-out via Tailwind's transition-[width] utility — Tailwind's
@@ -376,6 +460,7 @@ export function Sidebar({
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const expanded = pinned || hoverExpanded;
+  const monthLabel = currentMonthLabelHe();
 
   const onMouseEnter = useCallback(() => {
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
@@ -425,23 +510,15 @@ export function Sidebar({
     return () => document.removeEventListener('keydown', onKey);
   }, [togglePin]);
 
-  // Body scroll-lock while the mobile drawer is open. The Sidebar drawer is
-  // hand-rolled (not Radix Dialog), so we don't get Radix's automatic
-  // scroll-lock for free. Without this, tapping the drawer while the
-  // dashboard underneath has scrollable content would let the user scroll
-  // BOTH layers — the page would slide behind the open menu. We toggle
-  // `overflow-hidden` on documentElement (mirrors what Radix does) so it
-  // also works on iOS Safari where body-level overflow can be ignored.
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    if (!isMobileOpen) return;
-    const root = document.documentElement;
-    const prev = root.style.overflow;
-    root.style.overflow = 'hidden';
-    return () => {
-      root.style.overflow = prev;
-    };
-  }, [isMobileOpen]);
+  // Mobile drawer Esc handling — routed through the shared drawer-stack so Esc
+  // addresses only the TOPMOST open drawer (a CampaignDrawer/Modal opened over
+  // the nav won't be collapsed by the same keystroke). The Radix Sheet's own
+  // Esc-dismiss is suppressed below (onEscapeKeyDown preventDefault) and we
+  // delegate closing to this stack, matching the campaign-drawer / store-modal
+  // convention. Scroll-lock + focus-trap now come from Radix for free (the
+  // hand-rolled fixed-overlay div + manual documentElement overflow toggle are
+  // GONE — reskin-w2 "modal/drawer must be Radix" fix).
+  useDrawerEsc(isMobileOpen, onMobileClose);
 
   return (
     <>
@@ -454,10 +531,10 @@ export function Sidebar({
         data-pinned={pinned ? 'true' : 'false'}
         style={{ width: expanded ? 220 : 72 }}
         className={cn(
-          // Mockup keeps a DARK slim rail in BOTH themes — use the sidebar
-          // tokens (theme-independent dark surface) rather than bg-glass-1/text-ink
-          // so the rail never goes dark-on-dark or washes out on light.
-          'sticky top-0 h-screen border-s border-glass-edge bg-[var(--sidebar)] text-[var(--sidebar-fg)]',
+          // Horizon rail — SOLID surface in BOTH themes via the --sidebar token
+          // (white in light, navy-800 in dark). The shadow-sheet drop gives the
+          // rail the mockup's floating-panel lift without a hard border seam.
+          'sticky top-0 h-screen border-s border-glass-edge bg-[var(--sidebar)] text-[var(--sidebar-fg)] shadow-sheet',
           'hidden md:flex flex-col transition-[width] duration-200 ease-out',
         )}
         aria-label="ניווט ראשי"
@@ -469,67 +546,65 @@ export function Sidebar({
           pinned={pinned}
           onTogglePin={togglePin}
           variant="desktop"
+          monthLabel={monthLabel}
         />
       </aside>
 
       {/* ===== Mobile off-canvas drawer (< md) =====
-          Backdrop dims the page and closes the drawer when tapped. The
-          drawer panel slides in from the START side — RIGHT in RTL Hebrew
-          (matches where the hamburger button sits in the header strip;
-          taps reveal the menu from the same edge). Both layers remain
-          mounted so the slide-out animation has something to animate
-          against; pointer-events disable interaction on backdrop while
-          closed so the page underneath stays interactive.
+          Now a Radix Sheet (variant="drawer", side="end") — opens from the
+          inline-end edge (LEFT in RTL Hebrew). Radix gives us a focus trap,
+          scroll-lock, a tokenised overlay scrim, and aria-modal/role=dialog
+          for free — replacing the previous hand-rolled fixed-overlay div +
+          manual documentElement.overflow toggle (which violated the project's
+          "modal/drawer must be Radix" convention — the 2026-06-03
+          ProductPickerModal incident). Esc is delegated to the shared
+          drawer-stack (see useDrawerEsc above); Radix's built-in Esc dismiss
+          is suppressed so nested drawers don't all collapse on one keystroke.
 
-          Slide math: drawer is anchored at `start-0` (right edge in RTL).
-          Tailwind's `translate-x-full` is always `translateX(+100%)` which
-          is rightward — when the drawer is at the right edge, moving it
-          +100% pushes it OFF-screen to the right. So `translate-x-full`
-          = closed (off-screen right), `translate-x-0` = open (right edge).
-          In LTR (English) this would be off-screen left instead — fine,
-          but we're RTL-first here. */}
-      {/* Backdrop — the shared scrim token so the content behind reads as a
-          clearly dimmed layer (not a slightly-tinted bleed-through). The
-          mobile sidebar Sheet is hand-rolled so we don't get Radix's
-          stronger-by-default overlay; the scrim token matches the visual
-          weight of native iOS / Android navigation drawers and flips per
-          theme. */}
-      <div
-        onClick={onMobileClose}
-        aria-hidden={!isMobileOpen}
-        className={cn(
-          'fixed inset-0 bg-scrim backdrop-blur-sm z-40 md:hidden transition-opacity duration-DEFAULT',
-          isMobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
-        )}
-      />
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-label="ניווט ראשי"
-        aria-hidden={!isMobileOpen}
-        className={cn(
-          'fixed inset-y-0 start-0 w-64 max-w-[80vw] z-50 md:hidden',
-          // Solid canvas background (NOT glass-1's 4% alpha) so the drawer
-          // body is fully opaque on phones — operator feedback said the
-          // glass treatment let underlying content bleed through and made
-          // the labels hard to read. Desktop rail keeps the glass look.
-          'bg-canvas-1 text-ink shadow-sheet overflow-y-auto',
-          'border-s border-glass-edge',
-          'flex flex-col transition-transform duration-DEFAULT',
-          isMobileOpen ? 'translate-x-0' : 'translate-x-full',
-        )}
-      >
-        <SidebarBody
-          activeTab={activeTab}
-          onTabChange={onTabChange}
-          collapsed={false}
-          pinned={false}
-          onTogglePin={() => undefined}
-          onItemClick={onMobileClose}
-          onClose={onMobileClose}
-          variant="mobile"
-        />
-      </aside>
+          `md:hidden` keeps the drawer wrapper off the desktop breakpoint, but
+          since it only renders content when `isMobileOpen`, the desktop path is
+          unaffected regardless. */}
+      <Sheet open={isMobileOpen} onOpenChange={(o) => !o && onMobileClose()}>
+        <SheetContent
+          variant="drawer"
+          side="end"
+          dir="rtl"
+          className={cn(
+            // Solid rail surface (NOT the drawer-variant glass gradient) so the
+            // mobile body is fully opaque on phones — operator feedback said the
+            // glass treatment let underlying content bleed through and made the
+            // labels hard to read. Override the gradient with the --sidebar
+            // token + drop the blur. w-64/max-w to match the prior off-canvas.
+            'md:hidden flex flex-col p-0 w-64 max-w-[80vw]',
+            'bg-[var(--sidebar)] [background-image:none] text-[var(--sidebar-fg)]',
+            '[backdrop-filter:none] [-webkit-backdrop-filter:none]',
+          )}
+          aria-label="ניווט ראשי"
+          // The drawer has no descriptive body copy; opt out of Radix's
+          // optional Description requirement so it doesn't dev-warn.
+          aria-describedby={undefined}
+          data-testid="mobile-drawer"
+          // Delegate Esc to the drawer-stack (see useDrawerEsc above) instead
+          // of Radix's own dismiss, so a drawer opened OVER this nav addresses
+          // its own Esc first.
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          {/* Radix requires an accessible name; the brand wordmark is decorative
+              markup, so provide a visually-hidden Title (silences Radix's dev
+              warning + names the dialog for AT). */}
+          <SheetTitle className="sr-only">ניווט ראשי</SheetTitle>
+          <SidebarBody
+            activeTab={activeTab}
+            onTabChange={onTabChange}
+            collapsed={false}
+            pinned={false}
+            onTogglePin={() => undefined}
+            onItemClick={onMobileClose}
+            variant="mobile"
+            monthLabel={monthLabel}
+          />
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

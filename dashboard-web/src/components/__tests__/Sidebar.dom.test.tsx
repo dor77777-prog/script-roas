@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Sidebar } from '../Sidebar';
+import { FocusMode } from '../FocusMode';
 import { ThemeProvider } from '../ThemeProvider';
 
 // Pin the desktop (fine-pointer) branch so the collapsed-rail tooltip path is
@@ -8,6 +9,14 @@ import { ThemeProvider } from '../ThemeProvider';
 // `content=` is a non-string ReactNode (label + ⌘N shortcut), so it is the
 // canonical over-promotion regression for Task 1.4.
 vi.mock('@/lib/hooks/useIsMobile', () => ({ useIsMobile: () => false }));
+
+afterEach(() => {
+  // The sidebar pin persists to localStorage and FocusMode mutates
+  // documentElement — reset both so the shortcut/collision tests start from a
+  // known state and don't leak into each other.
+  try { window.localStorage.clear(); } catch { /* sandboxed localStorage */ }
+  document.documentElement.removeAttribute('data-focus-mode');
+});
 
 function renderSidebar(props: {
   activeTab?: 'home'|'activity'|'customers'|'archive'|'pnl'|'trends'|'campaigns'|'products'|'detail';
@@ -34,14 +43,13 @@ describe('Sidebar', () => {
     // Wave 2: 'לקוחות' (Customer Value) lands at slot 3 (after פעילות).
     const expectedLabels = ['בית', 'פעילות', 'לקוחות', 'טבלאות אופטימיזציה', 'P&L', 'מגמות', 'קמפיינים', 'מוצרים', 'פירוט'];
     for (const label of expectedLabels) {
-      // The Sidebar now renders two copies of the nav body (desktop right-
-      // rail + mobile off-canvas drawer) — both are always in the DOM, the
-      // mobile one hidden via `md:hidden` + `translate-x-full`. So each
-      // label appears twice; `getAllByText` keeps this test resilient to
-      // that without asserting on which rail rendered them.
-      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+      // reskin-w2: the desktop rail renders COLLAPSED by default (icon-only —
+      // the label lives on the tab's aria-label, not as visible text) and the
+      // mobile drawer is now a Radix portal that only mounts when open. So we
+      // query by role+accessible-name, which resolves whether the label is
+      // inline text OR an aria-label — presentation-agnostic.
+      expect(screen.getAllByRole('tab', { name: label }).length).toBeGreaterThan(0);
     }
-    // Operator link likewise appears twice — at least one is enough.
     const operatorLinks = screen.getAllByRole('link', { name: /ניהול/ });
     expect(operatorLinks.length).toBeGreaterThan(0);
     expect(operatorLinks[0]).toHaveAttribute('href', '/operator');
@@ -50,22 +58,22 @@ describe('Sidebar', () => {
   it('fires onTabChange with the correct key when an item is clicked', () => {
     const onTabChange = vi.fn();
     renderSidebar({ onTabChange });
-    // Click the first copy (desktop rail) — both copies wire the same handler.
-    fireEvent.click(screen.getAllByText('קמפיינים')[0]);
+    // Click the desktop rail's collapsed icon-tab via its accessible name.
+    fireEvent.click(screen.getAllByRole('tab', { name: 'קמפיינים' })[0]);
     expect(onTabChange).toHaveBeenCalledWith('campaigns');
   });
 
   it('fires onTabChange("activity") when the פעילות item is clicked', () => {
     const onTabChange = vi.fn();
     renderSidebar({ onTabChange });
-    fireEvent.click(screen.getAllByText('פעילות')[0]);
+    fireEvent.click(screen.getAllByRole('tab', { name: 'פעילות' })[0]);
     expect(onTabChange).toHaveBeenCalledWith('activity');
   });
 
   it('fires onTabChange("customers") when the לקוחות item is clicked', () => {
     const onTabChange = vi.fn();
     renderSidebar({ onTabChange });
-    fireEvent.click(screen.getAllByText('לקוחות')[0]);
+    fireEvent.click(screen.getAllByRole('tab', { name: 'לקוחות' })[0]);
     expect(onTabChange).toHaveBeenCalledWith('customers');
   });
 
@@ -120,11 +128,10 @@ describe('Sidebar', () => {
 
   it('marks the active item with aria-current="page"', () => {
     renderSidebar({ activeTab: 'pnl' });
-    // Both rails mark the active item; assert at least one does.
+    // Query the active tab by role+accessible-name (collapsed rail → aria-label).
     const activeButtons = screen
-      .getAllByText('P&L')
-      .map((el) => el.closest('button'))
-      .filter((b): b is HTMLButtonElement => b !== null && b.getAttribute('aria-current') === 'page');
+      .getAllByRole('tab', { name: 'P&L' })
+      .filter((b) => b.getAttribute('aria-current') === 'page');
     expect(activeButtons.length).toBeGreaterThan(0);
   });
 
@@ -147,5 +154,81 @@ describe('Sidebar', () => {
     expect(cls).not.toContain('hover:bg-glass-2');
     // White active text is preserved on hover (belt-and-suspenders).
     expect(cls).toContain('hover:text-[var(--sidebar-fg-active)]');
+  });
+
+  /**
+   * reskin-w2 shortcut-collision fix: the Sidebar pin AND FocusMode used to
+   * both bind Cmd/Ctrl+\ — two document-level listeners firing on ONE
+   * keypress. The pin keeps ⌘\ (more discoverable); FocusMode moved to ⌘.
+   * These two tests render BOTH components together and assert each chord
+   * drives exactly its own surface, never the other.
+   */
+  it('⌘\\ toggles the sidebar pin WITHOUT triggering focus-mode', () => {
+    const { container } = render(
+      <ThemeProvider>
+        <Sidebar activeTab="home" onTabChange={() => {}} isMobileOpen={false} onMobileClose={() => {}} />
+        <FocusMode />
+      </ThemeProvider>,
+    );
+    const rail = container.querySelector('[data-testid="desktop-sidebar"]')! as HTMLElement;
+    expect(rail.getAttribute('data-pinned')).toBe('false');
+    expect(document.documentElement.getAttribute('data-focus-mode')).not.toBe('on');
+
+    fireEvent.keyDown(document, { key: '\\', metaKey: true });
+
+    // Pin flipped...
+    expect(rail.getAttribute('data-pinned')).toBe('true');
+    // ...and focus-mode did NOT come along for the ride (collision resolved).
+    expect(document.documentElement.getAttribute('data-focus-mode')).not.toBe('on');
+  });
+
+  it('⌘. toggles focus-mode WITHOUT toggling the sidebar pin', () => {
+    const { container } = render(
+      <ThemeProvider>
+        <Sidebar activeTab="home" onTabChange={() => {}} isMobileOpen={false} onMobileClose={() => {}} />
+        <FocusMode />
+      </ThemeProvider>,
+    );
+    const rail = container.querySelector('[data-testid="desktop-sidebar"]')! as HTMLElement;
+    expect(rail.getAttribute('data-pinned')).toBe('false');
+
+    fireEvent.keyDown(document, { key: '.', metaKey: true });
+
+    // Focus-mode flipped on...
+    expect(document.documentElement.getAttribute('data-focus-mode')).toBe('on');
+    // ...and the pin stayed put.
+    expect(rail.getAttribute('data-pinned')).toBe('false');
+  });
+
+  /**
+   * reskin-w2 "modal/drawer must be Radix" fix (2026-06-03 ProductPickerModal
+   * incident guard pattern): the mobile off-canvas drawer used to be a
+   * hand-rolled fixed-overlay <aside>. It now routes through the Radix Sheet
+   * primitive, so when open it must render as a real Radix dialog — role=dialog
+   * + a data-state attribute Radix sets to 'open' — giving us the focus-trap /
+   * scroll-lock / Esc-stack for free.
+   */
+  it('mobile drawer renders as a Radix dialog (role=dialog + data-state) when open', async () => {
+    render(
+      <ThemeProvider>
+        <Sidebar activeTab="home" onTabChange={() => {}} isMobileOpen onMobileClose={() => {}} />
+      </ThemeProvider>,
+    );
+    const drawer = await screen.findByTestId('mobile-drawer');
+    // Radix Dialog content carries role=dialog...
+    expect(drawer).toHaveAttribute('role', 'dialog');
+    // ...and a data-state Radix flips between 'open' / 'closed'.
+    expect(drawer).toHaveAttribute('data-state', 'open');
+    // The nav contents come along (drawer body shares SidebarBody).
+    expect(drawer.querySelectorAll('nav [role="tab"]').length).toBeGreaterThan(0);
+  });
+
+  it('mobile drawer is NOT in the DOM when closed (Radix unmounts the portal)', () => {
+    render(
+      <ThemeProvider>
+        <Sidebar activeTab="home" onTabChange={() => {}} isMobileOpen={false} onMobileClose={() => {}} />
+      </ThemeProvider>,
+    );
+    expect(screen.queryByTestId('mobile-drawer')).toBeNull();
   });
 });
