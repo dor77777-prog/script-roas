@@ -205,8 +205,11 @@ export function Filters({
             </NativeSelect>
           </div>
 
-          {/* Selected range chip — Horizon pill (re-skinned in place) */}
-          <div className="flex items-center gap-2 rounded-full bg-glass-2 px-3 py-1.5 text-xs sm:text-sm whitespace-nowrap">
+          {/* Selected range chip — Horizon inset pill (re-skinned in place).
+           * Uses the canonical inset-well token `bg-pill-track`
+           * (--surface-sunken: lightPrimary light / navy-700 dark), matching
+           * the SegmentedControl rail + CommandPalette search pill. */}
+          <div className="flex items-center gap-2 rounded-full bg-pill-track px-3 py-1.5 text-xs sm:text-sm whitespace-nowrap">
             <Calendar size={13} className="text-ink-muted" aria-hidden="true" />
             <span className="tabular-nums text-ink-secondary">
               {formatDate(filters.range.from)} — {formatDate(filters.range.to)}
@@ -225,7 +228,7 @@ export function Filters({
           >
             <ChevronDown
               size={13}
-              className={cn('transition-transform duration-DEFAULT', showAdvanced && 'rotate-180')}
+              className={cn('transition-transform duration-fast', showAdvanced && 'rotate-180')}
             />
             טווחים נוספים
           </Button>
@@ -415,7 +418,7 @@ function SavedViewsDropdown({
         תצוגות שמורות
         <ChevronDown
           size={13}
-          className={cn('transition-transform duration-DEFAULT', open && 'rotate-180')}
+          className={cn('transition-transform duration-fast', open && 'rotate-180')}
         />
       </Button>
 

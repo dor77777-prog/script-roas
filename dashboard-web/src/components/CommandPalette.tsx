@@ -604,13 +604,15 @@ export function CommandPalette({
           onClick={() => { setOpen(true); setWarmCache(true); }}
           className={cn(
             // Horizon search pill (mockup recipe: rounded-full inset rail +
-            // secondary ink + ⌘K badge). The inset surface uses --glass-2,
-            // mirroring the Filters inset pill rail (light = lightPrimary,
-            // dark = navy-700) so it re-skins per token in both themes. The
-            // ghost variant's hover:bg-glass-2 is overridden to a hover:bg-glass-3
-            // lift so the resting/hover states are distinguishable on the pill.
+            // secondary ink + ⌘K badge). The inset surface uses the canonical
+            // inset-well token `bg-pill-track` (= --surface-sunken: lightPrimary
+            // in light, navy-700 in dark), mirroring the Filters inset chips +
+            // the SegmentedControl rail so the whole inset family re-skins from
+            // ONE token in both themes. The ghost variant's hover:bg-glass-2 is
+            // overridden to a hover:bg-glass-3 lift so the resting/hover states
+            // stay distinguishable on the pill.
             'gap-1.5 sm:gap-2 rounded-pill',
-            'bg-glass-2 hover:bg-glass-3 active:bg-[color:var(--surface-elevated-1)]',
+            'bg-pill-track hover:bg-glass-3 active:bg-[color:var(--surface-elevated-1)]',
             'text-ink-secondary',
             'px-2.5 sm:px-4 py-1.5 sm:py-2 h-auto text-xs sm:text-sm font-medium shrink-0',
           )}
