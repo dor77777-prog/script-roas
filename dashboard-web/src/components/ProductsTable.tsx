@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { SegmentedControl, type SegmentedOption } from '@/components/ui/SegmentedControl';
 import { Stat } from '@/components/ui/Stat';
+import { StateBlock } from '@/components/ui/StateBlock';
 import { TableBase } from '@/components/ui/TableBase';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import type { ProductRow } from '@/lib/products';
@@ -445,8 +446,14 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         </div>
       )}
 
+      {/* Horizon re-skin (W8): the hand-rolled plain-text loader routes through
+          the canonical <StateBlock> table skeleton. Same `isLoading` trigger;
+          the sr-only message preserves the verbatim "טוען נתוני מוצרים…"
+          announcement (the visible bars carry aria-busy + aria-hidden). */}
       {isLoading && (
-        <div className="p-8 text-center text-ink-muted text-sm">טוען נתוני מוצרים…</div>
+        <div className="p-4">
+          <StateBlock mode="skeleton" shape="table" rows={8} message="טוען נתוני מוצרים…" />
+        </div>
       )}
 
       {data && !error && !data.error && buckets.length === 0 && (

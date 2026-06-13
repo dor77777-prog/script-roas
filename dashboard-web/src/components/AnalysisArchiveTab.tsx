@@ -11,6 +11,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { SectionIntro } from '@/components/SectionIntro';
 import { PageScope } from '@/components/ui/PageScope';
 import { PageSynthesis } from '@/components/ui/PageSynthesis';
+import { StateBlock } from '@/components/ui/StateBlock';
 import { synthesizeArchive } from '@/lib/synthesis/archive';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { fetchJsonStrict } from '@/lib/fetchJson';
@@ -100,6 +101,18 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
     { revalidateOnFocus: false },
   );
 
+  // Horizon re-skin (W8): the archive's own year-wide SWR is unsettled when
+  // neither `data` nor `error` has arrived. Until then the synthesiser would
+  // run over `[]` rows (a false "weak year" verdict) and the MonthlyTables
+  // child would paint empty/zero tables — i.e. a LOADING surface masquerading
+  // as a settled EMPTY one. We render the canonical table skeleton in that
+  // window only. Note: this is loading≠error≠empty:
+  //   • loading (!data && !error) → skeleton (below)
+  //   • error  (error truthy)     → existing error path: synthesis suppressed
+  //     via `!error`, MonthlyTables surfaces the shared-key red error line
+  //   • loaded (data truthy)      → synthesis + scope + controls + tables
+  const isLoading = !data && !error;
+
   // Apply the global store filter to the synthesiser's input AND to the
   // visible scope label. The MonthlyTables child gets globalStore directly
   // and handles its own per-store filtering. 'All' (undefined or 'All')
@@ -134,6 +147,18 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
           </span>
         ))}
       </div>
+      {/* Horizon re-skin (W8): while the year-wide SWR is unsettled, show the
+          canonical table skeleton in place of the (otherwise zero/empty)
+          synthesis + scope + controls + tables, so loading never reads as a
+          settled empty archive. Once data OR error arrives, the real surfaces
+          below render. */}
+      {isLoading && (
+        <div className="p-1">
+          <StateBlock mode="skeleton" shape="table" rows={8} message="טוען טבלאות חודשיות…" />
+        </div>
+      )}
+      {!isLoading && (
+      <>
       <PageScope
         store={isStoreScoped ? globalStore! : 'כל החנויות'}
         rangeLabel={month != null ? `${month}/${year}` : `${year}`}
@@ -215,6 +240,8 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
         storeFilter={storeFilter}
         onStoreFilterChange={setStoreFilter}
       />
+      </>
+      )}
     </div>
   );
 }
