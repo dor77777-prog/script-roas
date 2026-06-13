@@ -52,6 +52,7 @@ import { useAutoRefresh } from '@/lib/hooks/useAutoRefresh';
 import { CogsSettings } from '@/components/CogsSettings';
 import { SalarySettings } from '@/components/SalarySettings';
 import { SegmentedControl, type SegmentedOption } from '@/components/ui/SegmentedControl';
+import { StateBlock, type StateBlockShape } from '@/components/ui/StateBlock';
 import { AnalysisTrendsTab } from './AnalysisTrendsTab';
 import { AnalysisArchiveTab } from './AnalysisArchiveTab';
 import { GoalTracker } from './GoalTracker';
@@ -171,6 +172,69 @@ function useTabTransition() {
       setActiveTab(next);
     }
   };
+}
+
+/**
+ * Reskin W8-T1 — first-load skeleton silhouette PER TAB.
+ *
+ * `activeTab` is URL-initialized (Dashboard's useState reads window.location),
+ * so a cold-start deep-link to `/?tab=campaigns` (or any non-home tab) hits the
+ * genuine first-mount `isLoading` branch with `activeTab` already pointing at a
+ * NON-home surface. The old loading block was hard-wired to the Home silhouette
+ * (a hero band + a 6-up KPI grid) regardless of `activeTab`, so the campaigns/
+ * products/detail/etc. surfaces flashed the wrong shape before data arrived —
+ * the skeleton "lied" about what was loading.
+ *
+ * This map routes each TabKey to the <StateBlock> skeleton shape that matches
+ * what the tab actually renders once data lands:
+ *   • table  → row-list surfaces (CampaignsTable/ProductsTable/DetailTable,
+ *              the archive list, the activity feed) — a vertical stack of slim
+ *              full-width bars, NEVER a 4-up grid of stubby tiles.
+ *   • card   → KPI/summary-card surfaces (Home hero+KPIs, Customers, Payments,
+ *              P&L, Trends) — the responsive 4-up tile grid.
+ * The exhaustive Record<TabKey, …> means adding a new tab is a compile error
+ * until its silhouette is chosen.
+ */
+const TAB_SKELETON_SHAPE: Record<TabKey, StateBlockShape> = {
+  // Row-list / tabular surfaces.
+  campaigns: 'table',
+  products: 'table',
+  archive: 'table',
+  detail: 'table',
+  activity: 'table',
+  // KPI / summary-card surfaces.
+  home: 'card',
+  customers: 'card',
+  payments: 'card',
+  pnl: 'card',
+  trends: 'card',
+};
+
+/**
+ * The genuine first-mount loading silhouette. Replaces the old unconditional
+ * Home-shaped block; the shape now follows `activeTab` via TAB_SKELETON_SHAPE
+ * so a deep-linked cold start shows the RIGHT silhouette. The `sr-only`
+ * "טוען נתונים…" live-region announcement is preserved verbatim (StateBlock's
+ * `message` renders it inside the aria-busy container). `data-testid` +
+ * `data-shape` let the DOM test assert the per-tab shape. Reduced-motion /
+ * token-only / RTL all inherited from StateBlock (its shimmer is already gated).
+ */
+export function FirstLoadSkeleton({ activeTab }: { activeTab: TabKey }) {
+  const shape = TAB_SKELETON_SHAPE[activeTab];
+  return (
+    <div
+      data-testid="first-load-skeleton"
+      data-shape={shape}
+      className="space-y-4 animate-fade-in"
+    >
+      {shape === 'card' && (
+        // Hero band placeholder — the Home/Customers/P&L surfaces open with a
+        // full-width summary band above their KPI grid.
+        <div className="skeleton h-40 sm:h-48 rounded-2xl" aria-hidden />
+      )}
+      <StateBlock mode="skeleton" shape={shape} rows={6} message="טוען נתונים…" />
+    </div>
+  );
 }
 
 export function Dashboard() {
@@ -770,17 +834,7 @@ export function Dashboard() {
             </div>
           )}
 
-          {isLoading && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="skeleton h-40 sm:h-48 rounded-2xl" aria-hidden />
-              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="skeleton h-28 sm:h-36 rounded-xl" aria-hidden />
-                ))}
-              </div>
-              <div className="sr-only">טוען נתונים…</div>
-            </div>
-          )}
+          {isLoading && <FirstLoadSkeleton activeTab={activeTab} />}
 
           {data && filtered && (
             <>
