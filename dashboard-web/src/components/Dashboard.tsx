@@ -68,6 +68,7 @@ import type { ActiveOverridesResponse } from '@/app/api/active-overrides/route';
 import type { OverridesActiveGroup } from '@/lib/home/overridesActive';
 import { PerStoreRow } from '@/components/home/PerStoreRow';
 import { StoreCompareGrid } from '@/components/home/StoreCompareGrid';
+import { NcByPlatformCard } from '@/components/home/NcByPlatformCard';
 import {
   RoasTargetChart,
   readChartRangeFromUrl,
@@ -1672,6 +1673,17 @@ function HomeTab({
           setChartRange(next);
           setChartCustomRange(custom);
         }}
+      />
+
+      {/* 4b. New-customers BY PLATFORM — renders the SAME channel-truth metrics
+          (heroNewCustomer.channelTruth) the hero/ChannelTruthPanel consume; no
+          new aggregate. Business NC-ROAS chip reuses the hero's blended value.
+          (Mockup: home-approved.html "לקוחות חדשים לפי פלטפורמה", sits between the
+          ROAS-vs-target chart and the intelligence+feed block.) */}
+      <NcByPlatformCard
+        metrics={heroNewCustomer.channelTruth.metrics}
+        businessNcRoas={heroNewCustomer.channelTruth.blendedNcRoas}
+        unclassifiableShare={heroNewCustomer.channelTruth.unclassifiableShare}
       />
 
       {/* 5. Bottom 2-up — Insights board + Activity feed --------------------
