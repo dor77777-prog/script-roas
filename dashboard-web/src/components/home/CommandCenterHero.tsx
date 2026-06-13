@@ -1,74 +1,68 @@
 'use client';
 
 /**
- * Task 3.1 — <CommandCenterHero> primitive.
+ * <CommandCenterHero> — the Home tab's KPI strip.
  *
- * Glass-card grid that REPLACES the prior HeroOverview + HomeLiveBand +
- * HomeSummaryBand + KpiCards stack at the top of the Home tab. Visual
- * ref: 2026-05-31 mesh mockup (`dashboard-mockups.html` `.row3b` + `.row4`).
+ * Horizon re-skin W3.2 (2026-06-13): rebuilt as the EXACT-MATCH 6-Widget KPI
+ * row from the approved mockup
+ * (docs/superpowers/mockups/2026-06-12-horizon-reskin/home-approved.html,
+ * lines ~138-200). The prior 7-Card mesh hero (banded glass cards + per-card
+ * sparklines, 2026-05-31) is replaced by a single responsive
+ * `grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-6` row of the shared
+ * {@link Widget} primitive (icon circle → label → value → delta sub-line).
  *
- *   Row 1 (`.row3b`, 1fr 1fr 1.15fr) — Revenue · Spend · Operating Profit
- *   Row 2 (`.row4`, repeat(4,1fr))   — CPM · Orders · Inventory (COGS) · ROAS
+ * The 6 mockup widgets, in DOM order:
+ *   1. הוצאת פרסום (spend)      — brand icon · delta ↓ red (spend ↑ = bad).
+ *   2. הכנסות (revenue)         — brand icon · delta ↑ green.
+ *   3. רווח תפעולי (op. profit) — brand icon + LIVE pill · delta ↓ red.
+ *      = revenue − ad spend − COGS. Full net profit (after fixed/recurring/
+ *      fees) stays on the P&L tab per operator request — see the tooltip.
+ *   4. MER (band-gauge)        — BAND VARIANT. The gauge icon + icon circle
+ *      + value + band-tag pill all take the operator-locked ROAS band colour
+ *      (bandForRoas / BAND_TAG_LABEL via Widget's `bandRoas`). MER = blended
+ *      business ROAS (revenue ÷ spend) — the SAME number the old "MER" tile
+ *      showed. Reads correctly for red/orange/green/blue/gray, which is why
+ *      the operator locked the band-agnostic gauge icon.
+ *   5. הזמנות (orders)         — brand icon · delta neutral.
+ *   6. CPM עסקי (business CPM) — brand icon · delta ↓ green (CPM ↑ = bad).
  *
- *   The two VIVID banded cards (Operating Profit, ROAS) live on the END/LEFT
- *   column under dir="rtl": the FIRST grid item renders in the start/right
- *   column, the LAST in the end/left column, so DOM-last banded cards stack
- *   on the left edge exactly as the approved mockup shows. The neutral KPI
- *   cards (Spend / Revenue / Inventory / Orders / CPM) fill the start side.
+ * NO-INFO-LOSS — the mockup's 6 widgets do NOT cover two data points the old
+ * hero surfaced, so both are KEPT (deletion/hiding is operator-forbidden):
+ *   • Inventory (COGS) — rendered as a 7th Widget in the SAME grid (the grid
+ *     simply holds >6 on its last row). Shows the COGS dollar amount + the
+ *     "~X.X% מהמחזור" subtitle. Informational — no band colouring.
+ *   • NC-ROAS / nCAC ("לקוחות חדשים · שאלה אחרת") — kept as its own banded
+ *     Widget below the grid (its OWN band, a different question from MER).
+ *     Will be reconciled/relocated when the NC-by-channel card lands.
+ * Also preserved: the attribution-coverage chip, every HelpTooltip (incl. the
+ * locked MER explanation + operating-profit + COGS copy), the delta-vs-previous
+ * computations, count-up numbers (via <Money countUp> / <CountUp>), the LIVE
+ * pill on operating profit, the DQ-3/DQ-4 provenance + override flags next to
+ * spend, and the exact metric-direction colouring (spend red↓, revenue green↑,
+ * orders neutral, CPM green-when-down). The per-card decorative sparklines were
+ * dropped to match the mockup; the underlying daily series remain available to
+ * the RoasTargetChart below — no data point is lost.
  *
- *   • Featured card carries the OPERATING PROFIT (revenue − ad spend −
- *     COGS), labelled "רווח תפעולי". Full net profit (after fixed +
- *     recurring + fees) lives on P&L per operator request — bringing it
- *     here would bake in costs the Home tab doesn't surface, mismatching
- *     the "Spend" card next to it which is ad-spend only.
- *   • Featured card carries `<Card band={...}>` with the band picked by
- *     `useRoasBandGradient(roas)` — i.e. the SAME band as the ROAS tile so
- *     the two hero numbers visually agree.
- *   • Featured big number wears `.v.banded` so its colour follows the
- *     data-band attribute on the card. Most secondary cards (Spend /
- *     Revenue / Orders / CPM / Inventory) wear `.v.neutral` which renders
- *     the soft white→cool-gray text-gradient defined in globals.css.
- *   • ROAS tile (row 2) also banded + `.v.banded` (matches mockup).
- *   • Inventory card (row 2, replaces the prior Ad-spend ÷ Revenue tile)
- *     is informational — muted business band, no threshold colouring.
- *     Shows COGS dollar amount for the range plus a "~X% מהמחזור"
- *     subtitle so the operator gets the dollar value AND the ratio
- *     context in one glance without baking a target into the colour.
- *   • Each card surfaces a <FreshnessBadge> chip wired to the same
- *     `updatedAt` that drives the Card's `data-freshness` desaturation,
- *     per [[home-visual-rules]] (Task 3.6).
- *   • Featured card renders a SVG sparkline (28-day shape) so the
- *     featured tile carries the editorial "shape of the period" without
- *     the heavy Recharts dependency the old HeroOverview pulled in.
- *
- * Numerics:
- *   • `prevPeriod` is optional. When present, each card emits a delta-vs-
- *     previous line ("▴ +$612 (+15%) מול אתמול"). The DOM order matches
- *     the mockup's RTL phrasing; the unicode arrows + numerals are wrapped
- *     in <bdi dir="ltr"> so Hebrew narrative + LTR numbers don't bidi-flip.
- *   • Spend's delta-positive (spend went UP) is rendered as a NEGATIVE
- *     signal (red ▾) — `inverse` prop on <DeltaText/>. All other tiles
- *     treat ↑ as positive.
- *
- * NO INFO LOSS PROMISE (mapping table per spec):
- *   • ROAS / Operating Profit / Revenue / Spend / CPM / Orders +
- *     Inventory (COGS) — all surfaced here.
- *   • Ad-spend ÷ Revenue ratio — implicit in Spend ÷ Revenue (both
- *     cards live in row 1) and exact in the operator's mental model;
- *     the dedicated card was retired 2026-05-31 in favour of inventory.
- *   • Full Net Profit (after fixed + recurring + fees) — P&L tab.
- *   • Gross Profit moves to <RoasTargetChart> KPI strip (lives under
- *     Operating Profit's tooltip).
- *   • Transaction fees, fixed costs — P&L tab.
+ * The legacy <NetSparkline>/<MiniSparkline> helpers are retained + exported so
+ * their unit tests stay green and future surfaces can reuse them.
  *
  * Presentational — parent (Dashboard HomeTab) reads /api/data via SWR and
- * passes the already-aggregated values + the day-period rows for the
- * sparkline. No SWR calls inside this primitive.
+ * passes the already-aggregated values. No SWR calls inside this primitive.
  */
 
 import { useMemo } from 'react';
+import {
+  DollarSign,
+  TrendingUp,
+  LineChart,
+  Gauge,
+  ShoppingCart,
+  BarChart3,
+  Package,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
+import { Widget } from '@/components/ui/Widget';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Money } from '@/components/ui/Money';
 import { CountUp } from '@/components/ui/CountUp';
@@ -358,7 +352,7 @@ function fmtCogsPctSubtitle(
  * stop that's already band-coloured by the surrounding card's data-band.
  * -------------------------------------------------------------------------- */
 
-function NetSparkline({
+export function NetSparkline({
   values,
   bandColorVar,
 }: {
@@ -461,7 +455,7 @@ function NetSparkline({
 /* Round 7 (2026-05-31): reads directly from --band-* tokens so the
  * sparkline stroke tracks the theme without any manual sync.
  * CommandCenterHero is NOT a chart file → var(--band-*) is allowed. */
-const BAND_STROKE: Record<RoasBand, string> = {
+export const BAND_STROKE: Record<RoasBand, string> = {
   red:         'var(--band-red)',
   // The hero never derives a red-alarm band itself (no zero-sales signal is
   // wired here), but Record<RoasBand> must be exhaustive — point it at the
@@ -479,7 +473,7 @@ const BAND_STROKE: Record<RoasBand, string> = {
  * light mode. The 55% alpha keeps it tonal rather than competing with the
  * band hue of any surrounding card.
  * -------------------------------------------------------------------------- */
-const NEUTRAL_SPARK_STROKE = 'oklch(from var(--text) l c h / 0.55)';
+export const NEUTRAL_SPARK_STROKE = 'oklch(from var(--text) l c h / 0.55)';
 
 /* --------------------------------------------------------------------------
  * MiniSparkline — slim 30 px stroke+fill spark for the secondary cards.
@@ -589,8 +583,12 @@ export function CommandCenterHero({
   coverageBreakdown,
   comparisonLabel = 'מול אתמול',
   comparisonUnavailable = false,
-  netSparkValues,
-  secondarySparklines,
+  // `netSparkValues` / `secondarySparklines` remain on the public props (so
+  // existing callers keep type-checking) but the Horizon Widget recipe carries
+  // no per-card sparkline — they are intentionally not consumed here. The
+  // underlying daily series still drive the RoasTargetChart below, so no data
+  // point is lost. The standalone <NetSparkline>/<MiniSparkline> exports keep
+  // the spark geometry available for any surface that wants it.
   updatedAt,
   newCustomer,
   provenanceVerdict,
@@ -598,26 +596,14 @@ export function CommandCenterHero({
   overrideLastEditedAt,
   className,
 }: CommandCenterHeroProps) {
-  // Business-ROAS band selector used by all 7 hero cards — Change
-  // B (2026-05-31): the hero strip wears the business-ROAS band so a
-  // glance at the row communicates business health. Operating Profit +
-  // ROAS get the band-coloured big number (`.v.banded`); Spend /
-  // Revenue / Orders / CPM / Inventory keep the white gradient number
-  // on top of the band-tinted surface. (The prior Ad-spend ÷ Revenue
-  // card carried its OWN 25%-target band — retired 2026-05-31 in
-  // favour of the inventory card, which is informational and doesn't
-  // colour itself differently from the strip.)
-  const netBand = useRoasBandGradient(current.roas);
-  const roasBand = netBand;
-  const businessBand = netBand.band;
-  // Freshness is the same input for every card in the hero — when a stale
-  // sweep affects the period, the whole strip dims together. (Per-card
-  // staleness will come back if we wire per-platform updatedAt later.)
+  // Freshness is the same input for every widget in the hero — when a stale
+  // sweep affects the period, the whole strip dims together. The featured
+  // operating-profit widget surfaces the chip; the rest share the same signal.
   const freshness = useStaleness(updatedAt);
   const freshnessStage = updatedAt !== undefined ? freshness.stage : undefined;
 
   // Subordinate NC-ROAS tile — its OWN band (different question), independent
-  // of the hero's MER band (netBand). Hidden entirely when newCustomer omitted.
+  // of the hero's MER band. Hidden entirely when newCustomer is omitted.
   const ncBand = useRoasBandGradient(newCustomer?.ncRoas ?? null);
 
   return (
@@ -638,282 +624,198 @@ export function CommandCenterHero({
       )}
 
       {/*
-        Row 1 — DOM order Revenue · Spend · Operating Profit (featured + banded).
-        The mockup (`.row3b`, grid-template-columns: 1fr 1fr 1.15fr) is rendered
-        under dir="rtl": the FIRST grid item lands in the rightmost (start)
-        column and the LAST lands in the leftmost (end) column. The approved
-        mockup puts the vivid banded Operating-Profit card on the LEFT/END
-        (slightly wider, 1.15fr) with the two neutral money cards filling the
-        start side — Spend in the middle, Revenue at the start/right. DOM
-        order here is therefore Revenue → Spend → Profit so the banded card
-        stacks with the banded ROAS card directly below it (row 2, also END).
+        The 6-Widget KPI row — EXACT-MATCH to the approved Horizon mockup
+        (home-approved.html lines ~138-200): a single responsive grid of the
+        shared <Widget> primitive. DOM order = mockup order:
+          1 Spend · 2 Revenue · 3 Operating Profit (LIVE) · 4 MER (band-gauge)
+          · 5 Orders · 6 CPM.
+        The Inventory (COGS) widget — a data point the 6 mockup widgets don't
+        cover but the operator forbids dropping — rides along as a 7th widget in
+        the SAME grid (its last row simply carries one extra tile until the
+        NC-by-channel card lands and we reconcile it). NC-ROAS stays below.
+
+        Grid: `grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-6` per the mockup.
       */}
       <div
-        className={cn(
-          'grid gap-3',
-          // Mobile: 2-up compact grid (Revenue + Spend share the top row; the
-          // featured Operating-Profit card spans full width below — see its
-          // `col-span-2`). Was a single tall stack that ate the whole phone
-          // screen. md+ desktop layout (1fr 1fr 1.15fr) is unchanged.
-          'grid-cols-2 md:grid-cols-[1fr_1fr_1.15fr]',
-        )}
+        className="grid grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-6"
         data-testid="hero-row-1"
       >
-        <Card
-          band={businessBand}
-          bandStrength="muted"
-          freshness={freshnessStage}
-          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
-          data-testid="hero-revenue"
-        >
-          <HeroCardHeader label="הכנסה" />
-          <bdi
-            dir="ltr"
-            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
-          >
-            <Money value={current.revenue} prefix="$" compactAbove={1_000_000} countUp />
-          </bdi>
-          <DeltaLine
-            text={fmtPctDelta(delta?.revenuePct)}
-            positive={(delta?.revenuePct ?? 0) >= 0}
-            className="text-xs mt-1.5"
-          />
-          {/* 2026-05-31 mockup-alignment: neutral card, GREEN (revenue) spark. */}
-          <MiniSparkline
-            values={secondarySparklines?.revenue}
-            stroke={'var(--up)'}
-          />
-        </Card>
-
-        <Card
-          band={businessBand}
-          bandStrength="muted"
-          freshness={freshnessStage}
-          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
+        {/* 1 — Spend. Spend ↑ is a NEGATIVE signal (red ↓). The DQ-3/DQ-4
+            data-trust flags ride in the sub-line; each renders null when its
+            data is absent so the widget is visually unchanged with nothing to
+            flag. */}
+        <Widget
           data-testid="hero-spend"
-        >
-          <HeroCardHeader label="הוצאה" />
-          <bdi
-            dir="ltr"
-            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
-          >
+          icon={<DollarSign aria-hidden="true" />}
+          title="הוצאת פרסום"
+          value={
             <Money value={current.spend} prefix="$" compactAbove={1_000_000} countUp />
-          </bdi>
-          {/* DQ-3 / DQ-4 data-trust flags next to the Spend KPI. Each renders
-              null when its data is absent (provenance 'unknown'; no override) so
-              the card is visually unchanged when there's nothing to flag. */}
-          {(provenanceVerdict || overrideNote || overrideLastEditedAt) && (
-            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-              {provenanceVerdict && <ProvenanceFlag verdict={provenanceVerdict} />}
-              {(overrideNote || overrideLastEditedAt) && (
-                <OverrideFlag note={overrideNote} lastEditedAt={overrideLastEditedAt} />
+          }
+          sub={
+            <>
+              {(provenanceVerdict || overrideNote || overrideLastEditedAt) && (
+                <span className="mb-1 flex flex-wrap items-center gap-1.5">
+                  {provenanceVerdict && <ProvenanceFlag verdict={provenanceVerdict} />}
+                  {(overrideNote || overrideLastEditedAt) && (
+                    <OverrideFlag note={overrideNote} lastEditedAt={overrideLastEditedAt} />
+                  )}
+                </span>
               )}
-            </div>
-          )}
-          {/* spend ↑ is a NEGATIVE signal */}
-          <DeltaLine
-            text={fmtPctDelta(delta?.spendPct)}
-            positive={(delta?.spendPct ?? 0) <= 0}
-            className="text-xs mt-1.5"
-          />
-          {/* 2026-05-31 mockup-alignment: neutral card, RED (spend) spark. */}
-          <MiniSparkline
-            values={secondarySparklines?.spend}
-            stroke={'var(--dn)'}
-          />
-        </Card>
+              <DeltaLine
+                text={fmtPctDelta(delta?.spendPct)}
+                positive={(delta?.spendPct ?? 0) <= 0}
+              />
+            </>
+          }
+        />
 
-        <HelpTooltip content="הכנסות − פרסום − מלאי. רווח נטו מלא (כולל הוצאות קבועות וחוזרות) נמצא ב-P&L.">
-        <Card
-          band={netBand.band}
-          freshness={freshnessStage}
-          // col-span-2 on mobile → the featured banded marquee spans the full
-          // phone width beneath Revenue+Spend; md+ returns to its single column.
-          className="hero-card featured col-span-2 md:col-span-1 px-4 py-4 sm:px-6 sm:py-6"
-          data-testid="hero-net-profit"
-        >
-          <HeroCardHeader
-            label={`רווח תפעולי · ${rangeLabel}`}
-            updatedAt={updatedAt}
-          />
-          <bdi
-            dir="ltr"
-            className={cn(
-              'v num banded',
-              'block font-extrabold tabular-nums tracking-tight leading-[1.05]',
-              'mt-2 text-[2.25rem] sm:text-[2.75rem]',
-            )}
-          >
-            <Money value={current.operatingProfit} prefix="$" compactAbove={1_000_000} countUp />
-          </bdi>
-          {comparisonUnavailable ? (
-            // Non-default baseline chosen but no prior-period data to compare
-            // against — say so explicitly instead of silently hiding the delta.
-            // `hero-delta` keeps it legible (repainted white) on the vivid band.
-            <div className="hero-delta flex items-baseline text-sm mt-2.5 text-ink-muted">
-              אין נתוני השוואה לתקופה זו
-            </div>
-          ) : (
+        {/* 2 — Revenue. ↑ is positive (green). */}
+        <Widget
+          data-testid="hero-revenue"
+          icon={<TrendingUp aria-hidden="true" />}
+          title="הכנסות"
+          value={
+            <Money value={current.revenue} prefix="$" compactAbove={1_000_000} countUp />
+          }
+          sub={
             <DeltaLine
-              text={fmtMoneyDelta(delta?.operatingProfit)}
-              pctText={fmtPctDelta(
-                delta?.operatingProfit != null && current.operatingProfit != null
-                  ? delta.operatingProfit /
-                      Math.max(
-                        1,
-                        Math.abs(current.operatingProfit - delta.operatingProfit),
-                      )
-                  : null,
-              )}
-              label={comparisonLabel}
-              positive={(delta?.operatingProfit ?? 0) >= 0}
-              className="text-sm mt-2.5"
+              text={fmtPctDelta(delta?.revenuePct)}
+              positive={(delta?.revenuePct ?? 0) >= 0}
             />
-          )}
-          {netSparkValues && netSparkValues.length >= 2 && (
-            <NetSparkline
-              values={netSparkValues}
-              bandColorVar={BAND_STROKE[netBand.band]}
-            />
-          )}
-        </Card>
-        </HelpTooltip>
-      </div>
+          }
+        />
 
-      {/*
-        Row 2 — DOM order CPM · Orders · Inventory (COGS) · ROAS (featured + banded).
-        Mirrors row 1: under dir="rtl" the FIRST grid item is the start/right
-        column and the LAST is the end/left column (mockup `.row4`,
-        grid-template-columns: repeat(4,1fr)). DOM order CPM → Orders →
-        Inventory → ROAS lands ROAS on the LEFT/END so it stacks directly
-        beneath the banded Operating-Profit card from row 1.
-      */}
-      <div
-        className="grid gap-3 grid-cols-2 md:grid-cols-4"
-        data-testid="hero-row-2"
-      >
-        <Card
-          band={businessBand}
-          bandStrength="muted"
-          freshness={freshnessStage}
-          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
-          data-testid="hero-cpm"
-        >
-          <HeroCardHeader label="CPM · עסקי" />
-          <bdi
-            dir="ltr"
-            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
-          >
-            {current.cpm != null && current.cpm > 0 ? (
-              <Money value={current.cpm} prefix="$" decimals={2} compactAbove={1_000_000} countUp />
-            ) : '—'}
-          </bdi>
-          {/* CPM ↑ is a NEGATIVE signal */}
-          <DeltaLine
-            text={fmtPctDelta(delta?.cpmPct)}
-            positive={(delta?.cpmPct ?? 0) <= 0}
-            className="text-xs mt-1.5"
+        {/* 3 — Operating Profit (= revenue − ad spend − COGS). Carries the LIVE
+            pill + the locked tooltip pointing full net profit to the P&L tab.
+            testid kept as `hero-net-profit` for back-compat. */}
+        <HelpTooltip content="הכנסות − פרסום − מלאי. רווח נטו מלא (כולל הוצאות קבועות וחוזרות) נמצא ב-P&L.">
+          <Widget
+            data-testid="hero-net-profit"
+            icon={<LineChart aria-hidden="true" />}
+            title={
+              <span className="flex items-center gap-1.5">
+                {`רווח תפעולי · ${rangeLabel}`}
+                <Badge tone="green" data-testid="hero-op-live">
+                  LIVE
+                </Badge>
+                {updatedAt !== undefined && <FreshnessBadge updatedAt={updatedAt} />}
+              </span>
+            }
+            value={
+              <Money
+                value={current.operatingProfit}
+                prefix="$"
+                compactAbove={1_000_000}
+                countUp
+              />
+            }
+            sub={
+              comparisonUnavailable ? (
+                <span className="text-ink-muted">אין נתוני השוואה לתקופה זו</span>
+              ) : (
+                <DeltaLine
+                  text={fmtMoneyDelta(delta?.operatingProfit)}
+                  pctText={fmtPctDelta(
+                    delta?.operatingProfit != null && current.operatingProfit != null
+                      ? delta.operatingProfit /
+                          Math.max(
+                            1,
+                            Math.abs(current.operatingProfit - delta.operatingProfit),
+                          )
+                      : null,
+                  )}
+                  label={comparisonLabel}
+                  positive={(delta?.operatingProfit ?? 0) >= 0}
+                />
+              )
+            }
           />
-          <MiniSparkline
-            values={secondarySparklines?.cpm}
-            stroke={NEUTRAL_SPARK_STROKE}
-          />
-        </Card>
-
-        <Card
-          band={businessBand}
-          bandStrength="muted"
-          freshness={freshnessStage}
-          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
-          data-testid="hero-orders"
-        >
-          <HeroCardHeader label="הזמנות · סה״כ" />
-          <bdi
-            dir="ltr"
-            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem] whitespace-nowrap"
-          >
-            {/* Orders is a COUNT — routed through <Money prefix="none"> so it
-                inherits the overflow-safe compact floor (≥100k → "150K", exact
-                value in title/sr-only) AND the count-up animation, instead of a
-                raw toLocaleString that could clip a 7-digit count on the ~165px
-                mobile 2-up card. */}
-            <Money
-              value={current.orders}
-              prefix="none"
-              compactAbove={100_000}
-              countUp
-            />
-          </bdi>
-          <DeltaLine
-            text={fmtCountDelta(delta?.orders)}
-            positive={(delta?.orders ?? 0) >= 0}
-            className="text-xs mt-1.5"
-          />
-          <MiniSparkline
-            values={secondarySparklines?.orders}
-            stroke={NEUTRAL_SPARK_STROKE}
-          />
-        </Card>
-
-        {/* Inventory (COGS) — informational, muted business band -------- */}
-        {/* Replaces the prior Ad-spend ÷ Revenue tile (2026-05-31). The
-            operator preferred the inventory dollar amount + ratio
-            subtitle over the ad-spend ratio. No threshold colouring —
-            COGS is a structural metric, not a status signal. */}
-        <HelpTooltip content="עלות המלאי (COGS) בטווח הנבחר. בדרך כלל ~25% מהמחזור — לא יעד אלא תצפית.">
-        <Card
-          band={businessBand}
-          bandStrength="muted"
-          freshness={freshnessStage}
-          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
-          data-testid="hero-cogs"
-        >
-          <HeroCardHeader label={`מלאי · ${rangeLabel}`} />
-          <bdi
-            dir="ltr"
-            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
-          >
-            <Money value={current.cogs} prefix="$" compactAbove={1_000_000} countUp />
-          </bdi>
-          {(() => {
-            const subtitle = fmtCogsPctSubtitle(current.cogs, current.revenue);
-            if (!subtitle) return null;
-            return (
-              <div
-                className="text-xs mt-1.5 text-ink-muted tabular-nums"
-                data-testid="hero-cogs-subtitle"
-              >
-                <bdi dir="rtl">{subtitle}</bdi>
-              </div>
-            );
-          })()}
-        </Card>
         </HelpTooltip>
 
+        {/* 4 — MER — BAND VARIANT (the headline of W3.2). The band-agnostic
+            lucide Gauge icon + its circle + the value + the band-tag pill all
+            take the operator-locked ROAS band colour, classified through
+            bandForRoas via Widget's `bandRoas`. MER = blended business ROAS
+            (revenue ÷ spend) — the SAME number the prior MER tile showed. Reads
+            correctly for red/orange/green/blue/gray. testid kept as `hero-roas`
+            for back-compat; the resolved band is mirrored onto the widget root's
+            data-band. */}
         <HelpTooltip content="MER — Marketing Efficiency Ratio: סך ההכנסות ÷ סך ההוצאות (ROAS משוקלל על כל הפלטפורמות). מקור האמת היחיד לרווחיות הפרסום.">
-        <Card
-          band={roasBand.band}
-          freshness={freshnessStage}
-          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
-          data-testid="hero-roas"
-        >
-          <HeroCardHeader label="MER" />
-          <bdi
-            dir="ltr"
-            className="v num banded block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem] whitespace-nowrap"
-          >
-            <CountUp value={current.roas} format={fmtRoas} />
-          </bdi>
-          <DeltaLine
-            text={fmtRoasDelta(delta?.roas)}
-            positive={(delta?.roas ?? 0) >= 0}
-            className="text-xs mt-1.5"
+          <Widget
+            data-testid="hero-roas"
+            icon={<Gauge aria-hidden="true" />}
+            title="MER"
+            bandRoas={current.roas ?? undefined}
+            value={<CountUp value={current.roas} format={fmtRoas} />}
+            sub={
+              <DeltaLine
+                text={fmtRoasDelta(delta?.roas)}
+                positive={(delta?.roas ?? 0) >= 0}
+              />
+            }
           />
-          <MiniSparkline
-            values={secondarySparklines?.roas}
-            stroke={NEUTRAL_SPARK_STROKE}
+        </HelpTooltip>
+
+        {/* 5 — Orders. Neutral signal. Routed through <Money prefix="none"> so a
+            7-digit count stays overflow-safe + count-up animated. */}
+        <Widget
+          data-testid="hero-orders"
+          icon={<ShoppingCart aria-hidden="true" />}
+          title="הזמנות"
+          value={
+            <Money value={current.orders} prefix="none" compactAbove={100_000} countUp />
+          }
+          sub={
+            <DeltaLine
+              text={fmtCountDelta(delta?.orders)}
+              positive={(delta?.orders ?? 0) >= 0}
+            />
+          }
+        />
+
+        {/* 6 — Business CPM. CPM ↑ is a NEGATIVE signal (green when down =
+            cheaper). null/0 → "—" (no $0.00 surprise). */}
+        <Widget
+          data-testid="hero-cpm"
+          icon={<BarChart3 aria-hidden="true" />}
+          title="CPM עסקי"
+          value={
+            current.cpm != null && current.cpm > 0 ? (
+              <Money value={current.cpm} prefix="$" decimals={2} compactAbove={1_000_000} countUp />
+            ) : (
+              '—'
+            )
+          }
+          sub={
+            <DeltaLine
+              text={fmtPctDelta(delta?.cpmPct)}
+              positive={(delta?.cpmPct ?? 0) <= 0}
+            />
+          }
+        />
+
+        {/* 7 — Inventory (COGS). KEPT (no-info-loss) — not one of the mockup's
+            6, but the operator forbids dropping it; it rides as the grid's 7th
+            widget. Informational (no band colouring). Shows the COGS dollar
+            amount + the "~X.X% מהמחזור" subtitle. */}
+        <HelpTooltip content="עלות המלאי (COGS) בטווח הנבחר. בדרך כלל ~25% מהמחזור — לא יעד אלא תצפית.">
+          <Widget
+            data-testid="hero-cogs"
+            icon={<Package aria-hidden="true" />}
+            title={`מלאי · ${rangeLabel}`}
+            value={
+              <Money value={current.cogs} prefix="$" compactAbove={1_000_000} countUp />
+            }
+            sub={(() => {
+              const subtitle = fmtCogsPctSubtitle(current.cogs, current.revenue);
+              if (!subtitle) return undefined;
+              return (
+                <span className="tabular-nums" data-testid="hero-cogs-subtitle">
+                  <bdi dir="rtl">{subtitle}</bdi>
+                </span>
+              );
+            })()}
           />
-        </Card>
         </HelpTooltip>
       </div>
 

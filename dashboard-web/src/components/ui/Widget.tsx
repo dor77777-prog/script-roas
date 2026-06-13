@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { Card } from './Card';
 import { Money } from './Money';
@@ -39,18 +39,22 @@ import { BAND_TAG_LABEL } from '@/lib/format/useRoasBandGradient';
  * permitted here (the no-dark-variant guard exempts components/ui/) and we
  * mirror the Horizon recipe directly (`bg-lightPrimary dark:bg-navy-700`).
  */
-export interface WidgetProps {
+export interface WidgetProps
+  extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   /** Lead icon — rendered inside the circular badge. */
   icon: ReactNode;
   /** Muted KPI label. */
-  title: string;
+  title: ReactNode;
   /** KPI value. A `number` renders through <Money>; anything else as-is. */
   value: ReactNode | number;
   /** Optional sub-line under the value (delta / context note). */
   sub?: ReactNode;
   /**
    * When supplied, classify this ROAS-like ratio through `bandForRoas` and
-   * colour the value + badge + tag with the operator-locked band colour.
+   * colour the value + badge + tag with the operator-locked band colour. The
+   * resolved band is also mirrored onto the Card root's `data-band` (so DOM
+   * tests / future CSS can target the whole widget, matching the prior banded
+   * MER hero card's contract).
    */
   bandRoas?: number;
   /** Extra classes for the Card root. */
@@ -80,10 +84,11 @@ function chipClassForBand(band: CoreRoasBand): string {
  * hex — so the no-hex-color-in-components guard stays green.
  *   • `text`   — value/icon colour = the band token.
  *   • `badgeBg`— circular-badge fill = a low-alpha tint of the same token.
- *     Uses the SAME technique + percentage as the adjacent `.chip-{band}`
- *     recipe in globals.css (`oklch(from var(--band-X) l c h / 0.18)`, and
- *     0.12 for gray to match `.chip-gray`) so a banded Widget shows one
- *     consistent tint method across its badge and tag-pill.
+ *     2026-06-13 (W3.2): tint set to ~12% alpha to match the approved mockup's
+ *     MER widget (a soft band wash on the gauge-icon circle) — the circle reads
+ *     as a band wash while the icon + value carry the full band colour. Stays
+ *     token-only (oklch(from var(--band-X) …)), so the no-hex-color guard stays
+ *     green and the whole thing re-skins + light/dark-flips through `--band-*`.
  */
 const BAND_VALUE_CLASS: Record<CoreRoasBand, string> = {
   red: 'text-[var(--band-red)]',
@@ -93,12 +98,12 @@ const BAND_VALUE_CLASS: Record<CoreRoasBand, string> = {
   gray: 'text-[var(--band-gray)]',
 };
 const BAND_BADGE_CLASS: Record<CoreRoasBand, string> = {
-  red: 'bg-[oklch(from_var(--band-red)_l_c_h_/_0.18)] text-[var(--band-red)]',
+  red: 'bg-[oklch(from_var(--band-red)_l_c_h_/_0.12)] text-[var(--band-red)]',
   orange:
-    'bg-[oklch(from_var(--band-orange)_l_c_h_/_0.18)] text-[var(--band-orange)]',
+    'bg-[oklch(from_var(--band-orange)_l_c_h_/_0.12)] text-[var(--band-orange)]',
   green:
-    'bg-[oklch(from_var(--band-green)_l_c_h_/_0.18)] text-[var(--band-green)]',
-  blue: 'bg-[oklch(from_var(--band-blue)_l_c_h_/_0.18)] text-[var(--band-blue)]',
+    'bg-[oklch(from_var(--band-green)_l_c_h_/_0.12)] text-[var(--band-green)]',
+  blue: 'bg-[oklch(from_var(--band-blue)_l_c_h_/_0.12)] text-[var(--band-blue)]',
   gray: 'bg-[oklch(from_var(--band-gray)_l_c_h_/_0.12)] text-[var(--band-gray)]',
 };
 
@@ -109,6 +114,7 @@ export function Widget({
   sub,
   bandRoas,
   className,
+  ...rest
 }: WidgetProps) {
   const band =
     typeof bandRoas === 'number' && Number.isFinite(bandRoas)
@@ -129,7 +135,11 @@ export function Widget({
     typeof value === 'number' ? <Money value={value} /> : value;
 
   return (
-    <Card className={cn('!flex-row items-center gap-4', className)}>
+    <Card
+      className={cn('!flex-row items-center gap-4', className)}
+      data-band={band ?? undefined}
+      {...rest}
+    >
       {/* Circular icon badge. `[&>svg]:h-5 [&>svg]:w-5` keeps the icon a
           consistent size regardless of the SVG passed in. */}
       <span
@@ -143,7 +153,7 @@ export function Widget({
       </span>
 
       <div className="flex min-w-0 flex-col justify-center">
-        <p className="flex items-center gap-2 text-sm font-medium text-ink-muted">
+        <p className="flex items-center gap-2 text-fs-sm font-medium text-ink-muted">
           <span className="truncate">{title}</span>
           {band ? (
             <span className={cn('band-chip', chipClassForBand(band))}>
@@ -154,14 +164,17 @@ export function Widget({
         <span
           data-band={band ?? undefined}
           className={cn(
-            'text-xl font-bold leading-tight tabular-nums',
+            'text-fs-lg font-bold leading-tight tabular-nums',
             valueColorClass,
           )}
         >
           {valueNode}
         </span>
+        {/* `sub` is a <div> (not <p>): callers pass block content like the
+            <DeltaLine> (a flex <div>) or the provenance/override flags, so a
+            <p> wrapper would produce invalid <p><div/></p> nesting. */}
         {sub ? (
-          <p className="mt-0.5 text-xs font-medium text-ink-muted">{sub}</p>
+          <div className="mt-0.5 text-fs-xs font-medium text-ink-muted">{sub}</div>
         ) : null}
       </div>
     </Card>

@@ -1,25 +1,29 @@
 // dashboard-web/src/components/home/__tests__/CommandCenterHero.dom.test.tsx
 //
-// Task 3.1 — smoke + contract tests for <CommandCenterHero>.
+// Smoke + contract tests for <CommandCenterHero>.
 //
-// Pins:
-//   • Row 1 (3 cards) + Row 2 (4 cards) = 7 hero cards total.
+// Horizon re-skin W3.2 (2026-06-13): the hero is now the EXACT-MATCH 6-Widget
+// KPI row from the approved mockup (a single grid of the shared <Widget>
+// primitive), with the Inventory (COGS) data point preserved as a 7th widget
+// in the same grid and the NC-ROAS tile preserved below. These pins were
+// updated from the prior 7-Card mesh hero where the change is legitimate:
+//   • ONE grid (`hero-row-1`) holds the 6 mockup KPIs + the kept COGS widget.
 //   • Featured card is Operating Profit ("רווח תפעולי") — NOT Net Profit
-//     (Net Profit is reserved for P&L per operator request, since the
-//     hero strip only contextualises ad-spend & inventory).
-//   • Operating Profit card is banded by business ROAS (same hue as the
-//     ROAS tile so the two hero numbers visually agree).
-//   • Operating Profit + ROAS render .v.banded;
-//     Spend / Revenue / Inventory / Orders / CPM render .v.neutral.
-//   • Inventory (COGS) card uses the muted business band — informational,
-//     not a status signal. Surfaces "מלאי · {rangeLabel}" + fmtMoneyCompact +
-//     "~X.X% מהמחזור" subtitle.
+//     (Net Profit is reserved for P&L per operator request).
+//   • Only the MER widget is banded (the band-gauge rule): its root + value
+//     carry data-band; operating profit + the rest are brand-icon widgets.
+//   • Inventory (COGS) is an informational widget — no band colouring.
+//     Surfaces "מלאי · {rangeLabel}" + fmtMoneyCompact + "~X.X% מהמחזור".
 //   • A null current.cpm renders "—" (no $0.00 surprise).
+//   • <NetSparkline>/<MiniSparkline> remain standalone exports (the Horizon
+//     Widget recipe carries no per-card spark); NetSparkline is unit-tested
+//     directly here.
 
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import {
   CommandCenterHero,
+  NetSparkline,
   type CommandCenterPeriod,
 } from '@/components/home/CommandCenterHero';
 
@@ -35,26 +39,39 @@ const PERIOD_GREEN: CommandCenterPeriod = {
 };
 
 describe('<CommandCenterHero>', () => {
-  it('renders 7 hero cards across 2 rows (3 + 4)', () => {
+  it('renders the 6 mockup KPI widgets + the kept COGS widget in one grid', () => {
     const { getByTestId } = render(
       <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
     );
+    // Single Horizon grid (the prior `hero-row-2` is gone).
     expect(getByTestId('hero-row-1')).toBeTruthy();
-    expect(getByTestId('hero-row-2')).toBeTruthy();
-    expect(getByTestId('hero-net-profit')).toBeTruthy(); // Operating Profit (testid retained for back-compat)
+    // 6 mockup widgets:
     expect(getByTestId('hero-spend')).toBeTruthy();
     expect(getByTestId('hero-revenue')).toBeTruthy();
-    expect(getByTestId('hero-roas')).toBeTruthy();
-    expect(getByTestId('hero-cogs')).toBeTruthy();
+    expect(getByTestId('hero-net-profit')).toBeTruthy(); // Operating Profit (testid retained for back-compat)
+    expect(getByTestId('hero-roas')).toBeTruthy();        // MER (band-gauge)
     expect(getByTestId('hero-orders')).toBeTruthy();
     expect(getByTestId('hero-cpm')).toBeTruthy();
+    // + the kept (no-info-loss) Inventory widget.
+    expect(getByTestId('hero-cogs')).toBeTruthy();
   });
 
-  it('Featured card carries data-band="green" for a green-band ROAS', () => {
+  it('Operating Profit widget carries the LIVE pill', () => {
     const { getByTestId } = render(
       <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
     );
-    expect(getByTestId('hero-net-profit').getAttribute('data-band')).toBe('green');
+    const live = getByTestId('hero-op-live');
+    expect(live.textContent).toBe('LIVE');
+    // The pill lives inside the operating-profit widget.
+    expect(getByTestId('hero-net-profit').contains(live)).toBe(true);
+  });
+
+  it('Operating Profit is NOT banded (only MER is — the band-gauge rule)', () => {
+    const { getByTestId } = render(
+      <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
+    );
+    // Brand-icon widget, no band signal on its root.
+    expect(getByTestId('hero-net-profit').getAttribute('data-band')).toBeNull();
   });
 
   it('Featured card label is "רווח תפעולי" (operating profit), NOT "רווח נטו"', () => {
@@ -76,25 +93,23 @@ describe('<CommandCenterHero>', () => {
     expect(featured.textContent).not.toContain('$4,847');
   });
 
-  it('Operating Profit + ROAS render the .v.banded class hook', () => {
-    const { container } = render(
+  it('only the MER widget carries the band signal (data-band on its root + value)', () => {
+    const { getByTestId } = render(
       <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
     );
-    const bandedNumbers = container.querySelectorAll('.v.banded');
-    // Two banded numbers — Operating Profit + ROAS. (Inventory replaced
-    // the prior Ad-spend % card, which was also banded; the inventory
-    // card uses .v.neutral because it's informational, not a status
-    // signal.)
-    expect(bandedNumbers.length).toBe(2);
-  });
-
-  it('Spend / Revenue / Inventory / Orders / CPM render the .v.neutral class hook', () => {
-    const { container } = render(
-      <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
-    );
-    const neutralNumbers = container.querySelectorAll('.v.neutral');
-    // Exactly five neutral numbers — Spend, Revenue, Inventory, Orders, CPM.
-    expect(neutralNumbers.length).toBe(5);
+    // MER (hero-roas) is the sole banded KPI — root mirrors the band.
+    expect(getByTestId('hero-roas').getAttribute('data-band')).toBe('green');
+    // The other KPI widgets are brand-icon (un-banded) widgets.
+    for (const id of [
+      'hero-spend',
+      'hero-revenue',
+      'hero-net-profit',
+      'hero-orders',
+      'hero-cpm',
+      'hero-cogs',
+    ]) {
+      expect(getByTestId(id).getAttribute('data-band')).toBeNull();
+    }
   });
 
   it('null CPM renders "—" not "$0"', () => {
@@ -105,8 +120,9 @@ describe('<CommandCenterHero>', () => {
       />,
     );
     const cpmCard = getByTestId('hero-cpm');
-    const big = cpmCard.querySelector('.v');
-    expect(big?.textContent).toBe('—');
+    // No money primitive rendered, and the em-dash placeholder is present.
+    expect(cpmCard.querySelector('bdi.metric-num')).toBeNull();
+    expect(cpmCard.textContent).toContain('—');
   });
 
   it('Featured card surfaces the eyebrow range label', () => {
@@ -116,13 +132,14 @@ describe('<CommandCenterHero>', () => {
     expect(getByTestId('hero-net-profit').textContent).toContain('30 ימים');
   });
 
-  it('red-band ROAS flips both Operating Profit AND ROAS to data-band="red"', () => {
+  it('red-band MER flips the MER widget to data-band="red" (operating profit stays un-banded)', () => {
     const red: CommandCenterPeriod = { ...PERIOD_GREEN, roas: 1.4 };
     const { getByTestId } = render(
       <CommandCenterHero current={red} rangeLabel="היום" />,
     );
-    expect(getByTestId('hero-net-profit').getAttribute('data-band')).toBe('red');
     expect(getByTestId('hero-roas').getAttribute('data-band')).toBe('red');
+    // Operating profit is a brand-icon widget — never banded.
+    expect(getByTestId('hero-net-profit').getAttribute('data-band')).toBeNull();
   });
 
   it('shows a "no comparison data" hint when comparisonUnavailable', () => {
@@ -149,13 +166,13 @@ describe('<CommandCenterHero>', () => {
       expect(card.textContent).toContain('היום');
     });
 
-    it('renders fmtMoneyCompact(cogs) as the big number', () => {
+    it('renders fmtMoneyCompact(cogs) as the value', () => {
       const { getByTestId } = render(
         <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
       );
       const card = getByTestId('hero-cogs');
-      // cogs = 2750 → "$2,750"
-      expect(card.querySelector('.v')?.textContent).toBe('$2,750');
+      // cogs = 2750 → "$2,750" via the shared <Money> primitive.
+      expect(card.querySelector('bdi.metric-num')?.textContent).toContain('2,750');
     });
 
     it('renders the "~X.X% מהמחזור" subtitle when revenue > 0', () => {
@@ -174,7 +191,8 @@ describe('<CommandCenterHero>', () => {
         <CommandCenterHero current={noCogs} rangeLabel="היום" />,
       );
       const card = getByTestId('hero-cogs');
-      expect(card.querySelector('.v')?.textContent).toBe('—');
+      // <Money value={null}> renders the em-dash inside the metric primitive.
+      expect(card.querySelector('bdi.metric-num')?.textContent).toBe('—');
       expect(queryByTestId('hero-cogs-subtitle')).toBeNull();
     });
 
@@ -187,44 +205,35 @@ describe('<CommandCenterHero>', () => {
       const { getByTestId, queryByTestId } = render(
         <CommandCenterHero current={noRev} rangeLabel="היום" />,
       );
-      expect(getByTestId('hero-cogs').querySelector('.v')?.textContent).toBe('$1,000');
+      expect(
+        getByTestId('hero-cogs').querySelector('bdi.metric-num')?.textContent,
+      ).toContain('1,000');
       expect(queryByTestId('hero-cogs-subtitle')).toBeNull();
     });
 
-    it('carries the muted business-band attribute (no independent threshold colouring)', () => {
+    it('is informational — NOT banded (no threshold colouring on the inventory widget)', () => {
       const { getByTestId } = render(
         <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
       );
-      const card = getByTestId('hero-cogs');
-      // Business ROAS = 2.8 → green band; muted strength.
-      expect(card.getAttribute('data-band')).toBe('green');
-      expect(card.getAttribute('data-band-strength')).toBe('muted');
+      // The Horizon Widget recipe leaves COGS as a neutral brand-icon widget.
+      expect(getByTestId('hero-cogs').getAttribute('data-band')).toBeNull();
     });
   });
 
-  // Wave D2 (refined) — featured-card sparkline (NetSparkline) legibility.
-  // The featured Operating-Profit card sits on a ROAS-band gradient and the
-  // spark stroke uses that SAME band hue, so on a matching band (green line
-  // on a green band) the line can vanish into the tint. The fix uses a neutral
-  // --plot-bg casing under-stroke ONLY (no scrim rect) so the line reads on
-  // any band in both themes, while the band-tinted AREA fill — and the card's
-  // ROAS-state band colour behind it — show through fully. The spark only
-  // renders when netSparkValues (≥2 points) is passed.
-  describe('Featured-card sparkline (NetSparkline) casing-only (no scrim)', () => {
+  // Wave D2 (refined) — <NetSparkline> casing-only legibility. The spark draws
+  // in the band hue, so on a matching band the line can vanish into the tint;
+  // the fix uses a neutral --plot-bg casing under-stroke ONLY (no scrim rect)
+  // so the line reads on any band while the band-tinted AREA fill shows through.
+  // W3.2: the Horizon Widget hero no longer embeds this spark, so the component
+  // is exercised directly (it stays an export for any surface that wants it).
+  describe('<NetSparkline> casing-only (no scrim)', () => {
     const SPARK = [1, 3, 2, 5, 4, 6];
 
     it('renders area + casing/coloured line paths and NO scrim rect', () => {
-      const { getByTestId } = render(
-        <CommandCenterHero
-          current={PERIOD_GREEN}
-          rangeLabel="היום"
-          netSparkValues={SPARK}
-        />,
+      const { container } = render(
+        <NetSparkline values={SPARK} bandColorVar="var(--band-green)" />,
       );
-      // The featured card carries the green band; its spark hue MATCHES the
-      // band — exactly the P0 collision the casing protects against.
-      const featured = getByTestId('hero-net-profit');
-      const svg = featured.querySelector('svg');
+      const svg = container.querySelector('svg');
       expect(svg).toBeTruthy();
 
       // NO scrim rect — the band colour/gradient must show through fully.
@@ -255,14 +264,10 @@ describe('<CommandCenterHero>', () => {
     });
 
     it('omits the spark entirely when fewer than 2 points are supplied', () => {
-      const { getByTestId } = render(
-        <CommandCenterHero
-          current={PERIOD_GREEN}
-          rangeLabel="היום"
-          netSparkValues={[5]}
-        />,
+      const { container } = render(
+        <NetSparkline values={[5]} bandColorVar="var(--band-green)" />,
       );
-      expect(getByTestId('hero-net-profit').querySelector('svg')).toBeNull();
+      expect(container.querySelector('svg')).toBeNull();
     });
   });
 });
@@ -282,12 +287,12 @@ describe('<CommandCenterHero> — NC-ROAS / nCAC subordinate tile', () => {
     expect(tile.textContent).toContain('$38');  // nCAC value
   });
 
-  it('subordinate tile carries its OWN band (ncRoas=2.1 → orange), not the hero band (roas=2.8 → green)', () => {
+  it('subordinate tile carries its OWN band (ncRoas=2.1 → orange), not the hero MER band (roas=2.8 → green)', () => {
     const { getByTestId } = render(
       <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" newCustomer={NC} />,
     );
-    // hero featured stays green (driven by current.roas = 2.8)
-    expect(getByTestId('hero-net-profit').getAttribute('data-band')).toBe('green');
+    // hero MER widget stays green (driven by current.roas = 2.8)
+    expect(getByTestId('hero-roas').getAttribute('data-band')).toBe('green');
     // subordinate tile is orange (driven by its own ncRoas = 2.1)
     expect(getByTestId('hero-nc-roas').getAttribute('data-band')).toBe('orange');
   });
