@@ -3,7 +3,7 @@
 > **קהל יעד**: מפתחים, מי שמתחזק את הקוד, AI agents שעובדים על הריפו.
 > זה לא user manual — לזה יש את [docs/ROAS-Dashboard-User-Manual.md](ROAS-Dashboard-User-Manual.md).
 >
-> **גרסה**: 1.5 · **תאריך**: 2026-06-04 · **בסיס קוד**: Phase 05.7.x + mesh exact re-skin + NC-ROAS / first-click + Wave 2 customer-value (cohorts / LTV) tab + תשלומים (payment-method breakdown) tab
+> **גרסה**: 1.6 · **תאריך**: 2026-06-13 · **בסיס קוד**: Phase 05.7.x + mesh exact re-skin → **Horizon UI re-skin (Waves 0–9, §53)** + NC-ROAS / first-click + Wave 2 customer-value (cohorts / LTV) tab + תשלומים (payment-method breakdown) tab
 
 ---
 
@@ -3672,3 +3672,75 @@ This test runs in the normal `npm test` (Vitest) suite and blocks the gate if an
 **Flag-off is a verified no-op.** When the flag is absent, `fetchCustomerJourney` returns `{ map: empty, disabled: true }` without making any network request. The `mergeCustomerJourney` function returns the original row unchanged when its `entry` argument is `undefined` (which it is for every order when the map is empty). This is verified in the test suite — the Shopify fetcher produces identical `orders_attribution` rows whether the flag is on+unavailable, on+empty-response, or off.
 
 **Data flow position.** The gap-fill is applied AFTER `classifyOrderSource` (which populates `utmId`, `utmCampaign`, `firstUtm*` from `note_attributes`) and BEFORE the row is inserted into `orders_attribution`. The order of precedence is therefore: (1) Shopify `note_attributes` / `_ft_*` cart-attributes (most trusted — came from the real browser session); (2) Shopify `customerJourneySummary` (gap-fill, only touches null fields); (3) any existing value is never overwritten.
+
+---
+
+## 53. Horizon UI re-skin + system-unification (Waves 0–9, 2026-06-12/13)
+
+The dashboard's visual layer was migrated from the **mesh exact re-skin (§28)** to the **Horizon UI** design language (`horizon-ui/horizon-tailwind-react`, MIT — adopted as the *base* layer, with the dashboard's locked semantic layer (ROAS bands / freshness / metric-direction) preserved on top). This is **a re-skin + a system-unification (paying down 14 design-debt items)** — it is **not** a data, pipeline, or attribution change. No DB tables, Inngest functions, fetchers, or `orders_attribution` semantics were touched.
+
+**Source-of-language spec / plan / canonical mockup:**
+- Design spec (language-approved): `docs/superpowers/specs/2026-06-12-horizon-reskin-design.md`
+- Implementation plan: `docs/superpowers/plans/2026-06-12-horizon-reskin-plan.md`
+- Canonical exact-match mockup: `docs/superpowers/mockups/2026-06-12-horizon-reskin/home-approved.html` (built-in light/dark toggle)
+- Coverage contract (zero-info-loss): `docs/superpowers/specs/2026-06-12-ui-surface-inventory.md` (211 components, STAYS/MOVES/NEW).
+
+### 53.1 Token-injection approach (no token renames)
+
+Horizon's exact values are **injected into the existing token NAMES** in `src/app/globals.css` — `--canvas` / `--surface` / `--accent` / `--ink` / `--band-*` / `--chart-*` / `--sidebar-*` etc. — and the Tailwind config is extended (`navy` / `brand` / `lightPrimary` scales + the `shadow-3xl` light card shadow). Because the **names are unchanged**, every existing hermetic guard (ratchet, contrast, theme-parity, band-consistency, snapshots) keeps working with no rewrite — the re-skin is a value swap behind a stable token vocabulary.
+
+- **Light**: canvas `#F4F7FE`, white cards, light box-shadow (`14px 17px 40px 4px rgba(112,144,176,0.08)`).
+- **Dark**: canvas `navy-900 #0b1437`, cards `navy-800 #111c44`, **insets `navy-700 #1B254B`** (the canonical inset-well token), **no shadows in dark** (matches the source language).
+- Card radius `rounded-[20px]` (the `rounded-hz` recipe); navbar is floating-rounded + `backdrop-blur`, **non-sticky** (operator decision).
+- Typography: the Horizon type ramp on **Heebo** (UI) + **Rubik** (numerals, `tabular-nums`); DM Sans dropped. The type ramp is exposed as `text-fs-*` utilities (no collision with legacy `text-*`).
+- **Rollback** is a token-level + class-recipe revert — reverting the Wave commits restores the §28 mesh.
+
+### 53.2 Primitive set
+
+Composed from isolated primitives under `src/components/ui/` (not bespoke markup):
+- **`Card.tsx`** — the single card recipe (rounded-hz + theme-aware shadow).
+- **`Widget.tsx`** — the KPI tile (icon-circle `bg-lightPrimary dark:bg-navy-700` + brand icon + small gray title + large bold value).
+- **`SegmentedControl.tsx`** — pill-track toggle (active = brand-500 pill, white text); replaces ad-hoc toggle groups (filters quick-range / compare-basis, activity sub-tabs, …).
+- **`StateBlock.tsx`** — unified loading-skeleton / error+retry / empty states. The skeleton is **shape-aware** (table/list = vertical stack).
+- **`Checkbox.tsx`** — new shared checkbox primitive.
+- **`Button.tsx`** — gained `success` / `warning` / `destructive` semantic variants (token-driven, AA-safe foregrounds).
+- All `lucide-react` icons (every emoji icon replaced).
+
+### 53.3 Single-source band system + chart-line band helper
+
+- **`src/lib/roasBands.ts`** is the SINGLE SOURCE OF TRUTH for the ROAS threshold ladder (`bandForRoas` → `'red' | 'orange' | 'green' | 'blue' | 'gray'`; `<2` red, `2–2.7` orange, `2.7–3` green, `>3` blue, `spend===0` → gray/organic). A CI guard (`roasBandConsistency.guard.test.ts`) keeps any second band-calculator from drifting.
+- **`src/components/home/roasChartBand.ts`** (`bandForPeriod`) is a PURE helper that maps the **period-average ROAS** to the chart's single line+area hue, **delegating the threshold ladder to `roasBands.ts`** (no re-forked logic). It adds only the organic detection (`spend === 0` → gray + **dashed** line `"1 6"`) and the band → CSS-var/dash mapping, so `<RoasTargetChart>` stays token-only (band colours via `--band-*`, no raw hex). **This replaced the old two-tone above/below-target (3.0) area split.** Unit-tested in `home/__tests__/chartLineBand.test.ts`.
+
+### 53.4 Locked semantic rules (new this session)
+
+1. **Store-card ALARM** — spend > **$100** with 0 sales → `band-alarm` screaming-red gradient + a `prefers-reduced-motion`-gated box-shadow pulse, with the factual copy **"הוצאה מעל $100 ללא מכירות — בדוק את הקמפיינים"**. The $100 floor suppresses start-of-day false alarms. Pinned by `home/__tests__/storeCardAlarm.dom.test.tsx`.
+2. **Chart line = period-average band** (§53.3); organic = gray-dashed.
+3. **MER obeys the ROAS bands** (gauge tile — number + tag + icon-circle hue all band-coloured). Pinned by `home/__tests__/merBandWidget.dom.test.tsx`.
+4. **Canonical inset-well token** = `navy-700` in dark (§53.1).
+5. **Gateway palette** — the תשלומים (Payments) tab's PayPal got its **own** `--gateway-*` brand token, off the locked Meta `--chart-platform-meta` token (PayPal and Meta merely share a blue hue). Made hermetic by `gatewayTokenGuard.test.ts` (bans `chart-meta` utilities in payments files; asserts `--gateway-*` declared in BOTH theme blocks; positive-asserts `PaymentMethodsTab` consumes them).
+6. **"לקוחות חדשים לפי פלטפורמה"** (`home/NcByPlatformCard.tsx`) — new home card (new/returning/nCAC/NC-ROAS + share bar).
+
+### 53.5 Hermetic guards (the readability/token standard stays enforced)
+
+- **`designColorGuard.test.ts`** — the green-ratchet token guard, **widened to scan `src/app/**`** (App-Router route trees: operator / login / dev pages + layout) in addition to `src/components/**`. Bans white/black literals, raw named-palette `(gray|slate|…)-NN`, inline `#hex`/`rgb()`/`hsl()`/`oklch()`, and alpha-on-flat-token footguns. The chart-band tokens + the new `Checkbox` primitive were added to the allowlist.
+- **`gatewayTokenGuard.test.ts`** — §53.4.5.
+- **`typeRampGuard.test.ts`** — the type-ramp ratchet (drained; enforces the `text-fs-*` ramp + the 10.5px floor).
+- **New-rule DOM pins**: `storeCardAlarm` ($100 alarm), `chartLineBand` / `home/__tests__/chartLineBand.test.ts` (chart-band), `merBandWidget` (MER-band), plus grep-bans (`title=` / `dark:` / physical-direction) cleared.
+- **`contrastGuard.test.ts` / `themeParity` / `moneyPrimitiveGuard`** continue unchanged (names stable → §53.1).
+- **New CI workflow `.github/workflows/test.yml`** (Wave 9.1) mirrors the local `.husky/pre-push` gate in CI on any PR touching `dashboard-web/**`: `tsc --noEmit` + **both** vitest suites — node/lib (`npm test`) AND the jsdom component suite (`npm run test:components`, where the merBandWidget / storeCardAlarm / band DOM pins live). Lint is intentionally **not** wired into this workflow yet (the ESLint custom-rule gate reports pre-existing main debt; it stays enforced by the local pre-push hook until that debt is burned down in a dedicated PR).
+
+### 53.6 Radix-Sheet convergence for operator confirms
+
+Operator destructive-confirm dialogs converged on the **Radix `Sheet` primitive** (`src/components/ui/Sheet.tsx`) instead of hand-rolled fixed-overlay divs — consistent with the project rule that a modal opened over a Sheet must itself be a nested Radix dialog (else it is visible-but-inert). Also resolves the earlier ⌘\ keybinding collision (focus-mode moved to ⌘.).
+
+### 53.7 Documented deferrals + data-truthful omissions
+
+**Deferred (out of scope this wave, still functional as-was):**
+- Mobile bottom-nav — operator chose to skip.
+- Radix-popover migration for the Campaigns column-menu + health popovers (stay hand-rolled for now).
+- `BillingSettings` centered-Sheet.
+
+**Honest data-truthful omissions (the data does not exist, so the UI does not invent it):**
+- `NcByPlatformCard` omits per-platform **"returning"** (not derivable per platform — only business-wide).
+- `StoreDetailModal` omits hourly-bars + top-products panels from the mockup (not in the data).
+- The Trends multi-store ROAS chart stays **brand-coloured per store** (per-store identity) rather than band-coloured — intentional, not a §53.3 regression.
