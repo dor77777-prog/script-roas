@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
 import type { DailyRow, DashboardData } from '@/lib/types';
-import { cn, formatDate, formatNumber } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 import { RefundIndicator } from './RefundIndicator';
 import { Button } from '@/components/ui/Button';
+import { Money } from '@/components/ui/Money';
 import { NativeSelect } from '@/components/ui/NativeSelect';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { TableBase } from '@/components/ui/TableBase';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { fetchJsonStrict } from '@/lib/fetchJson';
@@ -19,6 +21,22 @@ import { isStoreFullyOff, type AdStateMap, type AdPlatform } from '@/lib/adState
 const HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 
 export type Mode = 'per-store' | 'summary';
+
+// Shared mode-toggle options for the SegmentedControl rail (internal toolbar
+// AND the lifted AnalysisArchiveTab controls row both render this exact set so
+// the two surfaces stay in lock-step). Values match the `Mode` union.
+const MODE_OPTIONS = [
+  { value: 'per-store', label: 'לפי חנות' },
+  { value: 'summary', label: 'סיכום כללי' },
+] as const;
+
+// Overflow-safe money cell for the daily/total table values. Mirrors the
+// legacy `formatNumber` render (he-IL, 2 decimals, NO currency prefix) exactly
+// — only difference is the <Money> primitive's compact-floor + exact-value
+// title/sr-only safety. RTL-isolated via the primitive's own <bdi dir="ltr">.
+function MoneyCell({ value }: { value: number }) {
+  return <Money value={value} prefix="none" locale="he-IL" decimals={2} />;
+}
 
 type Props = {
   stores: string[];
@@ -268,21 +286,16 @@ export function MonthlyTables({
     <div
       className={cn(
         'flex flex-wrap items-center gap-2',
-        bare && 'px-4 sm:px-5 py-3 bg-glass-2/40 border-b border-glass-edge',
+        bare && 'px-4 sm:px-5 py-3 bg-pill-track border-b border-glass-edge',
       )}
     >
-      <div
-        role="tablist"
-        className="inline-flex rounded-lg border border-glass-edge bg-glass-1 overflow-hidden divide-x divide-glass-edge"
-        dir="ltr"
-      >
-        <Tab active={mode === 'per-store'} onClick={() => handleInternalMode('per-store')}>
-          לפי חנות
-        </Tab>
-        <Tab active={mode === 'summary'} onClick={() => handleInternalMode('summary')}>
-          סיכום כללי
-        </Tab>
-      </div>
+      <SegmentedControl
+        aria-label="תצוגה"
+        options={MODE_OPTIONS as unknown as { value: string; label: string }[]}
+        value={mode}
+        onChange={v => handleInternalMode(v as Mode)}
+        size="sm"
+      />
       {mode === 'per-store' && (
         <NativeSelect
           aria-label="חנות"
@@ -297,7 +310,7 @@ export function MonthlyTables({
           ))}
         </NativeSelect>
       )}
-      <span className="text-[10px] sm:text-xs text-ink-muted ms-auto tabular-nums">
+      <span className="text-fs-2xs sm:text-xs text-ink-muted ms-auto tabular-nums">
         {visibleMonthGroups.length} חודשים
       </span>
     </div>
@@ -343,35 +356,6 @@ export function MonthlyTables({
       </div>
       {blocks}
     </section>
-  );
-}
-
-// Exported so AnalysisArchiveTab can render the SAME mode toggle in its
-// shared controls row (the lifted-toolbar case) without duplicating markup.
-export function Tab({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      variant="ghost"
-      className={cn(
-        'px-3 sm:px-3.5 py-2 sm:py-2 text-xs sm:text-sm font-medium transition-colors min-h-[44px] sm:min-h-0 h-auto',
-        active
-          ? 'bg-accent text-accent-fg hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))]'
-          : 'bg-glass-1 text-ink-secondary hover:bg-glass-2',
-      )}
-    >
-      {children}
-    </Button>
   );
 }
 
@@ -435,12 +419,16 @@ export function MonthBlockPerStore({
       <Button
         variant="ghost"
         onClick={() => setOpen(!open)}
-        className="w-full justify-between gap-2 px-4 sm:px-5 py-3 min-h-[44px] h-auto bg-ink text-canvas hover:bg-[color-mix(in_oklab,var(--text)_90%,var(--canvas-1))]"
+        className={cn(
+          'w-full justify-between gap-2 px-4 sm:px-5 py-3 min-h-[44px] h-auto',
+          'bg-pill-track text-ink hover:bg-glass-2',
+          open && 'border-b border-glass-edge',
+        )}
       >
         <span className="font-semibold truncate min-w-0">
           {monthTitle(ym)}  •  {storeName}
         </span>
-        {open ? <ChevronUp size={18} className="shrink-0" /> : <ChevronDown size={18} className="shrink-0" />}
+        {open ? <ChevronUp size={18} className="shrink-0 text-ink-secondary" /> : <ChevronDown size={18} className="shrink-0 text-ink-secondary" />}
       </Button>
       {open && (
         <div className="overflow-auto max-h-[60vh]">
@@ -466,16 +454,16 @@ export function MonthBlockPerStore({
                 return (
                   <tr key={d} className={cn('border-t border-glass-edge', isEmpty && 'text-ink-muted')}>
                     <td className="px-3 py-1.5 tabular-nums">{formatDate(d)}</td>
-                    {hasFb && <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.fbSpend) : ''}</td>}
-                    {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.gaSpend) : ''}</td>}
+                    {hasFb && <td className="px-3 py-1.5 text-end tabular-nums">{r ? <MoneyCell value={r.fbSpend} /> : ''}</td>}
+                    {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{r ? <MoneyCell value={r.gaSpend} /> : ''}</td>}
                     {hasTt && (
                       <td className="px-3 py-1.5 text-end tabular-nums">
-                        {r ? ((r.ttSpend ?? 0) > 0 ? formatNumber(r.ttSpend) : '—') : ''}
+                        {r ? ((r.ttSpend ?? 0) > 0 ? <MoneyCell value={r.ttSpend ?? 0} /> : '—') : ''}
                       </td>
                     )}
-                    <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.totalSpend) : ''}</td>
+                    <td className="px-3 py-1.5 text-end tabular-nums">{r ? <MoneyCell value={r.totalSpend} /> : ''}</td>
                     <td className="px-3 py-1.5 text-end tabular-nums">
-                      {r ? formatNumber(r.revenue) : ''}
+                      {r ? <MoneyCell value={r.revenue} /> : ''}
                       {r && (
                         <RefundIndicator
                           grossRevenue={r.grossRevenue}
@@ -489,14 +477,14 @@ export function MonthBlockPerStore({
                   </tr>
                 );
               })}
-              <tr className="border-t-2 border-glass-edge bg-glass-2 font-semibold">
+              <tr className="border-t-2 border-glass-edge bg-pill-track font-semibold">
                 <td className="px-3 py-2">סך הכל</td>
-                {hasFb && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalFb)}</td>}
-                {hasGa && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalGa)}</td>}
-                {hasTt && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalTt)}</td>}
-                <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalSpend)}</td>
+                {hasFb && <td className="px-3 py-2 text-end tabular-nums"><MoneyCell value={totalFb} /></td>}
+                {hasGa && <td className="px-3 py-2 text-end tabular-nums"><MoneyCell value={totalGa} /></td>}
+                {hasTt && <td className="px-3 py-2 text-end tabular-nums"><MoneyCell value={totalTt} /></td>}
+                <td className="px-3 py-2 text-end tabular-nums"><MoneyCell value={totalSpend} /></td>
                 <td className="px-3 py-2 text-end tabular-nums">
-                  {formatNumber(totalRev)}
+                  <MoneyCell value={totalRev} />
                   <RefundIndicator
                     grossRevenue={totalGross}
                     refundDeduction={totalRefund}
@@ -591,12 +579,16 @@ export function MonthBlockSummary({
       <Button
         variant="ghost"
         onClick={() => setOpen(!open)}
-        className="w-full justify-between gap-2 px-4 sm:px-5 py-3 min-h-[44px] h-auto bg-ink text-canvas hover:bg-[color-mix(in_oklab,var(--text)_90%,var(--canvas-1))]"
+        className={cn(
+          'w-full justify-between gap-2 px-4 sm:px-5 py-3 min-h-[44px] h-auto',
+          'bg-pill-track text-ink hover:bg-glass-2',
+          open && 'border-b border-glass-edge',
+        )}
       >
         <span className="font-semibold truncate min-w-0">
           {monthTitle(ym)}  •  סיכום כל החנויות ({stores.length})
         </span>
-        {open ? <ChevronUp size={18} className="shrink-0" /> : <ChevronDown size={18} className="shrink-0" />}
+        {open ? <ChevronUp size={18} className="shrink-0 text-ink-secondary" /> : <ChevronDown size={18} className="shrink-0 text-ink-secondary" />}
       </Button>
       {open && (
         <div className="overflow-auto max-h-[60vh]">
@@ -622,12 +614,12 @@ export function MonthBlockSummary({
                 return (
                   <tr key={d} className={cn('border-t border-glass-edge', !agg && 'text-ink-muted')}>
                     <td className="px-3 py-1.5 tabular-nums">{formatDate(d)}</td>
-                    {hasFb && <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.fb) : ''}</td>}
-                    {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.ga) : ''}</td>}
-                    {hasTt && <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.tt) : ''}</td>}
-                    <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.spend) : ''}</td>
+                    {hasFb && <td className="px-3 py-1.5 text-end tabular-nums">{agg ? <MoneyCell value={agg.fb} /> : ''}</td>}
+                    {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{agg ? <MoneyCell value={agg.ga} /> : ''}</td>}
+                    {hasTt && <td className="px-3 py-1.5 text-end tabular-nums">{agg ? <MoneyCell value={agg.tt} /> : ''}</td>}
+                    <td className="px-3 py-1.5 text-end tabular-nums">{agg ? <MoneyCell value={agg.spend} /> : ''}</td>
                     <td className="px-3 py-1.5 text-end tabular-nums">
-                      {agg ? formatNumber(agg.revenue) : ''}
+                      {agg ? <MoneyCell value={agg.revenue} /> : ''}
                       {agg && agg.refund > 0 && (
                         <RefundIndicator
                           grossRevenue={agg.gross}
@@ -641,14 +633,14 @@ export function MonthBlockSummary({
                   </tr>
                 );
               })}
-              <tr className="border-t-2 border-glass-edge bg-glass-2 font-semibold">
+              <tr className="border-t-2 border-glass-edge bg-pill-track font-semibold">
                 <td className="px-3 py-2">סך הכל</td>
-                {hasFb && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalFb)}</td>}
-                {hasGa && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalGa)}</td>}
-                {hasTt && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalTt)}</td>}
-                <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalSpend)}</td>
+                {hasFb && <td className="px-3 py-2 text-end tabular-nums"><MoneyCell value={totalFb} /></td>}
+                {hasGa && <td className="px-3 py-2 text-end tabular-nums"><MoneyCell value={totalGa} /></td>}
+                {hasTt && <td className="px-3 py-2 text-end tabular-nums"><MoneyCell value={totalTt} /></td>}
+                <td className="px-3 py-2 text-end tabular-nums"><MoneyCell value={totalSpend} /></td>
                 <td className="px-3 py-2 text-end tabular-nums">
-                  {formatNumber(totalRev)}
+                  <MoneyCell value={totalRev} />
                   <RefundIndicator
                     grossRevenue={totalGross}
                     refundDeduction={totalRefund}

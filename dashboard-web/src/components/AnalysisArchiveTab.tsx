@@ -5,8 +5,9 @@ import useSWR from 'swr';
 import { CalendarDays } from 'lucide-react';
 import { YearSelector } from '@/components/YearSelector';
 import { MonthSelector } from '@/components/MonthSelector';
-import { MonthlyTables, Tab, type Mode } from '@/components/MonthlyTables';
+import { MonthlyTables, type Mode } from '@/components/MonthlyTables';
 import { NativeSelect } from '@/components/ui/NativeSelect';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { SectionIntro } from '@/components/SectionIntro';
 import { PageScope } from '@/components/ui/PageScope';
 import { PageSynthesis } from '@/components/ui/PageSynthesis';
@@ -26,6 +27,27 @@ type Props = {
    */
   globalStore?: string;
 };
+
+// ROAS-band legend chips. COLORS + THRESHOLDS mirror the operator-locked
+// classification in `bandForRoas` (lib/roasBands.ts — the single source of
+// truth): red < 2.0, orange 2.0–2.69, green 2.7–3.0, blue > 3.0. Rendered via
+// the AA-safe shared `band-chip chip-{band}` recipe (globals.css) — never a
+// text colour pulled straight from the band hue. This is a STATIC legend (not a
+// classifier), so it does not introduce a parallel band map. Threshold labels
+// are LTR numerics → isolated in <bdi dir="ltr"> for the RTL surface.
+const ROAS_BAND_LEGEND = [
+  { band: 'red', label: '< 2' },
+  { band: 'orange', label: '2–2.7' },
+  { band: 'green', label: '2.7–3' },
+  { band: 'blue', label: '> 3' },
+] as const;
+
+// Mode-toggle options for the lifted controls row (kept in lock-step with the
+// MonthlyTables internal toolbar). Values match the `Mode` union.
+const MODE_OPTIONS: { value: Mode; label: string }[] = [
+  { value: 'per-store', label: 'לפי חנות' },
+  { value: 'summary', label: 'סיכום כללי' },
+];
 
 // Match MonthlyTables' fetcher so the SWR key is shared (no duplicate
 // network request — same `/api/data?from=...&to=...` URL is hit by both
@@ -99,8 +121,19 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
       <SectionIntro
         icon={<CalendarDays size={20} />}
         title={isStoreScoped ? `טבלאות חודשיות — ${globalStore}` : 'טבלאות חודשיות'}
-        description="טבלה לכל חודש עם שורה לכל יום. ROAS צבוע: אדום (<2), כתום (2-2.7), ירוק (2.7-3), כחול (>3). יום עם הוצאה אך ללא מכירה מסומן בשחור עם '0'."
+        description="טבלה לכל חודש עם שורה לכל יום. ROAS צבוע לפי הבנדים שלהלן. יום עם הוצאה אך ללא מכירה מסומן בשחור עם '0'."
       />
+      {/* ROAS-band legend — replaces the former prose thresholds. Each chip uses
+          the AA-safe shared band-chip recipe; threshold ranges are LTR numerics
+          isolated in <bdi>. Mirrors bandForRoas (the locked source of truth). */}
+      <div className="flex flex-wrap items-center gap-2" aria-label="מקרא בנדים של ROAS">
+        <span className="text-xs text-ink-muted">מקרא ROAS:</span>
+        {ROAS_BAND_LEGEND.map(({ band, label }) => (
+          <span key={band} className={`band-chip chip-${band}`}>
+            <bdi dir="ltr">{label}</bdi>
+          </span>
+        ))}
+      </div>
       <PageScope
         store={isStoreScoped ? globalStore! : 'כל החנויות'}
         rangeLabel={month != null ? `${month}/${year}` : `${year}`}
@@ -144,18 +177,13 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
             caption text with the first tab's accessible name. */}
         <div className="flex flex-col gap-1">
           <span className="text-xs text-ink-muted">תצוגה</span>
-          <div
-            role="tablist"
-            className="inline-flex h-9 rounded-lg border border-glass-edge bg-glass-1 overflow-hidden divide-x divide-glass-edge"
-            dir="ltr"
-          >
-            <Tab active={mode === 'per-store'} onClick={() => setMode('per-store')}>
-              לפי חנות
-            </Tab>
-            <Tab active={mode === 'summary'} onClick={() => setMode('summary')}>
-              סיכום כללי
-            </Tab>
-          </div>
+          <SegmentedControl
+            aria-label="תצוגה"
+            options={MODE_OPTIONS}
+            value={mode}
+            onChange={v => setMode(v as Mode)}
+            size="sm"
+          />
         </div>
         {mode === 'per-store' && (
           <div className="flex flex-col gap-1">

@@ -93,23 +93,10 @@ vi.mock('@/components/MonthlyTables', () => ({
       data-controlled={props.mode != null ? 'yes' : 'no'}
     />
   ),
-  // AnalysisArchiveTab imports the real <Tab> to render the mode toggle in its
-  // lifted controls row. Provide a faithful, role-correct stand-in here (the
-  // real one renders a Button with role="tab"); we only need the role + label
-  // + click wiring for these assertions.
-  Tab: ({
-    active,
-    children,
-    onClick,
-  }: {
-    active: boolean;
-    children: React.ReactNode;
-    onClick: () => void;
-  }) => (
-    <button role="tab" aria-selected={active} onClick={onClick} type="button">
-      {children}
-    </button>
-  ),
+  // W6.4 Horizon re-skin: the lifted mode toggle now renders the real
+  // <SegmentedControl> (role="tablist" + child role="tab" buttons), so this
+  // mock no longer needs to stand in for the retired <Tab> export — the
+  // tablist/tab-name assertions below resolve against the real primitive.
 }));
 
 // ---------------------------------------------------------------------------

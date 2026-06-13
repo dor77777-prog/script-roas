@@ -127,7 +127,10 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   // MetaShopifyReconciliation.tsx — DRAINED to 0 in W4.5 (Horizon deep-analysis
   // re-skin: the 5 sub-floor literals — Pearson-r eyebrow, r-values row, legend,
   // 2 explainer paragraphs — → text-fs-2xs ramp token; removed from allowlist).
-  'MonthlyTables.tsx': 1,
+  // MonthlyTables.tsx — DRAINED to 0 in W6.4 (Horizon Archive + monthly-tables
+  // re-skin: the lone sub-floor literal — the "{n} חודשים" toolbar counter
+  // text-[10px] — → text-fs-2xs ramp token; the mode rail moved onto
+  // SegmentedControl; money cells routed through <Money>; removed from allowlist).
   // PaymentMethodsTab.tsx — DRAINED to 0 in W5.4 (Horizon payments-tab re-skin:
   // the lone sub-floor literal — the pm-error mono detail (now inside the shared
   // <StateBlock> error chrome) — → text-fs-2xs ramp token; all remaining text-2xs
