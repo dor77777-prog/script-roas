@@ -8,9 +8,11 @@
 // shows an inline error line. NO password constant lives here — it is only
 // what the user types.
 //
-// Styling reuses the project primitives/tokens (Card glass surface, Button
-// primary = bg-accent-btn, Input). Light+dark + RTL are inherited from the
-// root <html dir="rtl">.
+// Styling reuses the Horizon-re-skinned primitives/tokens (Card chassis =
+// rounded-hz + theme-aware shadow, brand-500 primary Button, Input) and the
+// canonical type ramp (text-fs-*). Light+dark + RTL are inherited from the
+// root <html dir="rtl">. No raw colours — the brand mark gradient resolves
+// through the sidebar-logo tokens, everything else through theme tokens.
 
 import { useState, type FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -53,15 +55,20 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-sm">
+    // Comfortable Horizon auth padding (p-7 vs the Card default p-5). The Card
+    // primitive already supplies the Horizon chassis: `rounded-hz` (20px) +
+    // the theme-aware Horizon shadow (drop in light / shadowless in dark) +
+    // the opaque card surface — we only widen the inner padding here.
+    <Card className="w-full max-w-sm p-7">
       <div className="flex flex-col items-center text-center gap-2 mb-6">
-        {/* Brand mark — same violet gradient as the sidebar logo (both themes). */}
+        {/* Brand mark — same violet brand gradient as the sidebar logo (both
+            themes), bumped to `rounded-hz` so it echoes the card's 20px radius. */}
         <div
-          className="h-11 w-11 rounded-xl bg-gradient-to-br from-[var(--sidebar-logo-1)] to-[var(--sidebar-logo-2)]"
+          className="h-12 w-12 rounded-hz bg-gradient-to-br from-[var(--sidebar-logo-1)] to-[var(--sidebar-logo-2)]"
           aria-hidden
         />
-        <h1 className="text-lg font-semibold text-ink">דשבורד ROAS</h1>
-        <p className="text-sm text-ink-muted">הזינו סיסמה כדי להמשיך</p>
+        <h1 className="text-fs-lg font-semibold text-ink">דשבורד ROAS</h1>
+        <p className="text-fs-sm text-ink-muted">הזינו סיסמה כדי להמשיך</p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-3" noValidate>
@@ -89,7 +96,7 @@ export function LoginForm() {
           <p
             id="dash-password-error"
             role="alert"
-            className="text-[13px] font-medium text-status-redFg text-center"
+            className="text-fs-xs font-medium text-status-redFg text-center"
           >
             סיסמה שגויה. נסו שוב.
           </p>

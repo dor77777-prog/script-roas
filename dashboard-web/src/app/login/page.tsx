@@ -21,7 +21,14 @@ export const metadata = {
 
 export default function LoginPage() {
   return (
-    <main className="min-h-screen bg-canvas flex items-center justify-center px-4 py-10">
+    // Horizon auth backdrop: the flat `bg-canvas` (Horizon light primary in
+    // light, navy canvas in dark — both via the --canvas-1 token) plus a single
+    // token-driven radial wash centred behind the card. The radial reuses the
+    // SAME `--bg-glow` token the global body backdrop uses (subtle violet on
+    // dark / subtle teal on light), so the auth screen reads as part of the
+    // app's surface system rather than a flat slab — no raw colours, no
+    // contrast cost (the card sits on its own opaque surface above the glow).
+    <main className="relative min-h-screen bg-canvas flex items-center justify-center px-4 py-10 bg-[radial-gradient(900px_500px_at_50%_38%,var(--bg-glow),transparent_60%)]">
       <Suspense fallback={null}>
         <LoginForm />
       </Suspense>
