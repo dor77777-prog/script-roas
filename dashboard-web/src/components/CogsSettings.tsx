@@ -4,6 +4,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
+import { Heading } from '@/components/ui/Typography';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import {
   TableBase, TableHead, TableRow, TableHeaderCell, TableCell,
 } from '@/components/ui/TableBase';
@@ -87,19 +89,22 @@ export function CogsSettings({ storeNames, currentMonth, monthsInData }: {
 
   return (
     <Card className="space-y-4">
-      <h3 className="text-sm font-bold text-ink">הוצאות מלאי (COGS)</h3>
+      <Heading level="panel">הוצאות מלאי (COGS)</Heading>
 
       {/* mode */}
       <div>
         <div className="text-2xs uppercase tracking-wide text-ink-muted mb-1.5">מצב (גלובלי)</div>
-        <div className="inline-flex rounded-md bg-glass-2 border border-glass-edge p-0.5 gap-0.5">
-          <Button type="button" variant="ghost" data-testid="cogs-mode-business"
-            onClick={() => switchMode('business')}
-            className={cn('h-auto px-3 py-1.5 text-sm', mode === 'business' && 'bg-accent text-accent-fg')}>רמת עסק</Button>
-          <Button type="button" variant="ghost" data-testid="cogs-mode-per-store"
-            onClick={() => switchMode('per-store')}
-            className={cn('h-auto px-3 py-1.5 text-sm', mode === 'per-store' && 'bg-accent text-accent-fg')}>רמת חנות</Button>
-        </div>
+        <SegmentedControl
+          role="radiogroup"
+          size="sm"
+          aria-label="מצב COGS (גלובלי)"
+          value={mode}
+          onChange={(v) => switchMode(v as TCogs['mode'])}
+          options={[
+            { value: 'business', label: 'רמת עסק', testId: 'cogs-mode-business' },
+            { value: 'per-store', label: 'רמת חנות', testId: 'cogs-mode-per-store' },
+          ]}
+        />
       </div>
 
       {/* % inputs */}
@@ -177,13 +182,13 @@ export function CogsSettings({ storeNames, currentMonth, monthsInData }: {
                   {mode === 'per-store'
                     ? storeNames.map((s, i) => (
                         <TableCell key={s} numeric className={dim}>
-                          {(effectiveCogsPct(settings, s, m) * 100).toFixed(0)}%
+                          <bdi dir="ltr" className="tabular-nums">{(effectiveCogsPct(settings, s, m) * 100).toFixed(0)}%</bdi>
                           {!edited && i === 0 && <Badge testid={`cogs-default-${m}`} variant="default">ברירת מחדל</Badge>}
                         </TableCell>
                       ))
                     : (
                       <TableCell numeric className={dim}>
-                        {(effectiveCogsPct(settings, '', m) * 100).toFixed(0)}%
+                        <bdi dir="ltr" className="tabular-nums">{(effectiveCogsPct(settings, '', m) * 100).toFixed(0)}%</bdi>
                         {!edited && <Badge testid={`cogs-default-${m}`} variant="default">ברירת מחדל</Badge>}
                       </TableCell>
                     )}

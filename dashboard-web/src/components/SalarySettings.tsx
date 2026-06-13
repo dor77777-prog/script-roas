@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { Money } from '@/components/ui/Money';
+import { Heading } from '@/components/ui/Typography';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import {
   TableBase, TableHead, TableRow, TableHeaderCell, TableCell,
 } from '@/components/ui/TableBase';
@@ -55,19 +57,22 @@ export function SalarySettings({ currentMonth, monthsInData }: {
 
   return (
     <Card className="space-y-4">
-      <h3 className="text-sm font-bold text-ink">משכורות</h3>
+      <Heading level="panel">משכורות</Heading>
 
       {/* entry-mode toggle: percent vs amount */}
       <div>
         <div className="text-2xs uppercase tracking-wide text-ink-muted mb-1.5">מצב הזנה</div>
-        <div className="inline-flex rounded-md bg-glass-2 border border-glass-edge p-0.5 gap-0.5">
-          <Button type="button" variant="ghost" data-testid="salary-mode-percent"
-            onClick={() => setKind('percent')}
-            className={cn('h-auto px-3 py-1.5 text-sm', kind === 'percent' && 'bg-accent text-accent-fg')}>% מהמחזור</Button>
-          <Button type="button" variant="ghost" data-testid="salary-mode-amount"
-            onClick={() => setKind('amount')}
-            className={cn('h-auto px-3 py-1.5 text-sm', kind === 'amount' && 'bg-accent text-accent-fg')}>סכום חודשי (CAD)</Button>
-        </div>
+        <SegmentedControl
+          role="radiogroup"
+          size="sm"
+          aria-label="מצב הזנת משכורות"
+          value={kind}
+          onChange={(v) => setKind(v as SalaryEntry['kind'])}
+          options={[
+            { value: 'percent', label: '% מהמחזור', testId: 'salary-mode-percent' },
+            { value: 'amount', label: 'סכום חודשי (CAD)', testId: 'salary-mode-amount' },
+          ]}
+        />
       </div>
 
       {/* value field — prefix flips with mode */}
