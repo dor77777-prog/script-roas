@@ -33,12 +33,12 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { AlertTriangle, CreditCard, ChevronDown, RefreshCw } from 'lucide-react';
+import { CreditCard, ChevronDown, Info } from 'lucide-react';
 import { fetchJsonStrict } from '@/lib/fetchJson';
 import { Card } from '@/components/ui/Card';
 import { Heading } from '@/components/ui/Typography';
+import { StateBlock } from '@/components/ui/StateBlock';
 import { NativeSelect } from '@/components/ui/NativeSelect';
-import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Money } from '@/components/ui/Money';
 import { TableBase } from '@/components/ui/TableBase';
@@ -419,56 +419,56 @@ export function PaymentMethodsTab({
           settled-empty (the business copy) → data. Pre-fix, error AND loading
           both fell into the "הדאטה תופיע ברגע שהזמנות יסונכרנו" verdict. */}
       {showError ? (
-        <div
-          role="alert"
-          data-testid="pm-error"
-          className="rounded-xl border border-status-red bg-status-redBg text-status-redFg px-4 py-4"
-        >
-          <div className="flex items-start gap-2.5">
-            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold text-[13px]">שגיאה בטעינת נתוני אמצעי-התשלום</div>
-              <div className="text-[11px] opacity-80 mt-1 leading-relaxed">
-                הקריאה ל-<code className="font-mono">/api/payment-methods</code> נכשלה.
-                זה לא אומר שאין הזמנות — זה אומר שהשרת לא ענה. נסה לרענן.
+        /* Horizon re-skin (W5.4) — the bespoke red strip is replaced by the
+           shared <StateBlock mode="error"> chrome (icon + AA-safe status-red
+           trio + "נסה שוב" retry <Button>). The pm-error testid + role=alert
+           stay on the wrapper so the honest-state contract is preserved; the
+           full explanatory copy + the mono error detail ride in `message` as a
+           composite node (no info loss — and this drains the file's lone
+           sub-floor 10px mono offender onto the type-ramp). */
+        <div data-testid="pm-error" role="alert">
+          <StateBlock
+            mode="error"
+            onRetry={() => mutate()}
+            message={
+              <div className="min-w-0">
+                <div className="font-semibold">שגיאה בטעינת נתוני אמצעי-התשלום</div>
+                <div className="mt-1 text-fs-2xs font-normal leading-relaxed opacity-80">
+                  הקריאה ל-<code className="font-mono">/api/payment-methods</code> נכשלה.
+                  זה לא אומר שאין הזמנות — זה אומר שהשרת לא ענה. נסה לרענן.
+                </div>
+                <div className="mt-1 font-mono text-fs-2xs font-normal opacity-60">
+                  {error instanceof Error ? error.message : String(error ?? data?.error)}
+                </div>
               </div>
-              <div className="text-[10px] opacity-60 mt-1 font-mono">
-                {error instanceof Error ? error.message : String(error ?? data?.error)}
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => mutate()}
-                className="mt-3 gap-1.5 text-[12px]"
-              >
-                <RefreshCw size={12} />
-                נסה שוב
-              </Button>
-            </div>
-          </div>
+            }
+          />
         </div>
       ) : showLoading ? (
+        /* LOADING → <StateBlock mode="skeleton"> (4-up KPI silhouette), never
+           the business empty-copy. pm-loading + aria-busy stay on the wrapper. */
         <div data-testid="pm-loading" aria-busy="true" className="space-y-3">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="skeleton h-24 rounded-xl" aria-hidden />
-            ))}
-          </div>
-          <div className="p-4 text-center text-ink-muted text-sm">טוען נתוני אמצעי-תשלום…</div>
+          <StateBlock mode="skeleton" shape="card" rows={4} message="טוען נתוני אמצעי-תשלום…" />
+          <div className="p-4 text-center text-fs-sm text-ink-muted">טוען נתוני אמצעי-תשלום…</div>
         </div>
       ) : rows.length === 0 ? (
-        <Card data-testid="pm-empty">
-          <p className="text-sm text-ink-secondary">
-            אין עדיין נתוני אמצעי-תשלום לתצוגה. הדאטה תופיע כאן ברגע שהזמנות יסונכרנו
-            מ-Shopify.
-          </p>
+        /* Settled-empty — the ONLY state allowed to show the "waiting for sync"
+           copy. Boxed in a Card so it reads as a real empty surface, with the
+           shared <StateBlock mode="empty"> status icon + tint. The exact
+           message + the pm-empty testid are preserved. */
+        <Card data-testid="pm-empty" className="p-0">
+          <StateBlock
+            mode="empty"
+            icon={<CreditCard aria-hidden />}
+            description="אין עדיין נתוני אמצעי-תשלום לתצוגה. הדאטה תופיע כאן ברגע שהזמנות יסונכרנו מ-Shopify."
+          />
         </Card>
       ) : (
         <>
           {/* Summary strip — wide totals card + 3 per-gateway cards. */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Card data-testid="pm-summary-total" className="p-4 sm:col-span-1">
-              <div className="text-2xs font-semibold uppercase tracking-[0.06em] text-ink-muted">
+              <div className="text-fs-2xs font-semibold uppercase tracking-[0.06em] text-ink-muted">
                 חלוקת הזמנות — כל התקופה
               </div>
               <div className="mt-1 text-xl font-extrabold tracking-tight">
@@ -487,7 +487,7 @@ export function PaymentMethodsTab({
                 {CAT_META.map(({ key, label }) => (
                   <span
                     key={key}
-                    className="inline-flex items-center gap-1.5 text-2xs font-semibold text-ink-secondary"
+                    className="inline-flex items-center gap-1.5 text-fs-2xs font-semibold text-ink-secondary"
                   >
                     <i className={cn('inline-block h-2 w-2 rounded-sm', SEG_BG[key])} />
                     {label} {pct(grand[key].orders, grandOrders)}%
@@ -507,22 +507,37 @@ export function PaymentMethodsTab({
           </div>
 
           {isPreBackfill && (
-            <Card data-testid="pm-backfill-hint" className="p-3">
-              <p className="text-xs text-ink-secondary">
-                כל ההזמנות מסווגות כרגע כ<b>"אחר / לא ידוע"</b> — נתוני שער-התשלום עוד
-                לא מולאו אחורה.{' '}
-                <span className="font-semibold text-ink">ממתין ל-backfill</span> מ-Shopify;
-                לאחר מכן הפילוח אשראי / PayPal יופיע כאן.
-              </p>
+            /* Info-toned state surface (status-blue trio + Info glyph) so the
+               pre-backfill notice reads as a real waiting/info banner, not body
+               prose. AA-safe (status-blueFg on status-blueBg, both themes). The
+               exact copy + the pm-backfill-hint testid are preserved. */
+            <Card
+              data-testid="pm-backfill-hint"
+              variant="flat"
+              className="border border-status-blue bg-status-blueBg p-3"
+            >
+              <div className="flex items-start gap-2.5 text-status-blueFg">
+                <Info size={16} className="mt-0.5 shrink-0" aria-hidden />
+                <p className="text-fs-xs leading-relaxed">
+                  כל ההזמנות מסווגות כרגע כ<b>"אחר / לא ידוע"</b> — נתוני שער-התשלום עוד
+                  לא מולאו אחורה.{' '}
+                  <span className="font-semibold">ממתין ל-backfill</span> מ-Shopify;
+                  לאחר מכן הפילוח אשראי / PayPal יופיע כאן.
+                </p>
+              </div>
             </Card>
           )}
 
           {/* By-year accordion — one collapsible <details> per year (DESC),
               each header carrying the year aggregate; expanding reveals
-              sub-rows at the chosen granularity. Footer grand-total row stays. */}
-          <Card variant="flat" className="overflow-hidden p-0">
+              sub-rows at the chosen granularity. Footer grand-total row stays.
+              W5.4 — BOXED as a proper Horizon <Card> section (was variant="flat"
+              floating on canvas) for cross-tab consistency with every customers
+              section. Keeps the max-h/scroll behaviour on a real card surface;
+              p-0 so the header / scroll body / note manage their own padding. */}
+          <Card className="overflow-hidden p-0">
             <div className="flex items-center gap-2 border-b border-glass-edge px-4 py-3">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-accent-soft text-accent">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-accent-bg text-accent">
                 <CreditCard size={16} aria-hidden />
               </span>
               <Heading level="section">פילוח לפי שנה</Heading>
@@ -540,7 +555,7 @@ export function PaymentMethodsTab({
             </div>
             <div
               data-testid="pm-note"
-              className="border-t border-glass-edge bg-glass-2 px-4 py-3 text-2xs leading-relaxed text-ink-subtle"
+              className="border-t border-glass-edge bg-glass-2 px-4 py-3 text-fs-2xs leading-relaxed text-ink-subtle"
             >
               המספרים מגיעים מ-Shopify (<code dir="ltr" className="font-mono">payment_gateway_names</code>)
               על כל היסטוריית ההזמנות. "אחר" = מתנה / manual / COD וכו׳. האחוז מחושב לפי
@@ -565,7 +580,7 @@ function GatewaySummaryCard({
 }) {
   return (
     <Card data-testid="pm-summary-card" className="p-4">
-      <div className="text-2xs font-semibold uppercase tracking-[0.06em] text-ink-muted">
+      <div className="text-fs-2xs font-semibold uppercase tracking-[0.06em] text-ink-muted">
         {label}
       </div>
       <div className="mt-1 text-xl font-extrabold tracking-tight">
@@ -611,7 +626,7 @@ function YearAccordion({
     <details
       open={defaultOpen}
       data-testid={`pm-year-row-${group.year}`}
-      className="group rounded-card border border-glass-edge bg-glass-2/40 overflow-hidden"
+      className="group rounded-card border border-glass-edge bg-pill-track overflow-hidden"
     >
       <summary
         data-testid={`pm-year-${group.year}`}
@@ -636,7 +651,7 @@ function YearAccordion({
           {(['credit', 'paypal', 'other'] as PaymentCategory[]).map((k) => (
             <span
               key={k}
-              className="inline-flex items-center gap-1.5 text-2xs font-semibold tabular-nums text-ink-secondary"
+              className="inline-flex items-center gap-1.5 text-fs-2xs font-semibold tabular-nums text-ink-secondary"
             >
               <i className={cn('inline-block h-2 w-2 rounded-sm', SEG_BG[k])} />
               <span className="text-ink-muted">{catLabels[k]}</span>
@@ -704,7 +719,7 @@ function PeriodRowsTable({
             חלוקה
           </th>
         </tr>
-        <tr className="text-2xs text-ink-muted">
+        <tr className="text-fs-2xs text-ink-muted">
           <th className="border-b border-glass-edge px-3 py-1.5 text-end font-medium">הזמנות</th>
           <th className="border-b border-glass-edge px-3 py-1.5 text-end font-medium">CAD</th>
           <th className="border-b border-glass-edge px-3 py-1.5 text-end font-medium">%</th>
@@ -735,7 +750,7 @@ function PeriodRowsTable({
               <td className="px-3 py-2 text-end tabular-nums">
                 <Money value={totals.credit.revenueCad} />
               </td>
-              <td className="px-3 py-2 text-end text-2xs tabular-nums text-ink-muted">
+              <td className="px-3 py-2 text-end text-fs-2xs tabular-nums text-ink-muted">
                 {pct(totals.credit.orders, ro)}%
               </td>
               {/* paypal */}
@@ -745,7 +760,7 @@ function PeriodRowsTable({
               <td className="px-3 py-2 text-end tabular-nums">
                 <Money value={totals.paypal.revenueCad} />
               </td>
-              <td className="px-3 py-2 text-end text-2xs tabular-nums text-ink-muted">
+              <td className="px-3 py-2 text-end text-fs-2xs tabular-nums text-ink-muted">
                 {pct(totals.paypal.orders, ro)}%
               </td>
               {/* other */}

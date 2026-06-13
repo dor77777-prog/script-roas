@@ -116,7 +116,10 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   // re-skin: the 5 sub-floor literals — Pearson-r eyebrow, r-values row, legend,
   // 2 explainer paragraphs — → text-fs-2xs ramp token; removed from allowlist).
   'MonthlyTables.tsx': 1,
-  'PaymentMethodsTab.tsx': 1,
+  // PaymentMethodsTab.tsx — DRAINED to 0 in W5.4 (Horizon payments-tab re-skin:
+  // the lone sub-floor literal — the pm-error mono detail (now inside the shared
+  // <StateBlock> error chrome) — → text-fs-2xs ramp token; all remaining text-2xs
+  // eyebrows/cells migrated onto the text-fs-* ramp; removed from allowlist).
   'PnLBreakdown.tsx': 10,
   'ProductCentricView.tsx': 14,
   // ProductPickerModal.tsx — DRAINED to 0 in W4.4 (Horizon product-picker
