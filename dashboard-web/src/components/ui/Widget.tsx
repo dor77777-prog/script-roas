@@ -79,10 +79,11 @@ function chipClassForBand(band: CoreRoasBand): string {
  * at the `--band-*` token (mode-aware in globals.css). Token-only — no raw
  * hex — so the no-hex-color-in-components guard stays green.
  *   • `text`   — value/icon colour = the band token.
- *   • `badgeBg`— circular-badge fill = a low-alpha tint of the same token,
- *     mirroring the mockup's ~12%-alpha brand-tint badge but kept
- *     token-driven via `color-mix(... transparent)` (same recipe used
- *     across the app for tinted brand surfaces).
+ *   • `badgeBg`— circular-badge fill = a low-alpha tint of the same token.
+ *     Uses the SAME technique + percentage as the adjacent `.chip-{band}`
+ *     recipe in globals.css (`oklch(from var(--band-X) l c h / 0.18)`, and
+ *     0.12 for gray to match `.chip-gray`) so a banded Widget shows one
+ *     consistent tint method across its badge and tag-pill.
  */
 const BAND_VALUE_CLASS: Record<CoreRoasBand, string> = {
   red: 'text-[var(--band-red)]',
@@ -92,13 +93,13 @@ const BAND_VALUE_CLASS: Record<CoreRoasBand, string> = {
   gray: 'text-[var(--band-gray)]',
 };
 const BAND_BADGE_CLASS: Record<CoreRoasBand, string> = {
-  red: 'bg-[color-mix(in_oklab,var(--band-red)_14%,transparent)] text-[var(--band-red)]',
+  red: 'bg-[oklch(from_var(--band-red)_l_c_h_/_0.18)] text-[var(--band-red)]',
   orange:
-    'bg-[color-mix(in_oklab,var(--band-orange)_14%,transparent)] text-[var(--band-orange)]',
+    'bg-[oklch(from_var(--band-orange)_l_c_h_/_0.18)] text-[var(--band-orange)]',
   green:
-    'bg-[color-mix(in_oklab,var(--band-green)_14%,transparent)] text-[var(--band-green)]',
-  blue: 'bg-[color-mix(in_oklab,var(--band-blue)_14%,transparent)] text-[var(--band-blue)]',
-  gray: 'bg-[color-mix(in_oklab,var(--band-gray)_12%,transparent)] text-[var(--band-gray)]',
+    'bg-[oklch(from_var(--band-green)_l_c_h_/_0.18)] text-[var(--band-green)]',
+  blue: 'bg-[oklch(from_var(--band-blue)_l_c_h_/_0.18)] text-[var(--band-blue)]',
+  gray: 'bg-[oklch(from_var(--band-gray)_l_c_h_/_0.12)] text-[var(--band-gray)]',
 };
 
 export function Widget({

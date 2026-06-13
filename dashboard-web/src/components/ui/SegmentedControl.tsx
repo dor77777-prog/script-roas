@@ -2,6 +2,8 @@
 
 // dashboard-web/src/components/ui/SegmentedControl.tsx
 //
+// Use SegmentedControl for a stateless VALUE TOGGLE with no associated content panel (filters, view switches). For switching content panels (tabpanel association), use Tabs.tsx instead.
+//
 // Horizon re-skin Wave 1, debt #4 — the single segmented / toggle primitive.
 // Replaces 12 hand-rolled controls with divergent active states (Filters
 // quick-range pills + compare-basis row, Products segmented switch, the
@@ -170,9 +172,14 @@ export const SegmentedControl = forwardRef<HTMLDivElement, SegmentedControlProps
         {options.map((opt, i) => {
           const selected = opt.value === value;
           // Roving tabindex: the active item is tabbable; if no value matches,
-          // make the first enabled item tabbable so the control is reachable.
+          // make the first ENABLED item tabbable so the control is reachable.
+          // When every option is disabled there is no enabled item — force
+          // nothing tabbable (don't fall back to the disabled index 0).
           const tabbable =
-            selected || (activeIndex < 0 && i === (enabledIndexes[0] ?? 0));
+            selected ||
+            (activeIndex < 0 &&
+              enabledIndexes.length > 0 &&
+              i === enabledIndexes[0]);
 
           return (
             <button

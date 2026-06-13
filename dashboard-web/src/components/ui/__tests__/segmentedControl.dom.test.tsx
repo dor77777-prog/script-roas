@@ -195,6 +195,18 @@ describe('SegmentedControl', () => {
     expect(rail.scrollWidth).toBeLessThanOrEqual(rail.clientWidth || rail.scrollWidth);
   });
 
+  it('all-disabled control: NO option is force-tabbable (no tabIndex=0 button)', () => {
+    const ALL_DISABLED = OPTIONS.map(o => ({ ...o, disabled: true }));
+    renderRTL(
+      // value matches nothing enabled (no enabled option exists at all)
+      <SegmentedControl options={ALL_DISABLED} value="__none__" onChange={() => {}} aria-label="טווח" />,
+    );
+    const items = screen.getAllByRole('tab');
+    const tabbable = items.filter(el => el.getAttribute('tabindex') === '0');
+    // With zero enabled options nothing should fall back to the disabled index 0.
+    expect(tabbable).toHaveLength(0);
+  });
+
   it('size="sm" and size="md" both render (no crash) and differ in padding class', () => {
     const { rerender } = renderRTL(
       <SegmentedControl options={OPTIONS} value="today" onChange={() => {}} size="sm" aria-label="טווח" />,

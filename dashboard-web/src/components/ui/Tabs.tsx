@@ -1,5 +1,7 @@
 'use client';
 
+// Use Tabs for CONTENT-PANEL switching (manages tabpanel association via Radix). For a stateless value toggle with no panel, use SegmentedControl.tsx instead.
+
 import { createContext, forwardRef, useContext } from 'react';
 import * as RadixTabs from '@radix-ui/react-tabs';
 import { cn } from '@/lib/utils';
