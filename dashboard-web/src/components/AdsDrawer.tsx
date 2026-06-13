@@ -1,15 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
 import useSWR from 'swr';
 import { Button } from '@/components/ui/Button';
 import {
   ExternalLink,
   Layers,
-  ArrowUp,
-  ArrowDown,
-  ArrowUpDown,
   CheckCircle2,
   Circle,
   Maximize2,
@@ -17,7 +13,7 @@ import {
   AlertTriangle,
   RefreshCw,
 } from 'lucide-react';
-import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
 import { fmtMoney, fmtMoneyString } from '@/lib/format';
 import { roasLabel } from '@/lib/analytics';
 import type { AdsResponse } from '@/app/api/ads/route';
@@ -34,10 +30,13 @@ import { pendingRoasLabel } from '@/lib/campaignPendingState';
 import { getTodayInIsraelTz } from '@/lib/dateRange';
 import { Heading } from '@/components/ui/Typography';
 import { Sheet, SheetContent, SheetHeader, SheetBody } from '@/components/ui/Sheet';
-import { Badge, BADGE_TONE_BG, type BadgeTone } from '@/components/ui/Badge';
+import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Stat } from '@/components/ui/Stat';
 import { TableBase } from '@/components/ui/TableBase';
+import { Money } from '@/components/ui/Money';
+import { SortableHeader } from '@/components/ui/SortableHeader';
+import { ROAS_TONE_BG, ROAS_BADGE_SHAPE } from '@/lib/format/roasCell';
 
 /**
  * Slide-in drawer that opens when the user clicks an ad-set row in the
@@ -438,7 +437,7 @@ export function AdsDrawer({
               {/* Hebrew "מודעות ב-" + LTR English "ad-set" literal. Wrap the
                   LTR fragment in <bdi> so bidi reordering doesn't pull
                   "ad-set" out of position within the header chip. */}
-              <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-ink-muted">
+              <div className="text-fs-2xs uppercase tracking-[0.12em] font-semibold text-ink-muted">
                 מודעות ב-<bdi dir="ltr">ad-set</bdi>
               </div>
               <HelpTooltip content={adSetName}>
@@ -496,7 +495,7 @@ export function AdsDrawer({
                     זה לא אומר שאין מודעות — זה אומר שהשרת לא ענה.
                     נסה לרענן, ואם זה לא עוזר בדוק את הלוגים.
                   </div>
-                  <div className="text-[10px] opacity-60 mt-1 font-mono">
+                  <div className="text-fs-2xs opacity-60 mt-1 font-mono">
                     {error instanceof Error ? error.message : String(error)}
                   </div>
                   <Button
@@ -561,20 +560,20 @@ export function AdsDrawer({
                   <thead>
                     <tr className="text-ink-secondary">
                       <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
-                      <AdSortHeader label="מודעה"     col="name"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="start"  />
-                      <AdSortHeader label="הוצאה"     col="spend"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
-                      <AdSortHeader label="ערך"       col="value"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
-                      <AdSortHeader
+                      <SortableHeader<AdSortKey> label="מודעה"  sortKey="name"  activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="start" />
+                      <SortableHeader<AdSortKey> label="הוצאה"  sortKey="spend" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="end" />
+                      <SortableHeader<AdSortKey> label="ערך"    sortKey="value" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="end" />
+                      <SortableHeader<AdSortKey>
                         label={
                           <span className="inline-flex flex-col items-center leading-tight">
                             <span>ROAS</span>
-                            <span className="text-[9px] text-ink-muted font-normal">מכוון · directional</span>
+                            <span className="text-fs-2xs text-ink-muted font-normal">מכוון · directional</span>
                           </span>
                         }
-                        col="roas"
-                        sortKey={sortKey}
-                        dir={sortDir}
-                        onClick={handleSort}
+                        sortKey="roas"
+                        activeSortKey={sortKey}
+                        sortDir={sortDir}
+                        onSort={handleSort}
                         align="center"
                       />
                       <th className="font-medium px-3 py-2 text-center text-ink-secondary">
@@ -587,9 +586,9 @@ export function AdsDrawer({
                           <span>first-click</span>
                         </HelpTooltip>
                       </th>
-                      <AdSortHeader label="המרות"     col="conversions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
-                      <AdSortHeader label="חשיפות"    col="impressions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
-                      <AdSortHeader label="קליקים"    col="clicks"      sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
+                      <SortableHeader<AdSortKey> label="המרות"  sortKey="conversions" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="end" />
+                      <SortableHeader<AdSortKey> label="חשיפות" sortKey="impressions" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="end" />
+                      <SortableHeader<AdSortKey> label="קליקים" sortKey="clicks"      activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="end" />
                       <th className="px-2 py-2 w-[40px]" aria-label="פעולות" />
                     </tr>
                   </thead>
@@ -649,9 +648,11 @@ export function AdsDrawer({
                               <bdi dir="ltr">{a.adName}</bdi>
                             </td>
                           </HelpTooltip>
-                          <td className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
+                          <td className="px-3 py-2 text-end tabular-nums">
+                            <Money value={a.spend} prefix="none" locale="he-IL" compactAbove={100_000} />
+                          </td>
                           <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-status-greenFg font-medium')}>
-                            {formatCurrency(a.value)}
+                            <Money value={a.value} prefix="none" locale="he-IL" compactAbove={100_000} />
                           </td>
                           {(() => {
                             // 2026-06-09 (Task 7): "מתעדכן…/ממתין…" for today's
@@ -663,9 +664,18 @@ export function AdsDrawer({
                             if (pend) {
                               return <td className="px-3 py-2 text-center text-xs text-ink-muted tabular-nums">{pend}</td>;
                             }
+                            // W4.4 band-fork FIX: render the ROAS value as a SOLID
+                            // rounded badge (ROAS_BADGE_SHAPE + ROAS_TONE_BG), the
+                            // SAME recipe CampaignsTableRow / AdSetTable /
+                            // CampaignDrawerAds use — instead of the prior pale
+                            // full-cell tint (BADGE_TONE_BG) that diverged from
+                            // every sibling. Classified via the canonical
+                            // roasLabel().tone (→ bandForRoas) single source.
                             return (
-                              <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', BADGE_TONE_BG[info.tone as keyof typeof BADGE_TONE_BG])}>
-                                {a.roas > 0 ? formatNumber(a.roas) : '—'}
+                              <td className="px-3 py-2 text-center font-semibold tabular-nums">
+                                <span className={cn(ROAS_BADGE_SHAPE, ROAS_TONE_BG[info.tone])}>
+                                  {a.roas > 0 ? formatNumber(a.roas) : '—'}
+                                </span>
                               </td>
                             );
                           })()}
@@ -684,7 +694,7 @@ export function AdsDrawer({
                               const tone =
                                 adAttr.trust.level === 'high'    ? 'bg-status-greenBg text-status-greenFg'
                               : adAttr.trust.level === 'medium'  ? 'bg-status-warningBg text-status-warningFg'
-                              : adAttr.trust.level === 'unknown' ? 'bg-glass-2 text-ink-secondary'
+                              : adAttr.trust.level === 'unknown' ? 'bg-pill-track text-ink-secondary'
                               :                                    'bg-status-redBg text-status-redFg';
                               const tooltip =
                                 `ROAS אמיתי · ${adAttr.trust.label} (${adAttr.trust.score.toFixed(0)}/100)\n\n` +
@@ -692,14 +702,16 @@ export function AdsDrawer({
                                 `click-id מתויג: ${fmtMoneyString(adAttr.deterministicRevenue)} (${adAttr.deterministicOrders} הזמנות)\n` +
                                 `modeled: ${fmtMoneyString(adAttr.modeledRevenue)}\n\n` +
                                 adAttr.reasons.map(r => `• ${r}`).join('\n') +
-                                `\n\n💡 ${adAttr.recommendation}`;
+                                // HelpTooltip content here is a plain string (no JSX),
+                                // so the 💡 emoji is replaced with a textual cue.
+                                `\n\nהמלצה: ${adAttr.recommendation}`;
                               return (
                                 <HelpTooltip content={tooltip}>
                                   <div className="inline-flex flex-col items-center gap-0.5">
                                     <span className="font-semibold tabular-nums text-ink">
                                       {detRoas > 0 ? formatNumber(detRoas) : '—'}
                                     </span>
-                                    <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', tone)}>
+                                    <span className={cn('inline-block text-fs-2xs font-bold px-1 py-0 rounded uppercase tracking-wider', tone)}>
                                       {adAttr.trust.label}
                                     </span>
                                   </div>
@@ -733,7 +745,7 @@ export function AdsDrawer({
                                     </span>
                                     {d && (
                                       <span className={cn(
-                                        'text-[10px] font-semibold tabular-nums',
+                                        'text-fs-2xs font-semibold tabular-nums',
                                         d.direction === 'up'   ? 'text-status-greenFg'
                                       : d.direction === 'down' ? 'text-status-redFg'
                                       :                          'text-ink-muted',
@@ -781,7 +793,7 @@ export function AdsDrawer({
             </>
           )}
 
-          <div className="text-[10px] text-ink-muted text-center pt-2">
+          <div className="text-fs-2xs text-ink-muted text-center pt-2">
             לחץ Esc או על הרקע לסגירה
           </div>
         </SheetBody>
@@ -792,69 +804,5 @@ export function AdsDrawer({
 
 // Local Stat fork removed in Wave-2 Task 2.3 — unified into
 // `@/components/ui/Stat` (density / prefix / chip / active / delta).
-
-function AdSortHeader({
-  label,
-  col,
-  sortKey,
-  dir,
-  onClick,
-  align,
-}: {
-  label: ReactNode;
-  col: AdSortKey;
-  sortKey: AdSortKey;
-  dir: AdSortDir;
-  onClick: (key: AdSortKey) => void;
-  align: 'start' | 'center' | 'end';
-}) {
-  const isActive = col === sortKey;
-  const justify =
-    align === 'start' ? 'justify-start' : align === 'end' ? 'justify-end' : 'justify-center';
-  const textAlign =
-    align === 'start' ? 'text-start' : align === 'end' ? 'text-end' : 'text-center';
-  // BUG #1 fix — for end-aligned (numeric) columns render the sort arrow
-  // BEFORE the label so under RTL + justify-end the label is flush with the
-  // text-end numeric body cells. (The invisible inactive ArrowUpDown still
-  // occupies layout.)
-  const sortArrow = isActive ? (
-    dir === 'asc' ? <ArrowUp size={12} className="text-accent" /> : <ArrowDown size={12} className="text-accent" />
-  ) : (
-    <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-60 transition-opacity" />
-  );
-  return (
-    <th
-      className={cn('font-medium px-3 py-2', textAlign)}
-      // 2026-06-11 adversarial-review fix (wave-8A item 6 parity) — aria-sort
-      // moved from the inner <Button> (invalid ARIA: the attribute is only
-      // defined for header cells, so AT never announced sort state) onto the
-      // <th>. Same relocation CampaignsTable + AdSetTable received.
-      aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-    >
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={() => onClick(col)}
-        className={cn(
-          'gap-1 select-none cursor-pointer w-full h-auto p-0',
-          justify,
-          isActive
-            ? 'text-accent font-semibold'
-            : 'text-ink-secondary hover:text-ink',
-        )}
-      >
-        {align === 'end' ? (
-          <>
-            {sortArrow}
-            <span>{label}</span>
-          </>
-        ) : (
-          <>
-            <span>{label}</span>
-            {sortArrow}
-          </>
-        )}
-      </Button>
-    </th>
-  );
-}
+// Local AdSortHeader removed in W4.4 — consolidated into the shared
+// `@/components/ui/SortableHeader` (consumed by AdsDrawer + AdSetTable).

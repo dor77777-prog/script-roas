@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { AlertTriangle, Package, RefreshCw, Search, X, Check } from 'lucide-react';
+import { AlertTriangle, Package, RefreshCw, Search, X, Check, Link2 } from 'lucide-react';
 import { cn, formatNumber } from '@/lib/utils';
 import { fetchJsonStrict } from '@/lib/fetchJson';
 import { fmtMoney } from '@/lib/format';
@@ -69,8 +69,8 @@ type Props = {
   /**
    * Phase 05.7.x (2026-05-23) — for each productId, the list of OTHER
    * campaign NAMES (in this same store) that already have it mapped.
-   * Surfaces multi-mapping in the picker: the operator sees "🔗 גם
-   * ב-N קמפיינים" next to the product so they know the same product
+   * Surfaces multi-mapping in the picker: the operator sees a Link2 chip
+   * "גם ב-N קמפיינים" next to the product so they know the same product
    * is advertised by another campaign. Multi-mapping is intentional
    * (a product can be promoted by multiple campaigns with different
    * audiences / creatives); the chip just makes it visible so the
@@ -274,7 +274,7 @@ export function ProductPickerModal({
               <Package size={16} />
             </span>
             <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-ink-muted">
+              <div className="text-fs-2xs uppercase tracking-[0.12em] font-semibold text-ink-muted">
                 שייך מוצרי {storeName} לקמפיין
               </div>
               <HelpTooltip content={campaignName}>
@@ -282,7 +282,7 @@ export function ProductPickerModal({
                   {campaignName}
                 </Heading>
               </HelpTooltip>
-              <div className="text-[10px] text-ink-muted mt-0.5 inline-flex items-center gap-1">
+              <div className="text-fs-2xs text-ink-muted mt-0.5 inline-flex items-center gap-1">
                 <span>מוצגים רק מוצרים מחנות:</span>
                 <span className="font-semibold text-accent">{storeName}</span>
               </div>
@@ -363,7 +363,7 @@ export function ProductPickerModal({
                     </code>{' '}
                     נכשלה. זה לא אומר שאין מוצרים בחנות — זה אומר שהשרת לא ענה. נסה שוב.
                   </div>
-                  <div className="text-[10px] opacity-60 mt-1 font-mono">
+                  <div className="text-fs-2xs opacity-60 mt-1 font-mono">
                     {fetchError instanceof Error ? fetchError.message : String(fetchError)}
                   </div>
                   <Button
@@ -405,7 +405,7 @@ export function ProductPickerModal({
                         'w-full justify-start h-auto px-3 py-2 gap-3',
                         isOn
                           ? 'bg-accent-bg hover:bg-accent-soft'
-                          : 'hover:bg-glass-2',
+                          : 'hover:bg-pill-track',
                       )}
                       aria-pressed={isOn}
                     >
@@ -428,7 +428,7 @@ export function ProductPickerModal({
                             {p.title}
                           </div>
                         </HelpTooltip>
-                        <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums">
+                        <div className="text-fs-2xs sm:text-fs-xs text-ink-muted tabular-nums">
                           {p.totalUnits > 0 ? (
                             <>
                               {formatNumber(p.totalUnits, 0)} יח&apos; · {fmtMoney(p.totalRevenue)}
@@ -452,8 +452,9 @@ export function ProductPickerModal({
                           const more = others.length > 2 ? ` +${others.length - 2}` : '';
                           return (
                             <HelpTooltip content={`גם ממופה ל: ${others.join(', ')}`}>
-                              <div className="text-[10px] mt-0.5 inline-flex items-center gap-1 text-status-warningFg bg-status-warningBg rounded px-1.5 py-0.5">
-                                🔗 גם ב-{others.length} קמפיינים: {preview}{more}
+                              <div className="text-fs-2xs mt-0.5 inline-flex items-center gap-1 text-status-warningFg bg-status-warningBg rounded px-1.5 py-0.5">
+                                <Link2 size={11} className="shrink-0" aria-hidden />
+                                גם ב-{others.length} קמפיינים: {preview}{more}
                               </div>
                             </HelpTooltip>
                           );

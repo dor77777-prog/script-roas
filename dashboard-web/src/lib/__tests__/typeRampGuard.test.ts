@@ -63,8 +63,13 @@ const FLOOR_PX = 10.5;
 // 241 offenders). Most are text-[10px]; the worst legibility cases are the
 // 8px/9px chips. Counts may only DECREASE — later waves drain toward {}.
 const BASELINE_ALLOWLIST: Record<string, number> = {
-  'AdSetTable.tsx': 1,
-  'AdsDrawer.tsx': 6,
+  // AdSetTable.tsx — DRAINED to 0 in W4.4 (Horizon ads/adset re-skin: the lone
+  // sub-floor trust-chip literal text-[8px] → text-fs-2xs ramp token; removed
+  // from allowlist).
+  // AdsDrawer.tsx — DRAINED to 0 in W4.4 (Horizon ads-table re-skin: the 6
+  // sub-floor literals — header eyebrow, ROAS sub-caption, error mono, trust
+  // chip, first-click delta, Esc footer — → text-fs-2xs ramp token; removed
+  // from allowlist).
   'AiReportButton.tsx': 1,
   // AnnotationsPanel.tsx — DRAINED to 0 in Wave 3.6 (Horizon event-log re-skin:
   // sub-floor form labels → text-fs-2xs ramp token; removed from allowlist).
@@ -103,7 +108,10 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   'PaymentMethodsTab.tsx': 1,
   'PnLBreakdown.tsx': 10,
   'ProductCentricView.tsx': 14,
-  'ProductPickerModal.tsx': 5,
+  // ProductPickerModal.tsx — DRAINED to 0 in W4.4 (Horizon product-picker
+  // re-skin: the 5 sub-floor literals — header eyebrow, store sub-line, error
+  // mono, sales stats, 🔗-chip — → text-fs-2xs ramp token; removed from
+  // allowlist).
   'ProductsTable.tsx': 11,
   'SectionIntro.tsx': 1,
   // campaign-drawer/CampaignDrawerAds.tsx — DRAINED to 0 in Wave 4.3 (Horizon

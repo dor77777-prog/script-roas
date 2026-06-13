@@ -2,18 +2,17 @@
 
 import {
   Layers,
-  ArrowUp,
-  ArrowDown,
-  ArrowUpDown,
   CheckCircle2,
   Circle,
 } from 'lucide-react';
-import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
 import { fmtMoneyString } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { TableBase } from '@/components/ui/TableBase';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Heading } from '@/components/ui/Typography';
+import { Money } from '@/components/ui/Money';
+import { SortableHeader } from '@/components/ui/SortableHeader';
 import { roasLabel } from '@/lib/analytics';
 import { pendingRoasLabel } from '@/lib/campaignPendingState';
 import { ROAS_TONE_BG, ROAS_BADGE_SHAPE } from '@/lib/format/roasCell';
@@ -33,7 +32,9 @@ import type { AttributionAnalysis } from '@/lib/attributionAnalysis';
  *  - Trust chip 4-level ladder (high → roas-green, medium → amber,
  *    unknown → muted, fallback → roas-red) byte-identical with the chip
  *    in CampaignsTableRow.
- *  - `AdSetSortHeader` lives here as module-private — never exported.
+ *  - The sortable column header is the shared `@/components/ui/SortableHeader`
+ *    (W4.4 — was a module-private `AdSetSortHeader` clone, consolidated with
+ *    AdsDrawer's identical `AdSortHeader`).
  */
 
 // Columns the drawer's ad-set table can be sorted by. Kept narrow because
@@ -100,11 +101,11 @@ export function AdSetTable({
           <thead>
             <tr className="text-ink-secondary">
               <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
-              <AdSetSortHeader label="שם"          col="name"        sortKey={sortKey} dir={sortDir} onClick={onSort} align="start"  />
-              <AdSetSortHeader label="הוצאה"       col="spend"       sortKey={sortKey} dir={sortDir} onClick={onSort} align="center"    />
-              <AdSetSortHeader label="תקציב יומי"  col="budget"      sortKey={sortKey} dir={sortDir} onClick={onSort} align="center"    />
-              <AdSetSortHeader label="ערך"         col="value"       sortKey={sortKey} dir={sortDir} onClick={onSort} align="center"    />
-              <AdSetSortHeader label="ROAS"        col="roas"        sortKey={sortKey} dir={sortDir} onClick={onSort} align="center" />
+              <SortableHeader<AdSetSortKey> label="שם"         sortKey="name"   activeSortKey={sortKey} sortDir={sortDir} onSort={onSort} align="start" />
+              <SortableHeader<AdSetSortKey> label="הוצאה"      sortKey="spend"  activeSortKey={sortKey} sortDir={sortDir} onSort={onSort} align="center" />
+              <SortableHeader<AdSetSortKey> label="תקציב יומי" sortKey="budget" activeSortKey={sortKey} sortDir={sortDir} onSort={onSort} align="center" />
+              <SortableHeader<AdSetSortKey> label="ערך"        sortKey="value"  activeSortKey={sortKey} sortDir={sortDir} onSort={onSort} align="center" />
+              <SortableHeader<AdSetSortKey> label="ROAS"       sortKey="roas"   activeSortKey={sortKey} sortDir={sortDir} onSort={onSort} align="center" />
               {/* Per-ad-set deterministic attribution. Header doesn't
                   sort (the data is shape-inferred per row). Tooltip
                   on each cell explains the chip. */}
@@ -113,7 +114,7 @@ export function AdSetTable({
                   <span>ROAS Shopify</span>
                 </HelpTooltip>
               </th>
-              <AdSetSortHeader label="המרות"       col="conversions" sortKey={sortKey} dir={sortDir} onClick={onSort} align="center"    />
+              <SortableHeader<AdSetSortKey> label="המרות" sortKey="conversions" activeSortKey={sortKey} sortDir={sortDir} onSort={onSort} align="center" />
             </tr>
           </thead>
           <tbody>
@@ -210,18 +211,20 @@ export function AdSetTable({
                   <HelpTooltip content={a.name}>
                     <td className="px-3 py-2 text-ink truncate max-w-[200px]">{a.name}</td>
                   </HelpTooltip>
-                  <td className="px-3 py-2 text-center tabular-nums">{formatCurrency(a.spend)}</td>
+                  <td className="px-3 py-2 text-center tabular-nums">
+                    <Money value={a.spend} prefix="none" locale="he-IL" compactAbove={100_000} />
+                  </td>
                   <td className="px-3 py-2 text-center tabular-nums">
                     {a.adSetBudgetCad && a.adSetBudgetCad > 0 ? (
                       <span className={cn('font-medium', tight && 'text-status-warningFg')}>
-                        {formatCurrency(a.adSetBudgetCad)}
+                        <Money value={a.adSetBudgetCad} prefix="none" locale="he-IL" compactAbove={100_000} className="font-medium" />
                       </span>
                     ) : (
                       <span className="text-ink-muted">—</span>
                     )}
                   </td>
                   <td className={cn('px-3 py-2 text-center tabular-nums', a.value > a.spend && 'text-status-greenFg font-medium')}>
-                    {formatCurrency(a.value)}
+                    <Money value={a.value} prefix="none" locale="he-IL" compactAbove={100_000} />
                   </td>
                   <td className="px-3 py-2 text-center font-semibold tabular-nums">
                     {/* OPERATOR FIX (2026-06-01): solid rounded badge (mirrors
@@ -256,7 +259,7 @@ export function AdSetTable({
                       const tone =
                         adsetAttr.trust.level === 'high'    ? 'bg-status-greenBg text-status-greenFg'
                       : adsetAttr.trust.level === 'medium'  ? 'bg-status-warningBg text-status-warningFg'
-                      : adsetAttr.trust.level === 'unknown' ? 'bg-glass-2 text-ink-secondary'
+                      : adsetAttr.trust.level === 'unknown' ? 'bg-pill-track text-ink-secondary'
                       :                                       'bg-status-redBg text-status-redFg';
                       const tooltip =
                         `ROAS אמיתי · ${adsetAttr.trust.label} (${adsetAttr.trust.score.toFixed(0)}/100)\n\n` +
@@ -264,14 +267,16 @@ export function AdSetTable({
                         `click-id מתויג: ${fmtMoneyString(adsetAttr.deterministicRevenue)} (${adsetAttr.deterministicOrders} הזמנות)\n` +
                         `modeled: ${fmtMoneyString(adsetAttr.modeledRevenue)}\n\n` +
                         adsetAttr.reasons.map(r => `• ${r}`).join('\n') +
-                        `\n\n💡 ${adsetAttr.recommendation}`;
+                        // HelpTooltip content here is a plain string (no JSX),
+                        // so the 💡 emoji is replaced with a textual cue.
+                        `\n\nהמלצה: ${adsetAttr.recommendation}`;
                       return (
                         <HelpTooltip content={tooltip}>
                           <div className="inline-flex flex-col items-center gap-0.5">
                             <span className="font-semibold tabular-nums text-ink">
                               {detRoas > 0 ? formatNumber(detRoas) : '—'}
                             </span>
-                            <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', tone)}>
+                            <span className={cn('inline-block text-fs-2xs font-bold px-1 py-0 rounded uppercase tracking-wider', tone)}>
                               {adsetAttr.trust.label}
                             </span>
                           </div>
@@ -291,76 +296,6 @@ export function AdSetTable({
   );
 }
 
-/**
- * Sort-aware <th> for the drawer's ad-sets table. Mirrors the SortHeader in
- * CampaignsTable but lives here so the drawer doesn't need to import that
- * component's narrower SortKey union. Module-private (not exported).
- */
-function AdSetSortHeader({
-  label,
-  col,
-  sortKey,
-  dir,
-  onClick,
-  align,
-}: {
-  label: string;
-  col: AdSetSortKey;
-  sortKey: AdSetSortKey;
-  dir: AdSetSortDir;
-  onClick: (key: AdSetSortKey) => void;
-  align: 'start' | 'center' | 'end';
-}) {
-  const isActive = col === sortKey;
-  const justify =
-    align === 'start' ? 'justify-start' : align === 'end' ? 'justify-end' : 'justify-center';
-  const textAlign =
-    align === 'start' ? 'text-start' : align === 'end' ? 'text-end' : 'text-center';
-  // BUG #1 fix — for end-aligned (numeric) columns render the sort arrow
-  // BEFORE the label so under RTL + justify-end the label is flush with the
-  // text-end numeric body cells. (The invisible inactive ArrowUpDown still
-  // occupies layout.)
-  const sortArrow = isActive ? (
-    dir === 'asc' ? (
-      <ArrowUp size={12} className="text-accent" />
-    ) : (
-      <ArrowDown size={12} className="text-accent" />
-    )
-  ) : (
-    <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-60 transition-opacity" />
-  );
-  return (
-    <th
-      className={cn('font-medium px-3 py-2', textAlign)}
-      // 2026-06-10 audit — aria-sort moved from the inner <Button> (invalid
-      // ARIA: the attribute is only defined for header cells, so AT never
-      // announced sort state) onto the <th>.
-      aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-    >
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={() => onClick(col)}
-        className={cn(
-          'gap-1 select-none cursor-pointer w-full h-auto p-0',
-          justify,
-          isActive
-            ? 'text-accent font-semibold'
-            : 'text-ink-secondary hover:text-ink',
-        )}
-      >
-        {align === 'end' ? (
-          <>
-            {sortArrow}
-            <span>{label}</span>
-          </>
-        ) : (
-          <>
-            <span>{label}</span>
-            {sortArrow}
-          </>
-        )}
-      </Button>
-    </th>
-  );
-}
+// Local AdSetSortHeader removed in W4.4 — consolidated into the shared
+// `@/components/ui/SortableHeader` (also consumed by AdsDrawer). The exact
+// aria-sort placement + arrow-before-label (RTL) behavior is preserved there.
