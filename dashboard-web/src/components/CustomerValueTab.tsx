@@ -26,6 +26,7 @@ import { AlertTriangle, Gem, RefreshCw } from 'lucide-react';
 import { fetchJsonStrict } from '@/lib/fetchJson';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { Money } from '@/components/ui/Money';
 import { HelpTooltip } from '@/components/ui/Tooltip';
@@ -425,42 +426,20 @@ export function CustomerValueTab({
                 ))}
               </NativeSelect>
             </div>
-            {/* profit ↔ revenue basis toggle (segmented). Active = deepened
-                accent-btn bg + white (AA-verified, same as Button primary). */}
-            <div
+            {/* profit ↔ revenue basis toggle — SegmentedControl (radiogroup).
+                Active pill = brand thumb + on-color ink (the primitive owns the
+                AA-verified active state). Roving-tabindex + Arrow/Home/End nav. */}
+            <SegmentedControl
               role="radiogroup"
+              size="sm"
               aria-label="בסיס"
-              className="inline-flex rounded-md border border-glass-edge bg-glass-2 p-0.5"
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                data-testid="cv-basis-profit"
-                role="radio"
-                aria-checked={isProfit}
-                onClick={() => setBasis('profit')}
-                className={cn(
-                  'h-7 font-semibold',
-                  isProfit ? 'bg-accent-btn text-accent-fg hover:bg-accent-btnHover' : 'text-ink-secondary',
-                )}
-              >
-                רווח
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                data-testid="cv-basis-revenue"
-                role="radio"
-                aria-checked={!isProfit}
-                onClick={() => setBasis('net')}
-                className={cn(
-                  'h-7 font-semibold',
-                  !isProfit ? 'bg-accent-btn text-accent-fg hover:bg-accent-btnHover' : 'text-ink-secondary',
-                )}
-              >
-                הכנסה
-              </Button>
-            </div>
+              options={[
+                { value: 'profit', label: 'רווח', testId: 'cv-basis-profit' },
+                { value: 'net', label: 'הכנסה', testId: 'cv-basis-revenue' },
+              ]}
+              value={basis}
+              onChange={(v) => setBasis(v as Basis)}
+            />
           </div>
         }
       />

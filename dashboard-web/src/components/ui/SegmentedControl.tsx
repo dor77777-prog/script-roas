@@ -39,6 +39,10 @@ export type SegmentedOption = {
   label: ReactNode;
   /** Optional per-option disable (kept focusable-skippable). */
   disabled?: boolean;
+  /** Optional per-option test id, forwarded as data-testid on the item button.
+   *  Lets a consumer preserve stable per-choice testids when migrating a
+   *  hand-rolled radio row onto this primitive. */
+  testId?: string;
 };
 
 export type SegmentedControlProps = {
@@ -190,6 +194,7 @@ export const SegmentedControl = forwardRef<HTMLDivElement, SegmentedControlProps
               type="button"
               role={itemRole}
               id={`${baseId}-${opt.value}`}
+              data-testid={opt.testId}
               {...(isRadio
                 ? { 'aria-checked': selected }
                 : { 'aria-selected': selected })}

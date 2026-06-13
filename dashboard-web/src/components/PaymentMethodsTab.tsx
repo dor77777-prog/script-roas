@@ -39,6 +39,7 @@ import { Card } from '@/components/ui/Card';
 import { Heading } from '@/components/ui/Typography';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { Button } from '@/components/ui/Button';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Money } from '@/components/ui/Money';
 import { TableBase } from '@/components/ui/TableBase';
 import { SectionIntro } from '@/components/SectionIntro';
@@ -366,78 +367,34 @@ export function PaymentMethodsTab({
         description="פילוח מכירות לפי שער-תשלום (אשראי / PayPal / אחר), לפי שנה — מספר הזמנות · הכנסה (CAD) · אחוז. פתחו שנה לפילוח פנימי לפי חודש / רבעון / שליש. כלל-העסק או פר-חנות."
         rightSlot={
           <div className="flex flex-wrap items-center gap-2">
-            {/* Granularity toggle — month / quarter / third (segmented). Sets
-                the sub-row grouping inside every expanded year. */}
-            <div
+            {/* Granularity toggle — month / quarter / third — SegmentedControl
+                (radiogroup). Sets the sub-row grouping inside every expanded
+                year. Active pill = brand thumb (primitive-owned, AA both themes).
+                Roving-tabindex + Arrow/Home/End nav. */}
+            <SegmentedControl
               role="radiogroup"
+              size="sm"
               aria-label="רזולוציית פילוח"
-              className="inline-flex rounded-md border border-glass-edge bg-glass-2 p-0.5"
-            >
-              {(
-                [
-                  { g: 'month', label: 'חודש' },
-                  { g: 'quarter', label: 'רבעון' },
-                  { g: 'third', label: 'שליש' },
-                ] as { g: Granularity; label: string }[]
-              ).map(({ g, label }) => (
-                <Button
-                  key={g}
-                  variant="ghost"
-                  size="sm"
-                  data-testid={`pm-gran-${g}`}
-                  role="radio"
-                  aria-checked={gran === g}
-                  onClick={() => setGran(g)}
-                  className={cn(
-                    'h-7 font-semibold',
-                    gran === g
-                      ? 'bg-accent-btn text-accent-fg hover:bg-accent-btnHover'
-                      : 'text-ink-secondary',
-                  )}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-            {/* Scope toggle — business / per-store (segmented). */}
-            <div
+              options={[
+                { value: 'month', label: 'חודש', testId: 'pm-gran-month' },
+                { value: 'quarter', label: 'רבעון', testId: 'pm-gran-quarter' },
+                { value: 'third', label: 'שליש', testId: 'pm-gran-third' },
+              ]}
+              value={gran}
+              onChange={(v) => setGran(v as Granularity)}
+            />
+            {/* Scope toggle — business / per-store — SegmentedControl (radiogroup). */}
+            <SegmentedControl
               role="radiogroup"
+              size="sm"
               aria-label="היקף"
-              className="inline-flex rounded-md border border-glass-edge bg-glass-2 p-0.5"
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                data-testid="pm-scope-business"
-                role="radio"
-                aria-checked={scope === 'business'}
-                onClick={() => setScope('business')}
-                className={cn(
-                  'h-7 font-semibold',
-                  scope === 'business'
-                    ? 'bg-accent-btn text-accent-fg hover:bg-accent-btnHover'
-                    : 'text-ink-secondary',
-                )}
-              >
-                כלל-העסק
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                data-testid="pm-scope-store"
-                role="radio"
-                aria-checked={scope === 'store'}
-                onClick={() => setScope('store')}
-                className={cn(
-                  'h-7 font-semibold',
-                  scope === 'store'
-                    ? 'bg-accent-btn text-accent-fg hover:bg-accent-btnHover'
-                    : 'text-ink-secondary',
-                )}
-              >
-                פר-חנות
-              </Button>
-            </div>
+              options={[
+                { value: 'business', label: 'כלל-העסק', testId: 'pm-scope-business' },
+                { value: 'store', label: 'פר-חנות', testId: 'pm-scope-store' },
+              ]}
+              value={scope}
+              onChange={(v) => setScope(v as Scope)}
+            />
             {scope === 'store' && (
               <div className="w-40">
                 <NativeSelect

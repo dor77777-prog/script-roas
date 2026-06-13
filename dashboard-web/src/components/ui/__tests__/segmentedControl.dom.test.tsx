@@ -207,6 +207,25 @@ describe('SegmentedControl', () => {
     expect(tabbable).toHaveLength(0);
   });
 
+  it('forwards a per-option testId as data-testid on the item button', () => {
+    const TAGGED = OPTIONS.map(o => ({ ...o, testId: `range-${o.value}` }));
+    renderRTL(
+      <SegmentedControl options={TAGGED} value="today" onChange={() => {}} aria-label="טווח" />,
+    );
+    // every option re-emits its stable testid on the button
+    for (const o of OPTIONS) {
+      const byTestId = screen.getByTestId(`range-${o.value}`);
+      expect(byTestId.getAttribute('role')).toBe('tab');
+      expect(within(byTestId).getByText(o.label)).toBeTruthy();
+    }
+    // options without a testId stay un-tagged (no spurious attribute)
+    cleanup();
+    renderRTL(
+      <SegmentedControl options={OPTIONS} value="today" onChange={() => {}} aria-label="טווח" />,
+    );
+    expect(screen.getByText('היום').closest('[role="tab"]')!.getAttribute('data-testid')).toBeNull();
+  });
+
   it('size="sm" and size="md" both render (no crash) and differ in padding class', () => {
     const { rerender } = renderRTL(
       <SegmentedControl options={OPTIONS} value="today" onChange={() => {}} size="sm" aria-label="טווח" />,
