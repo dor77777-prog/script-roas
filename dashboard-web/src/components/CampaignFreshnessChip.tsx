@@ -22,7 +22,7 @@ export function CampaignFreshnessChip({ lastLiveTickAt }: CampaignFreshnessChipP
   const { dot, label } = colorForMinutes(min);
   return (
     <HelpTooltip content={lastLiveTickAt ?? 'no live tick'}>
-      <span className="inline-flex items-center gap-1.5 text-xs text-ink-secondary">
+      <span className="inline-flex items-center gap-1.5 text-fs-xs text-ink-secondary">
         <span className={`size-1.5 rounded-full ${dot}`} />
         {label}
       </span>

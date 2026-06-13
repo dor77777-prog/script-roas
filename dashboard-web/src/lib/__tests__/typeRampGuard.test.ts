@@ -82,9 +82,15 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   'CommandPalette.tsx': 7,
   'CustomerValueTab.tsx': 2,
   'DetailTable.tsx': 1,
-  'FirstClickCoverageChip.tsx': 1,
+  // FirstClickCoverageChip.tsx — DRAINED to 0 in Wave 4 (Horizon
+  // campaign-health re-skin: lone sub-floor coverage-% chip literal
+  // text-[10px] → text-fs-2xs ramp token + bg-pill-track inset; removed
+  // from allowlist).
   'GoalTracker.tsx': 23,
-  'HealthScoreBadge.tsx': 1,
+  // HealthScoreBadge.tsx — DRAINED to 0 in Wave 4 (Horizon campaign-health
+  // re-skin: lone sub-floor score-suffix literal text-[10px] → text-fs-2xs
+  // ramp token, all popover px literals migrated onto text-fs-*; removed
+  // from allowlist).
   // InsightsBoard.tsx — DRAINED to 0 in Wave 3.7 (Horizon insight-surfaces
   // re-skin: sub-floor scope badge + severity pill → text-fs-2xs ramp token;
   // removed from allowlist).

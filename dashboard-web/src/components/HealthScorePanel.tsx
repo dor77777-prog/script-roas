@@ -1,13 +1,17 @@
 'use client';
 
+import { ArrowLeft, Hourglass } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type {
-  CampaignHealth,
-  HealthGrade,
-} from '@/lib/campaignHealthScore';
+import type { CampaignHealth } from '@/lib/campaignHealthScore';
 import { InsightCard } from '@/components/ui/InsightCard';
 import { InsightActions } from '@/components/insights/InsightActions';
 import { useStoreAdAccounts } from '@/lib/hooks/useStoreAdAccounts';
+import {
+  GRADE_STYLES,
+  COMPONENT_LABELS,
+  COMPONENT_ORDER,
+  barColor,
+} from '@/lib/healthGradeStyles';
 
 /**
  * Inline (always-expanded) Health Score panel for the campaign drawer.
@@ -24,46 +28,15 @@ import { useStoreAdAccounts } from '@/lib/hooks/useStoreAdAccounts';
  * default. Composing two visuals from the same data keeps the design
  * language consistent (component bars + reason strings) without forcing
  * the badge to handle both modes.
+ *
+ * The grade chip recipe (`GRADE_STYLES.tone` colours the label TEXT on the
+ * neutral card surface — legible status colour, not a tint, not white),
+ * component labels, render order and bar colours all come from the shared
+ * `lib/healthGradeStyles` module that HealthScoreBadge also consumes.
+ *
+ * Horizon W4 re-skin: lucide ArrowLeft (no raw arrow) + Hourglass (no emoji),
+ * `bg-pill-track` insets, type-ramp `text-fs-*`.
  */
-
-// Grade chip is the big bold SOLID score badge (mockup): white grade-letter on
-// a solid status band. `tone` colors only the label TEXT on the neutral card
-// surface, so it stays the legible status color (not a tint, not white).
-const GRADE_STYLES: Record<HealthGrade, { chip: string; ring: string; label: string; tone: string }> = {
-  A: { chip: 'bg-status-greenBtn text-accent-fg', ring: 'ring-status-green', label: 'מצוין', tone: 'text-status-greenFg' },
-  B: { chip: 'bg-status-blueBtn text-accent-fg', ring: 'ring-status-blue', label: 'בריא', tone: 'text-status-blueFg' },
-  C: { chip: 'bg-status-orangeSolid text-status-orangeSolidFg', ring: 'ring-status-orange', label: 'גבולי', tone: 'text-status-orangeFg' },
-  D: { chip: 'bg-status-redBtn text-accent-fg', ring: 'ring-status-red', label: 'בעייתי', tone: 'text-status-redFg' },
-  F: { chip: 'bg-status-redBtn text-accent-fg', ring: 'ring-status-red', label: 'כשל', tone: 'text-status-redFg' },
-  unknown: { chip: 'bg-glass-2 text-ink-muted', ring: 'ring-glass-edge', label: 'מוקדם מדי', tone: 'text-ink-muted' },
-};
-
-type WeightedComponentKey = 'profitability' | 'volume' | 'trajectory' | 'attributionClarity';
-
-// Column-audit 2026-06-01 (FIX 2) — clarify that the Health Score's
-// profitability axis runs on the CLICK-ID / PROVEN (deterministic) ROAS, so
-// it's clear WHY it can differ from the table's "ROAS Shopify (מוקצה)" column.
-// Label/text only — the score computation is unchanged.
-const COMPONENT_LABELS: Record<WeightedComponentKey, { label: string; weight: string }> = {
-  profitability:       { label: 'רווחיות (ROAS מוכח · click-id כשקיים)', weight: '40%' },
-  volume:              { label: 'נפח',                weight: '15%' },
-  trajectory:          { label: 'מומנטום',            weight: '25%' },
-  attributionClarity:  { label: 'אמינות attribution', weight: '20%' },
-};
-
-const COMPONENT_ORDER: ReadonlyArray<WeightedComponentKey> = [
-  'profitability',
-  'volume',
-  'trajectory',
-  'attributionClarity',
-];
-
-function barColor(value: number): string {
-  if (value >= 75) return 'bg-status-green';
-  if (value >= 50) return 'bg-status-blue';
-  if (value >= 30) return 'bg-status-orange';
-  return 'bg-status-red';
-}
 
 /**
  * Derive a recommendation block based on the SCORE'S WEAKEST COMPONENT.
@@ -181,7 +154,11 @@ export function HealthScorePanel({
             styles.ring,
           )}
         >
-          {isUnknown ? '⏳' : health.grade}
+          {isUnknown ? (
+            <Hourglass className="size-7 sm:size-8" aria-hidden />
+          ) : (
+            health.grade
+          )}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
@@ -195,7 +172,7 @@ export function HealthScorePanel({
               </div>
             )}
           </div>
-          <div className="text-[11px] sm:text-xs text-ink-secondary mt-1 leading-relaxed">
+          <div className="text-fs-2xs sm:text-fs-xs text-ink-secondary mt-1 leading-relaxed">
             ציון מאוחד שמשקלל את 4 הרכיבים הקיימים בדשבורד לכדי תמונה אחת. שאר הסקציות בעמוד מציגות את המרכיבים בפירוט.
           </div>
         </div>
@@ -203,7 +180,7 @@ export function HealthScorePanel({
 
       {/* Insufficient short-circuit — render reasons only */}
       {health.insufficient ? (
-        <div className="rounded-lg bg-glass-2/40 border border-glass-edge px-3 py-2.5 text-[12px] text-ink-secondary leading-relaxed">
+        <div className="rounded-lg bg-pill-track border border-glass-edge px-3 py-2.5 text-fs-xs text-ink-secondary leading-relaxed">
           {health.reasons[0]}
         </div>
       ) : (
@@ -215,7 +192,7 @@ export function HealthScorePanel({
               const meta = COMPONENT_LABELS[key];
               return (
                 <div key={key}>
-                  <div className="flex items-center justify-between text-[12px] sm:text-[13px] mb-1">
+                  <div className="flex items-center justify-between text-fs-xs sm:text-fs-sm mb-1">
                     <span className="font-medium text-ink">
                       {meta.label}
                       <span className="text-ink-muted font-normal ms-1.5">({meta.weight})</span>
@@ -224,13 +201,13 @@ export function HealthScorePanel({
                       {value}/100
                     </span>
                   </div>
-                  <div className="h-2 rounded-full bg-glass-2 overflow-hidden">
+                  <div className="h-2 rounded-full bg-pill-track overflow-hidden">
                     <div
                       className={cn('h-full rounded-full transition-all', barColor(value))}
                       style={{ width: `${Math.max(2, value)}%` }}
                     />
                   </div>
-                  <div className="text-[11px] sm:text-[12px] text-ink-muted leading-snug mt-1">
+                  <div className="text-fs-2xs sm:text-fs-xs text-ink-muted leading-snug mt-1">
                     {health.reasons[idx]}
                   </div>
                 </div>
@@ -244,16 +221,16 @@ export function HealthScorePanel({
               5 separate things). */}
           {recommendations.length > 0 && (
             <div className="pt-3 border-t border-glass-edge">
-              <div className="text-[11px] sm:text-xs font-semibold text-ink mb-1.5 uppercase tracking-wide">
+              <div className="text-fs-2xs sm:text-fs-xs font-semibold text-ink mb-1.5 uppercase tracking-wide">
                 המלצה
               </div>
               <ul className="space-y-1.5">
                 {recommendations.map((r, idx) => (
                   <li
                     key={idx}
-                    className="text-[12px] sm:text-[13px] text-ink-secondary leading-relaxed flex gap-1.5"
+                    className="text-fs-xs sm:text-fs-sm text-ink-secondary leading-relaxed flex gap-1.5"
                   >
-                    <span className="text-ink-muted shrink-0">←</span>
+                    <ArrowLeft className="size-3.5 text-ink-muted shrink-0 mt-0.5" aria-hidden />
                     <span>{r}</span>
                   </li>
                 ))}
@@ -263,7 +240,7 @@ export function HealthScorePanel({
 
           {/* Footer formula reference — keep tiny, just so a curious
               operator can verify how the score was assembled. */}
-          <div className="pt-2 border-t border-glass-edge text-[10.5px] sm:text-[11px] text-ink-muted leading-snug">
+          <div className="pt-2 border-t border-glass-edge text-fs-2xs text-ink-muted leading-snug">
             ציון = (רווחיות×0.40) + (נפח×0.15) + (מומנטום×0.25) + (attribution×0.20)
             {/* Column-audit 2026-06-01 (FIX 2) — ROAS basis note. */}
             <div className="mt-1">

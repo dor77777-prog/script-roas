@@ -1,48 +1,38 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Hourglass } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { CampaignHealth, HealthGrade } from '@/lib/campaignHealthScore';
+import type { CampaignHealth } from '@/lib/campaignHealthScore';
 import { Button } from '@/components/ui/Button';
 import { HelpTooltip } from '@/components/ui/Tooltip';
+import {
+  GRADE_STYLES,
+  COMPONENT_LABELS,
+  COMPONENT_ORDER,
+  barColor,
+} from '@/lib/healthGradeStyles';
 
 /**
  * Per-campaign Health Score badge with click-to-drill popover.
  *
- * Renders as a 1-letter grade chip (A/B/C/D/F or ⏳ when insufficient).
- * Clicking the chip opens a popover showing the 5-component breakdown so
- * the operator can argue with the verdict.
+ * Renders as a 1-letter grade chip (A/B/C/D/F or an hourglass glyph when
+ * insufficient). Clicking the chip opens a popover showing the 5-component
+ * breakdown so the operator can argue with the verdict.
+ *
+ * The grade chip recipe + component labels + bar colours come from the shared
+ * `lib/healthGradeStyles` module (the same source HealthScorePanel consumes),
+ * so the two surfaces can never drift apart.
  *
  * z-index ladder: popover at z-[15] (matches the ColumnHeaderTh tooltip
  * pattern in CampaignsTable.tsx, sits above row body but below the page
  * Header z-30 / TabNav z-20 — same as the rest of the stacking ladder
  * from commit e45f743).
+ *
+ * Horizon W4 re-skin: lucide Hourglass (no emoji), `bg-pill-track` insets,
+ * type-ramp `text-fs-*`. The hand-rolled popover structure is intentionally
+ * LEFT AS-IS — the Radix-popover migration is deferred to W7.
  */
-
-// Grade chips are bold SOLID score badges (mockup): white grade-letter on a
-// solid status band. s-a→green, s-b→blue, s-c→orange, s-d/F→red. `unknown`
-// stays a neutral tint (not a status color).
-const GRADE_STYLES: Record<HealthGrade, { chip: string; ring: string; label: string }> = {
-  A: { chip: 'bg-status-greenBtn text-accent-fg', ring: 'ring-status-green', label: 'מצוין' },
-  B: { chip: 'bg-status-blueBtn text-accent-fg', ring: 'ring-status-blue', label: 'בריא' },
-  C: { chip: 'bg-status-orangeSolid text-status-orangeSolidFg', ring: 'ring-status-orange', label: 'גבולי' },
-  D: { chip: 'bg-status-redBtn text-accent-fg', ring: 'ring-status-red', label: 'בעייתי' },
-  F: { chip: 'bg-status-redBtn text-accent-fg', ring: 'ring-status-red', label: 'כשל' },
-  unknown: { chip: 'bg-glass-2 text-ink-muted', ring: 'ring-glass-edge', label: 'מוקדם מדי' },
-};
-
-// Column-audit 2026-06-01 (FIX 2) — clarify that the Health Score's
-// profitability axis is driven by the CLICK-ID / PROVEN (deterministic)
-// ROAS, so operators understand WHY the score's ROAS can differ from the
-// table's "ROAS Shopify (מוקצה)" column (which adds a proportional fallback
-// of un-attributed orders). This is a LABEL/TEXT clarification only — the
-// score computation in campaignHealthScore.ts is unchanged.
-const COMPONENT_LABELS = {
-  profitability: { label: 'רווחיות (ROAS מוכח · click-id כשקיים)', weight: '40%' },
-  volume: { label: 'נפח', weight: '15%' },
-  trajectory: { label: 'מומנטום', weight: '25%' },
-  attributionClarity: { label: 'אמינות attribution', weight: '20%' },
-} as const;
 
 export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
   const [open, setOpen] = useState(false);
@@ -85,15 +75,15 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
           aria-expanded={open}
           aria-haspopup="dialog"
           className={cn(
-            'min-w-[34px] h-7 px-1.5 text-[12px] font-bold leading-none tabular-nums',
+            'min-w-[34px] h-7 px-1.5 text-fs-xs font-bold leading-none tabular-nums',
             'ring-1 cursor-pointer select-none hover:opacity-90 active:scale-95',
             styles.chip,
             styles.ring,
           )}
         >
-          {isUnknown ? '⏳' : health.grade}
+          {isUnknown ? <Hourglass className="size-3.5" aria-hidden /> : health.grade}
           {!isUnknown && (
-            <span className="ms-1 text-[10px] font-medium text-accent-fg">
+            <span className="ms-1 text-fs-2xs font-medium text-accent-fg">
               {health.score}
             </span>
           )}
@@ -115,7 +105,7 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
             'w-[320px] sm:w-[340px] max-w-[min(86vw,360px)]',
             'rounded-xl bg-glass-1 text-ink border border-glass-edge',
             'shadow-overlay p-3.5',
-            'text-[12px] leading-relaxed text-start animate-fade-in',
+            'text-fs-xs leading-relaxed text-start animate-fade-in',
           )}
           onClick={(e) => e.stopPropagation()}
         >
@@ -124,16 +114,16 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
             <div className="flex items-center gap-2">
               <span
                 className={cn(
-                  'inline-flex items-center justify-center min-w-[32px] h-7 px-1.5 rounded-md font-bold text-[13px]',
+                  'inline-flex items-center justify-center min-w-[32px] h-7 px-1.5 rounded-md font-bold text-fs-sm',
                   styles.chip,
                 )}
               >
-                {isUnknown ? '⏳' : health.grade}
+                {isUnknown ? <Hourglass className="size-3.5" aria-hidden /> : health.grade}
               </span>
               <div>
-                <div className="text-[13px] font-semibold leading-tight">{styles.label}</div>
+                <div className="text-fs-sm font-semibold leading-tight">{styles.label}</div>
                 {!isUnknown && (
-                  <div className="text-[11px] text-ink-muted tabular-nums leading-tight">
+                  <div className="text-fs-2xs text-ink-muted tabular-nums leading-tight">
                     {health.score}/100
                   </div>
                 )}
@@ -145,7 +135,7 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
               size="icon"
               onClick={() => setOpen(false)}
               aria-label="סגור"
-              className="h-auto w-auto px-1 text-[16px] leading-none"
+              className="h-auto w-auto px-1 text-fs-base leading-none"
             >
               ×
             </Button>
@@ -155,7 +145,7 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
           {health.insufficient ? (
             <div className="space-y-1.5">
               {health.reasons.map((r, idx) => (
-                <div key={idx} className="text-ink-secondary text-[11.5px]">
+                <div key={idx} className="text-ink-secondary text-fs-2xs">
                   {r}
                 </div>
               ))}
@@ -164,47 +154,36 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
             <>
               {/* Component bars */}
               <div className="space-y-2">
-                {(['profitability', 'volume', 'trajectory', 'attributionClarity'] as const).map(
-                  (key, idx) => {
-                    const value = health.components[key];
-                    const meta = COMPONENT_LABELS[key];
-                    return (
-                      <div key={key}>
-                        <div className="flex items-center justify-between text-[11.5px] mb-0.5">
-                          <span className="font-medium text-ink">
-                            {meta.label}
-                            <span className="text-ink-muted font-normal ms-1">({meta.weight})</span>
-                          </span>
-                          <span className="tabular-nums text-ink-secondary font-semibold">
-                            {value}/100
-                          </span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-glass-2 overflow-hidden">
-                          <div
-                            className={cn(
-                              'h-full rounded-full transition-all',
-                              value >= 75
-                                ? 'bg-status-green'
-                                : value >= 50
-                                  ? 'bg-status-blue'
-                                  : value >= 30
-                                    ? 'bg-status-orange'
-                                    : 'bg-status-red',
-                            )}
-                            style={{ width: `${Math.max(2, value)}%` }}
-                          />
-                        </div>
-                        <div className="text-[11px] text-ink-muted leading-snug mt-0.5">
-                          {health.reasons[idx]}
-                        </div>
+                {COMPONENT_ORDER.map((key, idx) => {
+                  const value = health.components[key];
+                  const meta = COMPONENT_LABELS[key];
+                  return (
+                    <div key={key}>
+                      <div className="flex items-center justify-between text-fs-2xs mb-0.5">
+                        <span className="font-medium text-ink">
+                          {meta.label}
+                          <span className="text-ink-muted font-normal ms-1">({meta.weight})</span>
+                        </span>
+                        <span className="tabular-nums text-ink-secondary font-semibold">
+                          {value}/100
+                        </span>
                       </div>
-                    );
-                  },
-                )}
+                      <div className="h-1.5 rounded-full bg-pill-track overflow-hidden">
+                        <div
+                          className={cn('h-full rounded-full transition-all', barColor(value))}
+                          style={{ width: `${Math.max(2, value)}%` }}
+                        />
+                      </div>
+                      <div className="text-fs-2xs text-ink-muted leading-snug mt-0.5">
+                        {health.reasons[idx]}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Footer with formula note */}
-              <div className="mt-2.5 pt-2 border-t border-glass-edge text-[10.5px] text-ink-muted leading-snug">
+              <div className="mt-2.5 pt-2 border-t border-glass-edge text-fs-2xs text-ink-muted leading-snug">
                 ציון = (רווחיות×0.40) + (נפח×0.15) + (מומנטום×0.25) + (attribution×0.20)
                 {/* Column-audit 2026-06-01 (FIX 2) — explain the ROAS basis so
                     the score's ROAS reconciles vs the table's allocated ROAS. */}
