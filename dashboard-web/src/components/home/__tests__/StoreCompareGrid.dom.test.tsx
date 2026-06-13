@@ -1,21 +1,23 @@
 // dashboard-web/src/components/home/__tests__/StoreCompareGrid.dom.test.tsx
 //
-// Phase 1 (component-only) — <StoreCompareGrid>. The comparative-analysis
-// table below the per-store row. One <TableRow> per store; columns
-// חנות · הוצאה · הכנסה · ROAS · CPM · AOV · הזמנות. The ROAS cell is a
-// band-coloured pill whose tone is sourced from roasLabel(roas)
-// (lib/analytics.ts: <2 red / <2.7 orange / <=3 green / >3 blue), surfaced as
-// bg-status-*Bg + text-status-*Fg. These tests pin (a) the table renders one
-// row per store, (b) the ROAS pill carries the right band tone per threshold
-// (a 1.8x store → red, a 3.7x → blue), and (c) the money values render via the
-// overflow-safe <Money> primitive (tabular-nums). If a pill ships without its
-// tone class the colour-coded story silently disappears, so these are the
-// source-of-truth for the wiring.
+// <StoreCompareGrid> — the comparative-analysis card below the per-store row.
+// One <TableRow> per store; columns חנות · הוצאה · הכנסה · ROAS · CPM · AOV ·
+// הזמנות. The ROAS cell is a band-coloured pill whose band is classified
+// through the SINGLE SOURCE OF TRUTH `bandForRoas` (lib/roasBands.ts: <2 red /
+// <2.7 orange / <=3 green / >3 blue / spend===0 gray) and rendered with the
+// shared `band-chip` + `chip-{band}` recipe (the SAME pill the hero/Widget band
+// tags use). These tests pin (a) the table renders one row per store, (b) the
+// ROAS pill carries the right band per threshold (proving the bandForRoas
+// drain — 1.9x → red, 2.88x → green, 3.7x → blue), (c) money values render via
+// the overflow-safe <Money> primitive (tabular-nums), and (d) the NC-ROAS/nCAC
+// footer renders the threaded business-wide aggregate (degrading gracefully
+// when a field is absent / confidence is suppressed).
 
 import { describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { StoreCompareGrid } from '@/components/home/StoreCompareGrid';
 import type { PerStoreData } from '@/components/home/PerStoreRow';
+import type { CommandCenterNewCustomer } from '@/components/home/CommandCenterHero';
 
 const STORES: PerStoreData[] = [
   {
@@ -84,28 +86,35 @@ describe('StoreCompareGrid', () => {
     expect(screen.getByText('zolplus')).toBeInTheDocument();
   });
 
-  it('ROAS pill carries the RED tone for a 1.8x store', () => {
-    const { container } = render(<StoreCompareGrid stores={[STORES[0]]} />);
+  // ── band-drain proof — the ROAS pill classifies through bandForRoas (single
+  //    source of truth) and renders the shared `band-chip chip-{band}` recipe,
+  //    NOT a local parallel band map. A known ROAS lands in the operator-locked
+  //    band: 1.9x → red, 2.88x → green (2.7-3.0), 3.7x → blue (>3.0).
+
+  it('ROAS pill carries the RED band (chip-red) for a 1.9x store (<2.0) — bandForRoas drain', () => {
+    const redStore: PerStoreData = { ...STORES[0], roas: 1.9, revenue: 1301 };
+    const { container } = render(<StoreCompareGrid stores={[redStore]} />);
     const pill = container.querySelector('[data-testid="roas-pill"]');
     expect(pill).not.toBeNull();
-    expect(pill).toHaveClass('bg-status-redBg');
-    expect(pill).toHaveClass('text-status-redFg');
+    expect(pill).toHaveClass('band-chip');
+    expect(pill).toHaveClass('chip-red');
     expect(pill).toHaveAttribute('data-tone', 'red');
   });
 
-  it('ROAS pill carries the GREEN tone for a 2.8x store (2.7-3.0)', () => {
-    const { container } = render(<StoreCompareGrid stores={[STORES[1]]} />);
+  it('ROAS pill carries the GREEN band (chip-green) for a 2.88x store (2.7-3.0) — bandForRoas drain', () => {
+    const greenStore: PerStoreData = { ...STORES[1], roas: 2.88 };
+    const { container } = render(<StoreCompareGrid stores={[greenStore]} />);
     const pill = container.querySelector('[data-testid="roas-pill"]');
-    expect(pill).toHaveClass('bg-status-greenBg');
-    expect(pill).toHaveClass('text-status-greenFg');
+    expect(pill).toHaveClass('band-chip');
+    expect(pill).toHaveClass('chip-green');
     expect(pill).toHaveAttribute('data-tone', 'green');
   });
 
-  it('ROAS pill carries the BLUE tone for a 3.7x store (>3.0)', () => {
+  it('ROAS pill carries the BLUE band (chip-blue) for a 3.7x store (>3.0) — bandForRoas drain', () => {
     const { container } = render(<StoreCompareGrid stores={[STORES[2]]} />);
     const pill = container.querySelector('[data-testid="roas-pill"]');
-    expect(pill).toHaveClass('bg-status-blueBg');
-    expect(pill).toHaveClass('text-status-blueFg');
+    expect(pill).toHaveClass('band-chip');
+    expect(pill).toHaveClass('chip-blue');
     expect(pill).toHaveAttribute('data-tone', 'blue');
   });
 
@@ -241,5 +250,115 @@ describe('StoreCompareGrid', () => {
     const pill = container.querySelector('[data-testid="roas-pill"]');
     expect(pill).toHaveAttribute('data-tone', 'green');
     expect(pill?.textContent).toContain('3.00x');
+  });
+
+  // ── NC-ROAS / nCAC footer (mockup 306-311) ───────────────────────────────
+  // Reuses the EXACT business-wide CommandCenterNewCustomer aggregate the hero
+  // renders (threaded as a prop from Dashboard — no second NC aggregate). The
+  // footer hides entirely when the prop is omitted (back-compat).
+
+  const NC_OK: CommandCenterNewCustomer = {
+    ncRoas: 1.74,
+    nCac: 64,
+    ncOrders: 15,
+    returningOrders: 10,
+    unclassifiableShare: 0,
+    confidence: 'ok',
+  };
+
+  it('does NOT render the NC footer when newCustomer is omitted (back-compat)', () => {
+    const { container } = render(<StoreCompareGrid stores={STORES} />);
+    expect(
+      container.querySelector('[data-testid="store-compare-nc-footer"]'),
+    ).toBeNull();
+  });
+
+  it('renders the NC-ROAS + nCAC footer values from the threaded aggregate', () => {
+    const { container } = render(
+      <StoreCompareGrid stores={STORES} newCustomer={NC_OK} />,
+    );
+    const footer = container.querySelector('[data-testid="store-compare-nc-footer"]');
+    expect(footer).not.toBeNull();
+    // NC-ROAS — 2-decimal, mirrors the hero tile's formatting.
+    expect(
+      container.querySelector('[data-testid="store-compare-nc-roas"]')?.textContent,
+    ).toContain('1.74');
+    // nCAC — rendered via the overflow-safe <Money> primitive ($64).
+    const ncac = container.querySelector('[data-testid="store-compare-ncac"]');
+    expect(ncac?.textContent).toContain('64');
+    expect(
+      within(ncac as HTMLElement).getAllByText(
+        (_t, el) => el?.classList.contains('metric-num') ?? false,
+      ).length,
+    ).toBeGreaterThanOrEqual(1);
+    // order-mix line — new · returning · unclassified.
+    const mix = container.querySelector('[data-testid="store-compare-nc-mix"]');
+    expect(mix?.textContent).toContain('15');
+    expect(mix?.textContent).toContain('חדשות');
+    expect(mix?.textContent).toContain('10');
+    expect(mix?.textContent).toContain('חוזרות');
+    expect(mix?.textContent).toContain('0% לא מסווג');
+  });
+
+  it('footer uses the canonical inset-well token (bg-pill-track, not bg-glass-2/bg-canvas)', () => {
+    const { container } = render(
+      <StoreCompareGrid stores={STORES} newCustomer={NC_OK} />,
+    );
+    const footer = container.querySelector('[data-testid="store-compare-nc-footer"]');
+    expect(footer).toHaveClass('bg-pill-track');
+    expect(footer?.className ?? '').not.toContain('bg-glass-2');
+    expect(footer?.className ?? '').not.toContain('bg-canvas');
+  });
+
+  it('low-confidence: footer renders the ratio + a "ביטחון נמוך" badge', () => {
+    const lowNc: CommandCenterNewCustomer = {
+      ...NC_OK,
+      unclassifiableShare: 0.3,
+      confidence: 'low',
+    };
+    const { container } = render(
+      <StoreCompareGrid stores={STORES} newCustomer={lowNc} />,
+    );
+    expect(
+      container.querySelector('[data-testid="store-compare-nc-roas"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="store-compare-nc-confidence"]'),
+    ).not.toBeNull();
+  });
+
+  it('suppressed: footer hides the ratio (shows "לא מספיק דאטה לסיווג") but keeps the order-mix', () => {
+    const suppressedNc: CommandCenterNewCustomer = {
+      ...NC_OK,
+      ncRoas: null,
+      unclassifiableShare: 0.55,
+      confidence: 'suppressed',
+    };
+    const { container } = render(
+      <StoreCompareGrid stores={STORES} newCustomer={suppressedNc} />,
+    );
+    // ratios hidden …
+    expect(
+      container.querySelector('[data-testid="store-compare-nc-roas"]'),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-testid="store-compare-ncac"]'),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-testid="store-compare-nc-suppressed"]'),
+    ).not.toBeNull();
+    // … but the count-based order-mix stays (honest even when the ratio isn't).
+    expect(
+      container.querySelector('[data-testid="store-compare-nc-mix"]')?.textContent,
+    ).toContain('חדשות');
+  });
+
+  it('degrades gracefully when nCAC is absent (null) — renders "—", never a fabricated 0', () => {
+    const noNcac: CommandCenterNewCustomer = { ...NC_OK, nCac: null };
+    const { container } = render(
+      <StoreCompareGrid stores={STORES} newCustomer={noNcac} />,
+    );
+    const ncac = container.querySelector('[data-testid="store-compare-ncac"]');
+    expect(ncac?.textContent).toContain('—');
   });
 });

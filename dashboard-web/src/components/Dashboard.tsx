@@ -1609,8 +1609,11 @@ function HomeTab({
       <PerStoreRow stores={perStoreData} onStoreSelect={handleStoreSelect} rangeLabel={rangeLabel} />
 
       {/* Cross-store comparison grid — renders its own section heading. Shares
-          the exact per-store data array PerStoreRow consumes. */}
-      <StoreCompareGrid stores={perStoreData} />
+          the exact per-store data array PerStoreRow consumes. The NC-ROAS/nCAC
+          footer REUSES the SAME `heroNewCustomer` aggregate the hero tile below
+          consumes (computed once above) — no second NC aggregate; the two
+          surfaces can never disagree. */}
+      <StoreCompareGrid stores={perStoreData} newCustomer={heroNewCustomer} />
 
       {/* Per-store drill-down MODAL — opens on store-card click; reuses the
           campaign modal's Sheet shell. Renders nothing while closed (data null).

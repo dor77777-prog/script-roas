@@ -10,6 +10,17 @@
  *
  *   חנות · הוצאה · הכנסה · ROAS · CPM · AOV · הזמנות
  *
+ * Horizon re-skin (W3.4, 2026-06-13): rebuilt to the approved
+ * "ניתוח השוואתי" card recipe
+ * (docs/superpowers/mockups/2026-06-12-horizon-reskin/home-approved.html,
+ * lines 294-313): the whole grid now sits inside the shared <Card> glass
+ * surface (`rounded-hz`, the exact Horizon 20px radius + light/dark fill +
+ * Horizon drop shadow) with the section title as its header, and a FOOTER
+ * inset-well (`bg-pill-track` — the canonical sunken-well token) carrying the
+ * business-wide NC-ROAS · nCAC · new/returning/unclassified figures. The 7
+ * data columns are PRESERVED unchanged (no-info-loss: the mockup only sketches
+ * 4, but CPM/AOV/orders survive the re-skin — STAYS/MOVES only).
+ *
  * Design contract (built to the 2026-06-01 readability + token standard from
  * the start — see [[uiux-accessibility-standard]] / CLAUDE.md mandatory rules):
  *
@@ -19,30 +30,38 @@
  *   • Every MONEY cell renders through the overflow-safe <Money> primitive
  *     (tabular-nums + nowrap + compact-floor, the EXACT value preserved in
  *     title/sr-only) so a digit is NEVER clipped — no `truncate` on numbers.
- *   • ROAS is a band-coloured PILL whose tone reuses the project's canonical
- *     `roasLabel(roas)` thresholds (<2 red / <2.7 orange / <=3 green / >3 blue
- *     / no-data gray) → `bg-status-{tone}Bg text-status-{tone}Fg`. These are
- *     the WCAG-AA on-colour status tokens (paired bg+fg, never text-colour-
- *     from-brand), so the pill clears AA in BOTH themes on the table's neutral
- *     surface. One source of truth for band wording/tone across every ROAS
- *     surface (cards, chart annotations, this grid).
+ *   • ROAS is a band-coloured PILL whose band is classified through the SINGLE
+ *     SOURCE OF TRUTH `bandForRoas` in lib/roasBands.ts (<2 red / <2.7 orange /
+ *     <=3 green / >3 blue / spend===0 gray) and rendered with the shared
+ *     `band-chip` + `chip-{band}` recipe (the SAME pill the hero/Widget band
+ *     tags use). That recipe is an AA-safe tint + band-coloured text — never
+ *     text-colour-derived-from-a-variable-brand — so the pill clears AA in BOTH
+ *     themes. NO local parallel band fork lives in this file.
  *   • Metric value-tinting per [[home-visual-rules]]: SPEND gets a subtle
  *     status-red cell wash (money out), REVENUE a subtle status-green wash
  *     (money in); CPM / AOV / orders stay NEUTRAL (no value colour) — the
  *     status-*Bg tokens are translucent so the wash never fights the on-colour
  *     fg text contrast.
+ *   • NC-ROAS / nCAC footer — REUSES the EXACT same business-wide new-customer
+ *     aggregate the hero renders (CommandCenterNewCustomer, computed ONCE in
+ *     Dashboard as `heroNewCustomer` and threaded to BOTH the hero tile and
+ *     this footer). No second NC aggregate is computed here. Confidence gate
+ *     (suppressed / low) is mirrored from the hero so the two surfaces can
+ *     never disagree.
  *   • RTL/logical: text-start headers, the table flows in the document's `dir`;
  *     store names are <bdi dir="ltr"> so a latin handle never mirror-breaks.
  *
  * This file is component-only — Phase 2 owns the wiring (Dashboard.tsx feeds it
- * the real `toPerStoreData(...)` output). The `PerStoreData` shape is imported
- * from <PerStoreRow> so both Home surfaces share one contract.
+ * the real `toPerStoreData(...)` output + the `newCustomer` footer aggregate).
+ * The `PerStoreData` shape is imported from <PerStoreRow> so both Home surfaces
+ * share one contract.
  */
 
 import { cn, formatNumber } from '@/lib/utils';
 import { Money } from '@/components/ui/Money';
+import { Card } from '@/components/ui/Card';
 import { Heading } from '@/components/ui/Typography';
-import { roasLabel } from '@/lib/analytics';
+import { bandForRoas, type CoreRoasBand } from '@/lib/roasBands';
 import { adDisplayState, type AdDisplayState } from '@/lib/adState';
 import {
   TableBase,
@@ -53,22 +72,31 @@ import {
 } from '@/components/ui/TableBase';
 import type { Platform } from '@/components/ui/PlatformBadge';
 import type { PerStoreData, PerStorePlatformCpm } from '@/components/home/PerStoreRow';
+import type { CommandCenterNewCustomer } from '@/components/home/CommandCenterHero';
 
 /* --------------------------------------------------------------------------
- * Tone → status-token class maps. The roasLabel() tone union is the key, so
- * the pill re-skins purely by swapping CSS variables (token-driven). Each
- * entry is a guaranteed-contrast bg + on-colour fg pairing.
+ * ROAS band → shared chip class. The band is classified through the SINGLE
+ * SOURCE OF TRUTH (`bandForRoas`); the class is the SAME `chip-{band}` recipe
+ * the hero/Widget band tags use (globals.css: AA-safe tint + band-coloured
+ * text). This is NOT a parallel band fork — it is a 1:1 band→class lookup over
+ * the canonical CoreRoasBand union, identical to Widget.chipClassForBand.
  * -------------------------------------------------------------------------- */
 
-type RoasTone = ReturnType<typeof roasLabel>['tone'];
-
-const PILL_TONE_CLASS: Record<RoasTone, string> = {
-  red:    'bg-status-redBg text-status-redFg',
-  orange: 'bg-status-orangeBg text-status-orangeFg',
-  green:  'bg-status-greenBg text-status-greenFg',
-  blue:   'bg-status-blueBg text-status-blueFg',
-  gray:   'bg-status-grayBg text-status-grayFg',
-};
+function chipClassForBand(band: CoreRoasBand): string {
+  switch (band) {
+    case 'red':
+      return 'chip-red';
+    case 'orange':
+      return 'chip-orange';
+    case 'green':
+      return 'chip-green';
+    case 'blue':
+      return 'chip-blue';
+    case 'gray':
+    default:
+      return 'chip-gray';
+  }
+}
 
 /** Subtle directional value-wash for the spend (red, money out) / revenue
  *  (green, money in) cells. The status-*Bg tokens are translucent so the wash
@@ -116,8 +144,16 @@ function fmtOrders(n: number | null): string {
   return formatNumber(n, 0);
 }
 
+/** NC-ROAS display — 2 decimals, "—" for null. Mirrors the hero's `fmtRoas`
+ *  so the footer and the hero NC tile never show a different number. */
+function fmtNcRoas(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return '—';
+  return n.toFixed(2);
+}
+
 /* --------------------------------------------------------------------------
- * ROAS pill — the only value-coloured token in the grid.
+ * ROAS pill — the only value-coloured token in the grid. Band classified via
+ * the single source of truth (`bandForRoas`); class from the shared chip recipe.
  * -------------------------------------------------------------------------- */
 
 function RoasPill({
@@ -132,30 +168,116 @@ function RoasPill({
   off: boolean;
 }) {
   const state: AdDisplayState = adDisplayState({ revenue, spend, off });
-  let tone: RoasTone;
+  let band: CoreRoasBand;
   let text: string;
   if (state === 'organic') {
-    tone = 'blue';
+    band = 'blue';
     text = 'אורגני';
   } else if (state === 'off-empty' || state === 'off-negative') {
-    tone = 'gray';
+    band = 'gray';
     text = '0';
   } else {
-    tone = roas != null && roas > 0 ? roasLabel(roas).tone : 'gray';
+    // SINGLE SOURCE: classify the ROAS through bandForRoas (the operator-locked
+    // ladder). null/≤0 → gray (no meaningful ratio); else the canonical band.
+    band = roas != null && roas > 0 ? bandForRoas(roas) : 'gray';
     text = roas != null && roas > 0 ? `${roas.toFixed(2)}x` : '—';
   }
   return (
     <span
       data-testid="roas-pill"
-      data-tone={tone}
+      data-tone={band}
       className={cn(
-        'inline-flex items-center justify-center rounded-full px-2.5 py-0.5',
-        'text-xs font-semibold tabular-nums whitespace-nowrap',
-        PILL_TONE_CLASS[tone],
+        'band-chip whitespace-nowrap',
+        chipClassForBand(band),
       )}
     >
       <bdi dir={state === 'organic' ? 'rtl' : 'ltr'}>{text}</bdi>
     </span>
+  );
+}
+
+/* --------------------------------------------------------------------------
+ * NC-ROAS / nCAC footer inset (mockup lines 306-311).
+ *
+ * REUSES the EXACT business-wide new-customer aggregate the hero renders
+ * (CommandCenterNewCustomer = computeNewCustomerMetrics output, computed ONCE
+ * in Dashboard as `heroNewCustomer`). No second aggregate is computed here. The
+ * confidence gate is mirrored from the hero so the surfaces never disagree:
+ *   • 'suppressed' → hide the NC-ROAS/nCAC ratios (too much unclassifiable
+ *     signal to trust them) + show "לא מספיק דאטה לסיווג"; keep the order-mix
+ *     line (it's count-based, always honest).
+ *   • 'low'        → render the ratios + a "ביטחון נמוך" badge.
+ *   • 'ok'         → render normally.
+ * Every field the footer shows (ncRoas, nCac, ncOrders, returningOrders,
+ * unclassifiableShare) is truthfully present on the aggregate.
+ * -------------------------------------------------------------------------- */
+
+function NcFooter({ nc }: { nc: CommandCenterNewCustomer }) {
+  const suppressed = nc.confidence === 'suppressed';
+  return (
+    <div
+      data-testid="store-compare-nc-footer"
+      className="mt-4 flex items-center gap-5 rounded-2xl bg-pill-track p-4"
+    >
+      {suppressed ? (
+        <div
+          className="text-sm text-ink-muted"
+          data-testid="store-compare-nc-suppressed"
+        >
+          <bdi dir="rtl">לא מספיק דאטה לסיווג</bdi>
+        </div>
+      ) : (
+        <>
+          <div>
+            <div className="flex items-center gap-1.5 text-[10.5px] font-semibold text-ink-muted">
+              <span>NC-ROAS · נטו</span>
+              {nc.confidence === 'low' && (
+                <span
+                  className="band-chip chip-orange"
+                  data-testid="store-compare-nc-confidence"
+                >
+                  ביטחון נמוך
+                </span>
+              )}
+            </div>
+            <div
+              className="text-xl font-bold tabular-nums text-ink"
+              data-testid="store-compare-nc-roas"
+            >
+              <bdi dir="ltr">{fmtNcRoas(nc.ncRoas)}</bdi>
+            </div>
+          </div>
+
+          <div className="h-8 w-px bg-border-subtle" aria-hidden="true" />
+
+          <div>
+            <div className="text-[10.5px] font-semibold text-ink-muted">nCAC</div>
+            <div
+              className="text-xl font-bold tabular-nums text-ink"
+              data-testid="store-compare-ncac"
+            >
+              <bdi dir="ltr">
+                <Money value={nc.nCac} prefix="$" compactAbove={1_000_000} />
+              </bdi>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Order-mix — always shown (count-based, honest even when the ratio is
+          suppressed): new · returning · unclassified. */}
+      <div
+        className="ms-auto text-[10.5px] font-medium leading-relaxed text-ink-muted tabular-nums"
+        data-testid="store-compare-nc-mix"
+      >
+        <bdi dir="rtl">
+          {nc.ncOrders.toLocaleString('en-US')} חדשות ·{' '}
+          {nc.returningOrders.toLocaleString('en-US')} חוזרות
+          <br />
+          {(nc.unclassifiableShare * 100).toFixed(0)}% לא מסווג
+        </bdi>
+      </div>
+    </div>
   );
 }
 
@@ -165,14 +287,20 @@ function RoasPill({
 
 export interface StoreCompareGridProps {
   stores: PerStoreData[];
+  /**
+   * Business-wide NC-ROAS / nCAC footer aggregate — the SAME
+   * CommandCenterNewCustomer value the hero consumes (Dashboard computes it
+   * once as `heroNewCustomer`). Omit to hide the footer entirely (back-compat).
+   */
+  newCustomer?: CommandCenterNewCustomer;
   className?: string;
 }
 
-export function StoreCompareGrid({ stores, className }: StoreCompareGridProps) {
+export function StoreCompareGrid({ stores, newCustomer, className }: StoreCompareGridProps) {
   if (!stores.length) return null;
 
   return (
-    <section className={className} aria-label={STORE_COMPARE_HEADING}>
+    <Card role="region" aria-label={STORE_COMPARE_HEADING} className={cn('overflow-hidden', className)}>
       <Heading level="section" as="h2" className="mb-3">
         {STORE_COMPARE_HEADING}
       </Heading>
@@ -258,6 +386,10 @@ export function StoreCompareGrid({ stores, className }: StoreCompareGridProps) {
           </tbody>
         </TableBase>
       </div>
-    </section>
+
+      {/* NC-ROAS / nCAC footer inset (mockup 306-311) — same aggregate the hero
+          renders; omitted when the parent doesn't thread it (back-compat). */}
+      {newCustomer && <NcFooter nc={newCustomer} />}
+    </Card>
   );
 }
