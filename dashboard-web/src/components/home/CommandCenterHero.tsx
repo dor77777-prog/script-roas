@@ -689,7 +689,6 @@ export function CommandCenterHero({
                 <Badge tone="green" data-testid="hero-op-live">
                   LIVE
                 </Badge>
-                {updatedAt !== undefined && <FreshnessBadge updatedAt={updatedAt} />}
               </span>
             }
             value={
@@ -701,24 +700,36 @@ export function CommandCenterHero({
               />
             }
             sub={
-              comparisonUnavailable ? (
-                <span className="text-ink-muted">אין נתוני השוואה לתקופה זו</span>
-              ) : (
-                <DeltaLine
-                  text={fmtMoneyDelta(delta?.operatingProfit)}
-                  pctText={fmtPctDelta(
-                    delta?.operatingProfit != null && current.operatingProfit != null
-                      ? delta.operatingProfit /
-                          Math.max(
-                            1,
-                            Math.abs(current.operatingProfit - delta.operatingProfit),
-                          )
-                      : null,
-                  )}
-                  label={comparisonLabel}
-                  positive={(delta?.operatingProfit ?? 0) >= 0}
-                />
-              )
+              <>
+                {comparisonUnavailable ? (
+                  <span className="text-ink-muted">אין נתוני השוואה לתקופה זו</span>
+                ) : (
+                  <DeltaLine
+                    text={fmtMoneyDelta(delta?.operatingProfit)}
+                    pctText={fmtPctDelta(
+                      delta?.operatingProfit != null && current.operatingProfit != null
+                        ? delta.operatingProfit /
+                            Math.max(
+                              1,
+                              Math.abs(current.operatingProfit - delta.operatingProfit),
+                            )
+                        : null,
+                    )}
+                    label={comparisonLabel}
+                    positive={(delta?.operatingProfit ?? 0) >= 0}
+                  />
+                )}
+                {/* Freshness moved OUT of the title: at the Option-A 4-up width
+                    the title can't fit text + range + LIVE + the freshness chip
+                    without `truncate` clipping the chip. It rides here on its own
+                    micro-line so the "as of …" signal is PRESERVED (moved, not
+                    dropped) while the title stays clean. */}
+                {updatedAt !== undefined && (
+                  <div className="mt-1">
+                    <FreshnessBadge updatedAt={updatedAt} />
+                  </div>
+                )}
+              </>
             }
           />
         </HelpTooltip>
