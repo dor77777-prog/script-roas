@@ -47,7 +47,7 @@
 
 import useSWR from 'swr';
 import { useState } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { useStores } from '@/lib/useStores';
 import { operatorFetch } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
@@ -55,7 +55,15 @@ import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { TableBase } from '@/components/ui/TableBase';
 import { Money } from '@/components/ui/Money';
-import { Heading } from '@/components/ui/Typography';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetBody,
+  SheetFooter,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/Sheet';
 
 type Row = {
   id: number;
@@ -376,35 +384,33 @@ export function ManualOverridesCrud() {
         </TableBase>
       </div>
 
-      {/* Delete-confirmation modal (RESEARCH §Open Question 5) */}
+      {/* Delete-confirmation modal (RESEARCH §Open Question 5). Routed through
+          the shared Radix `Sheet` primitive (variant="modal") — NEVER a
+          hand-rolled fixed-overlay div, which would be inert (the
+          modal-over-Sheet rule). Focus-trap + scroll-lock + Esc + role=dialog
+          come for free. Esc / backdrop are ignored mid-flight (while the DELETE
+          request is running). */}
       {confirmDelete && (
-        <div
-          className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-scrim"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="confirm-delete-title"
+        <Sheet
+          open
+          onOpenChange={(o) => {
+            if (!o && !deleting) closeDeleteModal();
+          }}
         >
-          <div className="bg-glass-1 border-0 sm:border sm:border-glass-edge rounded-none sm:rounded p-4 w-full h-full sm:h-auto sm:max-w-md sm:mx-4 flex flex-col">
-            <div className="flex items-start justify-between mb-3 shrink-0">
-              <Heading level="hero" id="confirm-delete-title">
-                אישור מחיקה
-              </Heading>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={closeDeleteModal}
-                aria-label="סגור"
-                className="w-11 h-11 sm:w-auto sm:h-auto sm:p-1"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="flex-1 overflow-y-auto -mx-4 px-4">
-              <p className="text-sm mb-3">
-                למחוק את ההחלפה הידנית של <strong>{confirmDelete.store_id}</strong> בתאריך{' '}
-                <span dir="ltr">{confirmDelete.date}</span> (פלטפורמה {confirmDelete.platform})?
-              </p>
-              <p className="text-ink-secondary text-xs mb-3">
+          <SheetContent variant="modal" dir="rtl" className="sm:max-w-md p-0 gap-0">
+            <SheetHeader className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 shrink-0 text-status-redFg" aria-hidden="true" />
+              <div className="min-w-0">
+                <SheetTitle className="text-status-redFg">אישור מחיקה</SheetTitle>
+                <SheetDescription>
+                  למחוק את ההחלפה הידנית של <strong>{confirmDelete.store_id}</strong> בתאריך{' '}
+                  <span dir="ltr">{confirmDelete.date}</span> (פלטפורמה {confirmDelete.platform})?
+                </SheetDescription>
+              </div>
+            </SheetHeader>
+
+            <SheetBody className="space-y-3">
+              <p className="text-ink-secondary text-xs">
                 סכום:{' '}
                 <span dir="ltr">
                   <Money value={Number(confirmDelete.spend)} prefix="none" decimals={2} />{' '}
@@ -412,18 +418,18 @@ export function ManualOverridesCrud() {
                 </span>
               </p>
               {deleteError && (
-                <p className="text-status-redFg text-sm mb-3" role="alert">
+                <p className="text-status-redFg text-sm" role="alert">
                   {deleteError}
                 </p>
               )}
-            </div>
-            <div className="sticky bottom-0 bg-glass-1 pt-2 flex justify-end gap-2 shrink-0 border-t border-glass-edge sm:border-t-0 -mx-4 px-4 sm:mx-0 sm:px-0">
+            </SheetBody>
+
+            <SheetFooter>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={closeDeleteModal}
                 disabled={deleting}
-                className="text-sm px-3 py-2 sm:py-1 min-h-[44px] sm:min-h-0 h-auto"
               >
                 ביטול
               </Button>
@@ -432,13 +438,12 @@ export function ManualOverridesCrud() {
                 variant="destructive"
                 onClick={() => deleteRow(confirmDelete.id)}
                 disabled={deleting}
-                className="text-sm px-3 py-2 sm:py-1 min-h-[44px] sm:min-h-0 h-auto"
               >
                 {deleting ? 'מוחק…' : 'מחק'}
               </Button>
-            </div>
-          </div>
-        </div>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
       )}
 
       <p className="text-ink-secondary text-xs">

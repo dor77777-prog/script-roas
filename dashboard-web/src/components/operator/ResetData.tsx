@@ -35,8 +35,13 @@
 //
 // Style consistency (D-D4) — a partner using the operator console
 // shouldn't see two different "confirm delete" UX paradigms on the
-// same page. Same Tailwind tokens, same z-50 overlay, same RTL layout,
-// same role=dialog + aria-labelledby + aria-modal=true a11y hooks.
+// same page. Both confirms now route through the SHARED Radix `Sheet`
+// primitive (variant="modal") — NEVER a hand-rolled fixed-overlay div,
+// which would be inert if ever opened over another Sheet (the
+// modal-over-Sheet rule). The Sheet gives focus-trap + scroll-lock +
+// Esc + role=dialog + aria-modal/aria-labelledby/aria-describedby for
+// free; the destructive emphasis is carried by the semantic Button
+// variants (destructive = full wipe, warning = partial wipe).
 //
 // === Why mutate() on neighbouring SWR keys after success ===
 //
@@ -55,16 +60,24 @@
 
 import { useState } from 'react';
 import { mutate } from 'swr';
-import { Loader2, AlertTriangle, X } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import {
   CONFIRM_TOKEN_FOR_SCOPE,
   PROTECTED_TABLES,
   type ResetScope,
 } from '@/lib/operatorReset';
 import { operatorFetch } from '@/lib/operatorClient';
-import { Button } from '@/components/ui/Button';
+import { Button, type ButtonProps } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Heading } from '@/components/ui/Typography';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetBody,
+  SheetFooter,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/Sheet';
 
 // Wire-shape of the /api/operator/reset 200 response. Mirrored locally
 // rather than imported across the server/client boundary to keep the
@@ -85,20 +98,26 @@ type ResetResponse = {
 type ScopeDescriptor = {
   scope: ResetScope;
   buttonLabel: string;
-  buttonClass: string;
+  /**
+   * Semantic Button variant (W7) — the variant OWNS the status colour
+   * (destructive = red, warning = orange) + hover/focus/disabled treatment.
+   * Replaces the old hand-painted `buttonClass` (bg-status-*Btn repaints).
+   */
+  buttonVariant: ButtonProps['variant'];
   modalTitle: string;
   modalWarning: string;
   tablesShown: readonly string[];
   preserves?: string;
 };
 
-// Per-scope status-token class strings. The mesh status tokens
-// (bg-status-red / bg-status-orange) drive the destructive emphasis;
-// hover/disabled use opacity so the solid fill stays token-flat.
+// Per-scope emphasis via semantic Button variants — the full wipe is
+// `destructive` (red), the partial wipe `warning` (orange). The variant owns
+// the colour, hover, focus-ring, and disabled treatment (token-flat); no
+// per-descriptor className repaint.
 const SCOPE_ALL: ScopeDescriptor = {
   scope: 'all',
   buttonLabel: 'איפוס מלא — מחק את כל הנתונים כולל הוצאות ידניות',
-  buttonClass: 'bg-status-redBtn hover:opacity-90 disabled:opacity-50',
+  buttonVariant: 'destructive',
   modalTitle: 'איפוס מלא של כל הנתונים',
   modalWarning:
     'פעולה זו תמחק את כל נתוני הדשבורד, כולל ההוצאות הידניות שהוזנו ידנית. אין צעד אחורה.',
@@ -116,7 +135,7 @@ const SCOPE_ALL: ScopeDescriptor = {
 const SCOPE_EXCEPT_MANUAL: ScopeDescriptor = {
   scope: 'except-manual',
   buttonLabel: 'איפוס חלקי — מחק הכל פרט להוצאות ידניות',
-  buttonClass: 'bg-status-orangeBtn hover:opacity-90 disabled:opacity-50',
+  buttonVariant: 'warning',
   modalTitle: 'איפוס חלקי — מחק הכל פרט להוצאות ידניות',
   modalWarning:
     'פעולה זו תמחק את נתוני ה-fetch (Shopify / Meta / Google / מוצרים / קמפיינים), אך תשמור על טבלת manual_overrides. ניתן לרוץ backfill מחדש.',
@@ -205,10 +224,10 @@ export function ResetData() {
           <Button
             key={d.scope}
             type="button"
-            variant="ghost"
+            variant={d.buttonVariant}
             onClick={() => openModal(d)}
             disabled={submitting}
-            className={`gap-2 text-accent-fg text-sm px-3 py-2 h-auto rounded ${d.buttonClass}`}
+            className="gap-2"
           >
             <AlertTriangle className="w-4 h-4" />
             {d.buttonLabel}
@@ -250,39 +269,36 @@ export function ResetData() {
         </div>
       )}
 
+      {/* Reset-confirm modal — routed through the shared Radix `Sheet`
+          primitive (variant="modal"), NEVER a hand-rolled fixed-overlay div
+          (the modal-over-Sheet rule). Focus-trap + scroll-lock + Esc +
+          role=dialog come for free. The typed-token gate is UNCHANGED: the
+          destructive action stays DISABLED until `typed` exactly equals the
+          per-scope token. Esc / backdrop are ignored mid-flight (closeModal
+          early-returns while submitting). */}
       {active && (
-        <div
-          className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-scrim"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="reset-confirm-title"
+        <Sheet
+          open
+          onOpenChange={(o) => {
+            if (!o) closeModal(); // closeModal early-returns mid-flight
+          }}
         >
-          <div className="bg-glass-1 border-0 sm:border sm:border-glass-edge rounded-none sm:rounded p-4 w-full h-full sm:h-auto sm:max-w-md sm:mx-4 flex flex-col">
-            <div className="flex items-start justify-between mb-3 shrink-0">
-              <Heading
-                level="hero"
-                id="reset-confirm-title"
-                className="flex items-center gap-2"
-              >
-                <AlertTriangle className="w-5 h-5 text-status-redFg" />
-                {active.modalTitle}
-              </Heading>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={closeModal}
-                disabled={submitting}
-                aria-label="סגור"
-                className="w-11 h-11 sm:w-auto sm:h-auto sm:p-1"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+          <SheetContent variant="modal" dir="rtl" className="sm:max-w-md p-0 gap-0">
+            <SheetHeader className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 shrink-0 text-status-redFg" aria-hidden="true" />
+              <div className="min-w-0">
+                <SheetTitle className="text-status-redFg">{active.modalTitle}</SheetTitle>
+                {/* The destructive warning copy doubles as the dialog's
+                    accessible description (aria-describedby) — same copy as
+                    before, now wired for a11y. */}
+                <SheetDescription className="text-sm text-ink mt-2">
+                  {active.modalWarning}
+                </SheetDescription>
+              </div>
+            </SheetHeader>
 
-            <div className="flex-1 overflow-y-auto -mx-4 px-4">
-              <p className="text-sm mb-3">{active.modalWarning}</p>
-
-              <div className="mb-3">
+            <SheetBody className="space-y-3">
+              <div>
                 <p className="text-ink-secondary text-xs mb-1">
                   טבלאות שיימחקו:
                 </p>
@@ -331,7 +347,7 @@ export function ResetData() {
                 </ul>
               </div>
 
-              <label className="block mb-2">
+              <label className="block">
                 <span className="text-xs text-ink-secondary block mb-1">
                   הקלד את הטוקן הבא בדיוק כדי לאשר:
                 </span>
@@ -353,19 +369,18 @@ export function ResetData() {
               </label>
 
               {error && (
-                <p className="text-status-redFg text-sm mb-3" role="alert">
+                <p className="text-status-redFg text-sm" role="alert">
                   {error}
                 </p>
               )}
-            </div>
+            </SheetBody>
 
-            <div className="sticky bottom-0 bg-glass-1 pt-2 flex justify-end gap-2 shrink-0 border-t border-glass-edge sm:border-t-0 -mx-4 px-4 sm:mx-0 sm:px-0">
+            <SheetFooter>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={closeModal}
                 disabled={submitting}
-                className="text-sm px-3 py-2 sm:py-1 min-h-[44px] sm:min-h-0 h-auto"
               >
                 ביטול
               </Button>
@@ -373,18 +388,20 @@ export function ResetData() {
                 type="button"
                 variant="destructive"
                 onClick={submit}
+                // SAFETY GATE (UNCHANGED): disabled until the typed token
+                // EXACTLY equals the per-scope confirm token.
                 disabled={
                   submitting ||
                   typed !== CONFIRM_TOKEN_FOR_SCOPE[active.scope]
                 }
-                className="gap-1 text-sm px-3 py-2 sm:py-1 min-h-[44px] sm:min-h-0 h-auto"
+                className="gap-1"
               >
                 {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {submitting ? 'מוחק…' : 'אשר ומחק'}
               </Button>
-            </div>
-          </div>
-        </div>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
       )}
 
       <p className="text-ink-secondary text-xs">
