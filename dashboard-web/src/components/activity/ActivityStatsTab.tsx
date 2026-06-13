@@ -236,7 +236,7 @@ function SegToggle<T extends string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="inline-flex rounded-pill border border-glass-edge bg-glass-2 p-0.5"
+      className="inline-flex rounded-pill bg-pill-track p-0.5"
     >
       {options.map((o) => {
         const active = value === o.key;
@@ -440,7 +440,7 @@ export function ActivityStatsTab({ range, globalStore }: ActivityStatsTabProps) 
       <Card className="animate-fade-in-up" data-testid="activity-stats-tab">
         <div data-testid="as-empty" className="px-5 py-12 text-center">
           <span
-            className="grid place-items-center w-10 h-10 mx-auto mb-3 rounded-xl bg-glass-2 text-ink-muted"
+            className="grid place-items-center w-10 h-10 mx-auto mb-3 rounded-xl bg-pill-track text-ink-muted"
             aria-hidden
           >
             <BarChart3 size={18} />

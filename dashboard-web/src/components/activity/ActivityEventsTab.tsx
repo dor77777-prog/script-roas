@@ -25,13 +25,21 @@
 
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { Zap, ShoppingBag, Undo2, ShoppingCart } from 'lucide-react';
+import {
+  Zap,
+  ShoppingBag,
+  Undo2,
+  ShoppingCart,
+  ChevronRight,
+  ChevronLeft,
+} from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Heading } from '@/components/ui/Typography';
 import { Money } from '@/components/ui/Money';
 import { Button } from '@/components/ui/Button';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { SourceBadge } from '@/components/ui/SourceBadge';
+import { StateBlock } from '@/components/ui/StateBlock';
 import { cn } from '@/lib/utils';
 import { STORE_ID_TO_NAME, type StoreId } from '@/lib/platformsByStore';
 import { storeColor, buildStoreBrandColorMap } from '@/lib/storeColors';
@@ -380,8 +388,18 @@ export function ActivityEventsTab({ data, globalStore }: ActivityEventsTabProps)
           </div>
         </label>
 
-        {/* Type pills — pushed to the row's end (start side in RTL). */}
-        <div className="flex gap-1.5 ms-auto" role="group" aria-label="סינון לפי סוג אירוע">
+        {/* Type pills — Horizon toggle-chip recipe on the shared `bg-pill-track`
+            rail (active = brand pill `bg-pill-thumb text-pill-inkOn`, AA both
+            themes; idle = `text-pill-ink` → ink-up on hover). Touch target ≥44px
+            (these are mobile-tapped). Pushed to the row's end (start in RTL).
+            Stays a <Button> set (not a SegmentedControl) so `aria-pressed`
+            multi-toggle semantics + each label's role="button" name lookup are
+            preserved for the existing DOM tests. */}
+        <div
+          className="flex flex-wrap gap-1 ms-auto rounded-full bg-pill-track p-1"
+          role="group"
+          aria-label="סינון לפי סוג אירוע"
+        >
           {TYPE_PILLS.map((pill) => {
             const active = typeFilter === pill.key;
             return (
@@ -395,10 +413,11 @@ export function ActivityEventsTab({ data, globalStore }: ActivityEventsTabProps)
                   resetPage();
                 }}
                 className={cn(
-                  'h-auto rounded-full px-3 py-1.5 text-[11px] font-bold border min-h-[34px]',
+                  'h-auto rounded-full px-3.5 py-2 text-[11px] font-bold min-h-[44px]',
+                  'transition-colors duration-fast ease-out',
                   active
-                    ? 'bg-accent-bg text-[color:var(--accent-link)] border-accent-soft'
-                    : 'bg-glass-2 text-ink-secondary border-glass-edge hover:bg-glass-3',
+                    ? 'bg-pill-thumb text-pill-inkOn shadow-soft hover:bg-pill-thumb'
+                    : 'bg-transparent text-pill-ink hover:bg-transparent hover:text-ink',
                 )}
               >
                 {pill.label}
@@ -416,15 +435,17 @@ export function ActivityEventsTab({ data, globalStore }: ActivityEventsTabProps)
             <div className="mt-1 text-[12px] text-ink-muted">ננסה שוב אוטומטית…</div>
           </div>
         ) : isLoading ? (
-          <div data-testid="activity-loading" className="px-5 py-4 space-y-2" aria-busy="true">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="skeleton h-12 rounded-lg" aria-hidden />
-            ))}
-            <span className="sr-only">טוען אירועים…</span>
+          <div data-testid="activity-loading" className="px-5 py-4">
+            <StateBlock
+              mode="skeleton"
+              shape="table"
+              rows={6}
+              message="טוען אירועים…"
+            />
           </div>
         ) : events.length === 0 ? (
           <div data-testid="activity-empty" className="px-5 py-12 text-center">
-            <span className="grid place-items-center w-10 h-10 mx-auto mb-3 rounded-xl bg-glass-2 text-ink-muted" aria-hidden>
+            <span className="grid place-items-center w-10 h-10 mx-auto mb-3 rounded-xl bg-pill-track text-ink-muted" aria-hidden>
               <Zap size={18} />
             </span>
             <div className="font-bold text-[13px] text-ink">אין אירועים בטווח/בפילטר שנבחר</div>
@@ -449,28 +470,36 @@ export function ActivityEventsTab({ data, globalStore }: ActivityEventsTabProps)
 
       {/* Pagination */}
       <div className="px-4 sm:px-5 py-3 flex items-center justify-center gap-3 border-t border-glass-edge">
+        {/* Prev — points toward inline-start (visually RIGHT in this RTL UI):
+            "הקודם" goes BACK, and inline-start sits on the right under dir=rtl,
+            so the chevron must point right → lucide ChevronRight. */}
         <Button
           type="button"
           variant="secondary"
           data-testid="activity-prev"
           disabled={page <= 1}
           onClick={onPrev}
-          className="h-auto px-3.5 py-2 text-[12px] font-bold min-h-[36px]"
+          className="h-auto gap-1 px-3.5 py-2 text-[12px] font-bold min-h-[36px]"
         >
-          › הקודם
+          <ChevronRight size={15} aria-hidden />
+          הקודם
         </Button>
         <span data-testid="activity-page-info" className="text-[12px] text-ink-muted tabular-nums">
           עמוד <bdi dir="ltr">{page}</bdi> מתוך <bdi dir="ltr">{totalPages}</bdi>
         </span>
+        {/* Next — points toward inline-end (visually LEFT in this RTL UI):
+            "הבא" goes FORWARD, and inline-end sits on the left under dir=rtl, so
+            the chevron must point left → lucide ChevronLeft. */}
         <Button
           type="button"
           variant="secondary"
           data-testid="activity-next"
           disabled={page >= totalPages}
           onClick={onNext}
-          className="h-auto px-3.5 py-2 text-[12px] font-bold min-h-[36px]"
+          className="h-auto gap-1 px-3.5 py-2 text-[12px] font-bold min-h-[36px]"
         >
-          הבא ‹
+          הבא
+          <ChevronLeft size={15} aria-hidden />
         </Button>
       </div>
     </Card>

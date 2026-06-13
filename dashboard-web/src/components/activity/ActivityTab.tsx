@@ -23,14 +23,15 @@
  * range-filtered. The store still applies to the feed via the existing
  * globalStore (derived from filters.store).
  *
- * The switcher is a tablist (role="tab"/aria-selected) styled in the existing
- * graphic language (underline-active sub-tabs, token-driven, AA both themes,
- * RTL logical classes).
+ * The switcher is the shared Horizon <SegmentedControl> primitive (Wave 8
+ * re-skin): role="tablist" with role="tab"/aria-selected children, the
+ * brand-pill active state, RTL-aware roving-tabindex keyboard nav, token-driven
+ * and AA in both themes. Each sub-tab keeps its stable `activity-subtab-*`
+ * data-testid via the primitive's per-option `testId`.
  */
 
 import { useState } from 'react';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/Button';
+import { SegmentedControl, type SegmentedOption } from '@/components/ui/SegmentedControl';
 import { Filters } from '@/components/Filters';
 import { ActivityEventsTab } from '@/components/activity/ActivityEventsTab';
 import { ActivityStatsTab } from '@/components/activity/ActivityStatsTab';
@@ -71,35 +72,19 @@ export function ActivityTab({ data, filters, stores, onChange }: ActivityTabProp
 
   return (
     <div className="space-y-4">
-      {/* Sub-tab switcher — underline-active tablist. */}
-      <div
-        role="tablist"
+      {/* Sub-tab switcher — shared Horizon <SegmentedControl> (tablist).
+          Preserves each sub-tab's `activity-subtab-*` testid via per-option
+          testId, plus role="tab"/aria-selected for the existing DOM tests. */}
+      <SegmentedControl
         aria-label="תצוגת פעילות"
-        className="flex gap-1 border-b border-glass-edge"
-      >
-        {SUB_TABS.map((t) => {
-          const active = sub === t.key;
-          return (
-            <Button
-              key={t.key}
-              type="button"
-              variant="ghost"
-              role="tab"
-              aria-selected={active}
-              data-testid={`activity-subtab-${t.key}`}
-              onClick={() => setSub(t.key)}
-              className={cn(
-                'h-auto rounded-none px-3.5 py-2.5 text-sm font-semibold border-b-2 -mb-px',
-                active
-                  ? 'text-ink border-accent'
-                  : 'text-ink-muted border-transparent hover:text-ink-secondary',
-              )}
-            >
-              {t.label}
-            </Button>
-          );
-        })}
-      </div>
+        options={SUB_TABS.map((t): SegmentedOption => ({
+          value: t.key,
+          label: t.label,
+          testId: `activity-subtab-${t.key}`,
+        }))}
+        value={sub}
+        onChange={(v) => setSub(v as SubTab)}
+      />
 
       {sub === 'feed' ? (
         <ActivityEventsTab data={data} globalStore={globalStore} />
