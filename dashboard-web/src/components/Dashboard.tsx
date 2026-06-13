@@ -1852,7 +1852,7 @@ function CampaignsTab({
       />
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
       <QuadrantScatterCard filters={filters} />
-      <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
+      <div className="glass rounded-hz overflow-hidden">
         <CampaignsTable
           range={filters.range}
           store={filters.store}
