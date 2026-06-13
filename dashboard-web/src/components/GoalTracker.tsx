@@ -238,7 +238,7 @@ export function GoalTracker({ data, range }: Props) {
   // to the NEXT (later) month — "back = right, forward = left" for Hebrew
   // readers. The first DOM child renders on the right under dir="rtl".
   const monthNav = effectiveMonth ? (
-    <span className="inline-flex items-center gap-0.5 bg-glass-2 border border-glass-edge rounded-lg p-0.5">
+    <span className="inline-flex items-center gap-0.5 bg-pill-track border border-glass-edge rounded-lg p-0.5">
       <HelpTooltip content="חודש קודם">
         <Button
           variant="ghost"
@@ -383,7 +383,7 @@ export function GoalTracker({ data, range }: Props) {
                 הקריאה ל-<code className="font-mono">/api/data</code> נכשלה — אי אפשר להציג
                 ביצוע מול יעד בלי הנתונים. זה לא אומר שלא היו מכירות.
               </div>
-              <div className="text-[10px] opacity-60 mt-1 font-mono">
+              <div className="text-fs-2xs opacity-60 mt-1 font-mono">
                 {wideError instanceof Error ? wideError.message : String(wideError)}
               </div>
               <Button
@@ -409,8 +409,15 @@ export function GoalTracker({ data, range }: Props) {
       <Card
         variant="flat"
         className={cn(
-          '!p-0 overflow-hidden rounded-card shadow-glass',
-          'bg-[linear-gradient(135deg,var(--accent),oklch(from_var(--accent)_calc(l*0.55)_c_h))] text-accent-fg',
+          '!p-0 overflow-hidden rounded-hz shadow-hz',
+          // Vivid accent CTA (operator-locked, W6.1) — TOKEN-DRIVEN accent
+          // gradient. The LIGHT stop is `--accent-btn` (the AA-locked deep
+          // on-hue accent: white = 4.80:1 dark / 7.10:1 light, per
+          // contrastGuard) and it only deepens from there, so the all-white
+          // `--accent-fg` foreground clears WCAG-AA across the WHOLE slab. No
+          // text colour is derived from the brand hue — white-on-accent via a
+          // paired on-accent token, Material-3 style.
+          'bg-[linear-gradient(135deg,var(--accent-btn),oklch(from_var(--accent-btn)_calc(l*0.6)_c_h))] text-accent-fg',
         )}
       >
         <div className="p-4 sm:p-5">
@@ -441,7 +448,7 @@ export function GoalTracker({ data, range }: Props) {
   // The carry-forward tag, shown next to the goal label when this month
   // inherits an earlier month's goal.
   const carryTag = goalInfo.carriedFrom ? (
-    <span className="text-[10px] sm:text-[10.5px] text-status-warningFg font-semibold">
+    <span className="text-fs-2xs text-status-warningFg font-semibold">
       · נגרר מ-{monthLabelHebrew(goalInfo.carriedFrom)}
     </span>
   ) : null;
@@ -467,10 +474,11 @@ export function GoalTracker({ data, range }: Props) {
               </span>
               <Heading level="section">יעד חודשי</Heading>
               <span className={cn(
-                'inline-flex items-center px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold rounded',
+                'inline-flex items-center gap-1 px-2 py-0.5 text-fs-2xs sm:text-[11px] font-semibold rounded',
                 met ? 'bg-status-greenBg text-status-greenFg' : 'bg-status-redBg text-status-redFg',
               )}>
-                {met ? '✓ עמד ביעד' : '✗ לא עמד'}
+                {met ? <Check size={11} aria-hidden /> : <X size={11} aria-hidden />}
+                {met ? 'עמד ביעד' : 'לא עמד'}
               </span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -489,10 +497,10 @@ export function GoalTracker({ data, range }: Props) {
                 הכנסות בחודש
               </div>
               <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
-                <span className="text-[10px] text-ink-muted font-medium me-1">CAD</span>
+                <span className="text-fs-2xs text-ink-muted font-medium me-1">CAD</span>
                 <Money value={monthRevenue} prefix="none" locale="he-IL" compactAbove={1_000_000} />
               </div>
-              <div className={cn('text-[10px] sm:text-[11px] tabular-nums mt-0.5', met ? 'text-status-greenFg' : 'text-status-redFg')}>
+              <div className={cn('text-fs-2xs sm:text-[11px] tabular-nums mt-0.5', met ? 'text-status-greenFg' : 'text-status-redFg')}>
                 {pctOfGoal.toFixed(0)}% מהיעד
               </div>
             </div>
@@ -501,45 +509,48 @@ export function GoalTracker({ data, range }: Props) {
                 יעד החודש {carryTag}
               </div>
               <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
-                <span className="text-[10px] text-ink-muted font-medium me-1">CAD</span>
+                <span className="text-fs-2xs text-ink-muted font-medium me-1">CAD</span>
                 <Money value={goal} prefix="none" locale="he-IL" compactAbove={1_000_000} />
               </div>
-              <div className={cn('text-[10px] sm:text-[11px] tabular-nums mt-0.5', met ? 'text-status-greenFg' : 'text-status-redFg')}>
+              <div className={cn('text-fs-2xs sm:text-[11px] tabular-nums mt-0.5', met ? 'text-status-greenFg' : 'text-status-redFg')}>
                 {met ? 'עברת ב-CAD ' : 'חסרו CAD '}
                 <Money value={Math.abs(diff)} prefix="none" locale="he-IL" compactAbove={1_000_000} />
               </div>
             </div>
             <div className="col-span-2 sm:col-span-1">
               <div className="text-[11px] sm:text-xs text-ink-muted uppercase tracking-wide inline-flex items-center gap-1">
-                {met ? '✓' : '✗'} תוצאה מול יעד
+                {met ? <Check size={11} aria-hidden /> : <X size={11} aria-hidden />} תוצאה מול יעד
               </div>
               <div className={cn('text-base sm:text-lg font-bold tabular-nums mt-0.5', met ? 'text-status-greenFg' : 'text-status-redFg')}>
-                <span className="text-[10px] text-ink-muted font-medium me-1">CAD</span>
+                <span className="text-fs-2xs text-ink-muted font-medium me-1">CAD</span>
                 {diff >= 0 ? '+' : '−'}
                 <Money value={Math.abs(diff)} prefix="none" locale="he-IL" compactAbove={1_000_000} />
               </div>
-              <div className={cn('text-[10px] sm:text-[11px] tabular-nums mt-0.5', met ? 'text-status-greenFg' : 'text-status-redFg')}>
+              <div className={cn('text-fs-2xs sm:text-[11px] tabular-nums mt-0.5', met ? 'text-status-greenFg' : 'text-status-redFg')}>
                 {met ? `מעל היעד ב-${diffPct.toFixed(1)}%` : `מתחת ליעד ב-${diffPct.toFixed(1)}%`}
               </div>
             </div>
           </div>
 
-          {/* Final-performance bar (no daily-target tick on a completed month) */}
-          <div className="relative h-2.5 bg-glass-2 rounded-full overflow-hidden">
+          {/* Final-performance bar (no daily-target tick on a completed month).
+              Track inset → pill-track; the fill stays SEMANTIC (met→green,
+              missed→red) — this is goal performance, not a ROAS band. */}
+          <div className="relative h-2.5 bg-pill-track rounded-full overflow-hidden">
             <div
               className={cn('h-full rounded-full transition-all duration-slow ease-out', met ? 'bg-status-green' : 'bg-status-red')}
               style={{ width: `${finalPct}%` }}
             />
           </div>
 
-          <div className="flex items-center justify-between mt-2 text-[10px] sm:text-[11px] text-ink-muted tabular-nums">
+          <div className="flex items-center justify-between mt-2 text-fs-2xs sm:text-[11px] text-ink-muted tabular-nums">
             <span className="inline-flex items-center gap-1">
               <Calendar size={11} />
               החודש הסתיים · {totalDays} ימים
             </span>
             <span>ביצוע סופי</span>
             <span className={cn('inline-flex items-center gap-1 font-semibold', met ? 'text-status-greenFg' : 'text-status-redFg')}>
-              {met ? '✓ הושג' : '✗ לא הושג'}
+              {met ? <Check size={11} aria-hidden /> : <X size={11} aria-hidden />}
+              {met ? 'הושג' : 'לא הושג'}
             </span>
           </div>
         </div>
@@ -567,12 +578,12 @@ export function GoalTracker({ data, range }: Props) {
     ahead: { label: 'מקדים את היעד', bg: 'bg-status-greenBg', color: 'text-status-greenFg' },
     'on-pace': { label: 'בקצב הנכון', bg: 'bg-accent-bg', color: 'text-accent' },
     behind: { label: 'מפגר מהיעד', bg: 'bg-status-warningBg', color: 'text-status-warningFg' },
-    unknown: { label: '—', bg: 'bg-glass-2', color: 'text-ink-muted' },
+    unknown: { label: '—', bg: 'bg-pill-track', color: 'text-ink-muted' },
   };
   // FUTURE month has no pacing yet — show a neutral "start of month" chip.
   const statusKey = isFuture ? 'start' : pacing.status;
   const sMeta = isFuture
-    ? { label: 'תחילת החודש', bg: 'bg-glass-2', color: 'text-ink-muted' }
+    ? { label: 'תחילת החודש', bg: 'bg-pill-track', color: 'text-ink-muted' }
     : statusMeta[statusKey];
 
   const barColor = isFuture
@@ -592,7 +603,7 @@ export function GoalTracker({ data, range }: Props) {
             </span>
             <Heading level="section">יעד חודשי</Heading>
             <span className={cn(
-              'inline-flex items-center px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold rounded',
+              'inline-flex items-center px-2 py-0.5 text-fs-2xs sm:text-[11px] font-semibold rounded',
               sMeta.bg, sMeta.color,
             )}>
               {sMeta.label}
@@ -615,10 +626,10 @@ export function GoalTracker({ data, range }: Props) {
               נצבר עד כה
             </div>
             <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
-              <span className="text-[10px] text-ink-muted font-medium me-1">CAD</span>
+              <span className="text-fs-2xs text-ink-muted font-medium me-1">CAD</span>
               <Money value={mtdRevenue} prefix="none" locale="he-IL" compactAbove={1_000_000} />
             </div>
-            <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums mt-0.5">
+            <div className="text-fs-2xs sm:text-[11px] text-ink-muted tabular-nums mt-0.5">
               {(progress * 100).toFixed(1)}% מהיעד
             </div>
           </div>
@@ -627,10 +638,10 @@ export function GoalTracker({ data, range }: Props) {
               יעד החודש {carryTag}
             </div>
             <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
-              <span className="text-[10px] text-ink-muted font-medium me-1">CAD</span>
+              <span className="text-fs-2xs text-ink-muted font-medium me-1">CAD</span>
               <Money value={goal} prefix="none" locale="he-IL" compactAbove={1_000_000} />
             </div>
-            <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums mt-0.5">
+            <div className="text-fs-2xs sm:text-[11px] text-ink-muted tabular-nums mt-0.5">
               חסרים CAD <Money value={Math.max(0, goal - mtdRevenue)} prefix="none" locale="he-IL" compactAbove={1_000_000} />
             </div>
           </div>
@@ -642,18 +653,18 @@ export function GoalTracker({ data, range }: Props) {
             {isFuture ? (
               <>
                 <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">—</div>
-                <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums mt-0.5">
+                <div className="text-fs-2xs sm:text-[11px] text-ink-muted tabular-nums mt-0.5">
                   אין עדיין מספיק נתונים
                 </div>
               </>
             ) : (
               <>
                 <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
-                  <span className="text-[10px] text-ink-muted font-medium me-1">CAD</span>
+                  <span className="text-fs-2xs text-ink-muted font-medium me-1">CAD</span>
                   <Money value={forecast.projectedRevenue} prefix="none" locale="he-IL" compactAbove={1_000_000} />
                 </div>
                 <div className={cn(
-                  'text-[10px] sm:text-[11px] tabular-nums mt-0.5',
+                  'text-fs-2xs sm:text-[11px] tabular-nums mt-0.5',
                   forecast.projectedRevenue >= goal ? 'text-status-greenFg' : 'text-status-redFg',
                 )}>
                   {forecast.projectedRevenue >= goal
@@ -665,8 +676,9 @@ export function GoalTracker({ data, range }: Props) {
           </div>
         </div>
 
-        {/* Progress bar with expected-pacing marker */}
-        <div className="relative h-2.5 bg-glass-2 rounded-full overflow-hidden">
+        {/* Progress bar with expected-pacing marker. Track inset → pill-track;
+            the fill stays SEMANTIC (pacing tone), not a ROAS band. */}
+        <div className="relative h-2.5 bg-pill-track rounded-full overflow-hidden">
           <div
             className={cn('h-full rounded-full transition-all duration-slow ease-out', barColor)}
             style={{ width: `${progressPct * 100}%` }}
@@ -681,7 +693,7 @@ export function GoalTracker({ data, range }: Props) {
           )}
         </div>
 
-        <div className="flex items-center justify-between mt-2 text-[10px] sm:text-[11px] text-ink-muted tabular-nums">
+        <div className="flex items-center justify-between mt-2 text-fs-2xs sm:text-[11px] text-ink-muted tabular-nums">
           <span className="inline-flex items-center gap-1">
             <Calendar size={11} />
             יום {daysElapsed} מתוך {daysInView}
@@ -702,14 +714,14 @@ export function GoalTracker({ data, range }: Props) {
         {!isFuture && (
           <div
             data-testid="goal-runrate"
-            className="mt-3 rounded-xl border border-dashed border-glass-edge bg-glass-2 p-3"
+            className="mt-3 rounded-xl border border-dashed border-glass-edge bg-pill-track p-3"
           >
             <div className="text-[11px] font-bold text-ink mb-2 inline-flex items-center gap-1.5">
               <TrendingUp size={12} /> בקצב הנוכחי · סוף החודש
             </div>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
-                <div className="text-[10px] text-ink-muted">רווח-נטו צפוי</div>
+                <div className="text-fs-2xs text-ink-muted">רווח-נטו צפוי</div>
                 <div className={cn(
                   'text-base font-extrabold tabular-nums',
                   forecast.projectedNet >= 0 ? 'text-status-greenFg' : 'text-status-redFg',
@@ -718,19 +730,19 @@ export function GoalTracker({ data, range }: Props) {
                 </div>
               </div>
               <div>
-                <div className="text-[10px] text-ink-muted">הוצאת-פרסום צפויה</div>
+                <div className="text-fs-2xs text-ink-muted">הוצאת-פרסום צפויה</div>
                 <div className="text-base font-extrabold tabular-nums text-ink-secondary">
                   <Money value={forecast.projectedSpend} prefix="none" locale="he-IL" compactAbove={1_000_000} />
                 </div>
               </div>
               <div>
-                <div className="text-[10px] text-ink-muted">ROAS צפוי</div>
+                <div className="text-fs-2xs text-ink-muted">ROAS צפוי</div>
                 <div className="text-base font-extrabold tabular-nums text-ink">
                   {forecast.projectedRoas.toFixed(1)}×
                 </div>
               </div>
             </div>
-            <div className="mt-1.5 text-[10px] text-ink-muted">
+            <div className="mt-1.5 text-fs-2xs text-ink-muted">
               רווח-נטו אחרי עלויות-מוצר, עמלות והוצאות-קבועות.
             </div>
           </div>

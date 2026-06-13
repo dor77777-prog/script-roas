@@ -110,7 +110,9 @@ describe('<GoalTracker> per-month + range-aware (T3)', () => {
       row({ date: `${pm}-20`, revenue: 70000 }),
     ];
     render(<GoalTracker data={dashboardData(swrRows)} range={monthRange(pm)} />);
-    expect(screen.getByText('✓ עמד ביעד')).toBeInTheDocument();
+    // W6.1 — the leading ✓/✗ glyph is now a lucide <Check>/<X> icon sibling of
+    // the Hebrew label, so the badge's text content is just "עמד ביעד".
+    expect(screen.getByText('עמד ביעד')).toBeInTheDocument();
     expect(screen.getByText(/תוצאה מול יעד/)).toBeInTheDocument();
     expect(screen.getByText('הכנסות בחודש')).toBeInTheDocument();
     // No forecast/days-left chrome on a completed month.
@@ -122,7 +124,8 @@ describe('<GoalTracker> per-month + range-aware (T3)', () => {
     setGoals({ [pm]: 200000 });
     swrRows = [row({ date: `${pm}-10`, revenue: 50000 })]; // < goal → missed
     render(<GoalTracker data={dashboardData(swrRows)} range={monthRange(pm)} />);
-    expect(screen.getByText('✗ לא עמד')).toBeInTheDocument();
+    // W6.1 — leading ✗ glyph is now a lucide <X> icon; badge text is "לא עמד".
+    expect(screen.getByText('לא עמד')).toBeInTheDocument();
   });
 
   it('carry-forward → shows the "נגרר מ-<month>" tag when the viewed month has no explicit goal', () => {

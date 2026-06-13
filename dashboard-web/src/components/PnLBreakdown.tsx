@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Receipt, ChevronDown, ChevronUp, AlertCircle, Settings as SettingsIcon } from 'lucide-react';
-import { cn, formatCurrency } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import type { Aggregate } from '@/lib/analytics';
 import { TRANSACTION_FEES_RATE } from '@/lib/costs';
 import { sumRefundsInRange } from '@/lib/refundDayHeuristic';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Money } from '@/components/ui/Money';
 import { TableBase } from '@/components/ui/TableBase';
 import { Heading } from '@/components/ui/Typography';
 import { ProvenanceFlag } from '@/components/ui/ProvenanceFlag';
@@ -243,10 +245,18 @@ export function PnLBreakdown({
   const feesPctText = `${(TRANSACTION_FEES_RATE * 100).toFixed(1)}%`;
 
   return (
-    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
+    <Card className="!p-0 overflow-hidden">
       {/* Hero strip — always visible. Three big numbers side-by-side with
           proportional bars so a glance answers "did I make money?" without
-          expanding anything. */}
+          expanding anything.
+
+          Vivid accent header (operator-locked, W6.1): a TOKEN-DRIVEN accent
+          wash — `--accent-bg` is the alpha-safe brand tint that flips per
+          theme. It is a SOFT tint over the glass surface (8–12% accent over
+          near-white / navy-800), so the dark `text-ink` / `text-ink-muted`
+          eyebrow + heading sit on an effectively-neutral surface and clear
+          WCAG-AA comfortably (the tint never darkens enough to threaten the
+          ink). No text colour is derived from the accent hue. */}
       <div
         className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 bg-gradient-to-br from-accent-bg via-glass-1 to-glass-1 relative"
       >
@@ -418,18 +428,21 @@ export function PnLBreakdown({
                 <span className="text-sm font-bold text-ink">
                   רווח נטו אמיתי
                 </span>
-                <span className="text-[10px] text-ink-muted">
+                <span className="text-fs-2xs text-ink-muted">
                   ({(current.trueMargin * 100).toFixed(1)}% מרג&apos;ין)
                 </span>
               </div>
+              {/* Semantic profit/loss tone STAYS (green/red Fg) — this is
+                  profit decomposition, not a ROAS band. Value routed through
+                  <Money> (overflow-safe, tabular-nums). */}
               <span
                 className={cn(
                   'text-base sm:text-lg font-bold tabular-nums',
                   finalProfit >= 0 ? 'text-status-greenFg' : 'text-status-redFg',
                 )}
               >
-                <span className="text-[10px] text-ink-muted font-medium ms-1">CAD</span>
-                {formatCurrency(finalProfit)}
+                <span className="text-fs-2xs text-ink-muted font-medium ms-1">CAD</span>
+                <Money value={finalProfit} prefix="none" locale="he-IL" compactAbove={1_000_000} />
               </span>
             </li>
           </ol>
@@ -441,10 +454,10 @@ export function PnLBreakdown({
                 <ChevronUp size={11} className="transition-transform group-open:rotate-180" />
                 פירוט עלויות קבועות לפי קטגוריה
               </summary>
-              <div className="mt-2 rounded-lg bg-glass-2/40 border border-glass-edge p-3 overflow-x-auto -mx-1 sm:mx-0">
+              <div className="mt-2 rounded-hz bg-pill-track border border-glass-edge p-3 overflow-x-auto -mx-1 sm:mx-0">
                 <TableBase className="text-xs tabular-nums" minWidth={420} stickyHeader>
                   <thead>
-                    <tr className="text-[10px] uppercase text-ink-muted tracking-wide">
+                    <tr className="text-fs-2xs uppercase text-ink-muted tracking-wide">
                       <th className="text-start font-medium pb-1.5 px-1">קטגוריה</th>
                       <th className="text-end font-medium pb-1.5 px-1">סכום (יחסי לטווח)</th>
                       <th className="text-end font-medium pb-1.5 px-1">% מההכנסה</th>
@@ -468,7 +481,7 @@ export function PnLBreakdown({
                               {SOURCE_LABEL[s]}
                             </td>
                             <td className="py-1 px-1 text-end text-ink">
-                              {formatCurrency(amt)}
+                              <Money value={amt} prefix="none" locale="he-IL" compactAbove={1_000_000} />
                             </td>
                             <td className="py-1 px-1 text-end text-ink-secondary font-medium">
                               {revenue > 0 ? `${revPct.toFixed(1)}%` : '—'}
@@ -481,7 +494,9 @@ export function PnLBreakdown({
                       })}
                     <tr className="border-t-2 border-glass-edge font-bold">
                       <td className="py-1.5 px-1">סך הכל</td>
-                      <td className="py-1.5 px-1 text-end">{formatCurrency(billing.total)}</td>
+                      <td className="py-1.5 px-1 text-end">
+                        <Money value={billing.total} prefix="none" locale="he-IL" compactAbove={1_000_000} />
+                      </td>
                       <td className="py-1.5 px-1 text-end text-ink">
                         {revenue > 0
                           ? `${((billing.total / revenue) * 100).toFixed(1)}%`
@@ -491,7 +506,7 @@ export function PnLBreakdown({
                     </tr>
                   </tbody>
                 </TableBase>
-                <div className="mt-2 text-[10px] text-ink-muted leading-relaxed">
+                <div className="mt-2 text-fs-2xs text-ink-muted leading-relaxed">
                   עורכים את הנתונים דרך הכפתור <span className="font-semibold">עלויות חודשיות</span>{' '}
                   מעל ה-P&amp;L. כל שינוי מתעדכן מיד בכל החישובים.{' '}
                   <span className="text-ink-secondary">
@@ -504,7 +519,7 @@ export function PnLBreakdown({
           )}
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -526,6 +541,8 @@ function HeroStat({
   tone: 'positive' | 'negative' | 'profit' | 'loss';
   sub?: string;
 }) {
+  // Semantic tones STAY (profit→green, loss→red). This is profit
+  // decomposition, NOT a ROAS band — do not band-color it.
   const amountColor =
     tone === 'positive' ? 'text-ink'
     : tone === 'negative' ? 'text-ink'
@@ -542,19 +559,19 @@ function HeroStat({
         {label}
       </div>
       <div className={cn('text-xl sm:text-3xl font-bold tabular-nums leading-none', amountColor)}>
-        <span className="text-[10px] sm:text-xs text-ink-muted font-medium ms-1.5 align-baseline">
+        <span className="text-fs-2xs sm:text-xs text-ink-muted font-medium ms-1.5 align-baseline">
           CAD
         </span>
-        {formatCurrency(amount)}
+        <Money value={amount} prefix="none" locale="he-IL" compactAbove={1_000_000} />
       </div>
-      <div className="h-1.5 sm:h-2 rounded-full bg-[color:var(--surface-sunken)] overflow-hidden">
+      <div className="h-1.5 sm:h-2 rounded-full bg-pill-track overflow-hidden">
         <div
           className={cn('h-full rounded-full transition-all duration-500 ease-out', barColor)}
           style={{ width: `${Math.max(2, Math.min(100, barWidthPct))}%` }}
         />
       </div>
       {sub && (
-        <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums">{sub}</div>
+        <div className="text-fs-2xs sm:text-[11px] text-ink-muted tabular-nums">{sub}</div>
       )}
     </div>
   );
@@ -600,10 +617,12 @@ function PnLLine({
           <span className="text-sm text-ink font-medium leading-snug">{label}</span>
           {flags}
         </div>
-        {note && <div className="text-[10px] sm:text-[11px] text-ink-muted mt-0.5 leading-snug">{note}</div>}
+        {note && <div className="text-fs-2xs sm:text-[11px] text-ink-muted mt-0.5 leading-snug">{note}</div>}
       </div>
 
-      {/* Column 2: amount + percentage */}
+      {/* Column 2: amount + percentage. Cost tone stays neutral-ink; the
+          semantic loss/profit colour lives on the running-total + final lines.
+          Value routed through <Money> (overflow-safe, tabular-nums). */}
       <div className="text-end">
         <div
           className={cn(
@@ -612,17 +631,17 @@ function PnLLine({
             tone === 'cost' && 'text-ink-secondary',
           )}
         >
-          <span className="text-[10px] text-ink-muted font-medium me-1 font-sans">CAD</span>
-          {formatCurrency(amount)}
+          <span className="text-fs-2xs text-ink-muted font-medium me-1 font-sans">CAD</span>
+          <Money value={amount} prefix="none" locale="he-IL" compactAbove={1_000_000} />
         </div>
-        <div className="text-[10px] text-ink-muted tabular-nums mt-0.5 font-mono">
+        <div className="text-fs-2xs text-ink-muted tabular-nums mt-0.5 font-mono">
           {pct > 0 && tone === 'positive' ? '100%' : `${pct.toFixed(1)}%`}
         </div>
       </div>
 
       {/* Column 3: running total — desktop only */}
       <div className="text-end hidden sm:block border-s border-glass-edge ps-3">
-        <div className="text-[10px] text-ink-muted uppercase tracking-wide leading-tight">נשאר</div>
+        <div className="text-fs-2xs text-ink-muted uppercase tracking-wide leading-tight">נשאר</div>
         {running === null ? (
           <span className="text-xs text-ink-secondary opacity-50" aria-label="הערה — לא משפיע על הסכום הרץ">—</span>
         ) : (
@@ -632,7 +651,7 @@ function PnLLine({
               running >= 0 ? 'text-ink' : 'text-status-redFg',
             )}
           >
-            {formatCurrency(running)}
+            <Money value={running} prefix="none" locale="he-IL" compactAbove={1_000_000} />
           </div>
         )}
       </div>

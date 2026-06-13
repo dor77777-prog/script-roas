@@ -104,7 +104,10 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   // campaign-health re-skin: lone sub-floor coverage-% chip literal
   // text-[10px] → text-fs-2xs ramp token + bg-pill-track inset; removed
   // from allowlist).
-  'GoalTracker.tsx': 23,
+  // GoalTracker.tsx — DRAINED to 0 in W6.1 (Horizon P&L-tab re-skin: all 23
+  // sub-floor text-[10px] literals — pacing/result captions, status chips,
+  // run-rate panel labels, carry-forward tag — → text-fs-2xs ramp token;
+  // removed from allowlist).
   // HealthScoreBadge.tsx — DRAINED to 0 in Wave 4 (Horizon campaign-health
   // re-skin: lone sub-floor score-suffix literal text-[10px] → text-fs-2xs
   // ramp token, all popover px literals migrated onto text-fs-*; removed
@@ -120,7 +123,11 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   // the lone sub-floor literal — the pm-error mono detail (now inside the shared
   // <StateBlock> error chrome) — → text-fs-2xs ramp token; all remaining text-2xs
   // eyebrows/cells migrated onto the text-fs-* ramp; removed from allowlist).
-  'PnLBreakdown.tsx': 10,
+  // PnLBreakdown.tsx — DRAINED to 0 in W6.1 (Horizon P&L-cascade re-skin: all
+  // 10 sub-floor text-[10px] literals — final-profit margin caption + CAD
+  // unit spans, by-source thead/footnote, HeroStat CAD/sub captions, PnLLine
+  // note/CAD/pct/running labels — → text-fs-2xs ramp token; money cells routed
+  // through <Money>; removed from allowlist).
   'ProductCentricView.tsx': 14,
   // ProductPickerModal.tsx — DRAINED to 0 in W4.4 (Horizon product-picker
   // re-skin: the 5 sub-floor literals — header eyebrow, store sub-line, error
