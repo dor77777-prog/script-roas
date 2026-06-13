@@ -415,6 +415,7 @@
      colours without tripping the guard. Keep oklch values IN SYNC with
      the band tokens above (red/orange/green/blue). */
   --chart-roas-line:    #eef1ff;             /* dark = light line on dark plot */
+  --chart-line-halo:    var(--glass-1);      /* casing under the band-coloured ROAS line — cuts it out of the plot scrim so the series hue never collides with a colored card (dark) */
   --chart-target-line:  #0fb37a;             /* mockup-locked green target */
   --chart-pin-line:     #ef9331;             /* operator-locked orange #EF9331 event pins (NOT Google amber) */
   --chart-dot-max:      #0fb37a;             /* mockup-locked green max-dot */
@@ -757,6 +758,7 @@
      target / pin / dots stay band-mirrored at light L; grid is a dark
      hairline. Hues unchanged. */
   --chart-roas-line:    #171a2b;             /* light = dark line on light plot */
+  --chart-line-halo:    var(--glass-1);      /* casing under the band-coloured ROAS line — cuts it out of the plot scrim so the series hue never collides with a colored card (light) */
   --chart-target-line:  #0fb37a;             /* mockup-locked green target */
   --chart-pin-line:     #ef9331;             /* operator-locked orange #EF9331 event pins (NOT Google amber) */
   --chart-dot-max:      #0fb37a;             /* mockup-locked green max-dot */

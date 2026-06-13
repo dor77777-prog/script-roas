@@ -51,6 +51,12 @@ import {
   type RoasChartPoint,
   type RoasChartRangeKey,
 } from '@/lib/synthesis/roasChart';
+import {
+  bandForPeriod,
+  chartLineStyleForBand,
+  areaGradientIdForBand,
+  BAND_STROKE_VAR,
+} from './roasChartBand';
 
 /* --------------------------------------------------------------------------
  * Props — data shape locked by Task 3.2 spec.
@@ -354,6 +360,24 @@ export function RoasTargetChart({
   const accentBand: RoasBand =
     synthesis.confidence === 'high' ? synthesis.band : roasBand;
 
+  // Spec §3.2.2 — the LINE + AREA are a SINGLE hue = the band of the
+  // PERIOD-AVERAGE ROAS (replaces the old two-tone area split at the target).
+  // Source = the SAME headline aggregation the KPI tile shows: kpis.roas
+  // (= agg.roas = total revenue / total spend) + kpis.spend (= agg.spend).
+  // No second average is computed. Organic (spend === 0) → gray + dashed.
+  const chartBand = useMemo(
+    () => bandForPeriod({ roas: kpis.roas, spend: kpis.spend }),
+    [kpis.roas, kpis.spend],
+  );
+  const lineStyle = useMemo(
+    () => chartLineStyleForBand(chartBand.band, chartBand.isOrganic),
+    [chartBand],
+  );
+  const areaGradientId = useMemo(
+    () => areaGradientIdForBand(chartBand.band, chartBand.isOrganic),
+    [chartBand],
+  );
+
   // Contiguous non-null runs → smoothed line + two-tone area paths. The
   // line keeps the `chart-roas-line` testid (now a smooth monotone-style
   // curve instead of straight segments); the area is a NEW overlay clipped
@@ -581,7 +605,21 @@ export function RoasTargetChart({
       <div className="flex flex-wrap items-center justify-between gap-3 mb-1.5 px-1 text-[11px] text-ink-muted">
         <div className="flex items-center gap-4">
           <span className="inline-flex items-center gap-1.5 font-mono tracking-wide">
-            <span className="inline-block w-4 h-0.5 bg-ink rounded-sm" />
+            {/* Swatch mirrors the band-coloured line (dashed when organic) so
+                the legend always matches the actual stroke (spec §3.2.2). */}
+            <span
+              className={cn(
+                'inline-block w-4 rounded-sm',
+                lineStyle.isDashed
+                  ? 'h-0 border-t-2 border-dashed'
+                  : 'h-0.5',
+              )}
+              style={
+                lineStyle.isDashed
+                  ? { borderTopColor: lineStyle.strokeVar }
+                  : { backgroundColor: lineStyle.strokeVar }
+              }
+            />
             ROAS יומי
           </span>
           <span className="inline-flex items-center gap-1.5 font-mono tracking-wide">
@@ -633,36 +671,32 @@ export function RoasTargetChart({
           onPointerMove={handlePlotMove}
           onPointerLeave={handlePlotLeave}
         >
-          {/* defs: two-tone area gradient (green above target / red below)
-              + a plot clip so the filled area never bleeds past the axes.
-              The gradient stop where green→red flips is placed at the target
-              line's y (in 0..1 of the plot height), so the colour boundary
-              lands exactly on the dashed יעד line. */}
+          {/* defs (spec §3.2.2): a SINGLE-HUE area gradient keyed to the
+              period-average band (replaces the old two-tone green/red split at
+              the target). The fill is the band hue fading top ~0.2 → bottom 0,
+              so the colour reads as one band, not a green/red boundary.
+              `--chart-line-halo` is the casing/halo colour (a neutral plot-scrim
+              tint) drawn UNDER the coloured line so the series hue never
+              collides with a colored card in either theme. */}
           <defs>
             <linearGradient
-              id="roas-area-fill"
+              id={areaGradientId}
               x1="0"
               y1={PADDING_TOP}
               x2="0"
               y2={VB_HEIGHT - PADDING_BOTTOM}
               gradientUnits="userSpaceOnUse"
             >
-              {(() => {
-                const plotH = VB_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
-                const targetOffset = Math.max(
-                  0,
-                  Math.min(1, (yForRoas(target, Y_MIN, yMax) - PADDING_TOP) / plotH),
-                );
-                const pct = `${(targetOffset * 100).toFixed(2)}%`;
-                return (
-                  <>
-                    <stop offset="0%" stopColor="var(--chart-area-up-top)" />
-                    <stop offset={pct} stopColor="var(--chart-area-up-bot)" />
-                    <stop offset={pct} stopColor="var(--chart-area-dn-top)" />
-                    <stop offset="100%" stopColor="var(--chart-area-dn-bot)" />
-                  </>
-                );
-              })()}
+              <stop
+                offset="0%"
+                stopColor={BAND_STROKE_VAR[chartBand.band]}
+                stopOpacity={chartBand.isOrganic ? 0.1 : 0.2}
+              />
+              <stop
+                offset="100%"
+                stopColor={BAND_STROKE_VAR[chartBand.band]}
+                stopOpacity={0}
+              />
             </linearGradient>
             <clipPath id="roas-plot-clip">
               <rect
@@ -703,15 +737,15 @@ export function RoasTargetChart({
             </text>
           ))}
 
-          {/* Gradient area fill — two-tone, drawn UNDER the line. The
-              `roas-area-rise` class fades+slides it up on mount (collapsed
-              by the global prefers-reduced-motion sweep). */}
+          {/* Gradient area fill — SINGLE band hue (spec §3.2.2), drawn UNDER
+              the line. The `roas-area-rise` class fades+slides it up on mount
+              (collapsed by the global prefers-reduced-motion sweep). */}
           {areaPaths.map((d, i) =>
             d ? (
               <path
                 key={`area-${i}`}
                 d={d}
-                fill="url(#roas-area-fill)"
+                fill={`url(#${areaGradientId})`}
                 clipPath="url(#roas-plot-clip)"
                 className="roas-area-rise"
                 data-testid={i === 0 ? 'chart-roas-area' : undefined}
@@ -752,24 +786,54 @@ export function RoasTargetChart({
             />
           ))}
 
-          {/* ROAS line — smooth monotone-style curve. `roas-line-draw`
-              + the inline dash seed make it "draw in" on mount; the
-              --roas-line-len var sizes the dash to the path so the sweep
-              is proportional. preserveAspectRatio="none" stretches the
-              dash slightly but the effect still reads as a draw-in. */}
+          {/* Casing / halo — a wider stroke in the plot-scrim colour drawn
+              UNDER the coloured line so the band hue is "cut out" of the
+              surface and never collides with a colored card, in both themes.
+              Skipped for the organic dashed state (the gaps would show the
+              casing through). */}
+          {smoothLinePath && !lineStyle.isDashed && (
+            <path
+              d={smoothLinePath}
+              fill="none"
+              style={{
+                stroke: 'var(--chart-line-halo)',
+                strokeWidth: 5,
+                strokeLinejoin: 'round',
+                strokeLinecap: 'round',
+                opacity: 0.9,
+              }}
+              data-testid="chart-roas-line-halo"
+              aria-hidden
+            />
+          )}
+
+          {/* ROAS line — smooth monotone-style curve. Spec §3.2.2: the stroke
+              is the SINGLE band hue of the period-average ROAS (was a static
+              neutral --chart-roas-line). SOLID for every spend-backed band;
+              for the ORGANIC / no-spend state it's gray + dashed ("1 6",
+              mockup-locked). The solid line keeps the `roas-line-draw` "draw
+              in" on mount (--roas-line-len sizes the dash to the path); the
+              organic line skips that class so the static "1 6" dash is not
+              fought by the draw-in dasharray. */}
           {smoothLinePath && (
             <path
               d={smoothLinePath}
               fill="none"
-              className="roas-line-draw"
+              className={lineStyle.isDashed ? undefined : 'roas-line-draw'}
               style={{
-                stroke: 'var(--chart-roas-line)',
-                strokeWidth: 2,
+                stroke: lineStyle.strokeVar,
+                strokeWidth: lineStyle.isDashed ? 2.5 : 2,
                 strokeLinejoin: 'round',
                 strokeLinecap: 'round',
-                strokeDasharray: 'var(--roas-line-len, 1600)',
-                ['--roas-line-len' as string]: '1600',
+                ...(lineStyle.isDashed
+                  ? { strokeDasharray: lineStyle.dash }
+                  : {
+                      strokeDasharray: 'var(--roas-line-len, 1600)',
+                      ['--roas-line-len' as string]: '1600',
+                    }),
               }}
+              data-band={chartBand.band}
+              data-organic={chartBand.isOrganic ? 'true' : undefined}
               data-testid="chart-roas-line"
             />
           )}
@@ -797,7 +861,9 @@ export function RoasTargetChart({
               ? 'var(--chart-dot-max)'
               : isMin
                 ? 'var(--chart-dot-min)'
-                : 'var(--chart-roas-line)';
+                // Spec §3.2.2 — ordinary dots follow the period band hue so they
+                // sit ON the band line (was the static neutral --chart-roas-line).
+                : lineStyle.strokeVar;
             const r = isMax || isMin ? 3 : 2.5;
             return (
               // Decision §6.5.4 — no SVG <title> on data dots; the crosshair
@@ -890,7 +956,8 @@ export function RoasTargetChart({
                 r={6}
                 style={{
                   fill: 'var(--chart-hover-ring)',
-                  stroke: 'var(--chart-roas-line)',
+                  // Match the band line so the crosshair dot reads as part of it.
+                  stroke: lineStyle.strokeVar,
                   strokeWidth: 2,
                 }}
               />
@@ -898,7 +965,7 @@ export function RoasTargetChart({
                 cx={hoverPoint.x}
                 cy={hoverPoint.y}
                 r={2.5}
-                style={{ fill: 'var(--chart-roas-line)' }}
+                style={{ fill: lineStyle.strokeVar }}
               />
             </g>
           )}
