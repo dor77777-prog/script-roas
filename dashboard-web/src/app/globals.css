@@ -309,6 +309,45 @@
   --up: #0fb37a;  /* mockup-locked delta-up */
   --dn: #ef4d5b;  /* mockup-locked delta-down */
 
+  /* ---------------------------------------------------------------------
+     TYPE RAMP (Horizon re-skin Wave 1, debt #5).
+     One canonical type scale to end the micro-typography anarchy
+     (arbitrary `text-[Npx]` literals — some at 8px/9px, BELOW the
+     legibility floor). Sizes are in rem so they respect the user's
+     root font-size; they are theme-INDEPENDENT (a label is the same
+     size in light + dark), so the ramp lives ONCE here in :root and is
+     NOT re-declared in [data-theme="light"].
+
+     FONTS (unchanged by this ramp — we adopt the SCALE only):
+       • Heebo  → UI text (labels, body, headings) — var(--font-heebo)
+       • Rubik  → numerals / money / metrics       — var(--font-rubik)
+     The body element already stacks Rubik→Heebo (see `body` rule); use
+     font-family overrides at the call site as today. The ramp governs
+     SIZE, not family.
+
+     FLOOR: the smallest step (--fs-2xs) is 0.656rem ≈ 10.5px — the
+     readability floor. There is intentionally NO 8px/9px step; sub-10.5px
+     text is BANNED going forward by typeRampGuard.test.ts (the current
+     8px/9px offenders are an allowlisted baseline that later waves drain).
+
+     Step → size (≈px @16) → intended use:
+       --fs-2xs   0.656rem  ~10.5px  micro-label / chip / uppercase eyebrow (FLOOR)
+       --fs-xs    0.75rem   ~12px    dense meta, table sub-text, freshness chip
+       --fs-sm    0.875rem  ~14px    secondary body, table cell, form labels
+       --fs-base  1rem      ~16px    default body copy
+       --fs-md    1.125rem  ~18px    emphasised body / small KPI value
+       --fs-lg    1.375rem  ~22px    card title / per-store KPI value (Rubik)
+       --fs-xl    1.75rem   ~28px    section heading / hero secondary metric
+       --fs-2xl   2.25rem   ~36px    hero headline metric (Rubik)               */
+  --fs-2xs:  0.656rem;
+  --fs-xs:   0.75rem;
+  --fs-sm:   0.875rem;
+  --fs-base: 1rem;
+  --fs-md:   1.125rem;
+  --fs-lg:   1.375rem;
+  --fs-xl:   1.75rem;
+  --fs-2xl:  2.25rem;
+
   /* Task 1.4 — freshness desaturation transition.
      Controls how long it takes for a card to fade from
      fresh→aging→stale (or back) when its data refreshes.
@@ -647,6 +686,19 @@
   /* Up/down deltas — literal mockup green / red (theme-independent). */
   --up: #0fb37a;  /* mockup-locked delta-up */
   --dn: #ef4d5b;  /* mockup-locked delta-down */
+
+  /* TYPE RAMP — theme-INDEPENDENT (sizes don't flip per theme). Values are
+     identical to :root; re-declared here only to satisfy the themeParity guard
+     (every :root token must have a light-mode counterpart). See the documented
+     ramp in :root for step→use mapping. FLOOR = --fs-2xs 0.656rem ≈ 10.5px. */
+  --fs-2xs:  0.656rem;
+  --fs-xs:   0.75rem;
+  --fs-sm:   0.875rem;
+  --fs-base: 1rem;
+  --fs-md:   1.125rem;
+  --fs-lg:   1.375rem;
+  --fs-xl:   1.75rem;
+  --fs-2xl:  2.25rem;
 
   /* Freshness desaturation transition — theme-invariant. */
   --motion-freshness: 600ms ease-out;
