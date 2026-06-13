@@ -53,6 +53,13 @@ describe('Sidebar — hover state must differ from active state', () => {
     expect(indicator).not.toBeNull();
     // Token-driven (brand accent var), not a raw colour.
     expect(indicator!.className).toContain('bg-[var(--accent)]');
+    // Must be pinned to the rail's inline-start edge. Guard the exact bug from
+    // the W2 quality review: `inline-start-0` is NOT a Tailwind utility (emits
+    // no CSS → indicator falls back to its static inline position). The correct
+    // logical-inset utility is `start-0` (→ inset-inline-start:0, RTL-correct).
+    expect(indicator!.className).toContain('absolute');
+    expect(indicator!.className).toContain('start-0');
+    expect(indicator!.className).not.toContain('inline-start-0');
   });
 });
 

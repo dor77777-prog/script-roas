@@ -267,7 +267,7 @@ function SidebarBody({
                 <span
                   aria-hidden
                   data-testid="sidebar-active-indicator"
-                  className="absolute inline-start-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-full bg-[var(--accent)]"
+                  className="absolute start-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-full bg-[var(--accent)]"
                 />
               )}
               <span className="shrink-0">{item.icon}</span>
@@ -579,7 +579,9 @@ export function Sidebar({
             'bg-[var(--sidebar)] [background-image:none] text-[var(--sidebar-fg)]',
             '[backdrop-filter:none] [-webkit-backdrop-filter:none]',
           )}
-          aria-label="ניווט ראשי"
+          // No aria-label here: the sr-only <SheetTitle> below names the dialog
+          // via Radix's aria-labelledby, which takes ARIA precedence over
+          // aria-label — so an aria-label would be dead. Single source of name.
           // The drawer has no descriptive body copy; opt out of Radix's
           // optional Description requirement so it doesn't dev-warn.
           aria-describedby={undefined}
