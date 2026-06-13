@@ -54,6 +54,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { TableBase } from '@/components/ui/TableBase';
+import { Money } from '@/components/ui/Money';
 import { Heading } from '@/components/ui/Typography';
 
 type Row = {
@@ -352,7 +353,9 @@ export function ManualOverridesCrud() {
                 <td className="p-2" dir="ltr">{r.date}</td>
                 <td className="p-2">{r.store_id}</td>
                 <td className="p-2">{r.platform}</td>
-                <td className="p-2" dir="ltr">{Number(r.spend).toFixed(2)}</td>
+                <td className="p-2" dir="ltr">
+                  <Money value={Number(r.spend)} prefix="none" decimals={2} />
+                </td>
                 <td className="p-2" dir="ltr">{r.currency}</td>
                 <td className="p-2 text-ink-secondary">{r.notes ?? '—'}</td>
                 <td className="p-2">
@@ -402,7 +405,11 @@ export function ManualOverridesCrud() {
                 <span dir="ltr">{confirmDelete.date}</span> (פלטפורמה {confirmDelete.platform})?
               </p>
               <p className="text-ink-secondary text-xs mb-3">
-                סכום: <span dir="ltr">{Number(confirmDelete.spend).toFixed(2)} {confirmDelete.currency}</span>
+                סכום:{' '}
+                <span dir="ltr">
+                  <Money value={Number(confirmDelete.spend)} prefix="none" decimals={2} />{' '}
+                  {confirmDelete.currency}
+                </span>
               </p>
               {deleteError && (
                 <p className="text-status-redFg text-sm mb-3" role="alert">

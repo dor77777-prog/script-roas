@@ -51,6 +51,7 @@ import { useStores } from '@/lib/useStores';
 import { operatorFetch } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 // D-A3 history boundary. Same value as eventBackfill.ts:111 +
 // /api/operator/backfill/route.ts (HISTORY_BOUNDARY). UX hint only;
@@ -203,10 +204,10 @@ export function BackfillPicker() {
                 key={s.storeId}
                 className="flex items-center gap-1 text-sm cursor-pointer"
               >
-                <Input
-                  type="checkbox"
+                <Checkbox
                   checked={storeIds.has(s.storeId)}
-                  onChange={() => toggleStore(s.storeId)}
+                  onCheckedChange={() => toggleStore(s.storeId)}
+                  aria-label={s.storeName}
                 />
                 <span>{s.storeName}</span>
               </label>

@@ -44,6 +44,7 @@ import { operatorFetch } from '@/lib/operatorClient';
 import { generateStoreSnippet } from '@/lib/storeSnippets';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { Switch } from '@/components/ui/Switch';
 import { Card } from '@/components/ui/Card';
@@ -1089,11 +1090,9 @@ function Step2({
           ALWAYS re-verifies on create and writes nothing if the creds fail, so
           this can't force-save bad credentials. The copy says exactly that. */}
       <label className="mb-1 flex items-center gap-2 text-xs text-ink-secondary">
-        <Input
-          type="checkbox"
-          className="h-4 w-4 accent-accent"
+        <Checkbox
           checked={saveAnyway}
-          onChange={(e) => setSaveAnyway(e.target.checked)}
+          onCheckedChange={setSaveAnyway}
         />
         שמור בכל זאת (דילוג על הבדיקה המקומית — השרת עדיין יאמת את הפרטים)
       </label>

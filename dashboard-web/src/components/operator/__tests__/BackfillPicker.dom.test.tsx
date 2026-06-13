@@ -90,11 +90,21 @@ describe('BackfillPicker — useStores() integration (Phase 2 Task 3)', () => {
 
   it('checkboxes are rendered in displayOrder: uzoshop → zolplus → usmile360', () => {
     const { container } = render(<BackfillPicker />);
-    // Grab all checkbox labels in DOM order — each <label> wraps the <input> + <span>
+    // Grab all checkbox labels in DOM order — each <label> wraps the <Checkbox>
+    // (whose own <span> wrapper holds the input) + the storeName <span>. The
+    // storeName is the label's DIRECT-child span (`:scope > span`); the
+    // Checkbox's painted spans are nested one level deeper.
     const labels = Array.from(container.querySelectorAll('label')).filter(
       (l) => l.querySelector('input[type="checkbox"]'),
     );
-    const names = labels.map((l) => l.querySelector('span')?.textContent?.trim());
+    // The storeName <span> is the LAST direct-child span of the label (the
+    // first direct-child span is the <Checkbox>'s own empty-text wrapper).
+    const names = labels.map((l) => {
+      const directSpans = Array.from(l.children).filter(
+        (c): c is HTMLSpanElement => c.tagName === 'SPAN',
+      );
+      return directSpans[directSpans.length - 1]?.textContent?.trim();
+    });
     expect(names).toEqual(['uzoshop', 'Zol Plus', '360usmile']);
   });
 
