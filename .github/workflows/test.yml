@@ -1,0 +1,68 @@
+# .github/workflows/test.yml
+#
+# reskin-W9.1 — TEST gate. Runs the type-check + BOTH vitest suites
+# (node/lib guards AND the jsdom/component suite) on every PR touching
+# dashboard-web/. Mirrors the local `.husky/pre-push` hook so the hermetic
+# design/contrast/band/token guards (designColorGuard, contrastGuard,
+# themeParity, typeRampGuard, gatewayTokenGuard, roasBands, …) and the new
+# re-skin DOM pins (merBandWidget, storeCardAlarm, TopStrip, …) can't silently
+# regress in CI — not just on the operator's machine.
+#
+# Why two vitest invocations:
+#   - `npm test` uses vitest.config.ts (node env) — it does NOT include the
+#     jsdom component suite (vitest.config.dom.ts). A red DOM test would slip
+#     past `npm test` alone (this exact gap let a broken tooltip test reach
+#     main before the pre-push hook added the DOM leg).
+#   - `npm run test:components` runs vitest.config.dom.ts (jsdom) — the
+#     merBandWidget / storeCardAlarm / Hero band DOM pins live ONLY here.
+#
+# Why NOT `npm run lint` here:
+#   The repo's local pre-push hook also runs `npm run lint`, but the ESLint
+#   custom-rule gate (no-native-title-tooltip / no-physical-direction /
+#   no-cross-palette-import / no-raw-input / no-dark-variant) currently reports
+#   pre-existing errors on main that are tracked separately. Wiring lint into
+#   this gate now would make CI red on unrelated debt. The grep-ban guards stay
+#   enforced by the pre-push hook locally; promote lint into CI in a dedicated
+#   PR once the existing errors are burned down. (next.config.ts also sets
+#   eslint.ignoreDuringBuilds + typescript.ignoreBuildErrors, so the Vercel
+#   build does not gate either — this workflow is the type-check's only CI home.)
+
+name: Test
+
+on:
+  pull_request:
+    paths:
+      - 'dashboard-web/**'
+      - '.github/workflows/test.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: dashboard-web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./dashboard-web
+        run: npm ci
+
+      - name: Type-check (tsc --noEmit)
+        working-directory: ./dashboard-web
+        run: npx tsc --noEmit
+
+      - name: Unit + guard suite (vitest node)
+        working-directory: ./dashboard-web
+        run: npm test
+
+      - name: Component suite (vitest jsdom)
+        working-directory: ./dashboard-web
+        run: npm run test:components

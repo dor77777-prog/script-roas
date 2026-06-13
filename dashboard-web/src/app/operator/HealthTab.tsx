@@ -36,7 +36,7 @@ export function HealthTab() {
           legacy STORES_WITH_TIKTOK = {'uzoshop'} bucketed everything there.
           New rows from the next cron-live-heavy tick onward honor the
           per-campaign Store dropdown in the Campaigns tab. */}
-      <section className="rounded-md border border-status-orange/30 bg-status-orange/8 px-4 py-3 text-sm">
+      <section className="rounded-md border border-status-orange bg-status-orangeBg px-4 py-3 text-sm">
         <p className="text-ink-secondary">
           <span className="font-semibold text-status-orangeFg">שורות TikTok היסטוריות</span>
           {' '}(לפני 2026-05-29) משויכות כולן ל-<code>uzoshop</code>. זו ההנחה הישנה

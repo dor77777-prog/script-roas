@@ -6,8 +6,9 @@
  * through tailwind.config.ts). Components MUST source every colour from those
  * tokens so the whole UI re-skins (and light/dark flips) by changing vars.
  *
- * This guard scans every component under `src/components/**` (excluding test /
- * stories files) for the FORBIDDEN escape hatches that break theming:
+ * This guard scans every UI `.tsx` under `src/components/**` AND `src/app/**`
+ * (the App-Router route trees — operator/login/dev pages + layout; excluding
+ * test / stories files) for the FORBIDDEN escape hatches that break theming:
  *
  *   1. white / black literals      — bg|text|border|fill|divide|ring-white|black
  *   2. white/NN  black/NN          — slash-alpha on the white/black keywords
@@ -48,10 +49,36 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const COMPONENTS_DIR = path.resolve(__dirname, '..', '..', 'components');
+// Scan roots. The guard covers EVERY *.tsx UI surface — both the component
+// library (src/components/**) AND the App-Router route trees (src/app/**:
+// operator/login/dev pages + layout). Relative paths are prefixed with the
+// scan-root name (`components/…`, `app/…`) so allowlist entries are
+// unambiguous across the two roots.
+const SRC_DIR = path.resolve(__dirname, '..', '..');
+const SCAN_ROOTS = [
+  { prefix: 'components', dir: path.join(SRC_DIR, 'components') },
+  { prefix: 'app', dir: path.join(SRC_DIR, 'app') },
+] as const;
 
 // ---------------------------------------------------------------------------
-// MIGRATION ALLOWLIST — paths relative to src/components/.
+// PERMANENT EXCEPTIONS — root-prefixed paths (`components/…` | `app/…`) that
+// carry a LEGITIMATE, non-migratable literal colour. Unlike the migration
+// allowlist these are NOT expected to ever be fixed, so they're EXEMPT from the
+// ratchet-shrink check (a permanent exception that goes clean is fine — it just
+// stops being needed; the regression suite still skips it either way).
+//
+//   • app/layout.tsx — `viewport.themeColor` is browser-chrome metadata that
+//     the UA reads as a literal hex BEFORE any CSS loads, so it cannot point at
+//     a `var(--canvas-1)` token. The two hex values are kept IN SYNC with
+//     --canvas-1 in globals.css via the adjacent comment. Not a className/style
+//     colour — a Next.js Viewport metadata field.
+// ---------------------------------------------------------------------------
+const PERMANENT_EXCEPTIONS = new Set<string>([
+  'app/layout.tsx',
+]);
+
+// ---------------------------------------------------------------------------
+// MIGRATION ALLOWLIST — root-prefixed paths (`components/…` | `app/…`).
 // Files here are KNOWN to still carry ≥1 design-colour violation. As each is
 // migrated to tokens, remove its line. A fixed file left on the list FAILS the
 // test (forces the ratchet to shrink).
@@ -219,15 +246,14 @@ function walk(dir: string): string[] {
 }
 
 interface Violation {
-  rel: string; // path relative to src/components/
+  rel: string; // root-prefixed path (`components/…` | `app/…`)
   line: number;
   detector: string;
   snippet: string;
 }
 
 /** Scan one file and return every violation (line + detector + snippet). */
-function scanFile(absPath: string): Violation[] {
-  const rel = path.relative(COMPONENTS_DIR, absPath);
+function scanFile(absPath: string, rel: string): Violation[] {
   const text = fs.readFileSync(absPath, 'utf8');
   const lines = text.split(/\r?\n/);
   const violations: Violation[] = [];
@@ -248,14 +274,23 @@ function scanFile(absPath: string): Violation[] {
 }
 
 // ---------------------------------------------------------------------------
-// Run the scan ONCE; index violations by relative path.
+// Run the scan ONCE across BOTH roots; index violations by root-prefixed path.
 // ---------------------------------------------------------------------------
-const files = walk(COMPONENTS_DIR);
+interface ScannedFile {
+  abs: string;
+  rel: string; // root-prefixed (`components/…` | `app/…`)
+}
+const files: ScannedFile[] = [];
+for (const root of SCAN_ROOTS) {
+  for (const abs of walk(root.dir)) {
+    files.push({ abs, rel: path.join(root.prefix, path.relative(root.dir, abs)) });
+  }
+}
 const violationsByFile = new Map<string, Violation[]>();
-for (const abs of files) {
-  const v = scanFile(abs);
+for (const { abs, rel } of files) {
+  const v = scanFile(abs, rel);
   if (v.length > 0) {
-    violationsByFile.set(path.relative(COMPONENTS_DIR, abs), v);
+    violationsByFile.set(rel, v);
   }
 }
 const allowSet = new Set(MIGRATION_ALLOWLIST);
@@ -282,6 +317,7 @@ describe('design-color guard — regression (off-allowlist files must be clean)'
     const offenders: string[] = [];
     for (const [rel, vs] of violationsByFile) {
       if (allowSet.has(rel)) continue;
+      if (PERMANENT_EXCEPTIONS.has(rel)) continue;
       for (const v of vs) {
         offenders.push(`${v.rel}:${v.line} [${v.detector}]  ${v.snippet}`);
       }
@@ -314,11 +350,50 @@ describe('design-color guard — ratchet (allowlist may only shrink)', () => {
 
   it('every MIGRATION_ALLOWLIST entry points at a real component file', () => {
     const missing = MIGRATION_ALLOWLIST.filter(
-      (rel) => !fs.existsSync(path.join(COMPONENTS_DIR, rel)),
+      (rel) => !fs.existsSync(path.join(SRC_DIR, rel)),
     );
     expect(
       missing,
       `MIGRATION_ALLOWLIST references nonexistent file(s):\n  ${missing.join('\n  ')}`,
     ).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 4 — PERMANENT EXCEPTIONS stay honest. Each must (a) point at a real
+// file and (b) STILL carry the literal it was excused for. If the literal is
+// removed (e.g. layout.tsx stops hard-coding themeColor) the exception is dead
+// weight and MUST be deleted — so the narrow escape hatch can't silently widen.
+// ---------------------------------------------------------------------------
+describe('design-color guard — permanent exceptions stay honest', () => {
+  it('every PERMANENT_EXCEPTIONS entry points at a real file', () => {
+    const missing = [...PERMANENT_EXCEPTIONS].filter(
+      (rel) => !fs.existsSync(path.join(SRC_DIR, rel)),
+    );
+    expect(
+      missing,
+      `PERMANENT_EXCEPTIONS references nonexistent file(s):\n  ${missing.join('\n  ')}`,
+    ).toHaveLength(0);
+  });
+
+  it('every PERMANENT_EXCEPTIONS entry still carries a literal (else delete it)', () => {
+    const clean = [...PERMANENT_EXCEPTIONS].filter((rel) => !violationsByFile.has(rel));
+    expect(
+      clean,
+      `These PERMANENT_EXCEPTIONS no longer carry any literal colour — remove the ` +
+        `now-unneeded exception:\n  ${clean.join('\n  ')}`,
+    ).toHaveLength(0);
+  });
+
+  it('app route trees are actually in the scan set (coverage-hole sanity)', () => {
+    // Widening to src/app was the whole point of this change — assert at least
+    // one operator page got picked up so a future walk()-regression that drops
+    // the app root fails loudly instead of passing vacuously.
+    const appFiles = files.filter((f) => f.rel.startsWith('app/'));
+    expect(
+      appFiles.length,
+      'no app/** .tsx files scanned — the src/app scan root was lost',
+    ).toBeGreaterThan(5);
+    expect(appFiles.some((f) => f.rel === 'app/operator/SyncTab.tsx')).toBe(true);
   });
 });

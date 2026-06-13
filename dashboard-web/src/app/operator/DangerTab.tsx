@@ -48,7 +48,7 @@ export function DangerTab() {
           <AlertTriangle className="h-5 w-5 shrink-0 text-status-redFg" aria-hidden="true" />
           <Heading id="danger-zone-title" level="section" className="text-status-redFg">
             ניקוי וריסט
-            <span className="text-status-redFg/80 text-xs font-normal ms-2">
+            <span className="text-status-redFg text-xs font-normal ms-2">
               (destructive — איפוס נתונים)
             </span>
           </Heading>
