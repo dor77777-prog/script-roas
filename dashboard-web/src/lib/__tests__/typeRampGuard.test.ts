@@ -108,7 +108,11 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   // shared <StateBlock> error chrome) + the curve-explainer ⓘ trigger circle —
   // → text-fs-2xs ramp token; all other arbitrary-px type migrated onto the
   // text-fs-* ramp; removed from allowlist).
-  'DetailTable.tsx': 1,
+  // DetailTable.tsx — DRAINED to 0 in W6.6 (Horizon Trends + Detail re-skin:
+  // the lone sub-floor literal — the "מגמת חנות" sparkline-column header
+  // text-[10px] — → text-fs-2xs ramp token; root `<section bg-glass-1>` →
+  // <Card>, the bare meta inset → bg-pill-track, money cells → <Money>, and the
+  // per-store sparkline render deduped; removed from allowlist).
   // FirstClickCoverageChip.tsx — DRAINED to 0 in Wave 4 (Horizon
   // campaign-health re-skin: lone sub-floor coverage-% chip literal
   // text-[10px] → text-fs-2xs ramp token + bg-pill-track inset; removed

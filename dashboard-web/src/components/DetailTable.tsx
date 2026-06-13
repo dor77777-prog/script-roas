@@ -1,17 +1,28 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, type ReactElement } from 'react';
 import { Table } from 'lucide-react';
 import type { DailyRow } from '@/lib/types';
-import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 import { RefundIndicator } from './RefundIndicator';
 import { roasCell } from '@/lib/format/roasCell';
 import { RoasBadge, roasCellTdClass } from '@/lib/format/RoasBadge';
 import { isStoreFullyOff, type AdStateMap, type AdPlatform } from '@/lib/adState';
 import { Sparkline } from './ui/Sparkline';
 import { TableBase } from './ui/TableBase';
+import { Card } from './ui/Card';
+import { Money } from './ui/Money';
 import { Heading } from './ui/Typography';
 
+// Overflow-safe money cell — reproduces the legacy `formatNumber` render
+// (he-IL, 2 decimals, NO currency prefix) byte-for-byte while routing through
+// the <Money> primitive's compact-floor + exact-value title/sr-only safety so a
+// 7+ digit spend/revenue can never overflow the cell. `decimals` lets the
+// net-profit cell match the legacy `formatCurrency(n, 0)` (0-decimal) render.
+// RTL-isolated via the primitive's own <bdi dir="ltr">.
+function MoneyCell({ value, decimals = 2 }: { value: number; decimals?: 0 | 2 }) {
+  return <Money value={value} prefix="none" locale="he-IL" decimals={decimals} />;
+}
 
 type DetailProps = {
   rows: DailyRow[];
@@ -47,14 +58,35 @@ export function DetailTable({ rows, bare = false, adStateMap = {}, storeApplicab
     return out;
   }, [rows]);
 
+  // The "מגמת חנות" sparkline is IDENTICAL for every row of the same store (it
+  // plots that store's whole-range ROAS micro-trend, not the row's day). Build
+  // the rendered element ONCE per store and reuse it across all of that store's
+  // rows instead of re-instantiating the SVG geometry for every one of the up-to
+  // 100 rows. The visual is preserved on every row (a meaningful per-row "which
+  // store + how's it trending" cue) — only the redundant re-render is removed.
+  const sparklineByStore = useMemo(() => {
+    const out = new Map<string, ReactElement>();
+    for (const [store, series] of storeSeriesByStore) {
+      out.set(
+        store,
+        series.length >= 2 ? (
+          <Sparkline data={series} tone="blue" width={64} height={20} className="inline-block" />
+        ) : (
+          <span className="text-ink-muted">—</span>
+        ),
+      );
+    }
+    return out;
+  }, [storeSeriesByStore]);
+
   if (!display.length) {
     if (bare) {
       return <div className="p-8 text-center text-ink-muted text-sm">אין נתונים בטווח שבחרת</div>;
     }
     return (
-      <section className="rounded-xl bg-glass-1 border border-glass-edge p-8 text-center text-ink-muted shadow-glass">
+      <Card className="!p-8 text-center text-ink-muted">
         אין נתונים בטווח שבחרת
-      </section>
+      </Card>
     );
   }
 
@@ -65,7 +97,7 @@ export function DetailTable({ rows, bare = false, adStateMap = {}, storeApplicab
             <tr className="text-ink-secondary">
               <th className="px-3 py-2.5 text-start font-medium">תאריך</th>
               <th className="px-3 py-2.5 text-start font-medium">חנות</th>
-              <th className="px-2 py-2 text-center text-[10px] uppercase tracking-wide text-ink-muted font-medium w-[80px]">
+              <th className="px-2 py-2 text-center text-fs-2xs uppercase tracking-wide text-ink-muted font-medium w-[80px]">
                 מגמת חנות
               </th>
               <th className="px-3 py-2.5 text-end font-medium">פייסבוק</th>
@@ -88,25 +120,20 @@ export function DetailTable({ rows, bare = false, adStateMap = {}, storeApplicab
                   <td className="px-3 py-2 tabular-nums">{formatDate(r.date)}</td>
                   <td className="px-3 py-2 font-medium">{r.storeName}</td>
                   <td className="px-2 py-2 text-center align-middle">
-                    {(() => {
-                      const series = storeSeriesByStore.get(r.storeName) ?? [];
-                      return series.length >= 2 ? (
-                        <Sparkline data={series} tone="blue" width={64} height={20} className="inline-block" />
-                      ) : (
-                        <span className="text-ink-muted">—</span>
-                      );
-                    })()}
+                    {/* Deduped: the same per-store sparkline element is reused
+                        across every row of this store (built once above). */}
+                    {sparklineByStore.get(r.storeName) ?? <span className="text-ink-muted">—</span>}
                   </td>
-                  <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.fbSpend)}</td>
-                  <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.gaSpend)}</td>
+                  <td className="px-3 py-2 text-end tabular-nums"><MoneyCell value={r.fbSpend} /></td>
+                  <td className="px-3 py-2 text-end tabular-nums"><MoneyCell value={r.gaSpend} /></td>
                   {showTikTok && (
                     <td className="px-3 py-2 text-end tabular-nums">
-                      {(r.ttSpend ?? 0) > 0 ? formatNumber(r.ttSpend) : '—'}
+                      {(r.ttSpend ?? 0) > 0 ? <MoneyCell value={r.ttSpend ?? 0} /> : '—'}
                     </td>
                   )}
-                  <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.totalSpend)}</td>
+                  <td className="px-3 py-2 text-end tabular-nums"><MoneyCell value={r.totalSpend} /></td>
                   <td className="px-3 py-2 text-end tabular-nums">
-                    {formatNumber(r.revenue)}
+                    <MoneyCell value={r.revenue} />
                     <RefundIndicator
                       grossRevenue={r.grossRevenue}
                       refundDeduction={r.refundDeduction}
@@ -115,10 +142,10 @@ export function DetailTable({ rows, bare = false, adStateMap = {}, storeApplicab
                   <td className={cn('px-3 py-2 text-center font-medium tabular-nums', roasCellTdClass(cell.className))}>
                     <RoasBadge className={cell.className} text={cell.text} />
                   </td>
-                  <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.grossProfit)}</td>
+                  <td className="px-3 py-2 text-end tabular-nums"><MoneyCell value={r.grossProfit} /></td>
                   {showCogs && (
                     <td className="px-3 py-2 text-end tabular-nums text-ink-secondary">
-                      {r.hasCogs ? formatNumber(r.cogs) : '—'}
+                      {r.hasCogs ? <MoneyCell value={r.cogs} /> : '—'}
                     </td>
                   )}
                   {showCogs && (
@@ -130,7 +157,7 @@ export function DetailTable({ rows, bare = false, adStateMap = {}, storeApplicab
                         !r.hasCogs && 'text-ink-muted',
                       )}
                     >
-                      {r.hasCogs ? formatCurrency(r.netProfit) : '—'}
+                      {r.hasCogs ? <MoneyCell value={r.netProfit} decimals={0} /> : '—'}
                     </td>
                   )}
                 </tr>
@@ -150,7 +177,7 @@ export function DetailTable({ rows, bare = false, adStateMap = {}, storeApplicab
   if (bare) {
     return (
       <div>
-        <div className="px-4 sm:px-5 py-3 bg-glass-2/40 border-b border-glass-edge text-xs text-ink-secondary">
+        <div className="px-4 sm:px-5 py-3 bg-pill-track border-b border-glass-edge text-xs text-ink-secondary">
           {meta}
         </div>
         {tableContent}
@@ -159,13 +186,13 @@ export function DetailTable({ rows, bare = false, adStateMap = {}, storeApplicab
   }
 
   return (
-    <section className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
+    <Card className="!p-0 overflow-hidden">
       <Heading level="section" className="flex items-center gap-2 px-5 py-4 border-b border-glass-edge">
         <Table size={18} className="text-ink-secondary" />
         פירוט יומי
         {meta}
       </Heading>
       {tableContent}
-    </section>
+    </Card>
   );
 }

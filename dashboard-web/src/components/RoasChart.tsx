@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState, type Key } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, LineChart as LineChartIcon } from 'lucide-react';
 import type { DailySeries } from '@/lib/analytics';
 import { formatDate, formatNumber } from '@/lib/utils';
 import { storeColor, STORE_COLORS } from '@/lib/storeColors';
 import { isHeavyRefundDay } from '@/lib/refundDayHeuristic';
 import type { DailyRow } from '@/lib/types';
 import { ChartContainer } from '@/components/ui/chart/ChartContainer';
+import { StateBlock } from '@/components/ui/StateBlock';
 import {
   ChartTooltip,
   ChartTooltipLabel,
@@ -121,7 +122,30 @@ export function RoasChart({ data, stores, rows, bare = false, range, store = 'Al
     return () => ro.disconnect();
   }, []);
 
-  if (!data.length) return null;
+  if (!data.length) {
+    // No series points in the active scope. Previously returned `null`, which
+    // left the parent's bare card frame empty (a confusing blank panel). Render
+    // the shared <StateBlock mode="empty"> so the operator gets a clear "no
+    // data in range" message instead of dead space — in both the bare and
+    // standalone (titled-section) layouts.
+    const empty = (
+      <StateBlock
+        mode="empty"
+        icon={<LineChartIcon aria-hidden="true" />}
+        description="אין נתוני ROAS בטווח שבחרת. שנה את הטווח או הסינון למעלה."
+      />
+    );
+    if (bare) return <div className="p-3 sm:p-5">{empty}</div>;
+    return (
+      <section className="rounded-hz glass bg-clip-border p-3 sm:p-5">
+        <Heading level="section" className="flex items-center gap-2 mb-3 sm:mb-4">
+          <TrendingUp size={18} className="text-ink-secondary" />
+          מגמת ROAS לאורך זמן
+        </Heading>
+        {empty}
+      </section>
+    );
+  }
   const chartData = data.map(d => ({
     date: d.date,
     dateLabel: formatDate(d.date).slice(0, 5), // DD/MM
@@ -159,7 +183,7 @@ export function RoasChart({ data, stores, rows, bare = false, range, store = 'Al
       {/* Custom legend — RTL-aware, tabular spacing, distinguishes the
           dominant brand series from the muted neutrals so the eye anchors
           to the primary line. */}
-      <div className="flex items-center justify-end gap-3 sm:gap-4 flex-wrap text-[11px] sm:text-xs">
+      <div className="flex items-center justify-end gap-3 sm:gap-4 flex-wrap text-fs-2xs sm:text-fs-xs">
         {stores.map((s, i) => {
           const color = colorFor(s, i, brandColorByName);
           const isPrimary = color === PRIMARY_COLOR;
@@ -334,7 +358,7 @@ export function RoasChart({ data, stores, rows, bare = false, range, store = 'Al
   if (bare) return <div className="p-3 sm:p-5">{chart}</div>;
 
   return (
-    <section className="rounded-xl bg-glass-1 border border-glass-edge p-3 sm:p-5 shadow-glass">
+    <section className="rounded-hz glass bg-clip-border p-3 sm:p-5">
       <Heading level="section" className="flex items-center gap-2 mb-3 sm:mb-4">
         <TrendingUp size={18} className="text-ink-secondary" />
         מגמת ROAS לאורך זמן

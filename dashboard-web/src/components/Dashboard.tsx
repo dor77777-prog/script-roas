@@ -1959,6 +1959,21 @@ function ProductsTab({
 // ============================================================================
 // Tab: DETAIL — raw daily log for power users.
 // ============================================================================
+// ROAS-band legend chips for the Detail log. COLORS + THRESHOLDS mirror the
+// operator-locked classification in `bandForRoas` (lib/roasBands.ts — the single
+// source of truth): red < 2.0, orange 2.0–2.69, green 2.7–3.0, blue > 3.0; plus
+// the failure case (spend with zero sales → red "0"). Rendered via the AA-safe
+// shared `band-chip chip-{band}` recipe (globals.css) — never a text colour
+// pulled from the band hue. STATIC legend (not a classifier), so it adds no
+// parallel band map. Shared with the Archive tab's ROAS_BAND_LEGEND pattern
+// (W6.4). Threshold labels are LTR numerics → isolated in <bdi dir="ltr">.
+const DETAIL_ROAS_BAND_LEGEND = [
+  { band: 'red', label: '< 2' },
+  { band: 'orange', label: '2–2.7' },
+  { band: 'green', label: '2.7–3' },
+  { band: 'blue', label: '> 3' },
+] as const;
+
 function DetailTab({
   filtered,
   filters,
@@ -1980,8 +1995,25 @@ function DetailTab({
       <SectionIntro
         icon={<Table size={20} />}
         title="פירוט יומי"
-        description="כל שורה בטבלה היא (יום × חנות) — הוצאות פייסבוק, גוגל, הכנסות, ROAS, ורווח. עד 100 שורות אחרונות בטווח הנבחר. ROAS אדום עם '0' = יום שהוצאת בו כסף אבל לא היו מכירות (כשל)."
+        description="כל שורה בטבלה היא (יום × חנות) — הוצאות פייסבוק, גוגל, הכנסות, ROAS, ורווח. עד 100 שורות אחרונות בטווח הנבחר. ROAS צבוע לפי הבנדים שלהלן."
       />
+      {/* ROAS-band legend — replaces the former prose thresholds in the section
+          description. Each chip uses the AA-safe shared band-chip recipe;
+          threshold ranges are LTR numerics isolated in <bdi>. The trailing
+          chip-red "0" chip explains the failure cell (spend with zero sales).
+          Mirrors bandForRoas (the locked source of truth) + the Archive legend. */}
+      <div className="flex flex-wrap items-center gap-2" aria-label="מקרא בנדים של ROAS">
+        <span className="text-xs text-ink-muted">מקרא ROAS:</span>
+        {DETAIL_ROAS_BAND_LEGEND.map(({ band, label }) => (
+          <span key={band} className={`band-chip chip-${band}`}>
+            <bdi dir="ltr">{label}</bdi>
+          </span>
+        ))}
+        <span className="band-chip chip-red">
+          <bdi dir="ltr">0</bdi>
+          <span className="ms-1">= הוצאה ללא מכירה (כשל)</span>
+        </span>
+      </div>
       <PageScope
         store={filters.store === 'All' ? 'כל החנויות' : filters.store}
         rangeLabel={rangeLabelHebrew(filters.preset, filters.range)}
@@ -1993,7 +2025,7 @@ function DetailTab({
         confidence={detailSynthesis.confidence}
       />
       <Filters filters={filters} stores={stores} onChange={setFilters} />
-      <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
+      <div className="rounded-hz glass bg-clip-border overflow-hidden">
         <DetailTable rows={filtered.cur} bare adStateMap={adStateMap} storeApplicablePlatforms={storeApplicablePlatforms} />
       </div>
     </div>
