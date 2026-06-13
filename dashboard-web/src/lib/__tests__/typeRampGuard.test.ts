@@ -73,7 +73,9 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   'BillingSettings.tsx': 25,
   'CampaignDrawerStatusSection.tsx': 3,
   'CampaignsColumnsMenu.tsx': 3,
-  'CampaignsTable.tsx': 34,
+  // Wave 4 (debt #6): the CPM-expander chart block (10 sub-floor literals) was
+  // extracted to campaigns/CpmTrendChart.tsx (which clears the floor) → 34 → 24.
+  'CampaignsTable.tsx': 24,
   'CampaignsTableRow.tsx': 8,
   'CampaignsTopList.tsx': 1,
   'CohortComparisonPanel.tsx': 13,
@@ -95,7 +97,10 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   'ProductsTable.tsx': 11,
   'SectionIntro.tsx': 1,
   'campaign-drawer/CampaignDrawerAds.tsx': 1,
-  'campaign-drawer/CampaignDrawerDaily.tsx': 11,
+  // Wave 4 (debt #6): the CPM section (10 sub-floor literals) was extracted to
+  // campaigns/CpmTrendChart.tsx → 11 → 1 (the lone remaining literal is the
+  // spend↔value legend, which STAYS in this file).
+  'campaign-drawer/CampaignDrawerDaily.tsx': 1,
   'campaign-drawer/CampaignDrawerOverview.tsx': 2,
   'campaign-drawer/index.tsx': 2,
   // home/ChannelTruthPanel.tsx — DRAINED to 0 in Wave 3.8b (Horizon home-surfaces

@@ -16,30 +16,9 @@ import {
   Megaphone,
   Search,
   Store as StoreIcon,
-  X,
 } from 'lucide-react';
-import {
-  Line,
-  LineChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import { ChartContainer } from '@/components/ui/chart/ChartContainer';
-import {
-  ChartTooltip,
-  ChartTooltipLabel,
-  ChartTooltipRow,
-  ChartTooltipValue,
-} from '@/components/ui/chart/ChartTooltip';
-import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
-import {
-  analyzeCpmVsRoas,
-  dayOffsetFromRangeStart,
-  indexPrevByDateOffset,
-  PREV_PERIOD_MIN_DAYS,
-  type DailyCpmRoasPoint,
-} from '@/lib/cpmRoasAnalysis';
+import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { type DailyCpmRoasPoint } from '@/lib/cpmRoasAnalysis';
 import { aggregate, type Aggregated } from '@/lib/campaignsAggregator';
 import {
   analyzeFirstClickForCampaign,
@@ -54,7 +33,6 @@ import {
   DEFAULT_HIDDEN_COLUMN_IDS,
 } from '@/lib/campaignsColumnPrefs';
 import { CampaignsColumnsMenu } from './CampaignsColumnsMenu';
-import { CHART_AXIS_COLOR, CHART_COLORS } from '@/lib/chartColors';
 import { filterDrillRows } from '@/lib/drillFilter';
 import type { AdAccountMap } from '@/lib/campaignsLinks';
 import {
@@ -94,7 +72,7 @@ import { AdsDrawer } from './AdsDrawer';
 import { readTabLocalState, syncTabLocalUrl } from '@/lib/urlState';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { Stat } from '@/components/ui/Stat';
-import { Heading } from '@/components/ui/Typography';
+import { CpmTrendChart } from './campaigns/CpmTrendChart';
 
 type Mode = 'campaign' | 'adset';
 type Platform = 'all' | 'Meta' | 'Google' | 'TikTok';
@@ -1101,8 +1079,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
   }, [data?.rows, localRange.from, localRange.to, localStore, platform]);
 
   const [cpmExpanded, setCpmExpanded] = useState(false);
-  // ROAS overlay toggle (same UX as the CampaignDrawer CPM chart).
-  const [cpmShowRoas, setCpmShowRoas] = useState(false);
+  // ROAS-overlay state now lives inside <CpmTrendChart> (showRoasDefault).
   // Smart-analysis baseline mode: 'half' compares first vs second half
   // of the selected range; 'prev' compares against the equally-long
   // window immediately before the selected range (the conventional
@@ -1659,313 +1636,25 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
           active={cpmExpanded}
         />
       </div>
-      {cpmExpanded && cpmDaily.length >= 2 && (() => {
-        // Compute the smart-analysis verdict for this scope before render so
-        // the JSX stays flat. Mode toggle ('half' vs 'prev') picks the
-        // baseline — when 'prev', we pass the matching-length window
-        // immediately before the current range so the helper compares
-        // means apples-to-apples (same baseline the Hero KPI deltas use).
-        const analysis = analyzeCpmVsRoas(
-          cpmDaily.map(d => ({ date: d.date, cpm: d.cpm, roas: d.roas })),
-          cpmAnalysisMode === 'prev' && cpmDailyPrev ? { prev: cpmDailyPrev } : undefined,
-        );
-        const toneBg: Record<typeof analysis.tone, string> = {
-          positive: 'bg-status-greenBg border-status-green text-status-greenFg',
-          warning:  'bg-status-warningBg border-status-warning text-status-warningFg',
-          negative: 'bg-status-redBg border-status-red text-status-redFg',
-          neutral:  'bg-glass-2 border-glass-edge text-ink-secondary',
-        };
-        // Build an explicit baseline label with the actual date windows so
-        // the user knows exactly what's being compared. Format MM-DD/DD →
-        // MM-DD/DD so it reads naturally in Hebrew RTL.
-        const fmtRangeShort = (from: string, to: string) => {
-          const f = from.slice(5).replace('-', '/');
-          const t = to.slice(5).replace('-', '/');
-          return `${f}—${t}`;
-        };
-        const halfMidIdx = Math.floor(cpmDaily.length / 2);
-        const firstHalfDates = cpmDaily.length >= 4
-          ? `${cpmDaily[0].date.slice(5).replace('-', '/')}—${cpmDaily[halfMidIdx - 1].date.slice(5).replace('-', '/')}`
-          : '';
-        const secondHalfDates = cpmDaily.length >= 4
-          ? `${cpmDaily[halfMidIdx].date.slice(5).replace('-', '/')}—${cpmDaily[cpmDaily.length - 1].date.slice(5).replace('-', '/')}`
-          : '';
-        const baselineLabel = analysis.mode === 'previous-period'
-          ? `השוואה: ${fmtRangeShort(localRange.from, localRange.to)} מול ${fmtRangeShort(cpmPrevRange.from, cpmPrevRange.to)} (תקופה קודמת באותו אורך)`
-          : firstHalfDates && secondHalfDates
-          ? `השוואה: חצי שני (${secondHalfDates}) מול חצי ראשון (${firstHalfDates})`
-          : 'השוואה: חצי שני vs חצי ראשון של הטווח';
-        const isLoadingPrev = cpmAnalysisMode === 'prev' && !cpmPrevData;
-        // Build the chart's data array. When the user toggled the 'prev'
-        // baseline AND we have previous-period rows, merge in the previous
-        // period's CPM by CALENDAR OFFSET — "day 0 of current pairs with day 0
-        // of prev", "day 1 with day 1", regardless of which days got filtered
-        // out for zero impressions. Naive index pairing (the original bug
-        // c/CR-01) silently warped this whenever current and prev had a
-        // different number of active days. Now both series are anchored to
-        // days-since-window-start, so the dashed line truly is the same
-        // relative day. X-axis labels stay on the current period's dates;
-        // the previous period's actual date surfaces in the tooltip.
-        const prevByOffset = indexPrevByDateOffset(cpmDailyPrev, cpmPrevRange.from);
-        const cpmChartData = cpmDaily.map(d => {
-          const offset = dayOffsetFromRangeStart(d.date, localRange.from);
-          const prev = prevByOffset.get(offset);
-          return {
-            ...d,
-            prevCpm: prev?.cpm ?? null,
-            prevDate: prev?.date ?? null,
-          };
-        });
-        const showPrevLine = cpmAnalysisMode === 'prev' && !isLoadingPrev && (cpmDailyPrev?.length ?? 0) > 0;
-        return (
-        <div className="mt-3 rounded-lg bg-glass-1 border border-glass-edge p-3">
-          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-            <Heading level="panel" className="inline-flex items-center gap-1.5 text-xs sm:text-sm">
-              CPM לאורך זמן
-              <span className="text-[10px] font-medium text-ink-muted">
-                ({isAllStores(localStore) ? 'כל החנויות' : localStore}
-                {platform !== 'all' ? ` · ${platform}` : ''}
-                {', CAD'})
-              </span>
-            </Heading>
-            <div className="flex items-center gap-3 flex-wrap">
-              {/* Analysis baseline toggle — picks what the smart-analysis
-                  box compares against. Two modes: half-over-half (within
-                  range) vs previous-period (same-length window before). */}
-              <div className="inline-flex items-center gap-0.5 rounded-md border border-glass-edge bg-glass-1 p-0.5 text-[10px]">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setCpmAnalysisMode('half')}
-                  className={cn(
-                    'px-2 py-0.5 h-auto text-[10px] rounded transition-colors',
-                    cpmAnalysisMode === 'half'
-                      ? 'bg-accent-bg text-accent font-medium'
-                      : 'text-ink-muted hover:text-ink',
-                  )}
-                >
-                  חצי-חצי
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setCpmAnalysisMode('prev')}
-                  className={cn(
-                    'px-2 py-0.5 h-auto text-[10px] rounded transition-colors',
-                    cpmAnalysisMode === 'prev'
-                      ? 'bg-accent-bg text-accent font-medium'
-                      : 'text-ink-muted hover:text-ink',
-                  )}
-                >
-                  vs תקופה קודמת
-                </Button>
-              </div>
-              <label className="inline-flex items-center gap-1.5 text-[11px] text-ink-secondary cursor-pointer select-none">
-                <Input
-                  type="checkbox"
-                  checked={cpmShowRoas}
-                  onChange={e => setCpmShowRoas(e.target.checked)}
-                  className="rounded border-glass-edge text-accent focus:ring-accent cursor-pointer"
-                />
-                הוסף ROAS לגרף
-              </label>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setCpmExpanded(false)}
-                className="h-auto p-0 text-[11px] text-ink-muted hover:text-ink"
-                aria-label="סגור"
-              >
-                <X size={11} aria-hidden />
-              </Button>
-            </div>
-          </div>
-          <ChartContainer className="h-40 sm:h-48" height="100%">
-              <LineChart data={cpmChartData} margin={{ top: 8, right: cpmShowRoas ? 56 : 16, left: 4, bottom: 0 }}>
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 10, fill: CHART_AXIS_COLOR }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={d => {
-                    const m = String(d).match(/^\d{4}-(\d{2})-(\d{2})/);
-                    return m ? `${m[2]}/${m[1]}` : String(d);
-                  }}
-                  padding={{ left: 12, right: 12 }}
-                />
-                <YAxis
-                  yAxisId="cpm"
-                  tick={{ fontSize: 10, fill: CHART_AXIS_COLOR }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={v => `C$${Number(v).toFixed(2)}`}
-                  width={68}
-                  // c/CR-02: zero-anchored Y axis. The previous
-                  // `[dataMin * 0.88, dataMax * 1.12]` suppression turned a
-                  // 3% CPM change into a chart-height-spanning curve — the
-                  // textbook misleading-axis pattern. Operator dashboards
-                  // should show the true magnitude; CPM is always >= 0.
-                  domain={[0, (dataMax: number) => dataMax * 1.12]}
-                  allowDecimals
-                />
-                {cpmShowRoas && (
-                  <YAxis
-                    yAxisId="roas"
-                    orientation="right"
-                    tick={{ fontSize: 10, fill: CHART_COLORS.roas }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={v => Number(v).toFixed(2)}
-                    width={42}
-                    // c/CR-02: same zero-anchor rule for the ROAS overlay.
-                    domain={[0, (dataMax: number) => dataMax * 1.12]}
-                    allowDecimals
-                  />
-                )}
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload || payload.length === 0) return null;
-                    const d = payload[0].payload as {
-                      date: string;
-                      cpm: number;
-                      impressions: number;
-                      spend: number;
-                      roas: number;
-                      prevCpm: number | null;
-                      prevDate: string | null;
-                    };
-                    const prevDeltaPct = (showPrevLine && d.prevCpm != null && d.prevCpm > 0)
-                      ? ((d.cpm - d.prevCpm) / d.prevCpm) * 100
-                      : null;
-                    return (
-                      <ChartTooltip className="tabular-nums">
-                        <ChartTooltipLabel>{formatDate(d.date)}</ChartTooltipLabel>
-                        <ChartTooltipRow color={CHART_COLORS.cpm} label="CPM">
-                          CAD <ChartTooltipValue>{formatCurrency(d.cpm, 2)}</ChartTooltipValue>
-                        </ChartTooltipRow>
-                        {cpmShowRoas && (
-                          <ChartTooltipRow color={CHART_COLORS.roas} label="ROAS">
-                            <ChartTooltipValue>{formatNumber(d.roas, 2)}</ChartTooltipValue>
-                          </ChartTooltipRow>
-                        )}
-                        {showPrevLine && d.prevCpm != null && (
-                          <div className="mt-1 pt-1 border-t border-glass-edge">
-                            <div className="text-ink-muted text-[10px] mb-0.5">
-                              תקופה קודמת{d.prevDate ? ` (${formatDate(d.prevDate)})` : ''}:
-                            </div>
-                            <ChartTooltipRow color={CHART_COLORS.cpmPrev} label="CPM">
-                              CAD <ChartTooltipValue>{formatCurrency(d.prevCpm, 2)}</ChartTooltipValue>
-                              {prevDeltaPct != null && (
-                                <span className={cn(
-                                  'ms-1.5 text-[10px] font-semibold',
-                                  prevDeltaPct < 0 ? 'text-status-greenFg' : prevDeltaPct > 0 ? 'text-status-redFg' : 'text-ink-muted',
-                                )}>
-                                  ({prevDeltaPct > 0 ? '+' : ''}{prevDeltaPct.toFixed(1)}%)
-                                </span>
-                              )}
-                            </ChartTooltipRow>
-                          </div>
-                        )}
-                        <div className="text-ink-muted text-[10px] mt-1">
-                          {formatNumber(d.impressions, 0)} חשיפות · CAD {formatCurrency(d.spend, 2)}
-                        </div>
-                      </ChartTooltip>
-                    );
-                  }}
-                />
-                <Line
-                  yAxisId="cpm"
-                  type="monotone"
-                  dataKey="cpm"
-                  stroke={CHART_COLORS.cpm}
-                  strokeWidth={1.75}
-                  dot={{ r: 2.5, fill: CHART_COLORS.cpm, stroke: 'none' }}
-                  activeDot={{ r: 4, fill: CHART_COLORS.cpm, stroke: 'var(--surface-elevated-1)', strokeWidth: 1.5 }}
-                />
-                {showPrevLine && (
-                  <Line
-                    yAxisId="cpm"
-                    type="monotone"
-                    dataKey="prevCpm"
-                    stroke={CHART_COLORS.cpmPrev}
-                    strokeWidth={1.5}
-                    strokeDasharray="5 3"
-                    strokeOpacity={0.85}
-                    dot={{ r: 2, fill: CHART_COLORS.cpmPrev, stroke: 'none', fillOpacity: 0.7 }}
-                    activeDot={{ r: 3.5, fill: CHART_COLORS.cpmPrev, stroke: 'var(--surface-elevated-1)', strokeWidth: 1.5 }}
-                    connectNulls={false}
-                    isAnimationActive={false}
-                  />
-                )}
-                {cpmShowRoas && (
-                  <Line
-                    yAxisId="roas"
-                    type="monotone"
-                    dataKey="roas"
-                    stroke={CHART_COLORS.roas}
-                    strokeWidth={1.75}
-                    strokeDasharray="5 3"
-                    dot={{ r: 2.5, fill: CHART_COLORS.roas, stroke: 'none' }}
-                    activeDot={{ r: 4, fill: CHART_COLORS.roas, stroke: 'var(--surface-elevated-1)', strokeWidth: 1.5 }}
-                  />
-                )}
-              </LineChart>
-          </ChartContainer>
-          {(cpmShowRoas || showPrevLine) && (
-            <div className="flex items-center justify-center gap-4 text-[10px] text-ink-muted mt-1.5 flex-wrap">
-              <span className="inline-flex items-center gap-1.5">
-                {/* CPM swatch tracks CHART_COLORS.cpm (= var(--status-orange))
-                    so the legend stays in sync with the chart line in both
-                    light and dark mode. */}
-                <span className="inline-block w-3 h-[2px]" style={{ background: CHART_COLORS.cpm }} />
-                CPM {cpmShowRoas ? '(ציר שמאל)' : ''}
-              </span>
-              {showPrevLine && (
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="inline-block w-3 border-t-2 border-dashed border-status-warning" />
-                  CPM תקופה קודמת
-                </span>
-              )}
-              {cpmShowRoas && (
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="inline-block w-3 border-t-2 border-dashed border-status-green" />
-                  ROAS (ציר ימין)
-                </span>
-              )}
-            </div>
-          )}
-          {cpmAnalysisMode === 'prev' && !isLoadingPrev && analysis.mode === 'half-over-half' && (
-            <div className="text-[10px] text-status-warningFg bg-status-warningBg px-2 py-1 rounded mt-1">
-              {/* FIX-19 (5.2.2.1): fallback disclosure when previous period had
-                  fewer than PREV_PERIOD_MIN_DAYS active days.
-                  WR-01 (5.2.2.1): gated by !isLoadingPrev so the banner does not fire prematurely
-                  while SWR is still resolving cpmPrevData (~100-500ms after toggling to 'prev').
-                  Without the gate, the analyzer runs without prev data, returns
-                  analysis.mode='half-over-half', and the banner asserts <N active days even though
-                  prev was never actually evaluated. The banner self-corrects when data arrives, but
-                  the operator briefly sees an incorrect explanation.
-                  IN-08 (5.2.2.1): the threshold N is sourced from
-                  PREV_PERIOD_MIN_DAYS (cpmRoasAnalysis.ts) so the banner copy can
-                  never drift from the analyzer gate. */}
-              {`לתקופה הקודמת פחות מ-${PREV_PERIOD_MIN_DAYS} ימים שבהם הקמפיין רץ (חשיפות + הוצאה) — מציג השוואת חצי-חצי במקום.`}
-            </div>
-          )}
-          {/* FIX-24 (5.2.2.1): always render so sparse campaigns see an explicit
-              placeholder instead of an empty space that looks like a UI bug.
-              Previously gated by {analysis.hasData &&}. */}
-          <div className={cn('mt-2 rounded-lg border px-3 py-2 text-[11px] leading-relaxed', toneBg[analysis.tone])}>
-            {analysis.hasData && (
-              <div className="text-[10px] opacity-70 mb-1">
-                {baselineLabel}
-                {isLoadingPrev && <span className="ms-2 opacity-50">· טוען נתוני תקופה קודמת...</span>}
-              </div>
-            )}
-            <span className="font-semibold ms-1">ניתוח:</span>
-            <span>{analysis.text}</span>
-          </div>
-        </div>
-        );
-      })()}
+      {cpmExpanded && cpmDaily.length >= 2 && (
+        <CpmTrendChart
+          cpmDaily={cpmDaily}
+          cpmDailyPrev={cpmDailyPrev}
+          range={localRange}
+          prevRange={cpmPrevRange}
+          scopeLabel={
+            <>
+              ({isAllStores(localStore) ? 'כל החנויות' : localStore}
+              {platform !== 'all' ? ` · ${platform}` : ''}
+              {', CAD'})
+            </>
+          }
+          mode={cpmAnalysisMode}
+          onModeChange={setCpmAnalysisMode}
+          isLoadingPrev={cpmAnalysisMode === 'prev' && !cpmPrevData}
+          onClose={() => setCpmExpanded(false)}
+        />
+      )}
       {totals.spend > 0 && (
         <div className="mt-3 pt-3 border-t border-glass-edge text-[10px] sm:text-xs text-ink-muted tabular-nums flex flex-wrap gap-x-3 gap-y-1">
           <span>CPC: <span className="text-ink-secondary font-medium">CAD {formatCurrency(totals.cpc, 2)}</span></span>

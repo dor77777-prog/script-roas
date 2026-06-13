@@ -64,7 +64,10 @@ const COMPONENTS_DIR = path.resolve(__dirname, '..', '..', 'components');
 // entry here — a now-clean file left on the list FAILS the ratchet test.
 // ---------------------------------------------------------------------------
 const MIGRATION_ALLOWLIST: string[] = [
-  'CampaignsTable.tsx', // chart Y-axis tickFormatter `C$${Number(v).toFixed(2)}` — axis tick, not a cell
+  // Wave 4 (debt #6): CampaignsTable's CPM chart Y-axis tick moved into
+  // campaigns/CpmTrendChart.tsx — CampaignsTable.tsx now has ZERO raw-money
+  // lines, so its entry was removed (the ratchet would fail on a stale entry).
+  'campaigns/CpmTrendChart.tsx', // chart Y-axis tickFormatter `C$${Number(v).toFixed(2)}` — axis tick, not a cell (the consolidated CPM-vs-ROAS chart)
   'home/CommandCenterHero.tsx', // fmtMoneyCompact string helper feeds the delta-caption `text=` string (can't be JSX <Money>); fmtCount is a COUNT, not money
   'home/StoreDetailModal.tsx', // `data.newCustomer.ncOrders.toLocaleString('en-US')` — a new-customer ORDER COUNT (הזמנות חדשות), not money
   'home/StoreCompareGrid.tsx', // NC footer order-mix: ncOrders/returningOrders.toLocaleString('en-US') — ORDER COUNTS (חדשות/חוזרות), not money (mirrors CommandCenterHero NC line)
@@ -73,7 +76,7 @@ const MIGRATION_ALLOWLIST: string[] = [
   'FreshnessChip.tsx', // `new Date(dataLastWriteAt).toLocaleString(…)` built into the HelpTooltip content STRING — date inside a tooltip string
   'MetaShopifyReconciliation.tsx', // chart Y-axis tickFormatter `C$${formatCurrency(n, …)}` — axis tick wrapping an approved helper
   'RoasChart.tsx', // refund value rendered inside a <ChartTooltip> body — chart tooltip, not a table cell
-  'campaign-drawer/CampaignDrawerDaily.tsx', // two chart Y-axis tickFormatters `C$${formatCurrency(Number(v))}` / `C$${Number(v).toFixed(2)}` — axis ticks
+  'campaign-drawer/CampaignDrawerDaily.tsx', // spend↔value chart Y-axis tickFormatter `C$${formatCurrency(Number(v))}` — axis tick (the CPM chart's tick moved to campaigns/CpmTrendChart.tsx in Wave 4)
 ];
 
 // ---------------------------------------------------------------------------
