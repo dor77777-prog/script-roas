@@ -123,6 +123,30 @@ describe('<Widget>', () => {
     ).toBe(false);
   });
 
+  // Regression guard (2026-06-13) — a `titleBadge` (e.g. the op-profit LIVE
+  // pill) must render OUTSIDE the title's `truncate` span so a long title can
+  // never clip it. Inside the truncate, a long range label ("· מתחילת החודש")
+  // pushed the LIVE pill past the edge, leaving only a green sliver.
+  it('(i) titleBadge renders as a sibling OUTSIDE the truncating title span', () => {
+    const { container } = render(
+      <Widget
+        icon={<IconStub />}
+        title="רווח תפעולי"
+        titleBadge={<span data-testid="live-pill">LIVE</span>}
+        value="$14,929"
+      />,
+    );
+    const pill = container.querySelector('[data-testid="live-pill"]');
+    const truncate = container.querySelector('.truncate');
+    expect(pill).not.toBeNull();
+    expect(truncate).not.toBeNull();
+    // The badge must NOT be nested inside the truncate span (which clips it);
+    // it sits next to it as a flex sibling.
+    expect(truncate?.contains(pill!)).toBe(false);
+    // The title text stays inside the truncate span.
+    expect(truncate?.textContent).toContain('רווח תפעולי');
+  });
+
   // Contract hardening (reviewer flag) — a caller's stray spread must NOT
   // clobber the band/freshness the Widget owns. The explicit props are set
   // AFTER `{...rest}` in Widget.tsx, so the resolved values win.

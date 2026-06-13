@@ -135,11 +135,19 @@ describe('<CommandCenterHero>', () => {
     expect(cpmCard.textContent).toContain('—');
   });
 
-  it('Featured card surfaces the eyebrow range label', () => {
+  it('Featured card title is just the metric name + LIVE (no range label → never clips the LIVE pill at the 4-up width)', () => {
     const { getByTestId } = render(
       <CommandCenterHero current={PERIOD_GREEN} rangeLabel="30 ימים" />,
     );
-    expect(getByTestId('hero-net-profit').textContent).toContain('30 ימים');
+    const featured = getByTestId('hero-net-profit');
+    // The range label was MOVED out of the featured-card title — inside the
+    // narrow 4-up column it pushed the LIVE pill past the `truncate` edge
+    // (only a clipped sliver showed). It lives in the global date filter (and
+    // still on the inventory tile). Title now = name + LIVE only, and LIVE is
+    // a `titleBadge` rendered OUTSIDE the truncate so it can never be clipped.
+    expect(featured.textContent).toContain('רווח תפעולי');
+    expect(getByTestId('hero-op-live').textContent).toBe('LIVE');
+    expect(featured.textContent).not.toContain('30 ימים');
   });
 
   it('red-band MER flips the MER widget value span to data-band="red" (operating profit stays un-banded)', () => {

@@ -683,13 +683,18 @@ export function CommandCenterHero({
             data-testid="hero-net-profit"
             freshness={freshnessStage}
             icon={<LineChart aria-hidden="true" />}
-            title={
-              <span className="flex items-center gap-1.5">
-                {`רווח תפעולי · ${rangeLabel}`}
-                <Badge tone="green" data-testid="hero-op-live">
-                  LIVE
-                </Badge>
-              </span>
+            // Title = metric name only. The range label ("· מתחילת החודש" /
+            // "· 30 ימים") used to live here, but at the narrow 4-up width it
+            // pushed the LIVE pill past the Widget's `truncate` edge (only a
+            // green sliver showed). The range is already in the global date
+            // filter (and on the inventory tile), so it MOVES there; the LIVE
+            // pill goes to `titleBadge` so it renders OUTSIDE the truncate and
+            // can never be clipped. (2026-06-13.)
+            title="רווח תפעולי"
+            titleBadge={
+              <Badge tone="green" data-testid="hero-op-live">
+                LIVE
+              </Badge>
             }
             value={
               <Money

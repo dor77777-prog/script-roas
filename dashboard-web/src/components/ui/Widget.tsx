@@ -45,6 +45,15 @@ export interface WidgetProps
   icon: ReactNode;
   /** Muted KPI label. */
   title: ReactNode;
+  /**
+   * Optional status badge/pill rendered NEXT TO the title but OUTSIDE the
+   * truncating span — so it is NEVER clipped when the title is long (the title
+   * TEXT ellipsizes instead of the pill). Use for a pill like `LIVE` that must
+   * always stay visible. Mirrors how the band-tag chip already renders outside
+   * `truncate`. (Fixes 2026-06-13: a long range label inside the title pushed
+   * the LIVE pill past the truncate edge, leaving only a clipped sliver.)
+   */
+  titleBadge?: ReactNode;
   /** KPI value. A `number` renders through <Money>; anything else as-is. */
   value: ReactNode | number;
   /** Optional sub-line under the value (delta / context note). */
@@ -122,6 +131,7 @@ const BAND_BADGE_CLASS: Record<CoreRoasBand, string> = {
 export function Widget({
   icon,
   title,
+  titleBadge,
   value,
   sub,
   bandRoas,
@@ -201,7 +211,11 @@ export function Widget({
 
       <div className="flex min-w-0 flex-col justify-center">
         <p className="flex items-center gap-2 text-fs-sm font-medium text-ink-muted">
-          <span className="truncate">{title}</span>
+          {/* `min-w-0` lets the title shrink so the badges (titleBadge / band
+              chip) — which are flex-none — are never the thing that gets clipped;
+              the title TEXT ellipsizes instead. */}
+          <span className="truncate min-w-0">{title}</span>
+          {titleBadge}
           {band ? (
             <span className={cn('band-chip', chipClassForBand(band))}>
               {BAND_TAG_LABEL[band]}
