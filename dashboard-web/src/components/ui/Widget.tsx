@@ -80,9 +80,9 @@ function chipClassForBand(band: CoreRoasBand): string {
  * hex — so the no-hex-color-in-components guard stays green.
  *   • `text`   — value/icon colour = the band token.
  *   • `badgeBg`— circular-badge fill = a low-alpha tint of the same token,
- *     mirroring the mockup's `rgba(brand, .12)` badge but kept token-driven
- *     via `color-mix(... transparent)` (same recipe used across the app for
- *     tinted brand surfaces).
+ *     mirroring the mockup's ~12%-alpha brand-tint badge but kept
+ *     token-driven via `color-mix(... transparent)` (same recipe used
+ *     across the app for tinted brand surfaces).
  */
 const BAND_VALUE_CLASS: Record<CoreRoasBand, string> = {
   red: 'text-[var(--band-red)]',
@@ -119,7 +119,7 @@ export function Widget({
   // to the band tint + band icon colour.
   const badgeClass = band
     ? BAND_BADGE_CLASS[band]
-    : 'bg-lightPrimary text-brand-500 dark:bg-navy-700 dark:text-white';
+    : 'bg-lightPrimary text-brand-500 dark:bg-navy-700 dark:text-ink';
 
   // Value colour: band token when banded, else default ink.
   const valueColorClass = band ? BAND_VALUE_CLASS[band] : 'text-ink';

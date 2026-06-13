@@ -44,16 +44,17 @@ import { cn } from '@/lib/utils';
 const cardVariants = cva(
   /* Horizon re-skin Wave 1 (Task 1.1) — canonical Card recipe.
    * Mockup source: docs/superpowers/mockups/2026-06-12-horizon-reskin/
-   * home-approved.html (KPI card, the `!z-5 relative flex flex-col
-   * rounded-[20px] bg-white bg-clip-border shadow-3xl shadow-shadow-500
-   * dark:!bg-navy-800 dark:text-white dark:shadow-none` recipe). Expressed
+   * home-approved.html (KPI card — a `!z-5 relative flex flex-col`, 20px
+   * radius, light card-surface fill + border-box bg-clip, light drop shadow,
+   * and in dark a navy-800 fill with near-white text and no shadow). Expressed
    * through OUR token utilities rather than Horizon's raw class names:
-   *   • surface (`bg-white` / `dark:bg-navy-800`) + theme-aware shadow
-   *     (`shadow-3xl shadow-shadow-500` light / `dark:shadow-none`) +
+   *   • the card surface (light card-surface / dark navy-800) + theme-aware
+   *     shadow (Horizon drop shadow in light / none in dark) +
    *     `position: relative` already come from the `.glass` rule in
-   *     globals.css — it sets `background: var(--glass-1)` (#fff light /
-   *     navy-800 dark), `box-shadow: var(--shadow-glass)` (Horizon drop in
-   *     light, `0 0 transparent` in dark) and `position: relative`. Because
+   *     globals.css — it sets `background: var(--glass-1)` (near-white in
+   *     light / navy-800 dark), `box-shadow: var(--shadow-glass)` (Horizon
+   *     drop in light, `0 0 transparent` in dark) and `position: relative`.
+   *     Because
    *     `--shadow-glass` is ALREADY shadowless in dark, a separate
    *     `dark:shadow-none` would be redundant — so it is intentionally NOT
    *     present here (W0 follow-up note).
