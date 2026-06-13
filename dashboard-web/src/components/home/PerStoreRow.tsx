@@ -388,6 +388,15 @@ function StoreCard({
       band={band.band}
       freshness={freshness.stage}
       data-testid="per-store-card"
+      // W8-T5 — explicit, self-documenting marker for the operator-locked
+      // alarm pulse. The pulse itself is wired in globals.css against
+      // `.glass[data-band="red-alarm"]` under `prefers-reduced-motion:
+      // no-preference` (box-shadow ring, ~1.8s — NO transform, never reflows;
+      // reduced-motion sessions get the static alarm gradient, no pulse). This
+      // attribute documents the intent at the call site AND makes the affordance
+      // assertable in jsdom (where the CSS media query can't run): present in
+      // the alarm state, absent otherwise.
+      data-alarm-pulse={isAlarm ? '' : undefined}
       role={interactive ? 'button' : undefined}
       tabIndex={interactive ? 0 : undefined}
       aria-label={interactive ? `פתח קמפיינים של ${store.storeName}` : undefined}

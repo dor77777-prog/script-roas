@@ -47,6 +47,14 @@ describe('store-card alarm threshold (W3.1)', () => {
     // Card is in the alarm state.
     expect(card?.getAttribute('data-band')).toBe('red-alarm');
 
+    // W8-T5 — the alarm card carries the locked pulse affordance. The pulse
+    // itself is a CSS box-shadow ring wired in globals.css against
+    // `.glass[data-band="red-alarm"]` under `prefers-reduced-motion:
+    // no-preference` (so jsdom can't run it), but the explicit
+    // `data-alarm-pulse` marker is the assertable binding point: present in
+    // the alarm state, absent otherwise.
+    expect(card?.hasAttribute('data-alarm-pulse')).toBe(true);
+
     // The factual alarm note is present (verbatim, operator-locked).
     const note = card?.querySelector('.store-alarm-note');
     expect(note).not.toBeNull();
@@ -68,6 +76,9 @@ describe('store-card alarm threshold (W3.1)', () => {
     // upstream for a 0-revenue store, so it falls through to gray "אין נתונים".
     expect(card?.getAttribute('data-band')).not.toBe('red-alarm');
     expect(card?.getAttribute('data-band')).toBe('gray');
+
+    // W8-T5 — NO pulse affordance in the non-alarm state.
+    expect(card?.hasAttribute('data-alarm-pulse')).toBe(false);
 
     // No alarm note, no alarm copy at all.
     expect(card?.querySelector('.store-alarm-note')).toBeNull();

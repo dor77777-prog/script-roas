@@ -489,7 +489,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                   <div className="flex items-center gap-2 min-w-0">
                     {isLive && (
                       <span className="relative inline-flex h-2.5 w-2.5 shrink-0">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-green opacity-75"></span>
+                        <span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-status-green opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-status-green"></span>
                       </span>
                     )}

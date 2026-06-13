@@ -237,9 +237,15 @@ function SidebarBody({
           const button = (
             <Button
               key={item.key}
+              // W8-T5 — tab↔panel ARIA wiring. Each tab gets a stable id
+              // (`tab-${key}`) and points at the single main content panel via
+              // `aria-controls`; the Dashboard <main> reciprocates with
+              // role="tabpanel" + aria-labelledby={`tab-${activeTab}`}.
+              id={`tab-${item.key}`}
               role="tab"
               type="button"
               variant="ghost"
+              aria-controls="dashboard-tabpanel"
               aria-current={isActive ? 'page' : undefined}
               aria-selected={isActive}
               aria-label={isCollapsed ? item.label : undefined}

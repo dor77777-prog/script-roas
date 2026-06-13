@@ -128,7 +128,7 @@ export function ActionListPanel({ insights, loading, error, onMark, adAccounts, 
         ) : (
           <div className="px-5 sm:px-6 py-6 flex items-center gap-3">
             <span className="relative inline-flex w-2.5 h-2.5 shrink-0">
-              <span className="absolute inset-0 rounded-full bg-status-greenBg animate-ping" />
+              <span className="absolute inset-0 rounded-full bg-status-greenBg motion-safe:animate-ping" />
               <span className="relative inline-flex w-full h-full rounded-full bg-status-green" />
             </span>
             <div className="text-fs-xs sm:text-fs-sm text-ink-secondary">

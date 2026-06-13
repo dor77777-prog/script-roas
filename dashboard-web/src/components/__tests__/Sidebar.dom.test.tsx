@@ -126,6 +126,30 @@ describe('Sidebar', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
+  /**
+   * W8-T5 — tab↔panel ARIA wiring. Each rail tab must carry a stable
+   * `id="tab-${key}"` and point at the single main content panel via
+   * `aria-controls="dashboard-tabpanel"` (the Dashboard <main> reciprocates
+   * with role="tabpanel" + aria-labelledby={`tab-${activeTab}`}).
+   */
+  it('wires each tab with a stable id + aria-controls to the main panel', () => {
+    const { container } = renderSidebar({ activeTab: 'home' });
+    const rail = container.querySelector('[data-testid="desktop-sidebar"]')!;
+    const tabs = Array.from(rail.querySelectorAll('nav [role="tab"]'));
+    expect(tabs.length).toBeGreaterThan(0);
+    for (const tab of tabs) {
+      // Every tab points at the one main content panel.
+      expect(tab.getAttribute('aria-controls')).toBe('dashboard-tabpanel');
+      // …and carries a stable `tab-${key}` id for the panel's aria-labelledby.
+      expect(tab.getAttribute('id')).toMatch(/^tab-[a-z]+$/);
+    }
+    // The home tab specifically resolves to `tab-home`.
+    const home = tabs.find(
+      (t) => t.getAttribute('aria-label')?.trim() === 'בית',
+    );
+    expect(home?.getAttribute('id')).toBe('tab-home');
+  });
+
   it('marks the active item with aria-current="page"', () => {
     renderSidebar({ activeTab: 'pnl' });
     // Query the active tab by role+accessible-name (collapsed rail → aria-label).

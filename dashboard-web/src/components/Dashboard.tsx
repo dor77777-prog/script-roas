@@ -799,7 +799,19 @@ export function Dashboard() {
           />
         </div>
 
-        <main className="max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-5">
+        {/* W8-T5 — tab↔panel ARIA wiring. The single main content region is the
+            tabpanel for the Sidebar's rail tabs: id="dashboard-tabpanel" (the
+            target each tab's aria-controls points at), labelled by the ACTIVE
+            tab (`tab-${activeTab}` — the id Sidebar stamps on each tab button),
+            and tabIndex={0} so keyboard users can focus the panel itself.
+            Purely ARIA + a focus affordance — no visual/layout/scroll change. */}
+        <main
+          role="tabpanel"
+          id="dashboard-tabpanel"
+          aria-labelledby={`tab-${activeTab}`}
+          tabIndex={0}
+          className="max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-5"
+        >
           {/* Three error sources: (a) SWR threw (network failure, malformed JSON),
             * (b) /api/data returned 200 + empty rows + error field (WR-06 degraded
             * path — preferred over status 500 so SWR consumers downstream stay

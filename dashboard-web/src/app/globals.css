@@ -834,15 +834,44 @@
 }
 
 /* ===========================================================================
-   Horizon reskin (Wave 0) — alarm-band pulse. Pairs with --band-alarm-grad:
-   the "spend over threshold, ZERO sales" card breathes a hot-red box-shadow
-   ring (1.8s, from the approved mockup). The project-wide
-   prefers-reduced-motion sweep collapses animation durations, freezing the
-   pulse at rest for accessibility-sensitive sessions.
+   Horizon reskin (Wave 0 / W8-T5) — alarm-band pulse. Pairs with the
+   --band-red-alarm token: the "spend over threshold, ZERO sales" card breathes
+   a hot-red box-shadow RING (1.8s, from the approved mockup). It is a
+   box-shadow-only pulse (NO transform / no layout-shifting property) so it can
+   never reflow the card.
+
+   The keyframe carries the card's STATIC elevation shadow (`0 18px 44px …`)
+   in every frame and only animates the trailing ring layer, so the card keeps
+   its banded drop-shadow while the ring expands+fades — without this the
+   animated `box-shadow` would override (and visually drop) the static
+   elevation set on `.glass[data-band="red-alarm"]`.
+
+   Binding lives below under `@media (prefers-reduced-motion: no-preference)`,
+   so reduced-motion sessions get the static alarm gradient + elevation with NO
+   pulse (belt-and-braces with the project-wide `reduce` sweep that also
+   collapses animation durations).
    =========================================================================== */
 @keyframes alarmPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(248,27,37,.45); }
-  50%      { box-shadow: 0 0 0 9px rgba(248,27,37,0); }
+  0%, 100% {
+    box-shadow:
+      0 18px 44px color-mix(in oklab, var(--band-red-alarm) 42%, transparent),
+      0 0 0 0 color-mix(in oklab, var(--band-red-alarm) 55%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 18px 44px color-mix(in oklab, var(--band-red-alarm) 42%, transparent),
+      0 0 0 9px color-mix(in oklab, var(--band-red-alarm) 0%, transparent);
+  }
+}
+
+/* Wire the locked pulse to the alarm card. The alarm store-card is the ONLY
+   surface that carries `data-band="red-alarm"` (PerStoreRow → Card band, driven
+   by isSpendAlarm). Gated by `no-preference` so the keyframe binds ONLY for
+   users who haven't asked for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .glass[data-band="red-alarm"] {
+    animation: alarmPulse 1.8s ease-in-out infinite;
+  }
 }
 
 /* ===========================================================================
