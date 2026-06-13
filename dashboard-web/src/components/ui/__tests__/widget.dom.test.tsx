@@ -126,6 +126,15 @@ describe('<Widget>', () => {
   // Contract hardening (reviewer flag) — a caller's stray spread must NOT
   // clobber the band/freshness the Widget owns. The explicit props are set
   // AFTER `{...rest}` in Widget.tsx, so the resolved values win.
+  //
+  // NOTE (2026-06-13): the resolved band now lives on the VALUE span, not the
+  // Card root. `.glass[data-band]` is the vivid STORE-card recipe (opacity:0
+  // mount-entrance) so a data-band on a KPI Widget root rendered it invisible —
+  // the Card root therefore carries NO data-band at all. `data-freshness` IS
+  // still Widget-owned on the root. So this guard now asserts: the resolved band
+  // ('green') lands on the value span; a stray spread data-band="red" reaches
+  // NEITHER the root (no data-band) nor the value span (the Widget-owned band wins);
+  // and the stray data-freshness="fresh" loses to the forwarded "stale" on the root.
   it('(h) a stray spread data-band/data-freshness does NOT clobber the Widget-owned values', () => {
     const { container } = render(
       <Widget
@@ -140,7 +149,13 @@ describe('<Widget>', () => {
       />,
     );
     const root = container.querySelector('[data-testid="widget-spread"]');
-    expect(root?.getAttribute('data-band')).toBe('green'); // resolved band wins
+    // Resolved band ('green') is on the value span, never red, never the stray value.
+    const value = container.querySelector('[data-band="green"]');
+    expect(value).not.toBeNull();
+    expect(container.querySelector('[data-band="red"]')).toBeNull();
+    // The Card ROOT carries NO data-band (would make `.glass[data-band]` invisible).
+    expect(root?.hasAttribute('data-band')).toBe(false);
+    // Freshness IS root-owned: the forwarded prop wins over the stray spread.
     expect(root?.getAttribute('data-freshness')).toBe('stale'); // forwarded prop wins
   });
 });

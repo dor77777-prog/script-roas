@@ -1,5 +1,38 @@
 import clsx, { type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { extendTailwindMerge } from 'tailwind-merge';
+
+// The Horizon type-ramp utilities (`text-fs-2xs` … `text-fs-2xl`, declared under
+// tailwind `fontSize`) are FONT-SIZE classes. Stock tailwind-merge doesn't know the
+// `fs-*` token, so it mis-grouped `text-fs-*` as a text-COLOR and silently dropped a
+// real colour: e.g. `<Button variant="primary" className="… text-fs-2xs">` lost its
+// `text-accent-fg`, rendering navy ink on the accent button (and, in the reverse
+// order, a colour could drop the size). Registering `text-fs-*` in the `font-size`
+// group makes them conflict with each other / `text-xs` but NEVER with a text colour.
+//
+// The list MUST mirror the full `fontSize` ramp in tailwind.config.ts — including
+// `fs-md` (used in CustomerValueTab as `text-fs-base sm:text-fs-md`). Any omitted
+// size stays mis-grouped as a colour and re-introduces the dropped-colour bug for
+// that one size, so keep this in sync with the config's `fontSize` keys.
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      'font-size': [
+        {
+          text: [
+            'fs-2xs',
+            'fs-xs',
+            'fs-sm',
+            'fs-base',
+            'fs-md',
+            'fs-lg',
+            'fs-xl',
+            'fs-2xl',
+          ],
+        },
+      ],
+    },
+  },
+});
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

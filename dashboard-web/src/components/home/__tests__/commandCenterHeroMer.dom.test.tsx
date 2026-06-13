@@ -37,7 +37,14 @@ describe('CommandCenterHero MER framing (2026-06-02)', () => {
 
   it('the band is unchanged (green for 2.8x)', () => {
     const { getByTestId } = render(<CommandCenterHero current={PERIOD} rangeLabel="היום" />);
-    expect(getByTestId('hero-roas').getAttribute('data-band')).toBe('green');
+    // `hero-roas` is the Card ROOT (the testid spreads onto it). The band now lives
+    // on the value SPAN inside it, NOT the root: `.glass[data-band]` is the vivid
+    // store-card recipe (opacity:0 mount-entrance) so a root data-band rendered the
+    // MER tile invisible (fixed 2026-06-13). Assert the band on the value span and
+    // that the root carries no data-band.
+    const card = getByTestId('hero-roas');
+    expect(card.querySelector('[data-band="green"]')).not.toBeNull();
+    expect(card.getAttribute('data-band')).toBeNull();
   });
 });
 

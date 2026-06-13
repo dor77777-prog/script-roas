@@ -52,9 +52,11 @@ export interface WidgetProps
   /**
    * When supplied, classify this ROAS-like ratio through `bandForRoas` and
    * colour the value + badge + tag with the operator-locked band colour. The
-   * resolved band is also mirrored onto the Card root's `data-band` (so DOM
-   * tests / future CSS can target the whole widget, matching the prior banded
-   * MER hero card's contract).
+   * resolved band is mirrored onto the VALUE `<span>`'s `data-band` for DOM
+   * tests / future CSS — but DELIBERATELY NOT onto the Card root: the
+   * `.glass[data-band]` rule is the vivid store-card recipe (opacity:0
+   * mount-entrance gated on `data-mounted`, which a KPI Widget never sets), so a
+   * root `data-band` rendered the banded KPI fully invisible (fixed 2026-06-13).
    */
   bandRoas?: number;
   /**
@@ -164,11 +166,17 @@ export function Widget({
     <Card
       className={cn('!flex-row items-center gap-4', className)}
       {...domRest}
-      // Set AFTER `{...domRest}` (which has already had any stray
-      // data-band/data-freshness stripped above) so these Widget-owned values
-      // win unconditionally — `data-band` resolved from `bandRoas`, `freshness`
-      // forwarded to the Card → `data-freshness` desaturation fade.
-      data-band={band ?? undefined}
+      // `freshness` is set AFTER `{...domRest}` (stray data-freshness already stripped
+      // above) so the Widget-owned value wins → the Card's `data-freshness` fade.
+      //
+      // `data-band` is DELIBERATELY NOT set on the Card root. The `.glass[data-band]`
+      // rule is the vivid STORE-card recipe (band gradient + an `opacity:0`
+      // mount-entrance that only reveals once `data-mounted="true"` is set). A KPI
+      // Widget is a NEUTRAL card that band-colours only its icon-circle, value text +
+      // tag — so putting `data-band` here made the one banded KPI (MER, and the
+      // Campaigns ROAS summary tile) render at `opacity:0`, i.e. fully invisible.
+      // (Fixed 2026-06-13.) The band stays mirrored on the value <span> below for
+      // DOM-test targeting.
       freshness={freshness}
     >
       {/* Circular icon badge. `[&>svg]:h-5 [&>svg]:w-5` keeps the icon a

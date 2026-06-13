@@ -9,8 +9,12 @@
 // correctly for every state — which is why the operator locked it.
 //
 // Pins (per the plan): MER 2.79 ⇒ green band; MER 2.3 ⇒ orange band.
-//   • the band is applied to the value (data-band on the value span) AND to
-//     the widget root (mirrored data-band), matching the prior banded MER card,
+//   • the band is applied to the value (data-band on the value SPAN only). The
+//     Card ROOT deliberately does NOT carry data-band: `.glass[data-band]` is the
+//     vivid STORE-card recipe (band gradient + an opacity:0 mount-entrance that
+//     only reveals on data-mounted="true"), which a KPI Widget never sets — so a
+//     root data-band rendered the banded MER tile at opacity:0 = invisible (fixed
+//     2026-06-13). The band lives on the value span (+ icon-circle + tag) instead,
 //   • the icon-circle takes the band tint + the gauge icon takes the band
 //     colour (the icon-circle is the badge span carrying the lucide-gauge svg),
 //   • the canonical BAND_TAG_LABEL pill renders (no invented wording),
@@ -50,12 +54,14 @@ describe('MER band-gauge widget', () => {
     expect(bandForRoas(2.3)).toBe('orange');
   });
 
-  it('MER 2.79 → GREEN band on the widget root + value', () => {
+  it('MER 2.79 → GREEN band on the value span (NOT the card root)', () => {
     const widget = renderMer(2.79);
-    expect(widget.getAttribute('data-band')).toBe('green');
-    // The value span mirrors the band too.
+    // The band lives on the value span.
     const value = widget.querySelector('[data-band="green"]');
     expect(value).not.toBeNull();
+    // The card ROOT must NOT carry data-band — `.glass[data-band]` would make the
+    // KPI tile render at opacity:0 (invisible MER). Regression guard, fixed 2026-06-13.
+    expect(widget.getAttribute('data-band')).toBeNull();
   });
 
   it('MER 2.79 → green band-tag pill with the canonical locked wording', () => {
@@ -78,9 +84,9 @@ describe('MER band-gauge widget', () => {
 
   it('reads correctly for a NON-green band too: MER 2.3 → ORANGE everywhere', () => {
     const widget = renderMer(2.3);
-    // Root + value band.
-    expect(widget.getAttribute('data-band')).toBe('orange');
+    // Band on the value span; the card root must NOT carry data-band (see above).
     expect(widget.querySelector('[data-band="orange"]')).not.toBeNull();
+    expect(widget.getAttribute('data-band')).toBeNull();
     // Orange tag pill with canonical wording.
     const tag = widget.querySelector('.band-chip.chip-orange');
     expect(tag).not.toBeNull();

@@ -93,13 +93,18 @@ describe('<CommandCenterHero>', () => {
     expect(featured.textContent).not.toContain('$4,847');
   });
 
-  it('only the MER widget carries the band signal (data-band on its root + value)', () => {
+  it('only the MER widget carries the band signal (data-band on the VALUE span, not the root)', () => {
     const { getByTestId } = render(
       <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
     );
-    // MER (hero-roas) is the sole banded KPI — root mirrors the band.
-    expect(getByTestId('hero-roas').getAttribute('data-band')).toBe('green');
-    // The other KPI widgets are brand-icon (un-banded) widgets.
+    // MER (hero-roas) is the sole banded KPI. The band lives on the value SPAN —
+    // the Card ROOT must NOT carry data-band, since `.glass[data-band]` is the
+    // vivid store-card recipe (opacity:0 mount-entrance) that would make the KPI
+    // tile invisible (fixed 2026-06-13).
+    const mer = getByTestId('hero-roas');
+    expect(mer.querySelector('[data-band="green"]')).not.toBeNull();
+    expect(mer.getAttribute('data-band')).toBeNull();
+    // The other KPI widgets are brand-icon (un-banded) widgets — no data-band anywhere.
     for (const id of [
       'hero-spend',
       'hero-revenue',
@@ -109,6 +114,7 @@ describe('<CommandCenterHero>', () => {
       'hero-cogs',
     ]) {
       expect(getByTestId(id).getAttribute('data-band')).toBeNull();
+      expect(getByTestId(id).querySelector('[data-band]')).toBeNull();
     }
   });
 
@@ -132,12 +138,15 @@ describe('<CommandCenterHero>', () => {
     expect(getByTestId('hero-net-profit').textContent).toContain('30 ימים');
   });
 
-  it('red-band MER flips the MER widget to data-band="red" (operating profit stays un-banded)', () => {
+  it('red-band MER flips the MER widget value span to data-band="red" (operating profit stays un-banded)', () => {
     const red: CommandCenterPeriod = { ...PERIOD_GREEN, roas: 1.4 };
     const { getByTestId } = render(
       <CommandCenterHero current={red} rangeLabel="היום" />,
     );
-    expect(getByTestId('hero-roas').getAttribute('data-band')).toBe('red');
+    // Band on the value span; root carries none (see .glass[data-band] note above).
+    const mer = getByTestId('hero-roas');
+    expect(mer.querySelector('[data-band="red"]')).not.toBeNull();
+    expect(mer.getAttribute('data-band')).toBeNull();
     // Operating profit is a brand-icon widget — never banded.
     expect(getByTestId('hero-net-profit').getAttribute('data-band')).toBeNull();
   });
@@ -291,9 +300,15 @@ describe('<CommandCenterHero> — NC-ROAS / nCAC subordinate tile', () => {
     const { getByTestId } = render(
       <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" newCustomer={NC} />,
     );
-    // hero MER widget stays green (driven by current.roas = 2.8)
-    expect(getByTestId('hero-roas').getAttribute('data-band')).toBe('green');
-    // subordinate tile is orange (driven by its own ncRoas = 2.1)
+    // hero MER widget stays green (driven by current.roas = 2.8). The MER tile is a
+    // <Widget>, so its band lives on the VALUE span — the Card root carries no
+    // data-band (the `.glass[data-band]` opacity:0 recipe would hide a KPI Widget;
+    // fixed 2026-06-13). The NC tile below is a real banded <Card band=…> which DOES
+    // wire up data-mounted, so it legitimately keeps data-band on its root.
+    const mer = getByTestId('hero-roas');
+    expect(mer.querySelector('[data-band="green"]')).not.toBeNull();
+    expect(mer.getAttribute('data-band')).toBeNull();
+    // subordinate tile is orange (driven by its own ncRoas = 2.1), on the Card root.
     expect(getByTestId('hero-nc-roas').getAttribute('data-band')).toBe('orange');
   });
 
