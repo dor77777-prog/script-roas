@@ -944,18 +944,6 @@ input[type="number"] {
 }
 .roas-today-pulse { animation: roas-today-pulse 2.4s ease-in-out infinite; }
 
-/* Mobile A3 — sliding range-pill thumb. The bouncy curve mirrors the mockup
-   (.pills .thumb: .28s cubic-bezier(.34,1.4,.5,1)) so the slab "overshoots"
-   slightly as it slides between pills. The opacity (thumb show/hide for
-   non-featured presets) eases in tandem. The project-wide
-   prefers-reduced-motion sweep above collapses both transitions to 0.01ms, so
-   the thumb snaps to the active pill with no motion when reduce is on. */
-.filters-pill-thumb {
-  transition:
-    inset-inline-start 0.28s cubic-bezier(0.34, 1.4, 0.5, 1),
-    width 0.28s cubic-bezier(0.34, 1.4, 0.5, 1),
-    opacity 0.2s ease;
-}
 @media (prefers-reduced-motion: reduce) {
   /* Paint the line at rest (no dash sweep) and freeze the pulse. */
   .roas-line-draw { animation: none !important; stroke-dashoffset: 0 !important; }
