@@ -52,6 +52,10 @@ describe('InsightActions', () => {
     const primary = screen.getByRole('button', { name: /פתח קמפיין/ });
     expect(primary).toBeInTheDocument();
     expect(primary.tagName).toBe('BUTTON');
+    // Horizon re-skin (W3.7) — the primary CTA adopts the brand button recipe
+    // (mockup's filled "פתח"); the <Button variant="primary"> carries the
+    // accent-btn fill, so the rendered class set must include it.
+    expect(primary.className).toContain('bg-accent-btn');
 
     // Secondary — anchor (external link), deep-links to Meta with the
     // account-aware URL. The label uses Hebrew + the bdi-wrapped
@@ -62,6 +66,11 @@ describe('InsightActions', () => {
     expect(secondary.getAttribute('href')).toContain('act=act_123456');
     expect(secondary.getAttribute('target')).toBe('_blank');
     expect(secondary.getAttribute('rel')).toBe('noopener noreferrer');
+    // Re-skin (W3.7) — the deep-link is now routed through the <Button>
+    // primitive (asChild → renders the <a>), so it inherits the secondary
+    // recipe + a real focus-visible ring instead of the old hand-rolled
+    // border/hover classes.
+    expect(secondary.className).toContain('focus-visible:ring');
   });
 
   it('clicking primary dispatches `roas-open-campaign-drawer` with the typed detail', () => {

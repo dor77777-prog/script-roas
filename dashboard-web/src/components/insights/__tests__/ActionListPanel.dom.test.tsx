@@ -94,4 +94,27 @@ describe('ActionListPanel', () => {
     expect(within(panel).getByText(/קמפיין A כבה/)).toBeInTheDocument();
     expect(panel.querySelector('.text-status-redFg')).not.toBeNull();
   });
+
+  // ── Horizon re-skin (W3.7) ──────────────────────────────────────────────
+  it('header uses the neutral Horizon icon-circle token, NOT an accent-gradient band', () => {
+    const { container } = render(
+      <ActionListPanel insights={[CRIT]} onMark={() => {}} adAccounts={{}} />,
+    );
+    // The accent-gradient header band was removed in the re-skin.
+    expect(container.querySelector('[class*="bg-gradient-to-l"]')).toBeNull();
+    // The lead icon now sits in the canonical Widget icon-circle
+    // (bg-lightPrimary / dark:bg-navy-700), the same token KPI widgets use.
+    expect(container.querySelector('.bg-lightPrimary.rounded-full')).not.toBeNull();
+  });
+
+  it('renders icon glyphs only (lucide SVGs) — no emoji characters as UI icons', () => {
+    const { container } = render(
+      <ActionListPanel insights={[CRIT, OPP]} onMark={() => {}} adAccounts={{}} />,
+    );
+    // Every severity / action icon is a lucide <svg>; the rendered text must
+    // carry no emoji codepoint (Horizon rule: lucide, never emoji).
+    expect(container.querySelectorAll('svg').length).toBeGreaterThan(0);
+    const emoji = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u;
+    expect(emoji.test(container.textContent ?? '')).toBe(false);
+  });
 });

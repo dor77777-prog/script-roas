@@ -157,3 +157,36 @@ describe('InsightsBoard — data wiring (range-scoped fetch)', () => {
     expect(campaignsUrl).toMatch(/from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}/);
   });
 });
+
+describe('InsightsBoard — Horizon re-skin (W3.7)', () => {
+  it('renders neutral Horizon headers (no accent-gradient band) and lucide-only icons (no emoji)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/api/campaigns')) return jsonResponse(CAMPAIGNS);
+      if (url.includes('/api/data')) return jsonResponse({ rows: [], stores: [], lastUpdated: `${TODAY}T00:00:00.000Z` });
+      if (url.includes('/api/ads')) return jsonResponse({ rows: [], lastUpdated: `${TODAY}T00:00:00.000Z` });
+      if (url.includes('/api/products')) return jsonResponse({ rows: [], lastUpdated: `${TODAY}T00:00:00.000Z` });
+      return jsonResponse({ rows: [] });
+    }));
+
+    const { container } = render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <InsightsBoard data={{ rows: [], stores: [] } as unknown as DashboardData} />
+      </SWRConfig>,
+    );
+
+    // Wait until the surface has data (the went-dark insight surfaced).
+    await waitFor(() =>
+      expect(screen.getByTestId('action-list-panel').textContent).toContain('כבה'),
+    );
+
+    // The accent-gradient header band (old recipe) is gone from BOTH the
+    // ActionListPanel header and the board header.
+    expect(container.querySelector('[class*="bg-gradient-to-l"]')).toBeNull();
+    // The board + action-list icons are lucide <svg>s; no emoji codepoint
+    // leaks into the rendered text (Horizon rule: lucide, never emoji).
+    expect(container.querySelectorAll('svg').length).toBeGreaterThan(0);
+    const emoji = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u;
+    expect(emoji.test(container.textContent ?? '')).toBe(false);
+  });
+});

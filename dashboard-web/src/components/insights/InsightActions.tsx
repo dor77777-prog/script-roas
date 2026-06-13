@@ -149,13 +149,13 @@ export function InsightActions({
         <HelpTooltip content={campaignName ? `פתח את ${campaignName} בלוח הקמפיין` : 'פתח קמפיין'}>
           <Button
             type="button"
-            variant="secondary"
+            variant="primary"
             size="sm"
             onClick={handlePrimary}
-            className="gap-1 px-2 py-1 h-auto text-[11px] font-semibold"
+            className="gap-1 px-3 py-1 h-auto rounded-full text-fs-2xs font-bold"
             aria-label={campaignName ? `פתח קמפיין: ${campaignName}` : 'פתח קמפיין'}
           >
-            <ArrowUpRight size={11} />
+            <ArrowUpRight size={12} />
             פתח קמפיין
           </Button>
         </HelpTooltip>
@@ -163,23 +163,28 @@ export function InsightActions({
 
       {deepLink && isAdsPlatform && (
         <HelpTooltip content={`נפתח ב-${PLATFORM_LABEL[platform]} Ads Manager בלשונית חדשה`}>
-          <a
-            href={deepLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(
-              'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium',
-              'border border-glass-edge text-ink-secondary',
-              'hover:bg-glass-1/80 hover:text-ink hover:border-glass-edge',
-              'transition-colors',
-            )}
-            aria-label={`פתח ב-${PLATFORM_LABEL[platform]} Ads Manager`}
+          {/* Re-skin W3.7 — was a hand-rolled <a> with raw border/hover classes.
+              Now routed through the <Button> primitive (asChild → renders the
+              anchor) so it inherits the canonical secondary recipe + focus-visible
+              ring, while keeping the external-link semantics (target/rel/href). */}
+          <Button
+            asChild
+            variant="secondary"
+            size="sm"
+            className="gap-1 px-3 py-1 h-auto rounded-full text-fs-2xs font-medium"
           >
-            <ExternalLink size={11} />
-            <span>
-              פתח ב-<bdi dir="ltr">{PLATFORM_LABEL[platform]} Ads Manager</bdi>
-            </span>
-          </a>
+            <a
+              href={deepLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`פתח ב-${PLATFORM_LABEL[platform]} Ads Manager`}
+            >
+              <ExternalLink size={12} />
+              <span>
+                פתח ב-<bdi dir="ltr">{PLATFORM_LABEL[platform]} Ads Manager</bdi>
+              </span>
+            </a>
+          </Button>
         </HelpTooltip>
       )}
     </div>

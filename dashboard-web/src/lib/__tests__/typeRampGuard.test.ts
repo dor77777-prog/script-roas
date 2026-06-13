@@ -83,7 +83,9 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   'FirstClickCoverageChip.tsx': 1,
   'GoalTracker.tsx': 23,
   'HealthScoreBadge.tsx': 1,
-  'InsightsBoard.tsx': 2,
+  // InsightsBoard.tsx — DRAINED to 0 in Wave 3.7 (Horizon insight-surfaces
+  // re-skin: sub-floor scope badge + severity pill → text-fs-2xs ramp token;
+  // removed from allowlist).
   'MetaShopifyReconciliation.tsx': 5,
   'MonthlyTables.tsx': 1,
   'PaymentMethodsTab.tsx': 1,
@@ -101,7 +103,8 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   'home/RoasTargetChart.tsx': 4,
   'home/StoreDetailModal.tsx': 2,
   'home/UnknownBucketPanel.tsx': 1,
-  'insights/ActionListPanel.tsx': 1,
+  // insights/ActionListPanel.tsx — DRAINED to 0 in Wave 3.7 (Horizon
+  // insight-surfaces re-skin: sub-floor scope badge → text-fs-2xs; removed).
   'operator/ReconcilePanel.tsx': 1,
   'ui/ChartAnnotationPins.tsx': 1,
   'ui/InsightCard.tsx': 1,

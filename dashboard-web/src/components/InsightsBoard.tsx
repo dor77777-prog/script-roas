@@ -315,20 +315,22 @@ export function InsightsBoard({ data }: Props) {
           'w-full justify-start h-auto',
           'px-4 sm:px-6 py-4 sm:py-5',
           'border-b border-glass-edge',
-          'bg-gradient-to-l from-accent-bg via-glass-1 to-glass-1',
-          'hover:from-accent-soft hover:to-glass-2/40',
+          // Re-skin W3.7 — was an accent-gradient band; now the neutral Horizon
+          // header recipe (transparent over the Card surface + a subtle hover
+          // wash) so it matches the consistent home-card headers.
+          'hover:bg-glass-2/40',
         )}
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-accent-bg text-accent shrink-0">
+            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-lightPrimary text-brand-500 dark:bg-navy-700 dark:text-ink shrink-0">
               <Sparkles size={18} />
             </span>
             <div className="min-w-0">
               <Heading level="hero">
                 תובנות חכמות
               </Heading>
-              <div className="text-[11px] sm:text-xs text-ink-muted mt-0.5 leading-tight">
+              <div className="text-fs-2xs sm:text-fs-xs text-ink-muted mt-0.5 leading-tight">
                 {loading && (
                   <span className="inline-flex items-center gap-1 me-2">
                     <RefreshCw size={11} className="animate-spin" />
@@ -381,7 +383,7 @@ export function InsightsBoard({ data }: Props) {
         >
           <AlertTriangle size={28} className="mx-auto mb-2 text-ink-subtle" />
           <div className="text-sm font-semibold">לא ניתן לטעון תובנות כרגע.</div>
-          <div className="text-[11px] mt-1 text-ink-muted">
+          <div className="text-fs-2xs mt-1 text-ink-muted">
             אחת מקריאות הנתונים נכשלה — זה לא אומר שהכול תקין. נסה לרענן בעוד רגע.
           </div>
         </div>
@@ -391,7 +393,7 @@ export function InsightsBoard({ data }: Props) {
         <div className="px-4 sm:px-5 py-10 text-center text-ink-muted">
           <Sparkles size={28} className="mx-auto mb-2 text-ink-subtle" />
           <div className="text-sm">אין תובנות חדשות לרגע זה.</div>
-          <div className="text-[11px] mt-1">
+          <div className="text-fs-2xs mt-1">
             המערכת תזהה אנומליות והזדמנויות ברגע שייווצרו.
           </div>
         </div>
@@ -437,7 +439,7 @@ export function InsightsBoard({ data }: Props) {
 
       {/* Hidden / muted insights — only meaningful when the board is open */}
       {boardExpanded && hiddenCount > 0 && (
-        <div className="border-t border-glass-edge bg-glass-2/30">
+        <div className="border-t border-glass-edge bg-pill-track/40">
           <Button
             variant="ghost"
             onClick={() => setShowHidden(v => !v)}
@@ -448,7 +450,7 @@ export function InsightsBoard({ data }: Props) {
               <span className="font-medium">
                 {hiddenCount} תובנות מוסתרות
               </span>
-              <span className="text-ink-muted text-[11px]">
+              <span className="text-ink-muted text-fs-2xs">
                 (סומנו כבוצעו או הוסתרו ידנית)
               </span>
             </span>
@@ -465,7 +467,7 @@ export function InsightsBoard({ data }: Props) {
                     <span
                       className={cn(
                         'inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0 mt-0.5 opacity-60',
-                        meta.color, 'bg-glass-1 ring-1 ring-inset', meta.border,
+                        meta.color, 'bg-pill-track ring-1 ring-inset', meta.border,
                       )}
                     >
                       {meta.icon}
@@ -474,7 +476,7 @@ export function InsightsBoard({ data }: Props) {
                       <div className="text-sm font-medium text-ink-secondary leading-snug truncate">
                         {ins.title}
                       </div>
-                      <div className="text-[11px] text-ink-muted mt-0.5">
+                      <div className="text-fs-2xs text-ink-muted mt-0.5">
                         {stateLabel}{st?.at ? ` · ${relativeTime(st.at)}` : ''}
                       </div>
                     </div>
@@ -482,7 +484,7 @@ export function InsightsBoard({ data }: Props) {
                       <Button
                         variant="ghost"
                         onClick={() => restoreInsight(ins.id)}
-                        className="gap-1 px-2 py-1 h-auto text-[11px] font-semibold text-accent hover:bg-accent-bg shrink-0"
+                        className="gap-1 px-2 py-1 h-auto text-fs-2xs font-semibold text-accent hover:bg-accent-bg shrink-0"
                       >
                         <Undo2 size={11} />
                         שחזר
@@ -542,7 +544,7 @@ function InsightGroupBody({
             variant="ghost"
             onClick={() => setShowAll(v => !v)}
             className={cn(
-              'h-auto p-0 text-[11px] sm:text-xs font-medium gap-1',
+              'h-auto p-0 text-fs-2xs sm:text-fs-xs font-medium gap-1',
               meta.color, 'hover:opacity-80',
             )}
           >
@@ -585,7 +587,7 @@ function InsightBoardRow({
     <div className="flex items-start justify-between gap-2 flex-wrap">
       <span>{insight.title}</span>
       {insight.scope && (
-        <span className="inline-block text-[10px] sm:text-[11px] font-medium text-ink-muted bg-glass-1/80 border border-glass-edge px-1.5 py-0.5 rounded shrink-0">
+        <span className="inline-block text-fs-2xs font-medium text-ink-muted bg-pill-track border border-glass-edge px-1.5 py-0.5 rounded shrink-0">
           {insight.scope}
         </span>
       )}
@@ -611,7 +613,7 @@ function InsightBoardRow({
           variant="secondary"
           onClick={() => onMark(insight, 'done')}
           className={cn(
-            'gap-1 px-2 py-1 h-auto text-[11px] font-medium',
+            'gap-1 px-2 py-1 h-auto text-fs-2xs font-medium',
             'text-ink-secondary hover:text-status-greenFg hover:border-status-green hover:bg-status-greenBg',
           )}
         >
@@ -624,7 +626,7 @@ function InsightBoardRow({
         <Button
           variant="ghost"
           onClick={() => onMark(insight, 'ignored')}
-          className="gap-1 px-2 py-1 h-auto text-[11px] font-medium text-ink-muted hover:text-ink"
+          className="gap-1 px-2 py-1 h-auto text-fs-2xs font-medium text-ink-muted hover:text-ink"
         >
           <ArchiveX size={12} />
           הסתר
@@ -681,7 +683,7 @@ function SeverityBadges({
               className={cn(
                 'inline-flex items-center gap-1 rounded-full',
                 compact ? 'px-1.5 py-0.5' : 'px-2 py-0.5',
-                'text-[10px] sm:text-[11px] font-bold tabular-nums',
+                'text-fs-2xs font-bold tabular-nums',
                 meta.badge,
               )}
             >

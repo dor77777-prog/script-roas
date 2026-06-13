@@ -79,14 +79,17 @@ export function ActionListPanel({ insights, loading, error, onMark, adAccounts, 
 
   return (
     <Card data-testid="action-list-panel" className={cn('!p-0 overflow-hidden', className)}>
-      {/* Header — accent-tinted, mirrors the board header's visual weight. */}
-      <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-glass-edge bg-gradient-to-l from-accent-bg via-glass-1 to-glass-1">
-        <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-accent-bg text-accent shrink-0">
+      {/* Header — Horizon recipe (W3.7): a neutral icon-circle (Widget token:
+          bg-lightPrimary / dark:bg-navy-700) + title + count chip, on a hairline
+          divider. Replaces the old accent-gradient band so the surface matches
+          the consistent Horizon header used across the home cards. */}
+      <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-glass-edge">
+        <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-lightPrimary text-brand-500 dark:bg-navy-700 dark:text-ink shrink-0">
           <Zap size={18} />
         </span>
         <div className="min-w-0 flex-1">
           <Heading level="hero">פעולות דחופות כרגע</Heading>
-          <div className="text-[11px] sm:text-xs text-ink-muted mt-0.5 leading-tight">
+          <div className="text-fs-2xs sm:text-fs-xs text-ink-muted mt-0.5 leading-tight">
             {count > 0
               ? 'המהלכים החשובים ביותר לטיפול — מדורגים לפי דחיפות'
               : 'הרשימה מתעדכנת אוטומטית כשמשהו דורש את תשומת ליבך'}
@@ -94,7 +97,7 @@ export function ActionListPanel({ insights, loading, error, onMark, adAccounts, 
         </div>
         <span
           data-testid="action-list-count"
-          className="inline-flex items-center justify-center min-w-[26px] h-6 px-2 text-xs font-bold rounded-full tabular-nums bg-accent-soft text-accent-deep shrink-0"
+          className="inline-flex items-center justify-center min-w-[26px] h-6 px-2 text-fs-xs font-bold rounded-full tabular-nums bg-accent-soft text-accent-deep shrink-0"
         >
           {count}
         </span>
@@ -115,7 +118,7 @@ export function ActionListPanel({ insights, loading, error, onMark, adAccounts, 
             className="px-5 sm:px-6 py-6 flex items-center gap-3"
           >
             <AlertTriangle size={16} className="shrink-0 text-ink-muted" aria-hidden />
-            <div className="text-[12px] sm:text-sm text-ink-secondary">
+            <div className="text-fs-xs sm:text-fs-sm text-ink-secondary">
               <span className="text-ink font-semibold">לא ניתן לטעון תובנות כרגע.</span>{' '}
               <span className="text-ink-muted">
                 אחת מקריאות הנתונים נכשלה — זה לא אומר שהכול תקין. נסה לרענן בעוד רגע.
@@ -128,7 +131,7 @@ export function ActionListPanel({ insights, loading, error, onMark, adAccounts, 
               <span className="absolute inset-0 rounded-full bg-status-greenBg animate-ping" />
               <span className="relative inline-flex w-full h-full rounded-full bg-status-green" />
             </span>
-            <div className="text-[12px] sm:text-sm text-ink-secondary">
+            <div className="text-fs-xs sm:text-fs-sm text-ink-secondary">
               <span className="text-ink font-semibold">אין פעולות דחופות כרגע.</span>{' '}
               <span className="text-ink-muted">הכול נראה תקין.</span>
             </div>
@@ -163,7 +166,7 @@ function ActionRow({
     <div className="flex items-start justify-between gap-2 flex-wrap">
       <span>{insight.title}</span>
       {insight.scope && (
-        <span className="inline-block text-[10px] sm:text-[11px] font-medium text-ink-muted bg-glass-1/80 border border-glass-edge px-1.5 py-0.5 rounded shrink-0">
+        <span className="inline-block text-fs-2xs font-medium text-ink-muted bg-pill-track border border-glass-edge px-1.5 py-0.5 rounded shrink-0">
           {insight.scope}
         </span>
       )}
@@ -177,7 +180,7 @@ function ActionRow({
           variant="secondary"
           onClick={() => onMark(insight, 'done')}
           className={cn(
-            'gap-1 px-2 py-1 h-auto text-[11px] font-medium',
+            'gap-1 px-2 py-1 h-auto text-fs-2xs font-medium',
             'text-ink-secondary hover:text-status-greenFg hover:border-status-green hover:bg-status-greenBg',
           )}
         >
@@ -189,7 +192,7 @@ function ActionRow({
         <Button
           variant="ghost"
           onClick={() => onMark(insight, 'ignored')}
-          className="gap-1 px-2 py-1 h-auto text-[11px] font-medium text-ink-muted hover:text-ink"
+          className="gap-1 px-2 py-1 h-auto text-fs-2xs font-medium text-ink-muted hover:text-ink"
         >
           <ArchiveX size={12} />
           הסתר
