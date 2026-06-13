@@ -331,15 +331,26 @@
      8px/9px offenders are an allowlisted baseline that later waves drain).
 
      Step → size (≈px @16) → intended use:
-       --fs-2xs   0.656rem  ~10.5px  micro-label / chip / uppercase eyebrow (FLOOR)
+       --fs-2xs   0.65625rem ~10.5px micro-label / chip / uppercase eyebrow (FLOOR)
        --fs-xs    0.75rem   ~12px    dense meta, table sub-text, freshness chip
        --fs-sm    0.875rem  ~14px    secondary body, table cell, form labels
        --fs-base  1rem      ~16px    default body copy
        --fs-md    1.125rem  ~18px    emphasised body / small KPI value
        --fs-lg    1.375rem  ~22px    card title / per-store KPI value (Rubik)
        --fs-xl    1.75rem   ~28px    section heading / hero secondary metric
-       --fs-2xl   2.25rem   ~36px    hero headline metric (Rubik)               */
-  --fs-2xs:  0.656rem;
+       --fs-2xl   2.25rem   ~36px    hero headline metric (Rubik)
+
+     ──────────────────────────────────────────────────────────────────────
+     HOW TO CONSUME — read this before reaching for `text-xl`/`text-sm`/etc.
+     These vars are the CANONICAL Horizon type scale. Consume them via the
+     `text-fs-*` Tailwind utilities (e.g. `text-fs-xl` → --fs-xl → 28px),
+     wired in tailwind.config.ts `fontSize`. The BARE `text-xs/sm/lg/xl/2xl`
+     utilities are the LEGACY Tailwind scale and carry DIFFERENT values
+     (legacy text-xl = 1.25rem/20px, ramp --fs-xl = 1.75rem/28px). They
+     coexist on purpose so un-migrated components keep their old sizes; the
+     typography wave migrates consumers from bare text-* onto text-fs-*.
+     Do NOT assume `text-xl == var(--fs-xl)` — they are not the same.        */
+  --fs-2xs:  0.65625rem; /* exactly 10.5px @16px root — sits ON the floor */
   --fs-xs:   0.75rem;
   --fs-sm:   0.875rem;
   --fs-base: 1rem;

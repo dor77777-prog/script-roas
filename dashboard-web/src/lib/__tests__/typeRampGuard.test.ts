@@ -4,7 +4,7 @@
  * The micro-typography anarchy debt: components scatter arbitrary
  * `text-[Npx]` literals, several of them at 8px / 9px — BELOW the ~10.5px
  * legibility floor. Wave 1 establishes a canonical type ramp in globals.css
- * (--fs-2xs … --fs-2xl, smallest step 0.656rem ≈ 10.5px) and this guard is
+ * (--fs-2xs … --fs-2xl, smallest step 0.65625rem = 10.5px) and this guard is
  * the CI ratchet that keeps the floor: no NEW sub-10.5px text literal may
  * enter `src/components`, and the existing baseline may only SHRINK.
  *
@@ -36,6 +36,13 @@
  * NOTE: this guard polices the legibility FLOOR only. Migrating the many
  * already-legal `text-[10px]/[11px]/[12px]` literals onto ramp tokens is a
  * separate follow-on (font-size migration) and is intentionally out of scope.
+ *
+ * SANCTIONED PATH: the ramp is exposed as the `text-fs-*` Tailwind utilities
+ * (text-fs-2xs … text-fs-2xl, wired in tailwind.config.ts → var(--fs-*)).
+ * Those are NOT raw px literals so they are never flagged here; the smallest,
+ * text-fs-2xs (--fs-2xs = 0.65625rem = 10.5px), sits exactly on the floor.
+ * Prefer text-fs-* over bare text-* — the legacy text-* scale has DIFFERENT
+ * values (e.g. legacy text-xl = 20px vs ramp --fs-xl = 28px).
  */
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
@@ -43,7 +50,7 @@ import path from 'node:path';
 
 const COMPONENTS_DIR = path.resolve(__dirname, '..', '..', 'components');
 
-/** Legibility floor in px. The smallest ramp step (--fs-2xs) is 0.656rem ≈ this. */
+/** Legibility floor in px. The smallest ramp step (--fs-2xs) is 0.65625rem = this. */
 const FLOOR_PX = 10.5;
 
 // ---------------------------------------------------------------------------
@@ -209,7 +216,7 @@ describe('type-ramp guard — regression (off-baseline files must clear the floo
       throw new Error(
         `${regressions.length} sub-10.5px text literal(s) in NON-baseline component(s). ` +
           `Sub-10.5px text is below the legibility floor — use a type-ramp token ` +
-          `(smallest legal step var(--fs-2xs) = 0.656rem ≈ 10.5px) instead:\n  ${regressions
+          `(smallest legal step var(--fs-2xs) = 0.65625rem = 10.5px, via text-fs-2xs) instead:\n  ${regressions
             .slice(0, 60)
             .join('\n  ')}${regressions.length > 60 ? `\n  … +${regressions.length - 60} more` : ''}`,
       );

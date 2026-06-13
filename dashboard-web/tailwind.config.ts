@@ -252,7 +252,12 @@ const config: Config = {
       },
 
       fontSize: {
-        // Tighter than defaults; letter-spacing pulls in on display sizes.
+        // LEGACY Tailwind scale (un-migrated components). Tighter than
+        // defaults; letter-spacing pulls in on display sizes. These do NOT
+        // match the canonical Horizon type ramp (--fs-*) — e.g. text-xl here
+        // is 1.25rem/20px while --fs-xl is 1.75rem/28px. The typography wave
+        // migrates consumers from these bare names onto the `text-fs-*`
+        // utilities below; until then BOTH scales coexist deliberately.
         '2xs':  ['0.6875rem', { lineHeight: '0.95rem',  letterSpacing: '0.01em' }],
         'xs':   ['0.75rem',   { lineHeight: '1.05rem',  letterSpacing: '0.005em' }],
         'sm':   ['0.875rem',  { lineHeight: '1.3rem' }],
@@ -263,6 +268,20 @@ const config: Config = {
         '3xl':  ['1.875rem',  { lineHeight: '2.125rem', letterSpacing: '-0.018em' }],
         '4xl':  ['2.25rem',   { lineHeight: '2.5rem',   letterSpacing: '-0.022em' }],
         '5xl':  ['3rem',      { lineHeight: '3.25rem',  letterSpacing: '-0.026em' }],
+
+        // CANONICAL Horizon type ramp — generates `text-fs-*` utilities wired
+        // to the --fs-* CSS vars (single source of truth in globals.css).
+        // Distinct names so they NEVER collide with the legacy scale above:
+        // `text-fs-xl` = ramp 1.75rem/28px, `text-xl` = legacy 1.25rem/20px.
+        // Use these for all NEW type and as the migration target for old ones.
+        'fs-2xs':  'var(--fs-2xs)',
+        'fs-xs':   'var(--fs-xs)',
+        'fs-sm':   'var(--fs-sm)',
+        'fs-base': 'var(--fs-base)',
+        'fs-md':   'var(--fs-md)',
+        'fs-lg':   'var(--fs-lg)',
+        'fs-xl':   'var(--fs-xl)',
+        'fs-2xl':  'var(--fs-2xl)',
       },
 
       boxShadow: {
