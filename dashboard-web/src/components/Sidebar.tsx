@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Home, Zap, Users, Receipt, TrendingUp, Megaphone, Package, Table, LayoutGrid,
-  CreditCard, Cog, Sun, Moon, Monitor, Pin, PinOff, Target,
+  CreditCard, Cog, Sun, Moon, Monitor, Pin, PinOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from './ThemeProvider';
@@ -89,65 +89,6 @@ function RailTooltip({
 }
 
 /**
- * Bottom goal-entry card (Horizon recipe — mockup `.band-green` slab pinned at
- * the rail foot). Uses the `band="green"` glass treatment via raw data-band so
- * we get the green gradient + guaranteed-AA on-band white text/ink recipe from
- * globals.css (`.glass[data-band="green"]`), token-only.
- *
- * It is a NAVIGATIONAL entry point — the live, editable monthly-goal pacing
- * widget (GoalTracker) lives on the Home tab and owns the actual revenue ÷
- * target math (it needs DashboardData, which the standalone Sidebar doesn't
- * receive). Tapping the card jumps to Home where the real tracker renders, so
- * no information is lost; we never fabricate a live percentage here.
- *
- * Hidden on the collapsed icon-rail (no room for the slab); shown on the
- * expanded desktop rail + the mobile drawer.
- */
-function SidebarGoalCard({
-  monthLabel,
-  onActivate,
-}: {
-  monthLabel: string;
-  onActivate: () => void;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      onClick={onActivate}
-      data-testid="sidebar-goal-card"
-      className={cn(
-        'glass w-full h-auto cursor-pointer rounded-[var(--radius-card)] p-4',
-        // Override the ghost variant defaults: full-card block layout (not the
-        // centered inline-flex row) + the band card surface. `block text-start`
-        // wins over the base inline-flex/justify-center via twMerge.
-        'block text-start',
-        // The band recipe applies on-band colours only to specific child
-        // classes, so set the guaranteed-AA white on-band foreground explicitly
-        // on the whole card (token-driven; --on-band-green is white in both
-        // themes and clears AA on the deep green slab). Drop the ghost's
-        // hover:bg-glass-2 (would wash the green) in favour of a brightness lift.
-        'text-[var(--on-band-green)] hover:bg-transparent',
-        'transition-[filter,transform] duration-base hover:brightness-105 active:scale-[0.99]',
-        'focus-visible:ring-accent',
-      )}
-      data-band="green"
-      data-band-strength="strong"
-      data-mounted="true"
-      aria-label={`יעד חודשי · ${monthLabel} — פתח את מעקב היעד`}
-    >
-      <span className="flex items-center gap-2">
-        <Target size={14} aria-hidden />
-        <span className="text-xs font-bold opacity-90">יעד חודשי · {monthLabel}</span>
-      </span>
-      <span className="mt-1.5 block text-sm font-semibold leading-tight">
-        צפה ביעד החודשי ובקצב
-      </span>
-    </Button>
-  );
-}
-
-/**
  * Renders the full nav body (brand + tabs + footer controls). Shared between
  * the desktop right-rail (`md:` and up) and the mobile off-canvas drawer
  * (below `md:`). The `collapsed` mode only applies on desktop — on mobile
@@ -161,7 +102,6 @@ function SidebarBody({
   onTogglePin,
   onItemClick,
   variant,
-  monthLabel,
 }: {
   activeTab: TabKey;
   onTabChange: (key: TabKey) => void;
@@ -175,8 +115,6 @@ function SidebarBody({
   onItemClick?: () => void;
   /** 'desktop' = honours collapsed; 'mobile' = always expanded, no collapse toggle. */
   variant: 'desktop' | 'mobile';
-  /** Hebrew current-month label for the bottom goal card. */
-  monthLabel: string;
 }) {
   const { choice, setChoice } = useTheme();
   const isCollapsed = variant === 'desktop' && collapsed;
@@ -298,20 +236,6 @@ function SidebarBody({
         })}
       </nav>
 
-      {/* Bottom goal card (Horizon green slab) — expanded states only. */}
-      {!isCollapsed && (
-        <div className="px-4 pb-2 pt-1">
-          <SidebarGoalCard
-            monthLabel={monthLabel}
-            onActivate={() => {
-              // The live GoalTracker lives on Home; jump there.
-              onTabChange('home');
-              onItemClick?.();
-            }}
-          />
-        </div>
-      )}
-
       {/* Footer: operator + theme toggle + pin */}
       <div className="border-t border-[color-mix(in_oklab,var(--sidebar-fg)_12%,transparent)] px-2 py-3 space-y-1">
         <RailTooltip show={showTooltips} label="ניהול">
@@ -415,15 +339,6 @@ function SidebarBody({
   );
 }
 
-/** Hebrew label for the current calendar month (e.g. "יוני"). */
-function currentMonthLabelHe(): string {
-  try {
-    return new Intl.DateTimeFormat('he-IL', { month: 'long' }).format(new Date());
-  } catch {
-    return 'החודש';
-  }
-}
-
 /**
  * Desktop sidebar interaction model (Task 5.8 — Q10):
  *
@@ -466,7 +381,6 @@ export function Sidebar({
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const expanded = pinned || hoverExpanded;
-  const monthLabel = currentMonthLabelHe();
 
   const onMouseEnter = useCallback(() => {
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
@@ -552,7 +466,6 @@ export function Sidebar({
           pinned={pinned}
           onTogglePin={togglePin}
           variant="desktop"
-          monthLabel={monthLabel}
         />
       </aside>
 
@@ -609,7 +522,6 @@ export function Sidebar({
             onTogglePin={() => undefined}
             onItemClick={onMobileClose}
             variant="mobile"
-            monthLabel={monthLabel}
           />
         </SheetContent>
       </Sheet>
