@@ -34,6 +34,35 @@
   --chart-platform-organic: #14b8a6;  /* teal — mockup has no explicit organic; clear teal */
   --chart-platform-shopify: #0fb37a;  /* shopify = e-commerce green */
 
+  /* Payment-GATEWAY palette (reskin W5.1, design-debt #9 — DARK). The תשלומים
+     tab splits sales by gateway (credit / PayPal / other) and draws each as a
+     share-bar segment + small legend swatch + a PeriodRowsTable group-header
+     TEXT. These are PAYMENT entities, NOT ad-platform entities, so they get
+     their OWN tokens instead of borrowing the locked --chart-platform-* brand
+     hues. Previously PayPal painted --chart-platform-meta (#1877f2) — retuning
+     Meta would have silently recolored PayPal (same hue). Now PayPal carries
+     its OWN brand blue, decoupled from Meta.
+
+     Two-token-per-gateway pattern where text + fill need different lightness:
+       --gateway-*       = the GRAPHICAL FILL (bar segment + swatch). As a fill
+                           it must clear ≥3:1 against the card surface.
+       --gateway-*-ink   = the TEXT (group header). Must clear AA 4.5:1 on the
+                           table/card surface. A single blue can't satisfy both
+                           "light-on-dark fill" and the AA text bar in one value,
+                           so the ink is split per-theme while the fill is shared.
+
+     CONTRAST (worst-case = --glass-2, the card's lower-contrast gradient stop):
+       --gateway-paypal #0070ba  FILL  → dark 3.02:1, light 4.86:1  (≥3 ✓ both)
+       --gateway-paypal-ink (dark)  #3b97e0 TEXT → 5.01:1 on --glass-2 (≥4.5 ✓)
+       --gateway-credit = var(--accent)  FILL  → dark 3.28:1, light 6.62:1 (≥3 ✓)
+       --gateway-credit-ink = var(--accent-link) TEXT → dark 6.17:1, light 6.62:1
+       --gateway-other = var(--text-subtle)  neutral, fill+text → ≥5.29:1 both. */
+  --gateway-credit:     var(--accent);       /* brand violet (own fill) */
+  --gateway-credit-ink: var(--accent-link);  /* AA-safe accent text */
+  --gateway-paypal:     #0070ba;             /* PayPal brand blue — fill (both themes) */
+  --gateway-paypal-ink: #3b97e0;             /* lighter PayPal blue — AA text on dark */
+  --gateway-other:      var(--text-subtle);  /* neutral gray (fill + AA text) */
+
   /* Stores — per-store hues for Per-Store row, store badges. The first three
      are the live stores (uzo=cyan, usm=pink, 3=green); store-4..8 are spare
      hues for NEW stores so each store gets a distinct colour (the add-store
@@ -494,6 +523,22 @@
   --chart-platform-tiktok:  #ff2e7e;  /* mockup-locked brand color */
   --chart-platform-organic: #14b8a6;  /* teal — mockup has no explicit organic; clear teal */
   --chart-platform-shopify: #0fb37a;  /* shopify = e-commerce green */
+
+  /* Payment-GATEWAY palette (reskin W5.1, design-debt #9 — LIGHT). See the
+     :root (dark) block for the full rationale. The FILL (--gateway-paypal
+     #0070ba) is shared with dark; only the TEXT ink darkens so it clears AA
+     on the near-white table/card surface.
+     CONTRAST (worst-case = --glass-2 #F4F7FE, the lower-contrast card stop):
+       --gateway-paypal #0070ba       FILL → 4.86:1 on --glass-2 (≥3 ✓)
+       --gateway-paypal-ink #1565c0   TEXT → 5.36:1 on --glass-2 (≥4.5 ✓)
+       --gateway-credit = var(--accent) FILL → 6.62:1 (≥3 ✓)
+       --gateway-credit-ink = var(--accent-link) TEXT → 6.62:1 (≥4.5 ✓)
+       --gateway-other = var(--text-subtle) neutral fill+text → 5.29:1 (≥4.5 ✓). */
+  --gateway-credit:     var(--accent);       /* brand violet (own fill) */
+  --gateway-credit-ink: var(--accent-link);  /* AA-safe accent text */
+  --gateway-paypal:     #0070ba;             /* PayPal brand blue — fill (both themes) */
+  --gateway-paypal-ink: #1565c0;             /* deeper PayPal blue — AA text on light */
+  --gateway-other:      var(--text-subtle);  /* neutral gray (fill + AA text) */
 
   /* Stores — same hues; mid-tone for legible badges on light. store-4..8 are
      the spare per-store hues offered to NEW stores (see the dark block above). */

@@ -444,3 +444,39 @@ describe('contrast guard — feed glyph tones (sale/refund/cart) on the Card sur
     }
   }
 });
+
+/**
+ * W5.1 (2026-06-13) — payment-GATEWAY palette (design-debt #9). The תשלומים tab
+ * paints PayPal with its OWN brand blue (`--gateway-paypal`) instead of borrowing
+ * the locked Meta platform token. PayPal appears as:
+ *   • a share-bar SEGMENT + small legend swatch — a GRAPHICAL FILL (`--gateway-paypal`),
+ *     held to the 3:1 non-text floor; and
+ *   • the PeriodRowsTable group-header TEXT (`--gateway-paypal-ink`), held to the
+ *     4.5:1 body-text bar.
+ * Both sit on the card / table surface, whose lower-contrast stop is `--glass-2`
+ * (the lighter gradient stop in dark / the darker stop in light). A single blue
+ * can't clear "light-on-dark fill ≥3" AND "AA text ≥4.5" in one value, so the
+ * FILL is shared across themes while the INK splits per-theme — this guard locks
+ * each against `--glass-2` in BOTH themes so neither can silently regress.
+ */
+describe('contrast guard — payment-gateway PayPal fill ≥3:1 + ink ≥4.5:1 on the card surface (both themes)', () => {
+  for (const theme of THEMES) {
+    const surface = hexOf('--glass-2', theme.blk);
+    it(`${theme.name}: --gateway-paypal FILL on --glass-2 ≥ 3:1`, () => {
+      const fill = hexOf('--gateway-paypal', theme.blk);
+      const ratio = wcagRatio(fill, surface);
+      expect(
+        ratio,
+        `--gateway-paypal ${fill} on --glass-2 ${surface} = ${ratio.toFixed(2)}:1 (need ≥3 for the bar fill)`,
+      ).toBeGreaterThanOrEqual(3.0);
+    });
+    it(`${theme.name}: --gateway-paypal-ink TEXT on --glass-2 ≥ 4.5:1`, () => {
+      const ink = hexOf('--gateway-paypal-ink', theme.blk);
+      const ratio = wcagRatio(ink, surface);
+      expect(
+        ratio,
+        `--gateway-paypal-ink ${ink} on --glass-2 ${surface} = ${ratio.toFixed(2)}:1 (need ≥4.5 for the header text)`,
+      ).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});

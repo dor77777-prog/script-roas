@@ -286,16 +286,33 @@ describe('PaymentMethodsTab — granularity toggle re-groups sub-rows', () => {
 });
 
 describe('PaymentMethodsTab — share bar uses token colours', () => {
-  it('paints credit=accent, paypal=chart-meta(blue), other=ink-subtle — never a hex', () => {
+  it('paints credit/paypal/other from the dedicated --gateway-* palette — never the Meta brand token, never a hex', () => {
     const { container } = renderTab();
     const bar = container.querySelector('[data-testid="pm-summary-sharebar"]');
     expect(bar).not.toBeNull();
     const html = bar!.innerHTML;
-    expect(html).toContain('bg-accent');
-    expect(html).toContain('bg-chart-meta');
-    expect(html).toContain('bg-ink-subtle');
+    // W5.1 (debt #9): gateways have their OWN palette — PayPal no longer borrows
+    // the locked Meta platform token.
+    expect(html).toContain('bg-gateway-credit');
+    expect(html).toContain('bg-gateway-paypal');
+    expect(html).toContain('bg-gateway-other');
+    expect(html).not.toContain('bg-chart-meta');
     // No raw colour literal leaked into the bar markup.
     expect(html).not.toMatch(/#[0-9a-fA-F]{3,6}\b/);
+  });
+
+  it('share bar exposes a role=img aria-label describing the gateway split (a11y)', () => {
+    const { container } = renderTab();
+    const bar = container.querySelector(
+      '[data-testid="pm-summary-sharebar"]',
+    ) as HTMLElement | null;
+    expect(bar).not.toBeNull();
+    expect(bar!.getAttribute('role')).toBe('img');
+    const label = bar!.getAttribute('aria-label') ?? '';
+    expect(label).toContain('אשראי');
+    expect(label).toContain('PayPal');
+    expect(label).toContain('אחר');
+    expect(label).toMatch(/\d+%/);
   });
 });
 

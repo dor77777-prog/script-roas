@@ -138,6 +138,21 @@ const config: Config = {
           shopify: 'var(--chart-platform-shopify)',
         },
 
+        // ---- Gateway: payment-method palette (תשלומים tab). PAYMENT entities,
+        //      NOT ad platforms — so they DON'T borrow --chart-platform-* (debt
+        //      #9: PayPal used to paint --chart-platform-meta and silently
+        //      tracked Meta's brand blue). `*` is the graphical FILL (share-bar
+        //      segment + legend swatch, ≥3:1 on the card); `*Ink` is the AA-safe
+        //      TEXT (group header, ≥4.5:1) where the fill blue is too light to
+        //      read as text. Contrast ratios locked in contrastGuard.test.ts.
+        gateway: {
+          credit:    'var(--gateway-credit)',
+          creditInk: 'var(--gateway-credit-ink)',
+          paypal:    'var(--gateway-paypal)',
+          paypalInk: 'var(--gateway-paypal-ink)',
+          other:     'var(--gateway-other)',
+        },
+
         // ---- Store: per-store hues for Per-Store row + store badges.
         store: {
           uzo: 'var(--store-uzo)',

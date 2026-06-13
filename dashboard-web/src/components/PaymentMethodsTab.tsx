@@ -25,9 +25,10 @@
  *
  * Token-driven (no hardcoded colours), light + dark, RTL logical classes, WCAG-AA.
  * Every CAD renders through <Money> (tabular, overflow-safe, never clipped).
- * Share-bar segment colours come from tokens: credit = accent, paypal = the
- * defined blue chart-meta brand-blue token, other = ink-subtle — all AA-safe
- * as solid fills carrying no text. % is computed on ORDER count.
+ * Share-bar segment colours come from dedicated payment-GATEWAY tokens (debt
+ * #9): credit = accent, paypal = PayPal's own brand blue (--gateway-paypal, no
+ * longer borrowing the locked Meta platform token), other = neutral subtle ink
+ * — all clear ≥3:1 as fills. % is computed on ORDER count.
  * CAPI-safe: pure Shopify reporting aggregate, zero pixel/CAPI events.
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -201,15 +202,18 @@ export function groupRowsByPeriod(
 }
 
 /**
- * Share-bar segment colour TOKENS (never raw hex). credit = brand accent,
- * paypal = the defined blue chart-meta token, other = ink-subtle. Solid fills
- * carry no text so they sit below the AA-on-text bar, but each is a real
- * theme-flipping token so the bar re-skins with the rest of the system.
+ * Share-bar segment colour TOKENS (never raw hex). These are PAYMENT-GATEWAY
+ * tokens, NOT ad-platform tokens — credit = brand accent, paypal = PayPal's OWN
+ * brand blue (--gateway-paypal; previously borrowed the locked Meta brand token
+ * --chart-platform-meta, design-debt #9 — retuning Meta would have recolored
+ * PayPal), other = neutral subtle ink. Each gateway fill clears ≥3:1 on the
+ * card surface in both themes (see contrastGuard.test.ts) and re-skins with the
+ * rest of the system.
  */
 const SEG_BG: Record<PaymentCategory, string> = {
-  credit: 'bg-accent',
-  paypal: 'bg-chart-meta',
-  other: 'bg-ink-subtle',
+  credit: 'bg-gateway-credit',
+  paypal: 'bg-gateway-paypal',
+  other: 'bg-gateway-other',
 };
 
 /** A horizontal stacked share bar — segments sized by order-count share. */
@@ -222,8 +226,17 @@ function ShareBar({
   className?: string;
 } & React.HTMLAttributes<HTMLDivElement>) {
   const denom = totalOrders(totals) || 1;
+  // a11y: the bar is otherwise mute graphics. Announce the gateway split as a
+  // role="img" with a Hebrew label (אשראי / PayPal / אחר %) so screen readers
+  // read the proportions instead of skipping a financial visual. A caller-passed
+  // aria-label in `rest` still wins (explicit override).
+  const ariaLabel =
+    `פילוח הזמנות לפי אמצעי תשלום: אשראי ${pct(totals.credit.orders, denom)}%, ` +
+    `PayPal ${pct(totals.paypal.orders, denom)}%, אחר ${pct(totals.other.orders, denom)}%`;
   return (
     <div
+      role="img"
+      aria-label={ariaLabel}
       {...rest}
       className={cn(
         'flex h-3 overflow-hidden rounded-pill border border-glass-edge',
@@ -705,19 +718,19 @@ function PeriodRowsTable({
           </th>
           <th
             colSpan={3}
-            className="border-b border-glass-edge px-3 py-2 text-center text-xs font-bold text-accent"
+            className="border-b border-glass-edge px-3 py-2 text-center text-xs font-bold text-gateway-creditInk"
           >
             אשראי
           </th>
           <th
             colSpan={3}
-            className="border-b border-s border-glass-edge px-3 py-2 text-center text-xs font-bold text-chart-meta"
+            className="border-b border-s border-glass-edge px-3 py-2 text-center text-xs font-bold text-gateway-paypalInk"
           >
             PayPal
           </th>
           <th
             colSpan={2}
-            className="border-b border-s border-glass-edge px-3 py-2 text-center text-xs font-bold text-ink-muted"
+            className="border-b border-s border-glass-edge px-3 py-2 text-center text-xs font-bold text-gateway-other"
           >
             אחר
           </th>
