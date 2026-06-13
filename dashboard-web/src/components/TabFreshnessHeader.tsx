@@ -1,11 +1,21 @@
 'use client';
 
+import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { FreshnessChip } from './FreshnessChip';
 import { useDashboardRefresh } from '@/lib/useDashboardRefresh';
 import { useStores } from '@/lib/useStores';
 import { Button } from '@/components/ui/Button';
 import { HelpTooltip } from '@/components/ui/Tooltip';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetBody,
+  SheetFooter,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/Sheet';
 
 /**
  * ONE refresh-duration string for the confirm dialog, the in-progress toast
@@ -47,23 +57,18 @@ export function TabFreshnessHeader(props: {
   const { stores } = useStores();
   const storeCount = stores.length;
 
-  const handleRefreshClick = () => {
-    // Confirm dialog — the action fires Inngest sync-now for every active
-    // store (Shopify + Meta + Google + TikTok), then polls until the writers
-    // commit. Takes REFRESH_DURATION_TEXT and burns Inngest quota. The
-    // auto-poll catches up most of the time, so we want the operator to
-    // consciously opt-in to the heavier path.
-    const ok = window.confirm(
-      'רענון מלא ירוץ עכשיו?\n\n' +
-        `• מרענן את כל הדשבורד מ-Shopify + Meta + Google + TikTok עבור ${storeCount} החנויות.\n` +
-        '• מכסה היום + אתמול + שלשום (3 ימים אחורה) — תופס cross-day refunds + עדכוני אטריביושן.\n' +
-        `• לוקח ${REFRESH_DURATION_TEXT}. תוכל להמשיך לעבוד; הדשבורד יתעדכן אוטומטית כשיסתיים.\n` +
-        '• בדרך כלל אין צורך — קיים רענון אוטומטי כל 10 דקות (היום) + כל שעתיים (אתמול).\n\n' +
-        'ללחוץ "אישור" כדי להריץ.',
-    );
-    if (ok) {
-      void refresh();
-    }
+  // W7-T6 — the pre-run confirm is now a focus-trapped Radix dialog (Sheet
+  // variant="modal") instead of the native window.confirm(): consistent
+  // chrome with the rest of the app, Esc-to-close + reduced-motion handled by
+  // Radix, and the cost is surfaced as readable copy rather than a blocking
+  // browser alert. Behaviour is preserved: clicking "רענן הכל" OPENS the
+  // modal; "אישור" runs the SAME void refresh() the window.confirm-true path
+  // used to run; "ביטול" / Esc / backdrop closes without refreshing.
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const handleConfirm = () => {
+    setConfirmOpen(false);
+    void refresh();
   };
 
   return (
@@ -85,7 +90,7 @@ export function TabFreshnessHeader(props: {
           type="button"
           variant="secondary"
           size="sm"
-          onClick={handleRefreshClick}
+          onClick={() => setConfirmOpen(true)}
           disabled={isRefreshing}
           aria-label="רענן את כל הדשבורד"
         >
@@ -96,6 +101,53 @@ export function TabFreshnessHeader(props: {
           <span>{isRefreshing ? 'מרענן...' : 'רענן הכל'}</span>
         </Button>
       </HelpTooltip>
+
+      {/* W7-T6 — pre-run confirm modal (was window.confirm). The cost copy is
+          preserved verbatim from the old alert so the operator sees the same
+          opt-in information before triggering the heavier full refresh. */}
+      <Sheet open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <SheetContent variant="modal" dir="rtl" className="sm:max-w-md p-0 gap-0">
+          <SheetHeader className="flex items-center gap-2">
+            <RefreshCw size={18} className="shrink-0 text-ink-secondary" aria-hidden="true" />
+            <div className="min-w-0">
+              <SheetTitle>רענון מלא ירוץ עכשיו?</SheetTitle>
+              <SheetDescription>
+                רענון אופציונלי וכבד — בדרך כלל הרענון האוטומטי תופס את הכול.
+              </SheetDescription>
+            </div>
+          </SheetHeader>
+
+          <SheetBody>
+            <ul className="space-y-2 text-sm text-ink list-disc pe-5">
+              <li>
+                מרענן את כל הדשבורד מ-Shopify + Meta + Google + TikTok עבור{' '}
+                {storeCount} החנויות.
+              </li>
+              <li>
+                מכסה היום + אתמול + שלשום (3 ימים אחורה) — תופס cross-day refunds +
+                עדכוני אטריביושן.
+              </li>
+              <li>
+                לוקח {REFRESH_DURATION_TEXT}. תוכל להמשיך לעבוד; הדשבורד יתעדכן
+                אוטומטית כשיסתיים.
+              </li>
+              <li>
+                בדרך כלל אין צורך — קיים רענון אוטומטי כל 10 דקות (היום) + כל שעתיים
+                (אתמול).
+              </li>
+            </ul>
+          </SheetBody>
+
+          <SheetFooter>
+            <Button type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>
+              ביטול
+            </Button>
+            <Button type="button" onClick={handleConfirm}>
+              אישור
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

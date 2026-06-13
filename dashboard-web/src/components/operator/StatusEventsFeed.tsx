@@ -14,7 +14,7 @@
 import useSWR from 'swr';
 import { Pause, Play, Sparkles, Archive, AlertCircle, MousePointerClick, Eye } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
-import { Heading } from '@/components/ui/Typography';
+import { Card } from '@/components/ui/Card';
 import type { StatusEventsResponse } from '@/app/api/operator/status-events/route';
 
 const ENDPOINT = '/api/operator/status-events';
@@ -51,12 +51,16 @@ export function StatusEventsFeed() {
     revalidateOnFocus: true,
   });
 
+  // W7-T6 — `<section border…rounded-lg>` → shared `<Card>`, and the inner
+  // "שינויי סטטוס אחרונים" heading is DROPPED: the ActivityTab section already
+  // self-titles this panel ("סטטוס אירועים" + the status_events subtitle), so
+  // the feed's own h-heading was a duplicate. The "(50 אחרונים)" count is kept
+  // as a muted caption in the populated state so no info is lost.
   if (isLoading && !data) {
     return (
-      <section className="border border-glass-edge rounded-lg p-4 text-ink-secondary text-sm">
-        <Heading level="section" className="font-medium mb-2">שינויי סטטוס אחרונים</Heading>
+      <Card data-testid="status-events-feed" className="text-ink-secondary text-sm">
         <p>טוען…</p>
-      </section>
+      </Card>
     );
   }
 
@@ -64,17 +68,14 @@ export function StatusEventsFeed() {
 
   if (events.length === 0) {
     return (
-      <section className="border border-glass-edge rounded-lg p-4 text-ink-secondary text-sm">
-        <Heading level="section" className="font-medium mb-2">שינויי סטטוס אחרונים</Heading>
+      <Card data-testid="status-events-feed" className="text-ink-secondary text-sm">
         <p>אין אירועי סטטוס עדיין. הראשון יופיע תוך 10 דקות מהפעלת ה-orchestrator.</p>
-      </section>
+      </Card>
     );
   }
   return (
-    <section className="border border-glass-edge rounded-lg p-4">
-      <Heading level="section" className="font-medium mb-3">
-        שינויי סטטוס אחרונים <span className="text-xs text-ink-secondary">(50 אחרונים)</span>
-      </Heading>
+    <Card data-testid="status-events-feed">
+      <p className="text-xs text-ink-secondary mb-3">(50 אחרונים)</p>
       <ul className="space-y-1.5 text-sm">
         {events.map((e) => (
           <li key={e.id} className="flex items-start gap-2.5 text-ink">
@@ -88,6 +89,6 @@ export function StatusEventsFeed() {
           </li>
         ))}
       </ul>
-    </section>
+    </Card>
   );
 }

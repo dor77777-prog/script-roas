@@ -9,9 +9,10 @@
 // sub-tabs share a single refresh paradigm.
 
 import useSWR from 'swr';
+import { CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
 import { TableBase } from '@/components/ui/TableBase';
-import { Heading } from '@/components/ui/Typography';
+import { Card } from '@/components/ui/Card';
 import type { CronTickSnapshotsResponse } from '@/app/api/operator/cron-tick-snapshots/route';
 
 const ENDPOINT = '/api/operator/cron-tick-snapshots';
@@ -33,12 +34,15 @@ export function CronTickSnapshotsViewer() {
     revalidateOnFocus: true,
   });
 
+  // W7-T6 — `<section border…rounded-lg>` → shared `<Card>`, and the inner
+  // "Cron-tick snapshots" heading is DROPPED: the ActivityTab section already
+  // self-titles this panel, so the feed's own h-heading duplicated it. The
+  // "(N ticks אחרונים)" count is kept as a muted caption so no info is lost.
   if (isLoading && !data) {
     return (
-      <section className="border border-glass-edge rounded-lg p-4 text-ink-secondary text-sm">
-        <Heading level="section" className="font-medium mb-2">Cron-tick snapshots</Heading>
+      <Card data-testid="cron-tick-snapshots" className="text-ink-secondary text-sm">
         <p>טוען…</p>
-      </section>
+      </Card>
     );
   }
 
@@ -46,26 +50,41 @@ export function CronTickSnapshotsViewer() {
 
   if (rows.length === 0) {
     return (
-      <section className="border border-glass-edge rounded-lg p-4 text-ink-secondary text-sm">
-        <Heading level="section" className="font-medium mb-2">Cron-tick snapshots</Heading>
+      <Card data-testid="cron-tick-snapshots" className="text-ink-secondary text-sm">
         <p>אין ticks עדיין.</p>
-      </section>
+      </Card>
     );
   }
   return (
-    <section className="border border-glass-edge rounded-lg p-4">
-      <Heading level="section" className="font-medium mb-3">
-        Cron-tick snapshots <span className="text-xs text-ink-secondary">({rows.length} ticks אחרונים)</span>
-      </Heading>
+    <Card data-testid="cron-tick-snapshots">
+      <p className="text-xs text-ink-secondary mb-3">({rows.length} ticks אחרונים)</p>
       <div className="overflow-x-auto">
         <TableBase>
           <thead className="text-xs text-ink-secondary border-b border-glass-edge">
             <tr>
               <th className="text-end py-1 pe-2">tick_id</th>
               <th className="text-start py-1 px-2">fan_out</th>
-              <th className="text-start py-1 px-2">completed</th>
-              <th className="text-start py-1 px-2">skipped</th>
-              <th className="text-start py-1 px-2">failed</th>
+              {/* W7-T6 — each count column header carries its own status icon so
+                  the completed/skipped/failed meaning is NOT conveyed by colour
+                  alone (WCAG 1.4.1). The icon repeats in each cell below. */}
+              <th className="text-start py-1 px-2">
+                <span className="inline-flex items-center gap-1">
+                  <CheckCircle2 size={12} className="text-status-greenFg" aria-hidden="true" />
+                  completed
+                </span>
+              </th>
+              <th className="text-start py-1 px-2">
+                <span className="inline-flex items-center gap-1">
+                  <AlertTriangle size={12} className="text-status-orangeFg" aria-hidden="true" />
+                  skipped
+                </span>
+              </th>
+              <th className="text-start py-1 px-2">
+                <span className="inline-flex items-center gap-1">
+                  <XCircle size={12} className="text-status-redFg" aria-hidden="true" />
+                  failed
+                </span>
+              </th>
               <th className="text-start py-1 ps-2">duration</th>
             </tr>
           </thead>
@@ -74,15 +93,33 @@ export function CronTickSnapshotsViewer() {
               <tr key={r.tick_id} className="border-b border-glass-edge/40">
                 <td className="text-end py-1 pe-2">{r.tick_id}</td>
                 <td className="py-1 px-2">{r.fan_out_count ?? '—'}</td>
-                <td className="py-1 px-2 text-status-greenFg">{r.events_completed_count ?? '—'}</td>
-                <td className="py-1 px-2 text-status-orangeFg">{r.events_skipped_count ?? '—'}</td>
-                <td className="py-1 px-2 text-status-redFg">{r.events_failed_count ?? '—'}</td>
+                {/* Non-colour cue: a leading icon pairs with the colour so the
+                    outcome (completed/skipped/failed) is legible without
+                    relying on hue. */}
+                <td className="py-1 px-2 text-status-greenFg">
+                  <span className="inline-flex items-center gap-1">
+                    <CheckCircle2 size={12} aria-hidden="true" />
+                    {r.events_completed_count ?? '—'}
+                  </span>
+                </td>
+                <td className="py-1 px-2 text-status-orangeFg">
+                  <span className="inline-flex items-center gap-1">
+                    <AlertTriangle size={12} aria-hidden="true" />
+                    {r.events_skipped_count ?? '—'}
+                  </span>
+                </td>
+                <td className="py-1 px-2 text-status-redFg">
+                  <span className="inline-flex items-center gap-1">
+                    <XCircle size={12} aria-hidden="true" />
+                    {r.events_failed_count ?? '—'}
+                  </span>
+                </td>
                 <td className="py-1 ps-2 text-ink-secondary">{durationSeconds(r.started_at, r.finished_at)}</td>
               </tr>
             ))}
           </tbody>
         </TableBase>
       </div>
-    </section>
+    </Card>
   );
 }

@@ -31,7 +31,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, ArrowRight } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
 import { StoreList, type StoreRowData, type ManageFocus } from '@/components/operator/StoreList';
 import { RemovedStores } from '@/components/operator/RemovedStores';
@@ -168,7 +168,13 @@ export function StoresTab() {
     return (
       <div className="space-y-3">
         <Button type="button" variant="ghost" size="sm" onClick={handleDone}>
-          → חזרה לרשימה
+          {/* W7-T6 — was a literal "→" glyph. In RTL "חזרה לרשימה" (back to the
+              list) points toward the inline-start = visually RIGHT, so the
+              lucide ArrowRight (which renders right-pointing) is the correct
+              back-affordance glyph. aria-hidden — the Hebrew label carries the
+              meaning for AT. */}
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          חזרה לרשימה
         </Button>
         <AddStoreWizard
           onDone={handleDone}
