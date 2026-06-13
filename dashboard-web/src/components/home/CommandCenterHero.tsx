@@ -622,10 +622,13 @@ export function CommandCenterHero({
         the SAME grid (its last row simply carries one extra tile until the
         NC-by-channel card lands and we reconcile it). NC-ROAS stays below.
 
-        Grid: `grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-6` per the mockup.
+        Grid: 7 KPI widgets (the mockup's 6 + the operator-mandated inventory
+        tile). `xl:grid-cols-7` so all 7 sit in ONE clean row on desktop — at
+        `xl:grid-cols-6` the 7th (inventory) wrapped alone onto a 2nd row, which
+        read as a broken/orphaned card. Narrower breakpoints still wrap.
       */}
       <div
-        className="grid grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-6"
+        className="grid grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-7"
         data-testid="hero-row-1"
       >
         {/* 1 — Spend. Spend ↑ is a NEGATIVE signal (red ↓). The DQ-3/DQ-4

@@ -164,7 +164,13 @@ export function Widget({
 
   return (
     <Card
-      className={cn('!flex-row items-center gap-4', className)}
+      // `min-w-0` lets the Widget shrink below its content's intrinsic width
+      // when it's a grid/flex item — grid items default to `min-width:auto`,
+      // so without this a tight 7-up KPI row (e.g. the Campaigns summary at
+      // `lg:grid-cols-7`) refused to shrink and OVERFLOWED its container,
+      // clipping the edge card. The inner text column already has `min-w-0`
+      // so the value (via <Money> compact-floor) stays overflow-safe.
+      className={cn('!flex-row items-center gap-4 min-w-0', className)}
       {...domRest}
       // `freshness` is set AFTER `{...domRest}` (stray data-freshness already stripped
       // above) so the Widget-owned value wins → the Card's `data-freshness` fade.
