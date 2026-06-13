@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>תיקון שורת ה-KPI · Horizon</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: { extend: {
+    colors: {
+      brand: {50:"#E9E3FF",100:"#C0B8FE",200:"#A195FD",300:"#8171FC",400:"#7551FF",500:"#422AFB",600:"#3311DB",700:"#2111A5",800:"#190793",900:"#11047A"},
+      navy:  {50:"#d0dcfb",100:"#aac0fe",200:"#a3b9f8",300:"#728fea",400:"#3652ba",500:"#1b3bbb",600:"#24388a",700:"#1B254B",800:"#111c44",900:"#0b1437"},
+      lightPrimary: "#F4F7FE",
+      shadow: {500: "rgba(112, 144, 176, 0.08)"},
+      roas: {red:"#e5484d", orange:"#EF9331", green:"#10b981", blue:"#3b82f6"},
+    },
+    boxShadow: { '3xl': '14px 17px 40px 4px' },
+    fontFamily: { heebo: ['Heebo','sans-serif'] },
+    borderRadius: { '20': '20px' },
+  } }
+}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&family=Rubik:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  body{font-family:'Heebo',sans-serif}
+  .num{font-family:'Rubik','Heebo',sans-serif;font-variant-numeric:tabular-nums;letter-spacing:-.015em}
+  svg.ic{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+</style>
+</head>
+<body class="bg-lightPrimary dark:bg-navy-900 text-navy-700 dark:text-white transition-colors duration-300">
+
+<button onclick="document.documentElement.classList.toggle('dark')"
+  class="fixed bottom-6 left-6 z-50 rounded-full bg-white dark:bg-navy-800 shadow-3xl shadow-shadow-500 dark:shadow-none px-5 py-3 text-sm font-bold">
+  ☼ / ☾ החלף מצב
+</button>
+
+<div class="mx-auto max-w-[1216px] px-6 py-10 space-y-12">
+
+  <header class="space-y-1">
+    <h1 class="text-2xl font-black">תיקון שורת ה-KPI — דף הבית + קמפיינים</h1>
+    <p class="text-sm text-gray-600 dark:text-gray-300">7 כרטיסיות לא נכנסות בשורה אחת קריאה ברוחב הזה (‎~157px לכרטיס → טקסט נחתך). שתי אפשרויות תיקון. בחר אחת.</p>
+  </header>
+
+  <!-- ════ HOME · OPTION A — 4 + 3 balanced rows (RECOMMENDED) ════ -->
+  <section class="space-y-3">
+    <div class="flex items-baseline gap-3">
+      <h2 class="text-lg font-black">בית · אפשרות A — שתי שורות מאוזנות (4 + 3) ✅ מומלץ</h2>
+      <span class="text-xs text-gray-600 dark:text-gray-300">כרטיסים רחבים וקריאים, שום טקסט לא נחתך, אין כרטיס יתום</span>
+    </div>
+    <div id="homeA-row1" class="grid grid-cols-4 gap-5"></div>
+    <div id="homeA-row2" class="grid grid-cols-3 gap-5"></div>
+  </section>
+
+  <!-- ════ HOME · OPTION B — single compact 7-up row ════ -->
+  <section class="space-y-3">
+    <div class="flex items-baseline gap-3">
+      <h2 class="text-lg font-black">בית · אפשרות B — שורה אחת צפופה (7)</h2>
+      <span class="text-xs text-gray-600 dark:text-gray-300">אייקון קטן יותר, כותרת רב-שורתית, תווית "רווח תפעולי" מקוצרת — נכנס בשורה אחת אבל צפוף</span>
+    </div>
+    <div id="homeB-row" class="grid grid-cols-7 gap-3"></div>
+  </section>
+
+  <!-- ════ CAMPAIGNS · fix — 4 + 3 ════ -->
+  <section class="space-y-3">
+    <div class="flex items-baseline gap-3">
+      <h2 class="text-lg font-black">קמפיינים · תיקון — שתי שורות (4 + 3)</h2>
+      <span class="text-xs text-gray-600 dark:text-gray-300">אותו עיקרון: כרטיסי הסיכום מפסיקים להיחתך</span>
+    </div>
+    <div class="rounded-20 bg-white/60 dark:bg-navy-800/40 p-4 space-y-3">
+      <div id="camp-row1" class="grid grid-cols-4 gap-3"></div>
+      <div id="camp-row2" class="grid grid-cols-3 gap-3"></div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const ICONS = {
+  dollar:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  trend:'<path d="M22 7 13.5 15.5 8.5 10.5 2 17M16 7h6v6"/>',
+  line:'<path d="M3 3v18h18M7 13l4-4 4 3 5-6"/>',
+  gauge:'<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+  cart:'<path d="M6 6h15l-1.5 9h-12zM6 6 5 3H2"/><circle cx="9" cy="19" r="1"/><circle cx="18" cy="19" r="1"/>',
+  bars:'<path d="M3 3v18h18M8 17v-5M13 17V8M18 17v-9"/>',
+  box:'<path d="M12 17v5"/><path d="m21 8-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8"/>',
+  pct:'<path d="M19 5 5 19M6.5 6.5h.01M17.5 17.5h.01"/>',
+  click:'<path d="M9 3v4M5 5l2.5 2.5M3 9h4M14 13l7 7-3 1-1 3-3-7-4 4V8z"/>',
+  coins:'<circle cx="8" cy="8" r="5"/><path d="M10.5 12.6A5 5 0 1 0 16 18M7 6h2v4"/>',
+};
+// renders ONE widget card. opts: {size:'lg'|'sm', band:null|'orange', wrapTitle:bool}
+function card({icon,title,badge,value,sub,subColor,band,size,wrapTitle}){
+  const lg = size!=='sm';
+  const iconBox = lg ? 'h-12 w-12' : 'h-10 w-10';
+  const gap = lg ? 'gap-4' : 'gap-3';
+  const pad = lg ? 'p-5' : 'p-3.5';
+  const valSize = lg ? 'text-xl' : 'text-lg';
+  const titleSize = lg ? 'text-sm' : 'text-[12px]';
+  const titleClamp = wrapTitle ? 'leading-tight' : 'truncate';
+  // banded value/icon colour
+  const bandColor = band==='orange' ? '#EF9331' : (band==='green' ? '#10b981' : null);
+  const valStyle = bandColor ? `style="color:${bandColor}"` : '';
+  const iconWrap = bandColor
+    ? `<div class="rounded-full p-3 flex-none" style="background:${band==='orange'?'rgba(239,147,49,.12)':'rgba(16,185,129,.12)'}"><svg class="ic" style="color:${bandColor}" viewBox="0 0 24 24">${icon}</svg></div>`
+    : `<div class="rounded-full bg-lightPrimary p-3 dark:bg-navy-700 flex-none"><svg class="ic text-brand-500 dark:text-white" viewBox="0 0 24 24">${icon}</svg></div>`;
+  const iconSized = iconWrap.replace('p-3', lg?'p-3':'p-2.5');
+  return `
+  <div class="relative flex !flex-row items-center ${gap} ${pad} min-w-0 rounded-20 bg-white shadow-3xl shadow-shadow-500 dark:bg-navy-800 dark:text-white dark:shadow-none">
+    <span class="${iconBox} flex flex-none items-center justify-center rounded-full ${bandColor?'':'bg-lightPrimary dark:bg-navy-700'}" ${bandColor?`style="background:${band==='orange'?'rgba(239,147,49,.12)':'rgba(16,185,129,.12)'}"`:''}>
+      <svg class="ic ${bandColor?'':'text-brand-500 dark:text-white'}" ${bandColor?`style="color:${bandColor}"`:''} viewBox="0 0 24 24">${icon}</svg>
+    </span>
+    <div class="flex min-w-0 flex-col justify-center">
+      <p class="${titleSize} font-medium text-gray-600 dark:text-gray-300 flex items-center gap-1.5 ${wrapTitle?'':'min-w-0'}">
+        <span class="${titleClamp}">${title}</span>${badge||''}
+      </p>
+      <h4 class="num ${valSize} font-bold ${bandColor?'':'text-navy-700 dark:text-white'}" ${valStyle}>${value}</h4>
+      ${sub?`<p class="num text-xs font-bold ${subColor||'text-gray-500 dark:text-gray-400'}">${sub}</p>`:''}
+    </div>
+  </div>`;
+}
+const LIVE = '<span class="text-[9px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 rounded-full px-1.5 py-0.5 flex-none">LIVE</span>';
+const MERTAG = '<span class="rounded-full px-1.5 py-0.5 text-[9px] font-bold text-white flex-none" style="background:#EF9331">סביר</span>';
+const EST = '<span class="text-[9px] font-bold rounded-full px-1.5 py-0.5 bg-brand-500/15 text-brand-600 dark:text-brand-200 flex-none">אומדן חי</span>';
+
+// ----- HOME widgets (real values from the screenshots) -----
+const W = {
+  spend:  d=>card({icon:ICONS.dollar,title:'הוצאת פרסום',badge:EST,value:'$19,354',sub:'▴ ‎+15%',subColor:'text-roas-red',...d}),
+  revenue:d=>card({icon:ICONS.trend,title:'הכנסות',value:'$45,564',sub:'▴ ‎+26%',subColor:'text-emerald-500',...d}),
+  op:     d=>card({icon:ICONS.line,title:d&&d.shortTitle?'רווח תפעולי':'רווח תפעולי · 13 ימים',badge:LIVE,value:'$14,819',sub:'▴ ‎+$4,297 (+41%)',subColor:'text-emerald-500',...d}),
+  mer:    d=>card({icon:ICONS.gauge,title:'MER',badge:MERTAG,value:'2.35',sub:'▴ ‎+0.20',band:'orange',...d}),
+  orders: d=>card({icon:ICONS.cart,title:'הזמנות',value:'460',sub:'▴ ‎+73',subColor:'text-emerald-500',...d}),
+  cpm:    d=>card({icon:ICONS.bars,title:'CPM עסקי',value:'$19.88',sub:'▴ ‎+27%',subColor:'text-roas-red',...d}),
+  inv:    d=>card({icon:ICONS.box,title:d&&d.shortTitle?'מלאי (COGS)':'מלאי · 13 ימים',value:'$11,391',sub:'~25.0% מהמחזור',...d}),
+};
+
+// OPTION A — 4 + 3 (large cards)
+document.getElementById('homeA-row1').innerHTML = [W.spend(),W.revenue(),W.op(),W.mer()].join('');
+document.getElementById('homeA-row2').innerHTML = [W.orders(),W.cpm(),W.inv()].join('');
+
+// OPTION B — single 7-up compact (small cards, wrapped titles, short op/inv titles)
+const sm = {size:'sm',wrapTitle:true,shortTitle:true};
+document.getElementById('homeB-row').innerHTML =
+  [W.spend(sm),W.revenue(sm),W.op(sm),W.mer(sm),W.orders(sm),W.cpm(sm),W.inv(sm)].join('');
+
+// ----- CAMPAIGNS summary tiles (real values) -----
+const C = {
+  roas:  card({icon:ICONS.gauge,title:'ROAS',value:'2.21',band:'orange',size:'sm'}),
+  spend: card({icon:ICONS.dollar,title:'הוצאה',value:'CAD 19,354',size:'sm'}),
+  cval:  card({icon:ICONS.coins,title:'ערך המרות',value:'CAD 42,801',size:'sm'}),
+  conv:  card({icon:ICONS.cart,title:'המרות',value:'463',size:'sm'}),
+  clicks:card({icon:ICONS.click,title:'קליקים',value:'69,965',size:'sm'}),
+  ctr:   card({icon:ICONS.pct,title:'CTR',value:'7.18%',size:'sm'}),
+  cpm:   card({icon:ICONS.bars,title:'CPM',value:'CAD 19.88',sub:'הצג מגמה',subColor:'text-brand-500',size:'sm'}),
+};
+document.getElementById('camp-row1').innerHTML = [C.roas,C.spend,C.cval,C.conv].join('');
+document.getElementById('camp-row2').innerHTML = [C.clicks,C.ctr,C.cpm].join('');
+</script>
+</body>
+</html>

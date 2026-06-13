@@ -1626,7 +1626,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
       : undefined;
   const summary = aggregated.length > 0 && (
     <div className="px-4 sm:px-5 py-3 sm:py-4 bg-pill-track border-b border-glass-edge">
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
         <Widget
           icon={<Gauge />}
           title="ROAS"
@@ -1662,6 +1662,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
           title="המרות"
           value={formatNumber(totals.conversions, 0)}
         />
+      </div>
+      {/* Secondary summary row — clicks · CTR · CPM (3-up). The 7 tiles split
+          4-up + 3-up so the money values (e.g. "CAD 19,354") stop clipping the
+          edge tile that a single 7-up row produced (the Hebrew titles fit too). */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mt-2 sm:mt-3">
         <Widget
           icon={<MousePointerClick />}
           title="קליקים"

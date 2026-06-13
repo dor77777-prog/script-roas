@@ -7,7 +7,9 @@
 // primitive), with the Inventory (COGS) data point preserved as a 7th widget
 // in the same grid and the NC-ROAS tile preserved below. These pins were
 // updated from the prior 7-Card mesh hero where the change is legitimate:
-//   • ONE grid (`hero-row-1`) holds the 6 mockup KPIs + the kept COGS widget.
+//   • TWO balanced grids (operator-approved "Option A" 4+3 split — 7 tiles
+//     don't fit one legible row): `hero-row-1` (4-up: spend · revenue ·
+//     op-profit · MER) over `hero-row-2` (3-up: orders · CPM · COGS).
 //   • Featured card is Operating Profit ("רווח תפעולי") — NOT Net Profit
 //     (Net Profit is reserved for P&L per operator request).
 //   • Only the MER widget is banded (the band-gauge rule): its root + value
@@ -39,12 +41,14 @@ const PERIOD_GREEN: CommandCenterPeriod = {
 };
 
 describe('<CommandCenterHero>', () => {
-  it('renders the 6 mockup KPI widgets + the kept COGS widget in one grid', () => {
+  it('renders the 6 mockup KPI widgets + the kept COGS widget across the two balanced rows', () => {
     const { getByTestId } = render(
       <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
     );
-    // Single Horizon grid (the prior `hero-row-2` is gone).
+    // Two Horizon grids — the approved "Option A" 4+3 split (7 tiles don't fit
+    // one legible row): primary 4-up row over a secondary 3-up row.
     expect(getByTestId('hero-row-1')).toBeTruthy();
+    expect(getByTestId('hero-row-2')).toBeTruthy();
     // 6 mockup widgets:
     expect(getByTestId('hero-spend')).toBeTruthy();
     expect(getByTestId('hero-revenue')).toBeTruthy();

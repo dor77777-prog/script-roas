@@ -612,23 +612,20 @@ export function CommandCenterHero({
       )}
 
       {/*
-        The 6-Widget KPI row — EXACT-MATCH to the approved Horizon mockup
-        (home-approved.html lines ~138-200): a single responsive grid of the
-        shared <Widget> primitive. DOM order = mockup order:
-          1 Spend · 2 Revenue · 3 Operating Profit (LIVE) · 4 MER (band-gauge)
-          · 5 Orders · 6 CPM.
-        The Inventory (COGS) widget — a data point the 6 mockup widgets don't
-        cover but the operator forbids dropping — rides along as a 7th widget in
-        the SAME grid (its last row simply carries one extra tile until the
-        NC-by-channel card lands and we reconcile it). NC-ROAS stays below.
-
-        Grid: 7 KPI widgets (the mockup's 6 + the operator-mandated inventory
-        tile). `xl:grid-cols-7` so all 7 sit in ONE clean row on desktop — at
-        `xl:grid-cols-6` the 7th (inventory) wrapped alone onto a 2nd row, which
-        read as a broken/orphaned card. Narrower breakpoints still wrap.
+        The KPI row — the approved Horizon mockup is a 6-Widget single row; we
+        carry a 7th (the operator-mandated Inventory/COGS tile — no-info-loss).
+        Seven widgets do NOT fit one legible row at the ~1216px content width
+        (≈157px/card → the Hebrew titles truncate and the money values clip), so
+        we render the operator-approved "Option A" layout: TWO balanced rows — a
+        4-up PRIMARY row (Spend · Revenue · Operating Profit · MER) over a 3-up
+        SECONDARY row (Orders · CPM · Inventory). Both rows stay mobile-first
+        (2-up) and only fan to 4/3-up at `lg`, where each card is wide enough
+        that nothing clips. DOM order = mockup order. (Replaces the prior
+        `xl:grid-cols-7` single row that crammed 7 tiles + clipped — fixed
+        2026-06-13.)
       */}
       <div
-        className="grid grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-7"
+        className="grid grid-cols-2 gap-5 lg:grid-cols-4"
         data-testid="hero-row-1"
       >
         {/* 1 — Spend. Spend ↑ is a NEGATIVE signal (red ↓). The DQ-3/DQ-4
@@ -750,7 +747,15 @@ export function CommandCenterHero({
             }
           />
         </HelpTooltip>
+      </div>
 
+      {/* Secondary KPI row (Option A) — Orders · CPM · Inventory, 3-up at `lg`.
+          Splitting the 7 tiles into a 4-up + 3-up pair keeps every card wide
+          enough that the Hebrew titles + money values never clip. */}
+      <div
+        className="grid grid-cols-2 gap-5 lg:grid-cols-3"
+        data-testid="hero-row-2"
+      >
         {/* 5 — Orders. Neutral signal. Routed through <Money prefix="none"> so a
             7-digit count stays overflow-safe + count-up animated. */}
         <Widget
