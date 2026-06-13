@@ -140,13 +140,13 @@ export function SyncNowButtons() {
           <Button
             key={s.storeId}
             type="button"
-            variant="ghost"
+            variant="primary"
             size="sm"
             onClick={() =>
               sync({ scope: 'store', storeId: s.storeId }, `Sync ${s.storeName}`)
             }
             disabled={pendingKey !== null}
-            className="gap-1 bg-accent hover:opacity-90 text-accent-fg"
+            className="gap-1"
           >
             {pendingKey === s.storeId ? (
               <Loader2 className="w-4 h-4 animate-spin" />

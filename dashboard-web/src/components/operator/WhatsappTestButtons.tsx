@@ -101,15 +101,15 @@ export function WhatsappTestButtons() {
             <Button
               key={trigger}
               type="button"
-              variant="ghost"
+              variant={isArmed ? 'warning' : 'success'}
               onClick={() => handleClick(trigger)}
               disabled={pendingKey !== null}
               aria-pressed={isArmed}
               data-armed={isArmed || undefined}
               className={
                 isArmed
-                  ? 'gap-1 bg-status-orangeBtn hover:opacity-90 text-accent-fg text-sm px-3 py-2 h-auto ring-2 ring-status-warning ring-offset-2 ring-offset-[color:var(--canvas-1)]'
-                  : 'gap-1 bg-status-greenBtn hover:opacity-90 disabled:bg-glass-2 disabled:text-ink-muted text-accent-fg text-sm px-3 py-2 h-auto'
+                  ? 'gap-1 text-sm px-3 py-2 h-auto ring-2 ring-status-warning ring-offset-2 ring-offset-canvas'
+                  : 'gap-1 text-sm px-3 py-2 h-auto'
               }
             >
               {isPending ? (

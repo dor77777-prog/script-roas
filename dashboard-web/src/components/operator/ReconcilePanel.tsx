@@ -23,6 +23,7 @@
 // the tokens, RTL/logical classes only (ms-/ps-/start-/end-).
 
 import useSWR from 'swr';
+import { CheckCircle2, AlertTriangle } from 'lucide-react';
 import { fetchJsonOrNull } from '@/lib/fetchJson';
 import type { ReconcileResponse } from '@/app/api/reconcile/route';
 import type { Violation } from '@/lib/audit/reconcile';
@@ -35,6 +36,7 @@ import {
   TableCell,
 } from '@/components/ui/TableBase';
 import { Money } from '@/components/ui/Money';
+import { Badge } from '@/components/ui/Badge';
 
 const ENDPOINT = '/api/reconcile';
 
@@ -155,7 +157,8 @@ export function ReconcilePanel() {
           <span className="absolute inset-0 rounded-pill bg-status-green opacity-75 motion-safe:animate-ping" />
           <span className="relative inline-flex h-2.5 w-2.5 rounded-pill bg-status-green" />
         </span>
-        <span>✓ הכל תואם — כל הבדיקות עברו</span>
+        <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+        <span>הכל תואם — כל הבדיקות עברו</span>
       </div>
     );
   }
@@ -176,12 +179,14 @@ export function ReconcilePanel() {
             <span className="absolute inset-0 rounded-pill bg-status-green opacity-75 motion-safe:animate-ping" />
             <span className="relative inline-flex h-2.5 w-2.5 rounded-pill bg-status-green" />
           </span>
-          <span>✓ אין אי-התאמות מהותיות — כל המקורות תואמים בתחום הסביר</span>
+          <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+          <span>אין אי-התאמות מהותיות — כל המקורות תואמים בתחום הסביר</span>
         </div>
       ) : (
         <>
-          <div className="text-sm font-semibold text-status-warningFg">
-            ⚠️ {material.length} אי-התאמות מהותיות דורשות בדיקה
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-status-warningFg">
+            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+            <span>{material.length} אי-התאמות מהותיות דורשות בדיקה</span>
           </div>
           <ReconcileTable list={material} />
         </>
@@ -224,9 +229,9 @@ function ReconcileTable({ list }: { list: Violation[] }) {
                 <span className="inline-flex items-center gap-1.5">
                   {r.check}
                   {r.soft && (
-                    <span className="rounded bg-status-grayBg px-1.5 py-0.5 font-sans text-[10px] font-semibold text-status-grayFg">
+                    <Badge tone="gray" className="font-sans">
                       מוסבר
-                    </span>
+                    </Badge>
                   )}
                 </span>
               </TableCell>

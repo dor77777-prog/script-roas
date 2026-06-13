@@ -103,10 +103,10 @@ export function OperatorSecretBanner() {
           </div>
           <Button
             type="button"
-            variant="ghost"
+            variant="warning"
             onClick={handleSave}
             disabled={!input.trim()}
-            className="h-auto bg-status-orangeBtn hover:opacity-90 text-accent-fg text-sm px-3 py-1"
+            className="h-auto text-sm px-3 py-1"
           >
             שמור
           </Button>

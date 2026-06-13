@@ -188,7 +188,9 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   // token; removed from allowlist).
   // insights/ActionListPanel.tsx — DRAINED to 0 in Wave 3.7 (Horizon
   // insight-surfaces re-skin: sub-floor scope badge → text-fs-2xs; removed).
-  'operator/ReconcilePanel.tsx': 1,
+  // operator/ReconcilePanel.tsx — DRAINED to 0 in Wave 7 (Horizon operator-panel
+  // re-skin: the sub-floor «מוסבר» soft-gap chip text-[10px] → the <Badge>
+  // primitive, which sits on text-2xs ramp; removed from allowlist).
   'ui/ChartAnnotationPins.tsx': 1,
   'ui/InsightCard.tsx': 1,
   'ui/SourceBadge.tsx': 1,

@@ -129,7 +129,7 @@ function ProgressBar({ label, pct }: { label: string; pct: number }) {
         <span className="text-ink-secondary font-mono">{label}</span>
         <span className="font-mono">{pct.toFixed(0)}%</span>
       </div>
-      <div className="h-1.5 bg-[color:var(--surface-sunken)] rounded overflow-hidden">
+      <div className="h-1.5 bg-pill-track rounded overflow-hidden">
         <div className={`h-full ${colorClass}`} style={{ width: `${Math.min(100, pct)}%` }} />
       </div>
     </div>

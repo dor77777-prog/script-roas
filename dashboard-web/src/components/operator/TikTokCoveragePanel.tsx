@@ -101,7 +101,7 @@ export function TikTokCoveragePanel() {
   return (
     <Card className="space-y-4">
       {/* STATIC disclaimer — kept ABOVE the live panel. */}
-      <p className="rounded-card border border-dashed border-glass-edge bg-[color:var(--surface-sunken)] px-3 py-2.5 text-xs leading-relaxed text-ink-secondary">
+      <p className="rounded-card border border-dashed border-glass-edge bg-pill-track px-3 py-2.5 text-xs leading-relaxed text-ink-secondary">
         TikTok הוא חשבון-פרסום <b className="text-ink">אחד משותף</b> לכל החנויות;
         ייחוס פר-חנות נעשה לפי מיפוי-קמפיין-לחנות (ברירת-מחדל{' '}
         <bdi dir="ltr">uzoshop</bdi>, ניתן למיפוי מחדש). הפאנל החי למטה מראה כמה
