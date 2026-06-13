@@ -40,3 +40,52 @@ describe('CommandCenterHero MER framing (2026-06-02)', () => {
     expect(getByTestId('hero-roas').getAttribute('data-band')).toBe('green');
   });
 });
+
+// Regression guard (W3.2 2026-06-13) — the operator-locked freshness
+// desaturation fade on the KPI strip. `391fc19` rebuilt the hero on <Widget>
+// but stopped passing `freshness` to those KPI cards, so the systemic fade
+// silently vanished while the FreshnessBadge text chip kept rendering. These
+// assertions fail loudly if `freshness` is ever dropped from the Widget path
+// again — every KPI widget must mirror the period's staleness stage onto
+// `data-freshness` (which `.glass[data-freshness]` turns into saturate()).
+describe('CommandCenterHero KPI freshness desaturation (W3.2 regression)', () => {
+  // testids for the seven KPI widgets in the strip.
+  const KPI_TESTIDS = [
+    'hero-spend',
+    'hero-revenue',
+    'hero-net-profit',
+    'hero-roas',
+    'hero-orders',
+    'hero-cpm',
+    'hero-cogs',
+  ] as const;
+
+  it('a stale updatedAt → every KPI widget carries data-freshness="stale"', () => {
+    // 45 min old → past the 30-min stale threshold (useStaleness).
+    const staleIso = new Date(Date.now() - 45 * 60_000).toISOString();
+    const { getByTestId } = render(
+      <CommandCenterHero current={PERIOD} rangeLabel="היום" updatedAt={staleIso} />,
+    );
+    for (const id of KPI_TESTIDS) {
+      expect(getByTestId(id).getAttribute('data-freshness')).toBe('stale');
+    }
+  });
+
+  it('a fresh updatedAt → every KPI widget carries data-freshness="fresh"', () => {
+    // 2 min old → under the 15-min fresh threshold.
+    const freshIso = new Date(Date.now() - 2 * 60_000).toISOString();
+    const { getByTestId } = render(
+      <CommandCenterHero current={PERIOD} rangeLabel="היום" updatedAt={freshIso} />,
+    );
+    for (const id of KPI_TESTIDS) {
+      expect(getByTestId(id).getAttribute('data-freshness')).toBe('fresh');
+    }
+  });
+
+  it('no updatedAt → no data-freshness stamped (back-compat for historical rows)', () => {
+    const { getByTestId } = render(<CommandCenterHero current={PERIOD} rangeLabel="היום" />);
+    for (const id of KPI_TESTIDS) {
+      expect(getByTestId(id).hasAttribute('data-freshness')).toBe(false);
+    }
+  });
+});

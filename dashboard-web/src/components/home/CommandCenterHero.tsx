@@ -236,21 +236,9 @@ export interface CommandCenterHeroProps {
    */
   comparisonUnavailable?: boolean;
   /**
-   * Daily Net Profit values across the active range, in ISO date order.
-   * Drives the row-1 featured-card sparkline. Pass [] to suppress.
-   */
-  netSparkValues?: number[];
-  /**
-   * Per-metric daily series for the 5 secondary hero cards. Each metric is
-   * rendered with a tone-appropriate stroke (Spend = down-red, Revenue =
-   * up-green, ROAS = accent violet, Orders = neutral ink, CPM = info-blue)
-   * so a glance at the strip shows direction at the same time as magnitude.
-   */
-  secondarySparklines?: CommandCenterSecondarySparklines;
-  /**
-   * Freshness signal — drives every card's <FreshnessBadge> AND the
-   * Card's `data-freshness` desaturation. Accepts the same shape as
-   * `useStaleness`: a single ISO timestamp or a per-platform record.
+   * Freshness signal — drives the featured card's <FreshnessBadge> AND every
+   * KPI <Widget>'s `data-freshness` desaturation fade. Accepts the same shape
+   * as `useStaleness`: a single ISO timestamp or a per-platform record.
    */
   updatedAt?: StalenessInput;
   /** Optional NC-ROAS / nCAC subordinate-tile data. Omit to hide. */
@@ -583,12 +571,12 @@ export function CommandCenterHero({
   coverageBreakdown,
   comparisonLabel = 'מול אתמול',
   comparisonUnavailable = false,
-  // `netSparkValues` / `secondarySparklines` remain on the public props (so
-  // existing callers keep type-checking) but the Horizon Widget recipe carries
-  // no per-card sparkline — they are intentionally not consumed here. The
-  // underlying daily series still drive the RoasTargetChart below, so no data
-  // point is lost. The standalone <NetSparkline>/<MiniSparkline> exports keep
-  // the spark geometry available for any surface that wants it.
+  // (W3.2 2026-06-13) The former `netSparkValues` / `secondarySparklines` props
+  // were dropped from CommandCenterHeroProps: the Horizon <Widget> KPI recipe
+  // carries no per-card sparkline, so nothing here consumed them. The underlying
+  // daily series still drive the RoasTargetChart below (no data point lost), and
+  // the standalone <NetSparkline>/<MiniSparkline> exports + their adapters remain
+  // for any surface that wants the spark geometry.
   updatedAt,
   newCustomer,
   provenanceVerdict,
@@ -646,6 +634,7 @@ export function CommandCenterHero({
             flag. */}
         <Widget
           data-testid="hero-spend"
+          freshness={freshnessStage}
           icon={<DollarSign aria-hidden="true" />}
           title="הוצאת פרסום"
           value={
@@ -672,6 +661,7 @@ export function CommandCenterHero({
         {/* 2 — Revenue. ↑ is positive (green). */}
         <Widget
           data-testid="hero-revenue"
+          freshness={freshnessStage}
           icon={<TrendingUp aria-hidden="true" />}
           title="הכנסות"
           value={
@@ -691,6 +681,7 @@ export function CommandCenterHero({
         <HelpTooltip content="הכנסות − פרסום − מלאי. רווח נטו מלא (כולל הוצאות קבועות וחוזרות) נמצא ב-P&L.">
           <Widget
             data-testid="hero-net-profit"
+            freshness={freshnessStage}
             icon={<LineChart aria-hidden="true" />}
             title={
               <span className="flex items-center gap-1.5">
@@ -743,6 +734,7 @@ export function CommandCenterHero({
         <HelpTooltip content="MER — Marketing Efficiency Ratio: סך ההכנסות ÷ סך ההוצאות (ROAS משוקלל על כל הפלטפורמות). מקור האמת היחיד לרווחיות הפרסום.">
           <Widget
             data-testid="hero-roas"
+            freshness={freshnessStage}
             icon={<Gauge aria-hidden="true" />}
             title="MER"
             bandRoas={current.roas ?? undefined}
@@ -760,6 +752,7 @@ export function CommandCenterHero({
             7-digit count stays overflow-safe + count-up animated. */}
         <Widget
           data-testid="hero-orders"
+          freshness={freshnessStage}
           icon={<ShoppingCart aria-hidden="true" />}
           title="הזמנות"
           value={
@@ -777,6 +770,7 @@ export function CommandCenterHero({
             cheaper). null/0 → "—" (no $0.00 surprise). */}
         <Widget
           data-testid="hero-cpm"
+          freshness={freshnessStage}
           icon={<BarChart3 aria-hidden="true" />}
           title="CPM עסקי"
           value={
@@ -801,6 +795,7 @@ export function CommandCenterHero({
         <HelpTooltip content="עלות המלאי (COGS) בטווח הנבחר. בדרך כלל ~25% מהמחזור — לא יעד אלא תצפית.">
           <Widget
             data-testid="hero-cogs"
+            freshness={freshnessStage}
             icon={<Package aria-hidden="true" />}
             title={`מלאי · ${rangeLabel}`}
             value={

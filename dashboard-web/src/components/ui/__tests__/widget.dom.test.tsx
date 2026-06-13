@@ -70,4 +70,77 @@ describe('<Widget>', () => {
     );
     expect(getByTestId('widget-icon')).not.toBeNull();
   });
+
+  // Regression guard (W3.2 2026-06-13) — the operator-locked freshness
+  // desaturation fade. `391fc19` rebuilt the hero on <Widget> but the
+  // primitive then had NO `freshness` prop, so the KPI cards silently stopped
+  // dimming with data age. The prop must forward straight to the inner Card's
+  // `data-freshness` (which `.glass[data-freshness]` turns into saturate()).
+  it('(f) freshness="stale" → forwards data-freshness="stale" onto the Card root', () => {
+    const { container } = render(
+      <Widget
+        data-testid="widget-fresh"
+        icon={<IconStub />}
+        title="הזמנות"
+        value="25"
+        freshness="stale"
+      />,
+    );
+    const root = container.querySelector('[data-testid="widget-fresh"]');
+    expect(root).not.toBeNull();
+    expect(root?.getAttribute('data-freshness')).toBe('stale');
+  });
+
+  it('(g) freshness="fresh" → data-freshness="fresh"; no freshness → attribute absent', () => {
+    const fresh = render(
+      <Widget
+        data-testid="widget-fresh-on"
+        icon={<IconStub />}
+        title="הזמנות"
+        value="25"
+        freshness="fresh"
+      />,
+    );
+    expect(
+      fresh.container
+        .querySelector('[data-testid="widget-fresh-on"]')
+        ?.getAttribute('data-freshness'),
+    ).toBe('fresh');
+
+    const none = render(
+      <Widget
+        data-testid="widget-fresh-off"
+        icon={<IconStub />}
+        title="הזמנות"
+        value="25"
+      />,
+    );
+    // Omitting the prop must NOT stamp a data-freshness attribute at all.
+    expect(
+      none.container
+        .querySelector('[data-testid="widget-fresh-off"]')
+        ?.hasAttribute('data-freshness'),
+    ).toBe(false);
+  });
+
+  // Contract hardening (reviewer flag) — a caller's stray spread must NOT
+  // clobber the band/freshness the Widget owns. The explicit props are set
+  // AFTER `{...rest}` in Widget.tsx, so the resolved values win.
+  it('(h) a stray spread data-band/data-freshness does NOT clobber the Widget-owned values', () => {
+    const { container } = render(
+      <Widget
+        data-testid="widget-spread"
+        icon={<IconStub />}
+        title="MER"
+        value={2.8}
+        bandRoas={2.8}
+        freshness="stale"
+        // Stray attributes a careless caller might spread — must lose.
+        {...({ 'data-band': 'red', 'data-freshness': 'fresh' } as Record<string, string>)}
+      />,
+    );
+    const root = container.querySelector('[data-testid="widget-spread"]');
+    expect(root?.getAttribute('data-band')).toBe('green'); // resolved band wins
+    expect(root?.getAttribute('data-freshness')).toBe('stale'); // forwarded prop wins
+  });
 });

@@ -95,10 +95,8 @@ import {
   aggregateCpm,
   toHeroPeriod,
   toHeroDelta,
-  toNetSparkValues,
   toPerStoreData,
   toChartData,
-  toSecondarySparklines,
   computeCoverage,
   toCoverageChip,
   type CoverageChip as CoverageChipData,
@@ -1350,25 +1348,14 @@ function HomeTab({
       prevOrdersTotal,
     );
   }, [comparisonUnavailable, filtered.curAgg, prevAggFromPrevData, heroCpm, heroCpmPrev, heroOrders, prevOrdersTotal]);
-  const netSparkValues = useMemo(
-    () => toNetSparkValues(filtered.series),
-    [filtered.series],
-  );
-  // Bug F (2026-05-31) — every secondary hero card carries a per-day
-  // sparkline so the strip stops feeling empty. The adapter reuses the
-  // exact (series, orders, campaigns) inputs the rest of the Home tab
-  // already consumes so no extra SWR fetch is introduced.
-  const secondarySparklines = useMemo(
-    () =>
-      toSecondarySparklines({
-        series: filtered.series,
-        range: filters.range,
-        store: filters.store,
-        ordersRows,
-        campaignsRows: campaignsData?.rows,
-      }),
-    [filtered.series, filters.range, filters.store, ordersRows, campaignsData],
-  );
+  // (W3.2 2026-06-13) The per-card hero sparklines were removed when
+  // CommandCenterHero was rebuilt on the Horizon <Widget> primitive, so the
+  // `netSparkValues` / `secondarySparklines` memos that fed them are dead —
+  // the hero no longer consumes either prop. Dropped here to stop computing
+  // (and passing) values nothing reads. The underlying daily series still
+  // drive the RoasTargetChart, and the `toNetSparkValues` / `toSecondarySparklines`
+  // adapters + the exported <NetSparkline>/<MiniSparkline> components remain for
+  // any surface that wants them.
 
   // ---- Per-store row ------------------------------------------------------
   const storeIdByName = useMemo<Record<string, string>>(() => {
@@ -1660,8 +1647,6 @@ function HomeTab({
         coverageBreakdown={coverageBreakdown}
         comparisonLabel={compare.caption}
         comparisonUnavailable={comparisonUnavailable}
-        netSparkValues={netSparkValues}
-        secondarySparklines={secondarySparklines}
         updatedAt={data.dataLastWriteAt ?? undefined}
         newCustomer={heroNewCustomer}
         provenanceVerdict={provenanceVerdict}

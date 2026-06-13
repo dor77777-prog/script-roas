@@ -1,6 +1,6 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { Card } from './Card';
+import { Card, type CardFreshness } from './Card';
 import { Money } from './Money';
 import { bandForRoas, type CoreRoasBand } from '@/lib/roasBands';
 import { BAND_TAG_LABEL } from '@/lib/format/useRoasBandGradient';
@@ -57,6 +57,16 @@ export interface WidgetProps
    * MER hero card's contract).
    */
   bandRoas?: number;
+  /**
+   * Freshness desaturation signal — forwarded to the inner {@link Card}'s
+   * `freshness` prop (→ `data-freshness="…"`), which the
+   * `.glass[data-freshness]` rule in globals.css turns into the operator-locked
+   * saturate()+brightness fade (fresh <15min / aging 15–30min / stale >30min;
+   * see lib/freshness/useStaleness.ts). Restores the W3.2-regressed behaviour
+   * where every hero KPI card dimmed together as the period went stale. Omit to
+   * opt out (no fade) — back-compat for un-freshness-aware callers.
+   */
+  freshness?: CardFreshness;
   /** Extra classes for the Card root. */
   className?: string;
 }
@@ -113,9 +123,25 @@ export function Widget({
   value,
   sub,
   bandRoas,
+  freshness,
   className,
   ...rest
 }: WidgetProps) {
+  // Ordering matters: the Widget OWNS `data-band` (resolved from `bandRoas`)
+  // and `data-freshness` (forwarded from `freshness`). Strip any stray
+  // `data-band`/`data-freshness` a caller may have spread out of `rest` so they
+  // can NEVER reach the inner <Card>'s own `{...props}` spread and clobber the
+  // values we set below. (The inner Card spreads its `...props` last, so a stray
+  // raw attribute left in `rest` would otherwise win over the forwarded
+  // freshness.) These two attributes are Widget-owned, full stop.
+  const {
+    'data-band': _ignoredStrayBand,
+    'data-freshness': _ignoredStrayFreshness,
+    ...domRest
+  } = rest as Record<string, unknown>;
+  void _ignoredStrayBand;
+  void _ignoredStrayFreshness;
+
   const band =
     typeof bandRoas === 'number' && Number.isFinite(bandRoas)
       ? bandForRoas(bandRoas)
@@ -137,8 +163,13 @@ export function Widget({
   return (
     <Card
       className={cn('!flex-row items-center gap-4', className)}
+      {...domRest}
+      // Set AFTER `{...domRest}` (which has already had any stray
+      // data-band/data-freshness stripped above) so these Widget-owned values
+      // win unconditionally — `data-band` resolved from `bandRoas`, `freshness`
+      // forwarded to the Card → `data-freshness` desaturation fade.
       data-band={band ?? undefined}
-      {...rest}
+      freshness={freshness}
     >
       {/* Circular icon badge. `[&>svg]:h-5 [&>svg]:w-5` keeps the icon a
           consistent size regardless of the SVG passed in. */}
