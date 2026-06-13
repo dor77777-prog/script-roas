@@ -55,6 +55,14 @@ import {
 import { aovEmphasis } from '@/lib/format/aovEmphasis';
 import { useStaleness } from '@/lib/freshness/useStaleness';
 import { adDisplayState, adDisplayBand } from '@/lib/adState';
+import { isSpendAlarm } from '@/lib/roasBands';
+
+/* Operator-locked factual alarm copy. Shown in the card's scrim sub-surface
+ * when a store has spent over the alarm threshold ($100 CAD) with ZERO sales.
+ * Verbatim from the canonical mockup (band-alarm swatch,
+ * docs/superpowers/mockups/2026-06-12-horizon-reskin/home-approved.html) —
+ * the rejected dramatic "כסף יוצא — כלום לא חוזר" wording is NOT used. */
+const ALARM_NOTE = 'הוצאה מעל $100 ללא מכירות — בדוק את הקמפיינים';
 
 /* --------------------------------------------------------------------------
  * Props
@@ -291,13 +299,19 @@ function StoreCard({
   onSelect?: (storeId: string) => void;
   rangeLabel?: string;
 }) {
-  // Operator-locked "alarm-red" state: the store SPENT money but made ZERO
-  // sales (the worst outcome). Such a store carries `roas: null` upstream
-  // (a 0-revenue ROAS isn't a meaningful ratio), so we derive the flag from
-  // raw spend/revenue and let it drive the band. Genuine no-activity
-  // (spend === 0) does NOT trip this and stays gray ("אין נתונים").
-  const zeroSalesWithSpend =
-    (store.spend ?? 0) > 0 && store.revenue === 0;
+  // Operator-locked "alarm-red" state: the store SPENT real money (> $100 CAD)
+  // but made ZERO sales (the worst outcome). Such a store carries `roas: null`
+  // upstream (a 0-revenue ROAS isn't a meaningful ratio), so we derive the flag
+  // from raw spend/revenue via the single source of truth (`isSpendAlarm` in
+  // lib/roasBands.ts) and let it drive the band. The threshold ($100 CAD) keeps
+  // early-day "money out, no sales yet" trickles from false-alarming — a store
+  // at $20 spend / 0 sales at 7am is normal, not an emergency. Spend ≤ $100 with
+  // 0 sales is NOT alarm and falls through (roas is null upstream → gray
+  // "אין נתונים"); genuine no-activity (spend === 0) also stays gray.
+  const isAlarm = isSpendAlarm({
+    spend: store.spend ?? 0,
+    revenue: store.revenue ?? 0,
+  });
 
   // Ads-off Phase 2 — off-display override. When ALL of the store's applicable
   // platforms are toggled off AND spend is 0 (no historical-window spend), we
@@ -320,7 +334,7 @@ function StoreCard({
   // The 2nd arg (isStale) keeps its default false here (per-card desaturation
   // is driven by data-freshness, not this flag); the 3rd arg flips the card
   // to the alarm-red band.
-  const roasBand = useRoasBandGradient(store.roas, false, zeroSalesWithSpend);
+  const roasBand = useRoasBandGradient(store.roas, false, isAlarm);
   // Off-band override wins when set (organic→blue, off-empty→gray).
   const band = offBandId
     ? { band: offBandId, desaturate: false }
@@ -439,7 +453,7 @@ function StoreCard({
             ? 'אורגני'
             : offState !== 'normal'
             ? '0'
-            : zeroSalesWithSpend
+            : isAlarm
             ? '0.00x'
             : <CountUp value={store.roas} format={(n) => `${n.toFixed(2)}x`} />}
         </bdi>
@@ -447,12 +461,24 @@ function StoreCard({
           ROAS · {rangeLabel ?? 'היום'}
         </span>
 
+        {/* Alarm note — operator-locked factual line shown ONLY in the
+            red-alarm state (spend > $100 CAD with ZERO sales). It sits on a
+            dark scrim sub-surface (same white-on-scrim recipe as `.band-tag`,
+            guaranteed-AA on the vivid alarm gradient in BOTH themes) so the
+            "go look NOW" copy is legible without depending on the band hue.
+            Mockup: band-alarm swatch, home-approved.html. */}
+        {isAlarm && (
+          <p className="store-alarm-note mt-3" role="status">
+            {ALARM_NOTE}
+          </p>
+        )}
+
         {/* Mobile B1 — ROAS trend spark + delta-vs-prev chip. md:hidden keeps
             the desktop card's full-width ROAS hero untouched. The spark draws
             in band-agnostic white ink (legible on ANY band, both themes); the
             chip carries the ▲/▼ + % direction signal on a dark scrim. Hidden in
             the alarm-red 0-sales state (no meaningful ROAS trend to show). */}
-        {offState === 'normal' && !zeroSalesWithSpend &&
+        {offState === 'normal' && !isAlarm &&
           (store.roasSpark?.length ?? 0) >= 2 &&
           (() => {
             const deltaText = fmtRoasDeltaChip(store.roasDeltaPct);

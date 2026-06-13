@@ -149,15 +149,17 @@ describe('PerStoreRow', () => {
     expect(cards[2].getAttribute('data-band')).toBe('red');    // roas 1.65
   });
 
-  // (h) Operator-locked alarm-red state — the store SPENT money but made ZERO
-  // sales (`spend>0 && revenue===0`). Card flips to data-band="red-alarm", the
-  // ROAS hero reads an explicit "0.00x" (NOT "—"), and the band-tag reads
-  // "0 מכירות". A spend=0 (no-activity) store must stay gray ("אין נתונים").
-  it('spent money + ZERO sales → red-alarm band, ROAS "0.00x", tag "0 מכירות"', () => {
+  // (h) Operator-locked alarm-red state — the store SPENT real money (> $100 CAD)
+  // but made ZERO sales. Threshold is `isSpendAlarm` (lib/roasBands.ts):
+  // spend > $100 CAD && revenue === 0. Card flips to data-band="red-alarm", the
+  // ROAS hero reads an explicit "0.00x" (NOT "—"), the band-tag reads
+  // "0 מכירות", and the factual alarm note is shown. A spend=0 (no-activity)
+  // store must stay gray ("אין נתונים").
+  it('spend $148 + ZERO sales → red-alarm band, ROAS "0.00x", tag "0 מכירות", factual note', () => {
     const zeroSales: PerStoreData = {
       storeId: 'burned-store',
       storeName: 'burned-store',
-      spend: 100,
+      spend: 148, // > $100 CAD threshold → alarm
       revenue: 0,
       orders: 0,
       aov: null,
@@ -174,6 +176,11 @@ describe('PerStoreRow', () => {
     // Band-tag pill reads "0 מכירות".
     const tag = card?.querySelector('.band-tag');
     expect(tag?.textContent).toBe('0 מכירות');
+    // Operator-locked factual alarm note is present.
+    const note = card?.querySelector('.store-alarm-note');
+    expect(note?.textContent).toBe('הוצאה מעל $100 ללא מכירות — בדוק את הקמפיינים');
+    // The rejected dramatic copy must NOT appear.
+    expect(card?.textContent).not.toContain('כסף יוצא');
   });
 
   it('NO spend (spend=0) → stays gray / "אין נתונים" (no-activity, unchanged)', () => {

@@ -1889,6 +1889,25 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   color: #fff;
 }
 
+/* Red-alarm note — the operator-locked factual line
+   ("הוצאה מעל $100 ללא מכירות — בדוק את הקמפיינים") shown in the red-alarm
+   store card. Sits on a DARKER scrim block (mockup `bg-black/30` rounded pill,
+   home-approved.html band-alarm swatch) so the white "go look NOW" copy stays
+   guaranteed-AA on the vivid pulsing alarm gradient in BOTH themes — the copy's
+   legibility never depends on the band hue. Only ever rendered inside a
+   `[data-band="red-alarm"]` card, but the rule is class-scoped so it can't leak
+   onto other bands. */
+.per-store-card .store-alarm-note {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.30);
+  color: #fff;
+}
+
 /* Campaign-drawer neutral-header platform pill (Task 1.5) — brand-tinted bg
    wrapping a PlatformBadge so the platform color reads as a clear block on the
    neutral header, in both themes. Brand tints are theme-independent. */
