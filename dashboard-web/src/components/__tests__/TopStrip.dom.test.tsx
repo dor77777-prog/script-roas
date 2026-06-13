@@ -9,6 +9,10 @@
 //     onOpenMobileSidebar when tapped.
 //   • Renders the CommandPalette trigger pill.
 //   • The AI-export control fires onOpenAiReport (home tab).
+//   • The AI-export control is VISIBLE at mobile width (reskin-w8): the control
+//     itself is never `hidden` (icon-only on phones, labeled from md+) and
+//     always exposes an accessible name, so the action is reachable on
+//     mobile-home — not only via the ⌘K palette command.
 //   • The AI-export control is HOME-ONLY (absent on other tabs) — the report
 //     modal listener (AiReportButton) only mounts on home, so the navbar
 //     button would be a no-op elsewhere; the approved mockup is the home navbar.
@@ -96,6 +100,20 @@ describe('reskin-w2c — <TopStrip>', () => {
     renderStrip({ activeTab: 'home', onOpenAiReport });
     fireEvent.click(screen.getByTestId('top-strip-ai-export'));
     expect(onOpenAiReport).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces the AI-export control on mobile-home: visible (never `hidden`) + accessible name (reskin-w8)', () => {
+    renderStrip({ activeTab: 'home' });
+    const btn = screen.getByTestId('top-strip-ai-export');
+    // The control itself must NOT be display-hidden at base (phone) width —
+    // it's icon-only on phones, labeled from md+, but always present/usable.
+    expect(btn.className).not.toContain('hidden');
+    expect(btn.className).toContain('inline-flex');
+    // It exposes an accessible name even when the text label is collapsed
+    // (icon-only on phones), so it's reachable by name on mobile-home.
+    expect(
+      screen.getByRole('button', { name: 'ייצא דוח ל-AI' }),
+    ).toBe(btn);
   });
 
   it('shows the AI-export control ONLY on the home tab (none on other tabs)', () => {

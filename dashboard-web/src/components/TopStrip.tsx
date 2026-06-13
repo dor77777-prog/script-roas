@@ -1,6 +1,6 @@
 'use client';
 
-import { Menu } from 'lucide-react';
+import { Menu, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { CommandPalette } from './CommandPalette';
@@ -142,10 +142,18 @@ export function TopStrip({
         <FreshnessChip dataLastWriteAt={dataLastWriteAt} />
         <SyncIndicator />
         {/* AI-export — the brand `<Button>` primitive (NOT raw bg-brand/text-
-            white). Mirrors AiReportButton's own trigger copy; the real export
-            modal is owned by AiReportButton (mounted modal-only on the home
-            tab) and opened via the signal this handler bumps. Hidden on the
-            narrowest phones to keep the floating bar from wrapping.
+            white). Mirrors AiReportButton's own trigger (Bot icon + copy); the
+            real export modal is owned by AiReportButton (mounted modal-only on
+            the home tab) and opened via the signal this handler bumps.
+
+            RESPONSIVE (reskin-w8): the action is reachable at ALL widths. On
+            phones (<md) it renders ICON-ONLY (the Bot glyph) so it doesn't
+            crowd the 375px floating bar — the text label collapses via
+            `hidden md:inline` while the Bot icon always shows. A constant
+            `aria-label` gives the icon-only mobile presentation an accessible
+            name (the visible text is display:none there). From md+ the full
+            labeled pill appears, matching the approved mockup. The palette
+            command ("ייצא דוח ל-AI", ⌘K) remains a second affordance.
 
             HOME-ONLY: the report modal listener (AiReportButton) lives only on
             the home tab, so on every other tab this button would be a no-op /
@@ -160,9 +168,11 @@ export function TopStrip({
             size="sm"
             onClick={onOpenAiReport}
             data-testid="top-strip-ai-export"
-            className="hidden md:inline-flex shrink-0 rounded-pill font-bold"
+            aria-label="ייצא דוח ל-AI"
+            className="inline-flex shrink-0 rounded-pill font-bold gap-1.5 px-2.5 md:px-3"
           >
-            ייצא דוח ל-AI
+            <Bot size={15} className="shrink-0" />
+            <span className="hidden md:inline">ייצא דוח ל-AI</span>
           </Button>
         )}
       </div>
