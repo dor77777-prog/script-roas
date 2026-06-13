@@ -12,6 +12,7 @@
 // foreground tokens — never text-color-from-band).
 
 import useSWR from 'swr';
+import { ArrowLeft } from 'lucide-react';
 import { fetchJsonOrNull } from '@/lib/fetchJson';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -49,15 +50,16 @@ export function ReconcileBanner() {
       className="flex items-center gap-3 px-4 py-3"
     >
       <Badge tone="warning">אי-התאמה</Badge>
-      <span className="text-sm text-ink">
-        נמצאו <bdi dir="ltr">{n}</bdi> אי-התאמות בין מקורות-הנתונים
+      <span className="text-fs-sm text-ink">
+        נמצאו <bdi dir="ltr" className="tabular-nums">{n}</bdi> אי-התאמות בין מקורות-הנתונים
       </span>
       <a
         href="/operator"
         data-testid="reconcile-banner-link"
-        className="ms-auto whitespace-nowrap text-xs font-bold text-[color:var(--accent-link)] hover:underline"
+        className="ms-auto inline-flex items-center gap-1 whitespace-nowrap text-fs-xs font-bold text-[color:var(--accent-link)] hover:underline"
       >
-        לפרטים: /operator ←
+        לפרטים: /operator
+        <ArrowLeft size={13} aria-hidden className="flex-none" />
       </a>
     </Card>
   );

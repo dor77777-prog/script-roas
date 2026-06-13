@@ -33,4 +33,13 @@ describe('UnknownBucketPanel', () => {
     const money = screen.getByTestId('unknown-bucket-revenue');
     expect(money.className).toMatch(/tabular-nums/);
   });
+
+  // Horizon re-skin (W3.8b): the per-store rows + stat tiles render on the
+  // canonical recessed inset token (bg-pill-track), not the legacy bg-glass-1.
+  it('renders per-store rows on the canonical bg-pill-track inset', () => {
+    render(<UnknownBucketPanel breakdown={FIXTURE} />);
+    const storeRow = screen.getByText('Zol Plus').closest('li')!;
+    expect(storeRow.className).toContain('bg-pill-track');
+    expect(storeRow.className).not.toContain('bg-glass-1');
+  });
 });

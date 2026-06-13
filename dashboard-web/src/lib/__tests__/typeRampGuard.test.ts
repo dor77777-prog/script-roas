@@ -98,13 +98,17 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   'campaign-drawer/CampaignDrawerDaily.tsx': 11,
   'campaign-drawer/CampaignDrawerOverview.tsx': 2,
   'campaign-drawer/index.tsx': 2,
-  'home/ChannelTruthPanel.tsx': 2,
+  // home/ChannelTruthPanel.tsx — DRAINED to 0 in Wave 3.8b (Horizon home-surfaces
+  // re-skin: NC-ROAS caption + band-tag pill sub-floor literals → text-fs-2xs /
+  // shared band-chip recipe; removed from allowlist).
   'home/RoasChartDateRangePicker.tsx': 2,
   'home/RoasTargetChart.tsx': 4,
   // home/StoreDetailModal.tsx — DRAINED to 0 in Wave 3.8 (Horizon store-detail
   // re-skin: sub-floor KPI label + top-campaign caption → text-fs-2xs ramp
   // token; removed from allowlist).
-  'home/UnknownBucketPanel.tsx': 1,
+  // home/UnknownBucketPanel.tsx — DRAINED to 0 in Wave 3.8b (Horizon
+  // unknown-bucket re-skin: per-store-row "הזמנות" label → text-fs-2xs ramp
+  // token; removed from allowlist).
   // insights/ActionListPanel.tsx — DRAINED to 0 in Wave 3.7 (Horizon
   // insight-surfaces re-skin: sub-floor scope badge → text-fs-2xs; removed).
   'operator/ReconcilePanel.tsx': 1,

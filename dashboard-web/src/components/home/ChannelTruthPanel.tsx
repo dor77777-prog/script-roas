@@ -6,6 +6,7 @@
 // RTL, WCAG-AA (numbers via <Money>, band color carries a label not just hue).
 // CAPI-safe: pure display of already-computed numbers.
 
+import { AlertTriangle } from 'lucide-react';
 import { Money } from '@/components/ui/Money';
 import { CHART_COLORS } from '@/lib/chartColors';
 import { cn } from '@/lib/utils';
@@ -37,11 +38,19 @@ function roasBand(roas: number | null): 'good' | 'warn' | 'bad' | 'none' {
 }
 const bandFg = (b: ReturnType<typeof roasBand>) =>
   b === 'good' ? 'text-status-greenFg' : b === 'warn' ? 'text-status-warningFg' : b === 'bad' ? 'text-status-redFg' : 'text-ink-muted';
+/**
+ * Horizon re-skin (W3.8b) — the band tag renders through the SHARED
+ * `band-chip` + `chip-{band}` recipe (globals.css), the same AA-safe tint the
+ * Widget / RoasTargetChart / StoreDetailModal pills use. The band CLASSIFICATION
+ * is unchanged (still `bandForRoas` → `roasBand`); this only maps the 4-tone
+ * presentation onto the canonical chip palette: good→green, warn→orange,
+ * bad→red, none→gray.
+ */
 const bandChip = (b: ReturnType<typeof roasBand>) =>
-  b === 'good' ? 'bg-status-greenBg text-status-greenFg'
-  : b === 'warn' ? 'bg-status-warningBg text-status-warningFg'
-  : b === 'bad' ? 'bg-status-redBg text-status-redFg'
-  : 'bg-glass-2 text-ink-muted';
+  b === 'good' ? 'chip-green'
+  : b === 'warn' ? 'chip-orange'
+  : b === 'bad' ? 'chip-red'
+  : 'chip-gray';
 const bandLabel = (b: ReturnType<typeof roasBand>) =>
   b === 'good' ? 'בריא' : b === 'warn' ? 'תקין' : b === 'bad' ? 'חלש' : 'אין נתונים';
 
@@ -85,18 +94,18 @@ export function ChannelTruthPanel({
             <div
               key={m.channel}
               data-testid={`channel-card-${m.channel}`}
-              className="relative overflow-hidden rounded-xl border border-glass-edge bg-glass-2 p-3"
+              className="relative overflow-hidden rounded-hz bg-pill-track p-3"
             >
               <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: CHART_COLORS[m.channel] }} />
-              <div className="flex items-center gap-1.5 text-[12.5px] font-bold text-ink">
+              <div className="flex items-center gap-1.5 text-fs-sm font-bold text-ink">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: CHART_COLORS[m.channel] }} />
                 {CHANNEL_LABEL[m.channel]}
               </div>
               <div className={cn('mt-2 text-2xl font-extrabold tabular-nums', bandFg(b))}>
                 {m.ncRoas == null ? '—' : `${m.ncRoas.toFixed(1)}×`}
               </div>
-              <div className="text-[10px] text-ink-muted">NC-ROAS</div>
-              <div className="mt-2 space-y-1 text-[12px]">
+              <div className="text-fs-2xs text-ink-muted">NC-ROAS</div>
+              <div className="mt-2 space-y-1 text-fs-xs">
                 <div className="flex justify-between"><span className="text-ink-secondary">nCAC</span>
                   <span className="text-ink tabular-nums">{m.nCac == null ? '—' : <Money value={m.nCac} />}</span></div>
                 <div className="flex justify-between"><span className="text-ink-secondary">הכנסת לקוחות-חדשים</span>
@@ -123,7 +132,7 @@ export function ChannelTruthPanel({
                   </span>
                 </div>
               </div>
-              <span className={cn('mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-extrabold', bandChip(b))}>
+              <span className={cn('band-chip mt-2', bandChip(b))}>
                 {b === 'none' ? channelEmptyLabel(m) : bandLabel(b)}
               </span>
             </div>
@@ -131,14 +140,14 @@ export function ChannelTruthPanel({
         })}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-glass-edge bg-glass-2 px-3 py-2 text-[12px]">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-hz border border-dashed border-glass-edge bg-pill-track px-3 py-2 text-fs-xs">
         <span className="text-ink-secondary">
           בלנדי (כל הערוצים):{' '}
           <b className="text-ink tabular-nums">{blendedNcRoas == null ? '—' : `NC-ROAS ${blendedNcRoas.toFixed(1)}×`}</b>
           {blendedNcac != null && <> · <b className="text-ink tabular-nums">nCAC <Money value={blendedNcac} /></b></>}
         </span>
         {unclassifiableShare != null && unclassifiableShare > 0 && (
-          <span className="text-[10.5px] text-ink-muted tabular-nums">
+          <span className="text-fs-2xs text-ink-muted tabular-nums">
             {Math.round(unclassifiableShare * 100)}% מההזמנות לא-מסווגות — לא נכללות בפיצול
           </span>
         )}
@@ -147,10 +156,13 @@ export function ChannelTruthPanel({
       {showInsight && (
         <div
           data-testid="channel-insight"
-          className="rounded-lg bg-status-warningBg px-3 py-2 text-[12px] font-semibold text-status-warningFg"
+          className="flex items-start gap-1.5 rounded-hz bg-status-warningBg px-3 py-2 text-fs-xs font-semibold text-status-warningFg"
         >
-          ⚠️ הבלנדי מסתיר את הפער: <b>{CHANNEL_LABEL[best.channel]} {best.ncRoas.toFixed(1)}×</b> מסבסד את{' '}
-          <b>{CHANNEL_LABEL[worst.channel]} {worst.ncRoas.toFixed(1)}×</b>. שקול להזיז תקציב.
+          <AlertTriangle size={14} aria-hidden className="mt-0.5 flex-none" />
+          <span>
+            הבלנדי מסתיר את הפער: <b>{CHANNEL_LABEL[best.channel]} {best.ncRoas.toFixed(1)}×</b> מסבסד את{' '}
+            <b>{CHANNEL_LABEL[worst.channel]} {worst.ncRoas.toFixed(1)}×</b>. שקול להזיז תקציב.
+          </span>
         </div>
       )}
     </div>

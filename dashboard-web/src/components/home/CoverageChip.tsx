@@ -27,7 +27,7 @@ function ChipContent({ pct, prominent }: { pct: number; prominent: boolean }) {
 }
 
 const CHIP_BASE =
-  'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium tabular-nums';
+  'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-fs-2xs font-medium tabular-nums';
 const CHIP_PROMINENT = 'bg-status-warningBg text-status-warningFg border border-status-warning';
 const CHIP_QUIET = 'text-ink-muted';
 

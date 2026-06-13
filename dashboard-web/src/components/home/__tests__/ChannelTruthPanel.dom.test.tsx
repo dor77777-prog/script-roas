@@ -20,6 +20,25 @@ describe('ChannelTruthPanel', () => {
     expect(screen.getByTestId('channel-card-tiktok').textContent).toContain('1.2×');
   });
 
+  // Horizon re-skin (W3.8b): the 3-up channel cards sit on the canonical
+  // recessed inset token (bg-pill-track), and the band tag renders through the
+  // shared AA-safe `band-chip` + `chip-{band}` recipe (good→green, bad→red).
+  it('uses the canonical bg-pill-track inset + shared band-chip recipe', () => {
+    render(<ChannelTruthPanel metrics={METRICS} />);
+    const meta = screen.getByTestId('channel-card-meta');
+    expect(meta.className).toContain('bg-pill-track');
+    expect(meta.querySelector('.band-chip.chip-green')).not.toBeNull(); // 4.1× → green
+    expect(screen.getByTestId('channel-card-tiktok').querySelector('.band-chip.chip-red')).not.toBeNull(); // 1.2× → red
+  });
+
+  // No-emoji rule: the subsidy insight uses a lucide AlertTriangle, never the ⚠️ glyph.
+  it('renders the subsidy insight with a lucide icon, not an emoji glyph', () => {
+    render(<ChannelTruthPanel metrics={METRICS} blendedNcRoas={3.3} />);
+    const insight = screen.getByTestId('channel-insight');
+    expect(insight.textContent).not.toContain('⚠');
+    expect(insight.querySelector('svg')).not.toBeNull();
+  });
+
   it('weak channel (<2×) is red, healthy (≥3×) is green', () => {
     render(<ChannelTruthPanel metrics={METRICS} />);
     expect(screen.getByTestId('channel-card-tiktok').querySelector('.text-status-redFg')).not.toBeNull();

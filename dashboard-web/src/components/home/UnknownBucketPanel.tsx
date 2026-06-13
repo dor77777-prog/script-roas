@@ -38,7 +38,7 @@ export function UnknownBucketPanel({ breakdown }: { breakdown: UnknownBucketBrea
     <section
       data-testid="unknown-bucket-panel"
       dir="rtl"
-      className="overflow-hidden rounded-xl border border-glass-edge bg-glass-2"
+      className="overflow-hidden rounded-hz border border-glass-edge bg-glass-1"
     >
       {/* header band — title + honest framing + totals */}
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-glass-edge bg-status-warningBg px-4 py-3">
@@ -47,23 +47,23 @@ export function UnknownBucketPanel({ breakdown }: { breakdown: UnknownBucketBrea
             <HelpCircle size={15} aria-hidden />
             פירוק הבלתי-מזוהה
           </Heading>
-          <p className="mt-1 max-w-md text-[11px] leading-relaxed text-ink-secondary">
+          <p className="mt-1 max-w-md text-fs-2xs leading-relaxed text-ink-secondary">
             ההזמנות שמקור-ההפניה שלהן לא נקלט (ערוץ ישיר · חסר UTM · דפדפן חוסם).{' '}
             <b className="text-ink">תיאור בלבד</b> — לא חלוקה-מחדש לערוצים.
           </p>
         </div>
         <dl className="flex flex-none gap-5 text-end">
           <div>
-            <dt className="text-[10.5px] font-semibold text-ink-muted">הזמנות</dt>
-            <dd className="text-lg font-extrabold text-ink">
+            <dt className="text-fs-2xs font-semibold text-ink-muted">הזמנות</dt>
+            <dd className="text-fs-lg font-extrabold text-ink">
               <bdi dir="ltr" className="tabular-nums">{breakdown.unknownOrders}</bdi>
             </dd>
           </div>
           <div>
-            <dt className="text-[10.5px] font-semibold text-ink-muted">הכנסה</dt>
+            <dt className="text-fs-2xs font-semibold text-ink-muted">הכנסה</dt>
             <dd
               data-testid="unknown-bucket-revenue"
-              className="tabular-nums text-lg font-extrabold text-ink"
+              className="tabular-nums text-fs-lg font-extrabold text-ink"
             >
               <Money value={breakdown.unknownRevenueCad} />
             </dd>
@@ -105,12 +105,12 @@ export function UnknownBucketPanel({ breakdown }: { breakdown: UnknownBucketBrea
             {byStore.map((s) => (
               <li
                 key={s.store}
-                className="flex items-center justify-between gap-3 rounded-lg border border-glass-edge bg-glass-1 px-3 py-2"
+                className="flex items-center justify-between gap-3 rounded-hz bg-pill-track px-3 py-2"
               >
-                <span className="truncate text-[13px] font-bold text-ink">{s.store}</span>
+                <span className="truncate text-fs-sm font-bold text-ink">{s.store}</span>
                 <span className="flex flex-none items-center gap-1.5 text-end">
-                  <span className="text-[10px] font-semibold text-ink-muted">הזמנות</span>
-                  <bdi dir="ltr" className="tabular-nums text-sm font-extrabold text-ink">{s.orders}</bdi>
+                  <span className="text-fs-2xs font-semibold text-ink-muted">הזמנות</span>
+                  <bdi dir="ltr" className="tabular-nums text-fs-sm font-extrabold text-ink">{s.orders}</bdi>
                 </span>
               </li>
             ))}
@@ -118,9 +118,9 @@ export function UnknownBucketPanel({ breakdown }: { breakdown: UnknownBucketBrea
         </Block>
 
         {/* honest-framing disclaimer */}
-        <div className="flex items-start gap-2 rounded-lg border border-glass-edge bg-accent-bg px-3 py-2.5">
+        <div className="flex items-start gap-2 rounded-hz border border-glass-edge bg-accent-bg px-3 py-2.5">
           <AlertTriangle size={15} aria-hidden className="mt-0.5 flex-none text-status-warningFg" />
-          <p className="text-[11px] leading-relaxed text-ink-secondary">
+          <p className="text-fs-2xs leading-relaxed text-ink-secondary">
             <b className="text-ink">מסגור ישר:</b> הפנל מתאר את ההזמנות הבלתי-מזוהות — מי הלקוח, גודל הסל,
             אמצעי-התשלום ובאיזו חנות. הוא <b className="text-ink">אינו</b> מנחש לאיזה ערוץ הן שייכות ו
             <b className="text-ink">אינו</b> מחלק-מחדש את החלק הבלתי-מזוהה לערוצים — ה-ROAS לכל ערוץ נשאר כפי שהוא.
@@ -143,8 +143,8 @@ function Block({
   return (
     <div>
       <div className="mb-2 flex items-baseline gap-2">
-        <span className="text-[12px] font-bold text-ink">{title}</span>
-        <span className="text-[10.5px] font-medium text-ink-muted">{desc}</span>
+        <span className="text-fs-xs font-bold text-ink">{title}</span>
+        <span className="text-fs-2xs font-medium text-ink-muted">{desc}</span>
       </div>
       {children}
     </div>
@@ -163,13 +163,13 @@ function Stat({
   value: number;
 }) {
   return (
-    <div className="rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-2 text-center">
-      <div className="flex items-center justify-center gap-1.5 text-[11px] font-semibold text-ink-muted">
+    <div className="rounded-hz bg-pill-track px-2.5 py-2 text-center">
+      <div className="flex items-center justify-center gap-1.5 text-fs-2xs font-semibold text-ink-muted">
         <span className={cn('inline-block h-2 w-2 flex-none rounded-sm', TONE_SWATCH[tone])} aria-hidden />
         <span>{label}</span>
         {range && <bdi dir="ltr" className="text-ink-subtle">({range})</bdi>}
       </div>
-      <div className="mt-1 text-lg font-extrabold text-ink">
+      <div className="mt-1 text-fs-lg font-extrabold text-ink">
         <bdi dir="ltr" className="tabular-nums">{value}</bdi>
       </div>
     </div>
