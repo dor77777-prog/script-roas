@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Info, Package, X } from 'lucide-react';
+import { Info, Package, X, Lightbulb, AlertTriangle } from 'lucide-react';
 import type { ProductChannelBreakdown as ProductChannelBreakdownType } from '@/lib/attributionAnalysis';
 import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 import { CHART_COLORS } from '@/lib/chartColors';
+import { Money } from '@/components/ui/Money';
 import { Button } from '@/components/ui/Button';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Heading } from '@/components/ui/Typography';
@@ -16,10 +17,11 @@ import { Heading } from '@/components/ui/Typography';
  * orders) passes; the gate itself lives in CampaignDrawer's
  * `productChannelBreakdown` useMemo and is NOT duplicated here.
  *
- * Hebrew literals (D-05), the `&quot;` HTML entity, and the emoji
- * recommendation chips (💡 green ≥60%, ⚠️ amber <30% + ≥5 orders) are
- * lifted byte-identical from CampaignDrawer.tsx pre-refactor (lines
- * 699-760 JSX block).
+ * Hebrew literals (D-05) and the `&quot;` HTML entity are lifted
+ * byte-identical from CampaignDrawer.tsx pre-refactor (lines 699-760 JSX
+ * block). Horizon re-skin (W4.5): the recommendation chips' emoji
+ * (💡 green ≥60% / ⚠️ amber <30% + ≥5 orders) are now lucide glyphs
+ * (Lightbulb / AlertTriangle); chip thresholds + tones are unchanged.
  */
 type Props = {
   breakdown: ProductChannelBreakdownType;
@@ -92,7 +94,7 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
       <div className="rounded-xl border border-glass-edge bg-glass-2/30 p-3 space-y-3">
         {!chipHidden && (
           <HelpTooltip content="current state, not date-versioned">
-            <div className="rounded-md bg-glass-2 border border-glass-edge px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5">
+            <div className="rounded-md bg-pill-track border border-glass-edge px-2.5 py-1.5 text-fs-2xs text-ink-muted flex items-center gap-1.5">
               <Info size={12} className="shrink-0 text-ink-muted" />
               <span className="leading-relaxed">
                 ה-product↔campaign mapping מבוסס על המיפוי הנוכחי שלך. שינוי המיפוי משפיע על נתונים היסטוריים בדיעבד.
@@ -115,22 +117,23 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
         )}
 
         {/* Summary line — total orders + CAD */}
-        <div className="text-[12px] text-ink-secondary tabular-nums">
-          {total} הזמנות של מוצרים משויכים · CAD {breakdown.totalRevenue.toFixed(0)} סה&quot;כ
+        <div className="text-fs-xs text-ink-secondary tabular-nums">
+          {total} הזמנות של מוצרים משויכים · <Money value={breakdown.totalRevenue} prefix="CAD" /> סה&quot;כ
         </div>
 
         {/* 5-segment source breakdown bar (Phase 05.7.9 — added TikTok). */}
         <div className="space-y-1">
-          <div className="flex justify-between text-[11px] text-ink-secondary tabular-nums">
+          <div className="flex justify-between text-fs-2xs text-ink-secondary tabular-nums">
             <span>
               פייסבוק: {fb} · גוגל: {google} · טיקטוק: {tiktok} · ישיר: {direct} · אחר: {other}
             </span>
           </div>
           {/* 5-segment source bar — paid platform segments (Facebook=Meta,
-              Google, TikTok) read CHART_COLORS for brand-true colors that
-              match the per-platform lines elsewhere in the dashboard.
-              Direct + Other stay neutral grays (they aren't paid identities). */}
-          <div className="h-2.5 rounded-full bg-glass-2 overflow-hidden flex">
+              Google, TikTok) read CHART_COLORS (→ var(--chart-platform-*)) for
+              brand-true colors that match the per-platform lines elsewhere in
+              the dashboard. Direct + Other stay neutral grays (they aren't paid
+              identities). Track is the neutral pill-track well. */}
+          <div className="h-2.5 rounded-full bg-pill-track overflow-hidden flex">
             <div className="h-full" style={{ width: `${(fb / total) * 100}%`,     background: CHART_COLORS.meta }} />
             <div className="h-full" style={{ width: `${(google / total) * 100}%`, background: CHART_COLORS.google }} />
             <div className="h-full" style={{ width: `${(tiktok / total) * 100}%`, background: CHART_COLORS.tiktok }} />
@@ -156,19 +159,23 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
             the green ≥60% chip on a phantom signal — recommending
             budget increase off attribution noise. */}
         {exclusiveFacebookShare >= 0.6 && (
-          <div className="rounded-md bg-status-greenBg border border-status-green text-status-greenFg px-2.5 py-2 text-[11px] leading-relaxed">
-            <strong>💡 </strong>
-            {fbPct}% מהמכירות הגיעו מפייסבוק
-            {' → '}
-            ביטחון להעלאת תקציב הקמפיין
+          <div className="rounded-md bg-status-greenBg border border-status-green text-status-greenFg px-2.5 py-2 text-fs-2xs leading-relaxed inline-flex items-start gap-1.5">
+            <Lightbulb size={13} className="shrink-0 mt-px" aria-hidden />
+            <span>
+              {fbPct}% מהמכירות הגיעו מפייסבוק
+              {' → '}
+              ביטחון להעלאת תקציב הקמפיין
+            </span>
           </div>
         )}
         {exclusiveFacebookShare < 0.3 && total >= 5 && (
-          <div className="rounded-md bg-status-warningBg border border-status-warning text-status-warningFg px-2.5 py-2 text-[11px] leading-relaxed">
-            <strong>⚠️ </strong>
-            רק {fbPct}% מהמכירות הגיעו מפייסבוק
-            {' → '}
-            ייתכן שהקמפיין לא הוא המניע — בדוק לפני העלאת תקציב
+          <div className="rounded-md bg-status-warningBg border border-status-warning text-status-warningFg px-2.5 py-2 text-fs-2xs leading-relaxed inline-flex items-start gap-1.5">
+            <AlertTriangle size={13} className="shrink-0 mt-px" aria-hidden />
+            <span>
+              רק {fbPct}% מהמכירות הגיעו מפייסבוק
+              {' → '}
+              ייתכן שהקמפיין לא הוא המניע — בדוק לפני העלאת תקציב
+            </span>
           </div>
         )}
       </div>

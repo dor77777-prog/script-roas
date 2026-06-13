@@ -73,7 +73,9 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   'AiReportButton.tsx': 1,
   // AnnotationsPanel.tsx — DRAINED to 0 in Wave 3.6 (Horizon event-log re-skin:
   // sub-floor form labels → text-fs-2xs ramp token; removed from allowlist).
-  'AttributionAnalysisPanel.tsx': 6,
+  // AttributionAnalysisPanel.tsx — DRAINED to 0 in W4.5 (Horizon deep-analysis
+  // re-skin + AA fix: the 6 sub-floor literals — score/ROAS captions, breakdown
+  // labels, reasons/footer text — → text-fs-2xs ramp token; removed from allowlist).
   'BillingCsvImport.tsx': 8,
   'BillingSettings.tsx': 25,
   // CampaignDrawerStatusSection.tsx — DRAINED to 0 in Wave 4.3 (Horizon
@@ -87,7 +89,10 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   // thead stacked sub-labels, AttributionGapPanel tiles, Row status chips,
   // TopList ROAS caption) all migrated onto the text-fs-* ramp → all three
   // DRAINED to 0; removed from allowlist.
-  'CohortComparisonPanel.tsx': 13,
+  // CohortComparisonPanel.tsx — DRAINED to 0 in W4.5 (Horizon deep-analysis
+  // re-skin: the 13 sub-floor literals — status badge, "את/ה כאן" badge, section
+  // subtitle + 8 table-head labels, cannibalization risk badge, educational
+  // footer — → text-fs-2xs ramp token; removed from allowlist).
   'CommandPalette.tsx': 7,
   'CustomerValueTab.tsx': 2,
   'DetailTable.tsx': 1,
@@ -103,7 +108,9 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   // InsightsBoard.tsx — DRAINED to 0 in Wave 3.7 (Horizon insight-surfaces
   // re-skin: sub-floor scope badge + severity pill → text-fs-2xs ramp token;
   // removed from allowlist).
-  'MetaShopifyReconciliation.tsx': 5,
+  // MetaShopifyReconciliation.tsx — DRAINED to 0 in W4.5 (Horizon deep-analysis
+  // re-skin: the 5 sub-floor literals — Pearson-r eyebrow, r-values row, legend,
+  // 2 explainer paragraphs — → text-fs-2xs ramp token; removed from allowlist).
   'MonthlyTables.tsx': 1,
   'PaymentMethodsTab.tsx': 1,
   'PnLBreakdown.tsx': 10,

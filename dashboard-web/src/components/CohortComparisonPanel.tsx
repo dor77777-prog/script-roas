@@ -22,13 +22,14 @@
  *     Tagline: "ערוצים מקבילים".
  *
  * The current campaign appears at the top of EACH applicable section
- * with a highlight + 🥇/🥈/🥉 chip showing its rank in the section.
- * Other members sort by ROAS Shopify desc.
+ * with a highlight + a ranked Medal chip (gold/silver/bronze tint + a #N
+ * number) showing its rank in the section. Other members sort by ROAS
+ * Shopify desc.
  */
 
-import { Trophy, AlertCircle, Equal, Package, TrendingDown } from 'lucide-react';
+import { Trophy, AlertCircle, AlertTriangle, Equal, Package, TrendingDown, Medal } from 'lucide-react';
 import { cn, formatNumber } from '@/lib/utils';
-import { fmtMoney } from '@/lib/format';
+import { Money } from '@/components/ui/Money';
 import { TableBase } from '@/components/ui/TableBase';
 import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
@@ -58,18 +59,36 @@ type Props = {
  * `qualifies` (default true) is the display-only leader guard (2026-06-02): when
  * a rank-1 chip does NOT qualify (rank 1 but ROAS < 2x — "best of a losing
  * cohort"), the header chip passes `qualifies={false}` so we render the neutral
- * `#1` instead of the celebratory 🥇. The per-row ranking table leaves it true:
- * there the medal is a neutral rank fact, not a celebration. Ranks 2/3/N are
- * unaffected either way.
+ * `#1` instead of the celebratory gold medal. The per-row ranking table leaves
+ * it true: there the medal is a neutral rank fact, not a celebration. Ranks
+ * 2/3/N are unaffected either way.
+ *
+ * Horizon re-skin (W4.5): the 🥇/🥈/🥉 emoji are now a single lucide `Medal`
+ * glyph tinted gold/silver/bronze — but the rank number is ALWAYS printed next
+ * to it, so which campaign is 1st/2nd/3rd never depends on the medal color
+ * alone (accessibility + the exact rank meaning preserved). Ranks > 3 keep the
+ * neutral `#N`.
  */
+// Podium tint from EXISTING tokens (token-only — no fabricated gold/silver/
+// bronze vars). Rank 1 reads as the warm "gold" amber, 2/3 step down the
+// neutral ink ramp. Decorative only — the printed `#N` carries the real rank.
+const MEDAL_TONE: Record<1 | 2 | 3, string> = {
+  1: 'text-status-warningFg',
+  2: 'text-ink-muted',
+  3: 'text-ink-subtle',
+};
 function MedalIcon({ rank, qualifies = true }: { rank: number; qualifies?: boolean }) {
-  if (rank === 1) {
-    return qualifies
-      ? <span className="text-base">🥇</span>
-      : <span className="text-xs text-ink-muted tabular-nums">#1</span>;
+  if (rank === 1 && !qualifies) {
+    return <span className="text-xs text-ink-muted tabular-nums">#1</span>;
   }
-  if (rank === 2) return <span className="text-base">🥈</span>;
-  if (rank === 3) return <span className="text-base">🥉</span>;
+  if (rank === 1 || rank === 2 || rank === 3) {
+    return (
+      <span className="inline-flex items-center gap-0.5">
+        <Medal size={14} className={MEDAL_TONE[rank]} aria-hidden />
+        <span className="text-fs-2xs font-bold tabular-nums text-ink-secondary">#{rank}</span>
+      </span>
+    );
+  }
   return <span className="text-xs text-ink-muted tabular-nums">#{rank}</span>;
 }
 
@@ -145,10 +164,10 @@ function StatusBadge({ status }: { status: string | null }) {
     <HelpTooltip content={status}>
       <span
         className={cn(
-          'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium border',
+          'inline-flex items-center px-1.5 py-0.5 rounded text-fs-2xs font-medium border',
           isActive
             ? 'bg-status-greenBg text-status-greenFg border-status-green'
-            : 'bg-glass-2 text-ink-muted border-glass-edge',
+            : 'bg-pill-track text-ink-muted border-glass-edge',
         )}
       >
         {isActive ? 'פעיל' : 'כבוי'}
@@ -180,7 +199,7 @@ function MemberRow({ member, rank, isCurrent, onDrill }: MemberRowProps) {
         <span className="inline-flex items-center gap-1.5">
           <MedalIcon rank={rank} />
           {isCurrent && (
-            <span className="text-[9px] uppercase tracking-wider text-accent font-bold">
+            <span className="text-fs-2xs uppercase tracking-wider text-accent font-bold">
               את/ה כאן
             </span>
           )}
@@ -200,7 +219,7 @@ function MemberRow({ member, rank, isCurrent, onDrill }: MemberRowProps) {
         {member.sharedProductIds.length}
       </td>
       <td className="px-2 py-1.5 text-xs tabular-nums text-end">
-        {metrics ? fmtMoney(metrics.spend) : '—'}
+        {metrics ? <Money value={metrics.spend} prefix="CAD" /> : '—'}
       </td>
       <td className="px-2 py-1.5 text-xs tabular-nums text-end font-semibold">
         {fmtRoas(metrics?.roasShopify)}
@@ -265,27 +284,27 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
         </span>
         <div className="min-w-0">
           <div className="text-xs font-semibold text-ink">{title}</div>
-          <div className="text-[10px] text-ink-muted leading-tight">{subtitle}</div>
+          <div className="text-fs-2xs text-ink-muted leading-tight">{subtitle}</div>
         </div>
       </div>
       <TableBase minWidth={640} stickyHeader>
         <thead className="bg-glass-2/50 text-ink-muted">
           <tr>
-            <th className="px-2 py-1 text-start font-medium text-[10px]">דירוג</th>
-            <th className="px-2 py-1 text-start font-medium text-[10px]">קמפיין</th>
-            <th className="px-2 py-1 text-start font-medium text-[10px]">מוצרים משותפים</th>
-            <th className="px-2 py-1 text-end font-medium text-[10px]">הוצאה</th>
-            <th className="px-2 py-1 text-end font-medium text-[10px]">
+            <th className="px-2 py-1 text-start font-medium text-fs-2xs">דירוג</th>
+            <th className="px-2 py-1 text-start font-medium text-fs-2xs">קמפיין</th>
+            <th className="px-2 py-1 text-start font-medium text-fs-2xs">מוצרים משותפים</th>
+            <th className="px-2 py-1 text-end font-medium text-fs-2xs">הוצאה</th>
+            <th className="px-2 py-1 text-end font-medium text-fs-2xs">
               {/* Column-audit 2026-06-01 (FIX 2) — read as the ALLOCATED ROAS
                   for consistency with the table's "ROAS Shopify (מוקצה)".
                   Label only — the underlying roasShopify value is unchanged. */}
               ROAS Shopify (מוקצה)
             </th>
-            <th className="px-2 py-1 text-end font-medium text-[10px]">
+            <th className="px-2 py-1 text-end font-medium text-fs-2xs">
               ROAS פלטפ.
             </th>
-            <th className="px-2 py-1 text-end font-medium text-[10px]">המרות</th>
-            <th className="px-2 py-1 text-end font-medium text-[10px]">סטטוס</th>
+            <th className="px-2 py-1 text-end font-medium text-fs-2xs">המרות</th>
+            <th className="px-2 py-1 text-end font-medium text-fs-2xs">סטטוס</th>
           </tr>
         </thead>
         <tbody>
@@ -386,7 +405,7 @@ export function CohortComparisonPanel({
             <Trophy size={14} className="text-ink-secondary" />
             השוואה לקמפיינים שמקדמים את אותם מוצרים
           </Heading>
-          <p className="text-[11px] text-ink-muted mt-0.5 leading-relaxed">
+          <p className="text-fs-2xs text-ink-muted mt-0.5 leading-relaxed">
             הקמפיין הזה חולק מיפוי עם {cohort.others.length} קמפיינים אחרים בסך
             הכל ({cohort.sharedProductIds.length} מוצרים משותפים). ה-ROAS Shopify
             של כל קמפיין כבר מנוכה ל<strong>חלקו בהוצאה</strong> בתוך הקבוצה.
@@ -461,20 +480,21 @@ export function CohortComparisonPanel({
                     : 'text-accent',
               )}
             />
-            <span className="text-ink">
-              ⚠️ סימני קניבליזציה — הוצאה גדלה בלי שההכנסה תלך אחריה
+            <span className="inline-flex items-center gap-1 text-ink">
+              <AlertTriangle size={13} className="shrink-0" aria-hidden />
+              סימני קניבליזציה — הוצאה גדלה בלי שההכנסה תלך אחריה
             </span>
           </div>
           <ul className="space-y-1.5">
             {cannibalizationAlerts.map(v => (
               <li
                 key={v.productId}
-                className="text-[11px] text-ink-secondary leading-relaxed"
+                className="text-fs-2xs text-ink-secondary leading-relaxed"
               >
                 <strong className="text-ink">{v.productTitle}</strong>{' '}
                 <span
                   className={cn(
-                    'inline-block px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider align-middle',
+                    'inline-block px-1.5 py-0.5 rounded text-fs-2xs font-bold tracking-wider align-middle',
                     v.risk === 'high'
                       ? 'bg-status-redBg text-status-redFg'
                       : v.risk === 'medium'
@@ -486,10 +506,10 @@ export function CohortComparisonPanel({
                 </span>
                 <br />
                 <span className="text-ink-muted">
-                  הוצאת קבוצה: {fmtMoney(v.metrics.earlyHalfSpend)} →{' '}
-                  {fmtMoney(v.metrics.lateHalfSpend)} ({fmtPct(v.metrics.spendGrowthPct)}) ·
-                  הכנסת מוצר: {fmtMoney(v.metrics.earlyHalfRevenue)} →{' '}
-                  {fmtMoney(v.metrics.lateHalfRevenue)} ({fmtPct(v.metrics.revenueGrowthPct)})
+                  הוצאת קבוצה: <Money value={v.metrics.earlyHalfSpend} prefix="CAD" /> →{' '}
+                  <Money value={v.metrics.lateHalfSpend} prefix="CAD" /> ({fmtPct(v.metrics.spendGrowthPct)}) ·
+                  הכנסת מוצר: <Money value={v.metrics.earlyHalfRevenue} prefix="CAD" /> →{' '}
+                  <Money value={v.metrics.lateHalfRevenue} prefix="CAD" /> ({fmtPct(v.metrics.revenueGrowthPct)})
                   {v.metrics.marginalRoas !== null && (
                     <>
                       {' '}· ROAS שולי: {v.metrics.marginalRoas.toFixed(2)}
@@ -521,7 +541,7 @@ export function CohortComparisonPanel({
             {compositionChangedAlerts.map(v => (
               <li
                 key={v.productId}
-                className="text-[11px] text-ink-secondary leading-relaxed"
+                className="text-fs-2xs text-ink-secondary leading-relaxed"
               >
                 <strong className="text-ink">{v.productTitle}</strong>
                 <br />
@@ -558,7 +578,7 @@ export function CohortComparisonPanel({
 
       {/* Educational footer — explains the ranking + revenue split so the
           operator understands what the table means and what action to take. */}
-      <div className="rounded-lg bg-glass-2/40 border border-glass-edge px-3 py-2 text-[10px] text-ink-secondary leading-relaxed inline-flex items-start gap-1.5">
+      <div className="rounded-lg bg-pill-track border border-glass-edge px-3 py-2 text-fs-2xs text-ink-secondary leading-relaxed inline-flex items-start gap-1.5">
         <Package size={11} className="text-ink-muted mt-0.5 shrink-0" />
         <span>
           <strong>איך לקרוא:</strong> ROAS Shopify של כל קמפיין מבוסס על חלקו

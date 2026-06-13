@@ -18,6 +18,7 @@ import { enumerateDateRange } from '@/lib/dateRange';
 import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { ChartContainer } from '@/components/ui/chart/ChartContainer';
+import { Money } from '@/components/ui/Money';
 import { Heading } from '@/components/ui/Typography';
 import { Button } from '@/components/ui/Button';
 import { TableBase } from '@/components/ui/TableBase';
@@ -444,7 +445,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
       <div className="rounded-xl border border-glass-edge bg-glass-2/30 p-3 space-y-3">
         {!chipHidden && (
           <HelpTooltip content="current state, not date-versioned">
-            <div className="rounded-md bg-glass-2 border border-glass-edge px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5">
+            <div className="rounded-md bg-pill-track border border-glass-edge px-2.5 py-1.5 text-fs-2xs text-ink-muted flex items-center gap-1.5">
               <Info size={12} className="shrink-0 text-ink-muted" />
               <span className="leading-relaxed">
                 ה-product↔campaign mapping מבוסס על המיפוי הנוכחי שלך. שינוי המיפוי משפיע על נתונים היסטוריים בדיעבד.
@@ -468,7 +469,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
 
         {/* Dark traffic chip */}
         {reconciliation.darkTrafficPercent > 0 && (
-          <div className="rounded-md bg-status-warningBg border border-status-warning px-2.5 py-1.5 text-[11px] text-status-warningFg">
+          <div className="rounded-md bg-status-warningBg border border-status-warning px-2.5 py-1.5 text-fs-2xs text-status-warningFg">
             <strong>פער &quot;Dark traffic&quot; {reconciliation.darkTrafficPercent}%:</strong>{' '}
             סכום Meta+Google+Organic נמוך מ-Shopify בפועל. ייתכן channel attribution חסר (UTMs לא מוגדרים נכון, סוגי orders שלא מתויגים).
           </div>
@@ -476,7 +477,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
 
         <div className="flex items-start gap-3 flex-wrap">
           <div className="shrink-0">
-            <div className="text-[10px] text-ink-muted uppercase tracking-wide">
+            <div className="text-fs-2xs text-ink-muted uppercase tracking-wide">
               מתאם (Pearson r) · {primaryChannel}
             </div>
             <HelpTooltip content={primaryR === null ? noSignalTitle : undefined}>
@@ -488,7 +489,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               </div>
             </HelpTooltip>
           </div>
-          <div className="flex-1 min-w-[200px] text-[11px] sm:text-xs text-ink-secondary leading-relaxed">
+          <div className="flex-1 min-w-[200px] text-fs-2xs sm:text-fs-xs text-ink-secondary leading-relaxed">
             {(() => {
               if (primaryAbsR === null) {
                 return (
@@ -615,7 +616,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
         </div>
 
         {/* Pearson values for all 5 channels (Phase 05.7.9 — added TikTok). */}
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-ink-muted tabular-nums">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-fs-2xs text-ink-muted tabular-nums">
           {renderR('r(Meta)', reconciliation.r)}
           {renderR('r(Google)', reconciliation.rGoogle)}
           {renderR('r(TikTok)', reconciliation.rTiktok)}
@@ -628,7 +629,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           reconciliation.bestR !== null &&
           reconciliation.r !== null &&
           reconciliation.bestR > reconciliation.r + LAG_IMPROVEMENT_THRESHOLD && (
-          <div className="rounded-md bg-status-warningBg border border-status-warning px-2.5 py-1.5 text-[11px] text-status-warningFg">
+          <div className="rounded-md bg-status-warningBg border border-status-warning px-2.5 py-1.5 text-fs-2xs text-status-warningFg">
             <strong>זוהה lag של {Math.abs(reconciliation.bestLag)} ימים:</strong>{' '}
             {reconciliation.bestLag > 0
               ? `Meta מדווח על המרה ${Math.abs(reconciliation.bestLag)} ימים לפני שהמכירה מופיעה ב-Shopify (חלון attribution).`
@@ -746,7 +747,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
             All 4 platform swatches read CHART_COLORS via inline style so they
             track the brand-true palette (Meta blue, Google amber, TikTok red,
             Organic light purple) instead of stale Tailwind utility classes. */}
-        <div className="flex items-center justify-center flex-wrap gap-3 text-[10px] sm:text-[11px]">
+        <div className="flex items-center justify-center flex-wrap gap-3 text-fs-2xs sm:text-fs-xs">
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block w-3 h-[2px]" style={{ background: CHART_COLORS.meta }} />
             <span className="text-ink-secondary">Meta (מדווח)</span>
@@ -794,22 +795,22 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
             were on the same basis, which they are not. The percentage
             is directional ("platforms over- or under-claim vs
             Shopify"), not a strict accounting reconciliation. */}
-        <p className="text-[10px] text-ink-muted leading-relaxed text-center">
+        <p className="text-fs-2xs text-ink-muted leading-relaxed text-center">
           <strong>שים לב למשמעות:</strong>{' '}
           Meta ו-Google מציגים את ה-<em>דיווח</em> שלהם (conversionValue, יכול לכלול modeled/view-through).{' '}
           Organic ו-Shopify מציגים מכירות Shopify <em>בפועל</em> (revenueCad של פריטי המוצרים המשויכים).{' '}
           הפער בין הסכימה לבין Shopify מעיד על under/over-claim של הפלטפורמות, לא על reconciliation חשבונאי מדויק.
         </p>
-        <p className="text-[10px] text-ink-muted leading-relaxed text-center">
+        <p className="text-fs-2xs text-ink-muted leading-relaxed text-center">
           <strong>בסיס המתאם:</strong> Pearson r מחושב על ימים פעילים בלבד (לפחות ערוץ אחד או Shopify ≠ 0). תקופות עצירה לא משפיעות על r כדי שלא יצרו &quot;הסכמה&quot; מלאכותית של אפס-אפס.
         </p>
 
-        <details className="text-[11px]">
+        <details className="text-fs-2xs">
           <summary className="cursor-pointer text-ink-secondary hover:text-ink select-none py-1">
             יום-לפי-יום ↓
           </summary>
           <div className="mt-2 max-h-48 overflow-auto rounded-md border border-glass-edge">
-            <TableBase className="text-[11px]" minWidth={480} stickyHeader>
+            <TableBase className="text-fs-2xs" minWidth={480} stickyHeader>
               <thead>
                 <tr className="text-ink-muted">
                   <th className="px-2 py-1.5 text-start font-medium">תאריך</th>
@@ -837,11 +838,11 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                   return (
                     <tr key={s.date} className="border-t border-glass-edge">
                       <td className="px-2 py-1 text-ink-secondary tabular-nums">{s.date.slice(5)}</td>
-                      <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.meta)}</td>
-                      <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.google)}</td>
-                      <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.tiktok)}</td>
-                      <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.organic)}</td>
-                      <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.shopify)}</td>
+                      <td className="px-2 py-1 text-end tabular-nums"><Money value={s.meta} prefix="CAD" /></td>
+                      <td className="px-2 py-1 text-end tabular-nums"><Money value={s.google} prefix="CAD" /></td>
+                      <td className="px-2 py-1 text-end tabular-nums"><Money value={s.tiktok} prefix="CAD" /></td>
+                      <td className="px-2 py-1 text-end tabular-nums"><Money value={s.organic} prefix="CAD" /></td>
+                      <td className="px-2 py-1 text-end tabular-nums"><Money value={s.shopify} prefix="CAD" /></td>
                       <td className={cn('px-2 py-1 text-center tabular-nums font-medium', deltaClass)}>
                         {deltaLabel}
                       </td>
