@@ -149,6 +149,49 @@ describe('<ActivityFeed> — rows', () => {
     // zolplus → 'Zol Plus' display name.
     expect(screen.getByText('Zol Plus')).toBeInTheDocument();
   });
+
+  /* ---- Horizon re-skin (W3.6): icon-circle + pill-track chip + lucide-only -- */
+
+  it('the per-type glyph is a Horizon icon-CIRCLE (rounded-full, not rounded-xl)', () => {
+    swrReturn = {
+      data: resp({ lastReceivedAt: NOW, events: [row({ id: 's1', type: 'sale' })] }),
+      error: undefined,
+    };
+    const { container } = render(<ActivityFeed />);
+    const rowEl = container.querySelector('[data-testid="store-event-row"]')!;
+    // The lead glyph box is now a circle carrying the status tint.
+    const circle = rowEl.querySelector('span.rounded-full.bg-status-greenBg');
+    expect(circle).not.toBeNull();
+    // The old square-ish rounded-xl glyph box must be gone.
+    expect(rowEl.querySelector('.rounded-xl')).toBeNull();
+  });
+
+  it('the store chip sits on the canonical pill-track inset well (token)', () => {
+    swrReturn = {
+      data: resp({ lastReceivedAt: NOW, events: [row({ id: 's1', store_id: 'zolplus' })] }),
+      error: undefined,
+    };
+    render(<ActivityFeed />);
+    const chip = screen.getByTestId('store-chip');
+    expect(chip.className).toContain('bg-pill-track');
+  });
+
+  it('uses lucide icons only — no emoji glyph leaks into the feed UI', () => {
+    const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u;
+    swrReturn = {
+      data: resp({
+        lastReceivedAt: NOW,
+        events: [
+          row({ id: 's1', type: 'sale', product_title: 'סרום' }),
+          row({ id: 'r1', type: 'refund', amount_cad: -59.9, store_id: 'zolplus' }),
+          row({ id: 'c1', type: 'add_to_cart', amount_cad: null, store_id: 'usmile360' }),
+        ],
+      }),
+      error: undefined,
+    };
+    const { container } = render(<ActivityFeed />);
+    expect(container.textContent ?? '').not.toMatch(EMOJI);
+  });
 });
 
 describe('<ActivityFeed> — LIVE badge state machine', () => {

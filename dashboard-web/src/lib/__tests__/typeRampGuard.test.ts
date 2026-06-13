@@ -66,7 +66,8 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   'AdSetTable.tsx': 1,
   'AdsDrawer.tsx': 6,
   'AiReportButton.tsx': 1,
-  'AnnotationsPanel.tsx': 9,
+  // AnnotationsPanel.tsx — DRAINED to 0 in Wave 3.6 (Horizon event-log re-skin:
+  // sub-floor form labels → text-fs-2xs ramp token; removed from allowlist).
   'AttributionAnalysisPanel.tsx': 6,
   'BillingCsvImport.tsx': 8,
   'BillingSettings.tsx': 25,

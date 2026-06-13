@@ -264,18 +264,24 @@ function EventRow({
     <div
       data-testid="store-event-row"
       className={cn(
-        'px-5 py-2.5 flex items-center gap-3 border-b border-glass-edge/60 last:border-b-0',
+        // Horizon feed idiom: rows separated by the parent's `divide-y`
+        // (divide-glass-edge), so no per-row border here.
+        'px-5 py-3 flex items-center gap-3',
         // Slide-in only when motion is allowed (the global CSS sweep also
         // neutralises it, but gating the class means a reduced-motion session
         // never queues the animation at all).
         fresh && allowMotion && 'animate-fade-in-up',
       )}
     >
+      {/* Horizon icon-circle (Widget recipe): h-9 w-9 rounded-full. The
+          per-type status tint (sale=green / refund=red / cart=blue) stays — both
+          the box bg and the glyph fg are AA-pinned to the Card surface by the
+          contrast guard. */}
       <span
-        className={cn('grid place-items-center w-9 h-9 rounded-xl shrink-0', pres.glyphBox, pres.fg)}
+        className={cn('grid place-items-center h-9 w-9 rounded-full shrink-0', pres.glyphBox, pres.fg)}
         aria-hidden
       >
-        <Icon size={17} />
+        <Icon size={16} />
       </span>
 
       <div className="min-w-0 flex-1">
@@ -296,7 +302,7 @@ function EventRow({
         )}
         <div className="mt-1 flex items-center gap-2 text-[11px]">
           <span
-            className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-bold text-[10.5px] bg-glass-2 text-ink-secondary"
+            className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-bold text-[10.5px] bg-pill-track text-ink-secondary"
             data-testid="store-chip"
           >
             <span
@@ -381,7 +387,7 @@ export function ActivityFeed({ store, limit = 20, className, onSeeAll }: Activit
         />
       </div>
 
-      <div className="flex flex-col max-h-[420px] overflow-auto">
+      <div className="flex flex-col max-h-[420px] overflow-auto divide-y divide-glass-edge">
         {events.length === 0 ? (
           // Empty / listening state (mockup): pulsing dot + Hebrew copy.
           <div className="px-5 py-8 text-center">

@@ -98,8 +98,13 @@ function PrimaryChip({ desc }: { desc: SourceDescription }) {
         data-testid="source-badge"
         className={cn(
           'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 whitespace-nowrap',
+          // Horizon re-skin (W3.6): paid = solid inset pill-track well; organic =
+          // hairline outline chip. The platform name + qualifier sit on this
+          // NEUTRAL surface (never a vivid platform fill), so the brand-mirrored
+          // text clears AA the same way PlatformBadge does — the platform hue is
+          // carried by the dot/text, not the chip background.
           isPaid
-            ? 'bg-glass-2 border border-transparent'
+            ? 'bg-pill-track border border-transparent'
             : 'bg-transparent border border-glass-edge',
         )}
       >
@@ -147,9 +152,12 @@ function PrimaryChip({ desc }: { desc: SourceDescription }) {
       data-testid="source-badge"
       className={cn(
         'inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-bold whitespace-nowrap',
+        // Neutral inset pill-track well (Horizon). The Hebrew label carries the
+        // source identity in TEXT on a guaranteed-AA neutral surface — never a
+        // vivid hue fill — so direct/email/referral/etc. all clear AA.
         desc.tone === 'muted'
-          ? 'bg-glass-2 text-ink-subtle'
-          : 'bg-glass-2 text-ink-secondary',
+          ? 'bg-pill-track text-ink-subtle'
+          : 'bg-pill-track text-ink-secondary',
       )}
     >
       {desc.label}

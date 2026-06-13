@@ -144,4 +144,34 @@ describe('SourceBadge — precise per-event attribution (classify-v2 T3)', () =>
     const { container } = render(<SourceBadge source={null} firstTouchSource="meta-paid" />);
     expect(container.firstChild).toBeNull();
   });
+
+  /* ---- Horizon re-skin (W3.6): AA-safe neutral-scrim chip, no vivid hue fill -- */
+
+  it('paid chip sits on the NEUTRAL pill-track well (token), never a platform-hue fill — text clears AA', () => {
+    render(<SourceBadge source="meta-paid" />);
+    const badge = screen.getByTestId('source-badge');
+    // The chip surface is the canonical inset token (pill-track), a neutral
+    // scrim — the brand-mirrored platform name/dot carry the hue, not the bg.
+    expect(badge.className).toContain('bg-pill-track');
+    // It must NOT tint the chip background with a platform/brand hue (which
+    // would break the AA guarantee for the text-on-tint).
+    expect(badge.className).not.toMatch(/bg-(chart|roas|status|brand)/);
+  });
+
+  it('non-platform (direct) chip uses the neutral pill-track well token', () => {
+    render(<SourceBadge source="direct" />);
+    const badge = screen.getByTestId('source-badge');
+    expect(badge.className).toContain('bg-pill-track');
+    expect(badge.className).not.toMatch(/bg-(chart|roas|status|brand)/);
+  });
+
+  it('uses lucide/text icons only — no emoji glyph anywhere in the badge', () => {
+    // Render a representative mix; assert no emoji-range codepoint leaks into UI.
+    const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u;
+    for (const src of ['meta-paid', 'google-organic', 'email', 'direct']) {
+      cleanup();
+      const { container } = render(<SourceBadge source={src} />);
+      expect(container.textContent ?? '').not.toMatch(EMOJI);
+    }
+  });
 });

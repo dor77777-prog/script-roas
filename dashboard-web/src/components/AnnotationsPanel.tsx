@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Pin,
+  CalendarDays,
+  ChevronDown,
+  ChevronLeft,
   Plus,
   Trash2,
   Edit3,
@@ -10,16 +12,25 @@ import {
   X,
   Calendar,
   Store as StoreIcon,
+  Sparkles,
+  Pause,
+  Wallet,
+  DollarSign,
+  Tag,
+  Clapperboard,
+  Truck,
+  StickyNote,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Heading } from '@/components/ui/Typography';
 import {
   ANNOTATION_KIND_COLOR,
-  ANNOTATION_KIND_EMOJI,
   ANNOTATION_KIND_LABEL,
   annotationsInScope,
   generateAnnotationId,
@@ -28,6 +39,27 @@ import {
   type Annotation,
   type AnnotationKind,
 } from '@/lib/annotations';
+
+/**
+ * Horizon re-skin (Wave 3.6) — per-kind lucide icon map. The shipped
+ * `ANNOTATION_KIND_EMOJI` (lib/annotations.ts) is intentionally NOT consumed by
+ * the UI any more: Horizon's icon language is lucide-only (no emoji glyphs). The
+ * Hebrew labels (`ANNOTATION_KIND_LABEL`) still carry the kind identity in text;
+ * the icon is a redundant visual cue (kept colour-coded via
+ * `ANNOTATION_KIND_COLOR`). Each glyph maps 1:1 to the old emoji semantics:
+ *   launch ✨→Sparkles · pause ⏸→Pause · budget 💰→Wallet · pricing 💲→DollarSign
+ *   sale 🏷→Tag · creative 🎬→Clapperboard · supplier 🚚→Truck · other 📝→StickyNote
+ */
+const ANNOTATION_KIND_ICON: Record<AnnotationKind, LucideIcon> = {
+  launch: Sparkles,
+  pause: Pause,
+  budget: Wallet,
+  pricing: DollarSign,
+  sale: Tag,
+  creative: Clapperboard,
+  supplier: Truck,
+  other: StickyNote,
+};
 
 /**
  * Annotations panel — log events + view past ones, scoped to the current
@@ -85,42 +117,40 @@ export function AnnotationsPanel({ range, store }: Props) {
   }
 
   return (
-    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
-      {/* Clickable header */}
+    <Card className="!p-0 overflow-hidden">
+      {/* Clickable header — Horizon Card chrome: icon-circle lead + title/sub +
+          a lucide chevron (was ▼/◀ text glyphs). */}
       <Button
         type="button"
         variant="ghost"
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
         className={cn(
-          'w-full justify-start h-auto text-start px-4 sm:px-5 py-3',
-          'border-b border-glass-edge',
-          'bg-gradient-to-l from-accent-bg to-glass-1',
-          'hover:from-accent-soft hover:to-glass-2/40',
+          'w-full justify-start h-auto text-start p-4',
+          open && 'border-b border-glass-edge',
         )}
       >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent-bg text-accent shrink-0">
-              <Pin size={15} />
-            </span>
-            <div className="min-w-0">
-              <Heading level="section" className="font-bold">
-                יומן אירועים
-              </Heading>
-              <div className="text-[11px] sm:text-xs text-ink-muted mt-0.5 leading-tight">
-                {inScope.length === 0
-                  ? 'תיעד שינויים שהוצעו (השקות, מבצעים, שינויי תקציב) — יוצגו על הגרף'
-                  : `${inScope.length} ${inScope.length === 1 ? 'אירוע' : 'אירועים'} בטווח שבחרת`}
-              </div>
+        <div className="flex items-center gap-4 w-full min-w-0">
+          {/* Icon-circle (Horizon Widget recipe): pill-track surface flips
+              light→dark via --surface-sunken, accent (brand) icon. */}
+          <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-pill-track text-accent">
+            <CalendarDays size={18} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <Heading level="section" className="font-bold">
+              יומן אירועים
+            </Heading>
+            <div className="text-[11px] sm:text-xs text-ink-muted mt-0.5 leading-tight">
+              {inScope.length === 0
+                ? 'תיעד שינויים שהוצעו (השקות, מבצעים, שינויי תקציב) — יוצגו על הגרף'
+                : `${inScope.length} ${inScope.length === 1 ? 'אירוע' : 'אירועים'} בטווח שבחרת`}
             </div>
           </div>
-          <span
-            className="text-ink-muted text-[10px] sm:text-xs tabular-nums shrink-0"
-            aria-hidden
-          >
-            {open ? '▼' : '◀'}
-          </span>
+          {open ? (
+            <ChevronDown size={16} className="text-ink-muted shrink-0" aria-hidden />
+          ) : (
+            <ChevronLeft size={16} className="text-ink-muted shrink-0" aria-hidden />
+          )}
         </div>
       </Button>
 
@@ -131,7 +161,7 @@ export function AnnotationsPanel({ range, store }: Props) {
             <Button
               variant="ghost"
               onClick={() => setAdding(true)}
-              className="w-full justify-center gap-1.5 rounded-lg border border-dashed border-glass-edge bg-glass-2/40 hover:bg-glass-2 hover:border-accent px-3 py-2 h-auto text-xs sm:text-sm font-medium text-ink-secondary hover:text-ink"
+              className="w-full justify-center gap-1.5 rounded-full border border-dashed border-glass-edge bg-pill-track hover:bg-glass-2 hover:border-accent px-3 py-2 h-auto text-xs sm:text-sm font-medium text-ink-secondary hover:text-ink"
             >
               <Plus size={14} />
               תעד אירוע חדש
@@ -154,7 +184,7 @@ export function AnnotationsPanel({ range, store }: Props) {
               {inScope.map(a => (
                 <li
                   key={a.id}
-                  className="rounded-lg border border-glass-edge bg-glass-1 hover:bg-glass-2/30 transition-colors"
+                  className="rounded-2xl border border-glass-edge bg-glass-1 hover:bg-pill-track transition-colors"
                 >
                   {editing === a.id ? (
                     <AnnotationForm
@@ -165,33 +195,39 @@ export function AnnotationsPanel({ range, store }: Props) {
                     />
                   ) : (
                     <div className="flex items-center gap-3 p-2.5">
-                      <HelpTooltip content={ANNOTATION_KIND_LABEL[a.kind]}>
-                        <span
-                          className="text-base shrink-0 grid place-items-center w-7 h-7 rounded"
-                          style={{
-                            // P2-50 (2026-06-10 audit): ANNOTATION_KIND_COLOR
-                            // values are var(--…) strings — appending a hex
-                            // alpha ('15') produced invalid CSS ("var(--x)15")
-                            // → transparent chip. color-mix derives the same
-                            // ~8% tint from the token validly.
-                            background: `color-mix(in srgb, ${ANNOTATION_KIND_COLOR[a.kind]} 12%, transparent)`,
-                            color: ANNOTATION_KIND_COLOR[a.kind],
-                          }}
-                          aria-label={ANNOTATION_KIND_LABEL[a.kind]}
-                        >
-                          <span>{ANNOTATION_KIND_EMOJI[a.kind]}</span>
-                        </span>
-                      </HelpTooltip>
+                      {(() => {
+                        const KindIcon = ANNOTATION_KIND_ICON[a.kind];
+                        return (
+                          <HelpTooltip content={ANNOTATION_KIND_LABEL[a.kind]}>
+                            <span
+                              className="shrink-0 grid place-items-center h-9 w-9 rounded-full"
+                              style={{
+                                // P2-50 (2026-06-10 audit): ANNOTATION_KIND_COLOR
+                                // values are var(--…) strings — appending a hex
+                                // alpha ('15') produced invalid CSS ("var(--x)15")
+                                // → transparent chip. color-mix derives the same
+                                // ~12% tint from the token validly. The lucide
+                                // glyph (was an emoji) takes the full kind colour.
+                                background: `color-mix(in srgb, ${ANNOTATION_KIND_COLOR[a.kind]} 12%, transparent)`,
+                                color: ANNOTATION_KIND_COLOR[a.kind],
+                              }}
+                              aria-label={ANNOTATION_KIND_LABEL[a.kind]}
+                            >
+                              <KindIcon size={16} aria-hidden />
+                            </span>
+                          </HelpTooltip>
+                        );
+                      })()}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-ink truncate">
                             {a.title}
                           </span>
-                          <span className="text-[10px] text-ink-muted tabular-nums">
+                          <span className="text-fs-2xs text-ink-muted tabular-nums">
                             {formatDate(a.date)}
                           </span>
                           {a.store && (
-                            <span className="text-[10px] text-ink-muted inline-flex items-center gap-0.5">
+                            <span className="text-fs-2xs text-ink-muted inline-flex items-center gap-0.5">
                               <StoreIcon size={9} /> {a.store}
                             </span>
                           )}
@@ -232,7 +268,7 @@ export function AnnotationsPanel({ range, store }: Props) {
           )}
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -269,23 +305,23 @@ function AnnotationForm({
   }
 
   return (
-    <div className="p-3 space-y-2 bg-glass-2/40 rounded-lg border border-glass-edge">
+    <div className="p-3 space-y-2 bg-pill-track rounded-2xl border border-glass-edge">
       <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-end">
         <div>
-          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">סוג</label>
+          <label className="text-[11px] sm:text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">סוג</label>
           <NativeSelect
             value={kind}
             onChange={e => setKind(e.target.value as AnnotationKind)}
           >
             {(Object.keys(ANNOTATION_KIND_LABEL) as AnnotationKind[]).map(k => (
               <option key={k} value={k}>
-                {ANNOTATION_KIND_EMOJI[k]} {ANNOTATION_KIND_LABEL[k]}
+                {ANNOTATION_KIND_LABEL[k]}
               </option>
             ))}
           </NativeSelect>
         </div>
         <div>
-          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">כותרת</label>
+          <label className="text-[11px] sm:text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">כותרת</label>
           <Input
             value={title}
             onChange={e => setTitle(e.target.value)}
@@ -298,7 +334,7 @@ function AnnotationForm({
           />
         </div>
         <div>
-          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">תאריך</label>
+          <label className="text-[11px] sm:text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">תאריך</label>
           <Input
             type="date"
             value={date}
@@ -308,7 +344,7 @@ function AnnotationForm({
         </div>
       </div>
       <div>
-        <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
+        <label className="text-[11px] sm:text-fs-2xs text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
         <Input
           value={notes}
           onChange={e => setNotes(e.target.value)}
@@ -321,7 +357,7 @@ function AnnotationForm({
       </div>
       {storeOptions.length > 0 && (
         <div className="flex items-center gap-2">
-          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium inline-flex items-center gap-1">
+          <label className="text-[11px] sm:text-fs-2xs text-ink-muted uppercase tracking-wide font-medium inline-flex items-center gap-1">
             <StoreIcon size={11} /> שיוך לחנות
           </label>
           <NativeSelect
@@ -355,7 +391,7 @@ function AnnotationForm({
           <X size={13} />
           ביטול
         </Button>
-        <span className="text-[10px] text-ink-muted ms-auto inline-flex items-center gap-1">
+        <span className="text-fs-2xs text-ink-muted ms-auto inline-flex items-center gap-1">
           <Calendar size={10} />
           יסומן על הגרף
         </span>
