@@ -161,7 +161,7 @@ function CohortYearAccordion({
     <details
       open={defaultOpen}
       data-testid={`cv-cohort-year-row-${group.year}`}
-      className="group rounded-card border border-glass-edge bg-glass-2/40 overflow-hidden"
+      className="group rounded-hz border border-glass-edge bg-pill-track overflow-hidden"
     >
       <summary
         data-testid={`cv-cohort-year-${group.year}`}
@@ -194,7 +194,7 @@ function CohortYearGrid({ rows, todayMonth }: { rows: GridRow[]; todayMonth: str
           {Array.from({ length: COHORT_HORIZON }, (_, m) => (
             <th
               key={m}
-              className="px-1 py-1 text-center text-[10.5px] font-bold text-ink-muted"
+              className="px-1 py-1 text-center text-fs-2xs font-bold text-ink-muted"
             >
               M{m}
             </th>
@@ -210,7 +210,7 @@ function CohortYearGrid({ rows, todayMonth }: { rows: GridRow[]; todayMonth: str
           const partialCol = addMonths(gr.month, age) === todayMonth ? age : -1;
           return (
             <tr key={gr.month} data-testid={`cv-cohort-row-${gr.month}`}>
-              <td className="whitespace-nowrap pe-1.5 text-end text-[11px] font-bold text-ink-secondary">
+              <td className="whitespace-nowrap pe-1.5 text-end text-fs-xs font-bold text-ink-secondary">
                 {gr.month}
               </td>
               {gr.cells.map((v, m) => {
@@ -239,7 +239,7 @@ function CohortYearGrid({ rows, todayMonth }: { rows: GridRow[]; todayMonth: str
                     data-partial={isPartial ? 'true' : undefined}
                     aria-label={isPartial ? label : undefined}
                     className={cn(
-                      'h-7 min-w-[42px] rounded-md text-center text-[11px] font-bold text-ink tabular-nums',
+                      'h-7 min-w-[42px] rounded-md text-center text-fs-xs font-bold text-ink tabular-nums',
                       // Partial (in-progress current month): dim so it never reads
                       // as a completed retention figure.
                       isPartial && 'opacity-60',

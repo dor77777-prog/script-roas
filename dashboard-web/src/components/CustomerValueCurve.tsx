@@ -34,6 +34,18 @@ const PAD = { l: 52, r: 18, t: 22, b: 36 };
 /** The curve spans M0..M11 (12 points). The x-axis maps month 0..11. */
 const LAST_MONTH = 11;
 
+/**
+ * Horizon re-skin (W5.3) — SVG text sizes, aligned to the project type ramp.
+ * SVG `fontSize` is a px ATTRIBUTE (not a Tailwind class), so it lives outside
+ * the `text-fs-*` utility system; these constants pin the same px values the
+ * ramp tokens resolve to (--fs-2xs = 10.5px floor, --fs-xs = 12px) so the chart
+ * ink matches the surrounding type and never dips below the 10.5px floor.
+ *   FS_AXIS  — axis ticks / month labels / nCAC + zone labels (= --fs-xs 12px)
+ *   FS_MICRO — the secondary callout-pill sub-line (= --fs-2xs 10.5px floor)
+ */
+const FS_AXIS = 12;
+const FS_MICRO = 10.5;
+
 export interface CustomerValueCurveProps {
   /** Per-customer cumulative value at M0..M11 (net or profit, CAD). */
   points: number[];
@@ -290,7 +302,7 @@ export function CustomerValueCurve({
                 y={(y(v) + 3).toFixed(2)}
                 textAnchor="end"
                 fill="var(--chart-axis)"
-                fontSize="11"
+                fontSize={FS_AXIS}
                 style={{ fontVariantNumeric: 'tabular-nums' }}
               >
                 {fmtMoneyCompact(Math.round(v))}
@@ -307,7 +319,7 @@ export function CustomerValueCurve({
             y={(plotB + 17).toFixed(2)}
             textAnchor="middle"
             fill="var(--chart-axis)"
-            fontSize="11"
+            fontSize={FS_AXIS}
           >
             {m === 0 ? 'רכישה' : `ח׳ ${m}`}
           </text>
@@ -321,7 +333,7 @@ export function CustomerValueCurve({
             y={(plotT + 16).toFixed(2)}
             textAnchor="middle"
             fill="var(--status-warning-fg)"
-            fontSize="12"
+            fontSize={FS_AXIS}
             fontWeight={800}
           >
             עדיין מחזיר עלות
@@ -334,7 +346,7 @@ export function CustomerValueCurve({
             y={(plotT + 16).toFixed(2)}
             textAnchor="middle"
             fill="var(--status-green-fg)"
-            fontSize="12"
+            fontSize={FS_AXIS}
             fontWeight={800}
           >
             רווח
@@ -366,7 +378,7 @@ export function CustomerValueCurve({
               y={(cacY - 7).toFixed(2)}
               textAnchor="end"
               fill="var(--status-warning-fg)"
-              fontSize="11"
+              fontSize={FS_AXIS}
               fontWeight={800}
             >
               קו עלות-גיוס {fmtMoneyCompact(Math.round(ncac))}
@@ -440,7 +452,7 @@ export function CustomerValueCurve({
                 y={(pill.py + 15).toFixed(2)}
                 textAnchor="middle"
                 fill="var(--accent-fg)"
-                fontSize="11.5"
+                fontSize={FS_AXIS}
                 fontWeight={800}
               >
                 ↩ נקודת החזר
@@ -450,7 +462,7 @@ export function CustomerValueCurve({
                 y={(pill.py + 29).toFixed(2)}
                 textAnchor="middle"
                 fill="var(--accent-fg)"
-                fontSize="10.5"
+                fontSize={FS_MICRO}
                 fontWeight={700}
                 opacity={0.92}
               >
@@ -516,18 +528,18 @@ export function CustomerValueCurve({
           className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[118%] rounded-card border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-xs leading-snug text-ink shadow-overlay"
           style={{ left: `${tipLeftPct}%`, top: `${tipTopPct}%` }}
         >
-          <div className="text-[11px] font-semibold text-ink-muted">
+          <div className="text-fs-xs font-semibold text-ink-muted">
             {hover.m < 0.5 ? 'רכישה' : `חודש ${Math.round(hover.m)}`}
           </div>
-          <div className="text-sm font-bold">
+          <div className="text-fs-sm font-bold">
             <Money value={Math.round(hover.v)} />
           </div>
           {ncac != null && (
             <div
               className={
                 hoverProfitable
-                  ? 'text-[11px] font-bold text-status-greenFg'
-                  : 'text-[11px] font-bold text-status-warningFg'
+                  ? 'text-fs-xs font-bold text-status-greenFg'
+                  : 'text-fs-xs font-bold text-status-warningFg'
               }
             >
               {hoverProfitable ? `מעל קו האיזון — ${basisLabel}` : 'מתחת לקו — מחזיר עלות'}

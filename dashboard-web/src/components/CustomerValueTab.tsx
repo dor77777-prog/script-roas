@@ -22,10 +22,11 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { AlertTriangle, Gem, RefreshCw } from 'lucide-react';
+import { ChevronDown, Gem } from 'lucide-react';
 import { fetchJsonStrict } from '@/lib/fetchJson';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { StateBlock } from '@/components/ui/StateBlock';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { Money } from '@/components/ui/Money';
@@ -346,38 +347,36 @@ export function CustomerValueTab({
           title="כמה שווה לך לקוח"
           description="כמה רווח לקוח חדש מכניס לאורך זמן, מול כמה עלה לגייס אותו — ואם הגיוס משתלם."
         />
-        <div
-          role="alert"
-          data-testid="cv-error"
-          className="rounded-xl border border-status-red bg-status-redBg text-status-redFg px-4 py-4"
-        >
-          <div className="flex items-start gap-2.5">
-            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold text-[13px]">שגיאה בטעינת נתוני הלקוחות</div>
-              <div className="text-[11px] opacity-80 mt-1 leading-relaxed">
-                הקריאה ל-<code className="font-mono">/api/cohorts</code> נכשלה. זה לא אומר
-                שאין נתונים — זה אומר שהשרת לא ענה. נסה לרענן, ואם זה לא עוזר בדוק את הלוגים.
+        {/* Horizon re-skin (W5.3) — the bespoke red strip is replaced by the
+            shared <StateBlock mode="error"> chrome (icon + AA-safe status-red
+            trio + "נסה שוב" retry <Button>). The cv-error testid + role=alert
+            stay on the wrapper so the honest-state contract is preserved; the
+            full explanatory copy + the mono error detail ride in `message` as a
+            composite node (no info loss — and this drains the file's lone
+            sub-floor 10px mono offender onto the type-ramp). */}
+        <div data-testid="cv-error" role="alert">
+          <StateBlock
+            mode="error"
+            onRetry={() => mutate()}
+            message={
+              <div className="min-w-0">
+                <div className="font-semibold">שגיאה בטעינת נתוני הלקוחות</div>
+                <div className="mt-1 text-fs-2xs font-normal leading-relaxed opacity-80">
+                  הקריאה ל-<code className="font-mono">/api/cohorts</code> נכשלה. זה לא אומר
+                  שאין נתונים — זה אומר שהשרת לא ענה. נסה לרענן, ואם זה לא עוזר בדוק את הלוגים.
+                </div>
+                <div className="mt-1 font-mono text-fs-2xs font-normal opacity-60">
+                  {error instanceof Error ? error.message : String(error ?? data?.error)}
+                </div>
               </div>
-              <div className="text-[10px] opacity-60 mt-1 font-mono">
-                {error instanceof Error ? error.message : String(error ?? data?.error)}
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => mutate()}
-                className="mt-3 gap-1.5 text-[12px]"
-              >
-                <RefreshCw size={12} />
-                נסה שוב
-              </Button>
-            </div>
-          </div>
+            }
+          />
         </div>
       </div>
     );
   }
-  // LOADING → skeleton (ProductsTable pattern), never the business empty-copy.
+  // LOADING → <StateBlock mode="skeleton"> (verdict + 4-up KPI silhouette),
+  // never the business empty-copy. cv-loading + aria-busy stay on the wrapper.
   if (!useInjected && isLoading) {
     return (
       <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
@@ -387,13 +386,11 @@ export function CustomerValueTab({
           description="כמה רווח לקוח חדש מכניס לאורך זמן, מול כמה עלה לגייס אותו — ואם הגיוס משתלם."
         />
         <div data-testid="cv-loading" aria-busy="true" className="space-y-3">
-          <div className="skeleton h-24 rounded-2xl" aria-hidden />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="skeleton h-24 rounded-xl" aria-hidden />
-            ))}
-          </div>
-          <div className="p-4 text-center text-ink-muted text-sm">טוען נתוני לקוחות…</div>
+          {/* Verdict-card silhouette. */}
+          <div className="skeleton h-24 rounded-hz" aria-hidden />
+          {/* 4-up KPI silhouette via the shared StateBlock card grid. */}
+          <StateBlock mode="skeleton" shape="card" rows={4} message="טוען נתוני לקוחות…" />
+          <div className="p-4 text-center text-fs-sm text-ink-muted">טוען נתוני לקוחות…</div>
         </div>
       </div>
     );
@@ -451,7 +448,7 @@ export function CustomerValueTab({
           names WHICH side is missing. B1: era-tag + a qualified badge + a bridge
           to the new-vs-old card when recent cohorts already pay back. */}
       <Card>
-        <p data-testid="cv-verdict" className="text-[15.5px] sm:text-[17px] font-semibold leading-relaxed">
+        <p data-testid="cv-verdict" className="text-fs-base sm:text-fs-md font-semibold leading-relaxed">
           {!hasLtv ? (
             // A4 — the missing side is the MATURE LTV, not the nCAC.
             <>
@@ -540,21 +537,30 @@ export function CustomerValueTab({
                   {' '}על כל <span className="font-extrabold tabular-nums text-ink">$1</span> פרסום אתה מקבל{' '}
                   <span className={cn('font-extrabold tabular-nums', numClass(tone))}>{ratioText}×</span>{' '}
                   ברווח-לקוח (LTV:nCAC)
-                  <span
+                  {/* Trap #2 — the LTV:nCAC verdict badge migrates to the
+                      <Badge> PRIMITIVE but KEEPS its SEMANTIC status tone
+                      (green/warning/red). LTV:nCAC break-even is ×1 — a
+                      DIFFERENT metric from ROAS's ×2/×3 bands — so it must NOT
+                      use the band `chip-{band}` recipe (that's ROAS-keyed;
+                      band-colouring this ratio would be a correctness lie). The
+                      status-* trio still resolves to text-status-{red,warning,
+                      green}Fg, which the DOM tests assert on. */}
+                  {/* NOTE: no `text-fs-*` override here — the <Badge> base
+                      already sizes the text (text-2xs), and adding a second
+                      `text-*` size class makes tailwind-merge drop the tone's
+                      `text-status-*Fg` COLOUR (same `text-` group), which the
+                      DOM tests assert on. The pill geometry (rounded-full +
+                      padding) + weight are layout/weight-group classes, so they
+                      merge cleanly without touching the colour. */}
+                  <Badge
                     data-testid="cv-ratio-badge"
-                    className={cn(
-                      'ms-1.5 inline-block rounded-full px-2.5 py-0.5 text-[12.5px] font-extrabold',
-                      badgeTone === 'good'
-                        ? 'bg-status-greenBg text-status-greenFg'
-                        : badgeTone === 'bad'
-                          ? 'bg-status-redBg text-status-redFg'
-                          : 'bg-status-warningBg text-status-warningFg',
-                    )}
+                    tone={badgeTone === 'good' ? 'green' : badgeTone === 'bad' ? 'red' : 'warning'}
+                    className="ms-1.5 rounded-full px-2.5 py-0.5 font-extrabold"
                   >
                     {badgeText}
-                  </span>
+                  </Badge>
                   {/* B1 — the headline LTV is restricted to mature (12mo+) cohorts. */}
-                  <span className="ms-1.5 text-[12px] font-normal text-ink-muted">
+                  <span className="ms-1.5 text-fs-xs font-normal text-ink-muted">
                     · מבוסס על קבוצות בוגרות (12 ח׳+)
                   </span>
                 </>
@@ -564,7 +570,7 @@ export function CustomerValueTab({
               {showRecentBridge && (
                 <span
                   data-testid="cv-recent-bridge"
-                  className="mt-1.5 block text-[13px] font-semibold text-status-greenFg"
+                  className="mt-1.5 block text-fs-sm font-semibold text-status-greenFg"
                 >
                   ↗ אבל הקבוצות שגייסת לאחרונה חזקות יותר
                   {newVsOldDiff != null && newVsOldDiff > 0 ? ` ב-${newVsOldDiff}%` : ''}
@@ -586,7 +592,7 @@ export function CustomerValueTab({
           <div data-testid="cv-kpi-ltv" className="mt-1 text-2xl font-extrabold tracking-tight">
             <Money value={displayLtv} />
           </div>
-          <div className="mt-0.5 text-[11.5px] text-ink-muted">
+          <div className="mt-0.5 text-fs-xs text-ink-muted">
             כמה {basisLabel} ממוצע לקוח מכניס לאורך שנה
           </div>
         </Card>
@@ -595,27 +601,27 @@ export function CustomerValueTab({
           <div data-testid="cv-kpi-cac" className="mt-1 text-2xl font-extrabold tracking-tight">
             <Money value={ncac} />
           </div>
-          <div className="mt-0.5 text-[11.5px] text-ink-muted">כמה שילמת בפרסום לכל לקוח חדש</div>
+          <div className="mt-0.5 text-fs-xs text-ink-muted">כמה שילמת בפרסום לכל לקוח חדש</div>
         </Card>
         <Card data-testid="cv-kpi" className="p-4">
           <div className="text-xs font-semibold text-ink-secondary">החזר עלות (payback)</div>
           <div data-testid="cv-kpi-payback" className="mt-1 text-2xl font-extrabold tracking-tight tabular-nums">
             {payback != null ? `${payback} ח׳` : '—'}
           </div>
-          <div className="mt-0.5 text-[11.5px] text-ink-muted">תוך כמה חודשים הרווח מכסה את הגיוס</div>
+          <div className="mt-0.5 text-fs-xs text-ink-muted">תוך כמה חודשים הרווח מכסה את הגיוס</div>
         </Card>
         <Card data-testid="cv-kpi" className="p-4">
           <div className="text-xs font-semibold text-ink-secondary">חוזרים לקנות (repeat)</div>
           <div data-testid="cv-kpi-repeat" className="mt-1 text-2xl font-extrabold tracking-tight tabular-nums">
             {pctText(value.repeatRate)}
           </div>
-          <div className="mt-0.5 text-[11.5px] text-ink-muted">אחוז שמזמינים שוב אחרי הראשונה</div>
+          <div className="mt-0.5 text-fs-xs text-ink-muted">אחוז שמזמינים שוב אחרי הראשונה</div>
         </Card>
       </div>
 
       {/* 3. THE CURVE. */}
       <Card>
-        <h3 className="m-0 flex items-center gap-1.5 text-[15px] font-extrabold text-ink">
+        <h3 className="m-0 flex items-center gap-1.5 text-fs-base font-extrabold text-ink">
           העקומה: כמה לקוח מחזיר ככל שעובר הזמן
           <HelpTooltip
             variant="rich"
@@ -625,14 +631,14 @@ export function CustomerValueTab({
             }
           >
             <span
-              className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-glass-edge text-[10px] text-ink-muted"
+              className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-glass-edge text-fs-2xs text-ink-muted"
               aria-label="הסבר על העקומה"
             >
               ?
             </span>
           </HelpTooltip>
         </h3>
-        <p className="mb-2.5 mt-0.5 text-[12.5px] text-ink-secondary">
+        <p className="mb-2.5 mt-0.5 text-fs-xs text-ink-secondary">
           הקו עולה ככל שלקוחות חוזרים לקנות. כשהוא חוצה את <b>קו עלות-הגיוס</b> — הלקוח הפך לרווחי.
           משם זה {basisLabel} נקי.
         </p>
@@ -648,25 +654,30 @@ export function CustomerValueTab({
           paybackMonths={curvePayback}
           basisLabel={basisLabel}
         />
-        <div className="mt-2 flex flex-wrap gap-4 text-xs text-ink-secondary">
+        {/* Legend — the zone swatches mirror the chart's pale background zones
+            (status-warningBg / status-greenBg). A 1px status-* rim casing keeps
+            each pale swatch perceivable (≥3:1 graphical) against the card
+            surface in BOTH themes, so the legend never relies on a sub-3:1
+            pale-on-pale fill alone. */}
+        <div className="mt-2 flex flex-wrap gap-4 text-fs-xs text-ink-secondary">
           <span className="inline-flex items-center gap-1.5">
             <i className="inline-block h-[3px] w-3.5 rounded-sm bg-accent" /> {basisLabel} מצטבר ללקוח
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <i className="inline-block h-2.5 w-3.5 rounded-sm bg-status-warningBg" /> עדיין מחזיר עלות
+            <i className="inline-block h-2.5 w-3.5 rounded-sm border border-status-warning bg-status-warningBg" /> עדיין מחזיר עלות
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <i className="inline-block h-2.5 w-3.5 rounded-sm bg-status-greenBg" /> רווח
+            <i className="inline-block h-2.5 w-3.5 rounded-sm border border-status-green bg-status-greenBg" /> רווח
           </span>
         </div>
       </Card>
 
       {/* 4. NEW vs OLD. */}
       <Card>
-        <h3 className="m-0 text-[15px] font-extrabold text-ink">
+        <h3 className="m-0 text-fs-base font-extrabold text-ink">
           הלקוחות החדשים — טובים יותר או פחות מהוותיקים?
         </h3>
-        <p className="mb-3 mt-0.5 text-[12.5px] text-ink-secondary" data-testid="cv-newvsold-sub">
+        <p className="mb-3 mt-0.5 text-fs-xs text-ink-secondary" data-testid="cv-newvsold-sub">
           {/* A5: gate on the SAME condition as the bars (canCompare); the label
               names the SHARED observed depth ("first N months"), not "last 3
               months" — the bucket is recent cohorts vs veterans, both observed
@@ -696,7 +707,17 @@ export function CustomerValueTab({
                   <Money value={recent3} />
                 </b>
               </div>
-              <div className="h-3.5 overflow-hidden rounded-full bg-glass-2">
+              {/* Recessed pill-track well (bg-pill-track) with a SEMANTIC fill:
+                  recent = status-green (the stronger half), veteran = neutral
+                  ink-muted. role="meter" so the proportion is announced. */}
+              <div
+                role="meter"
+                aria-label={`חדשים — ${cmpMonthsLabel}`}
+                aria-valuemin={0}
+                aria-valuemax={Math.round(cmpMax)}
+                aria-valuenow={Math.round(recent3)}
+                className="h-3.5 overflow-hidden rounded-full bg-pill-track"
+              >
                 <div
                   className="h-full rounded-full bg-status-green"
                   style={{ width: `${(recent3 / cmpMax) * 100}%` }}
@@ -710,7 +731,14 @@ export function CustomerValueTab({
                   <Money value={old3} />
                 </b>
               </div>
-              <div className="h-3.5 overflow-hidden rounded-full bg-glass-2">
+              <div
+                role="meter"
+                aria-label={`ותיקים — ${cmpMonthsLabel}`}
+                aria-valuemin={0}
+                aria-valuemax={Math.round(cmpMax)}
+                aria-valuenow={Math.round(old3)}
+                className="h-3.5 overflow-hidden rounded-full bg-pill-track"
+              >
                 <div
                   className="h-full rounded-full bg-ink-muted"
                   style={{ width: `${(old3 / cmpMax) * 100}%` }}
@@ -723,12 +751,20 @@ export function CustomerValueTab({
 
       {/* 5. ADVANCED — collapsed cohort grid (no info loss). */}
       <Card>
-        <details data-testid="cv-advanced">
-          <summary className="cursor-pointer list-none text-[13.5px] font-bold text-accent marker:hidden [&::-webkit-details-marker]:hidden">
-            ▸ תצוגה מתקדמת — רשת ה-cohorts המלאה (לחובבי דאטה)
+        <details data-testid="cv-advanced" className="group">
+          {/* The static `▸` glyph (never rotated) is replaced by a lucide
+              <ChevronDown> that rotates 180° when the <details> is open
+              (group-open:rotate-180), matching the cohort-year accordion. */}
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-fs-sm font-bold text-accent marker:hidden [&::-webkit-details-marker]:hidden">
+            <ChevronDown
+              size={15}
+              className="shrink-0 transition-transform duration-snap group-open:rotate-180"
+              aria-hidden="true"
+            />
+            תצוגה מתקדמת — רשת ה-cohorts המלאה (לחובבי דאטה)
           </summary>
           <div className="mt-3">
-            <p className="text-[12.5px] text-ink-secondary">
+            <p className="text-fs-xs text-ink-secondary">
               שורה = חודש הזמנה-ראשונה · עמודה = חודשים-מאז (M0=הרכישה). תא = % שחזרו לקנות. כלי
               לאנליסט — לא חובה ליומיום.
             </p>
@@ -737,7 +773,7 @@ export function CustomerValueTab({
         </details>
         {/* Per-cohort nCAC availability — pre-May cohorts have no ad-spend.
             Grouped by cohort YEAR (DESC), mirroring the by-year cohort grid. */}
-        <div className="mt-3 border-t border-glass-edge pt-3 text-[11.5px] leading-relaxed text-ink-muted">
+        <div className="mt-3 border-t border-glass-edge pt-3 text-fs-xs leading-relaxed text-ink-muted">
           עלות-גיוס לכל קבוצה (nCAC) זמינה רק מ-מאי 2026 והלאה (תקופת היסטוריית הפרסום). לקבוצות
           ישנות יותר מוצג{' '}
           <span className="font-semibold text-ink-secondary">אין נתוני הוצאה</span> במדד עלות-הגיוס.

@@ -94,7 +94,11 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   // subtitle + 8 table-head labels, cannibalization risk badge, educational
   // footer — → text-fs-2xs ramp token; removed from allowlist).
   'CommandPalette.tsx': 7,
-  'CustomerValueTab.tsx': 2,
+  // CustomerValueTab.tsx — DRAINED to 0 in W5.3 (Horizon customers-tab re-skin:
+  // the 2 sub-floor literals — the error-strip mono detail (now inside the
+  // shared <StateBlock> error chrome) + the curve-explainer ⓘ trigger circle —
+  // → text-fs-2xs ramp token; all other arbitrary-px type migrated onto the
+  // text-fs-* ramp; removed from allowlist).
   'DetailTable.tsx': 1,
   // FirstClickCoverageChip.tsx — DRAINED to 0 in Wave 4 (Horizon
   // campaign-health re-skin: lone sub-floor coverage-% chip literal
