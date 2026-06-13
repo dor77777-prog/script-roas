@@ -101,7 +101,9 @@ const BASELINE_ALLOWLIST: Record<string, number> = {
   'home/ChannelTruthPanel.tsx': 2,
   'home/RoasChartDateRangePicker.tsx': 2,
   'home/RoasTargetChart.tsx': 4,
-  'home/StoreDetailModal.tsx': 2,
+  // home/StoreDetailModal.tsx — DRAINED to 0 in Wave 3.8 (Horizon store-detail
+  // re-skin: sub-floor KPI label + top-campaign caption → text-fs-2xs ramp
+  // token; removed from allowlist).
   'home/UnknownBucketPanel.tsx': 1,
   // insights/ActionListPanel.tsx — DRAINED to 0 in Wave 3.7 (Horizon
   // insight-surfaces re-skin: sub-floor scope badge → text-fs-2xs; removed).

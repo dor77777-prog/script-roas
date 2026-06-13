@@ -11,26 +11,45 @@
  * value arrives pre-computed in `data` (built by `toStoreDetail` from state
  * the HomeTab already holds).
  *
- * Sections (verbatim from docs/.../2026-06-01-store-modal/store-modal-mockup.html):
- *   1. Vivid ROAS-band HEADER slab — white-on-band (reuses the `.per-store-card`
- *      `.glass[data-band]` treatment proven AA in both themes), store name,
- *      band-tag pill, FreshnessBadge, close ✕, big climbing ROAS, "ROAS ·
- *      {rangeLabel}" caption, white band-ink sparkline.
- *   2. KPI cards (הוצאה / הכנסה / רווח תפעולי / הזמנות / AOV) + a ▲▼% delta vs
- *      the previous period (green=good, red=bad — note SPEND ↑ is BAD). MOBILE:
- *      a scroll-snap CAROUSEL (same pattern as PerStoreRow); md+: a 5-col grid.
- *   3. ROAS-over-time chart — the store-scoped `RoasChart` (target line kept).
- *   4. Per-platform breakdown — spend + CPM + ROAS per Meta/Google/TikTok.
- *   5. Top campaigns — name + spend + a solid colored ROAS chip; clicking a row
- *      passes its {storeId,platform,campaignId} to onOpenCampaigns to deep-link
- *      that campaign's drawer; the footer button calls onOpenCampaigns() (no
- *      arg) to drill to the Campaigns table filtered to the store.
- *   6. Footer — primary "פתח את כל הקמפיינים …" + ghost "סגור".
+ * Sections (Horizon re-skin — docs/superpowers/mockups/2026-06-12-horizon-reskin/
+ * home-approved.html:520-619 "open store-detail modal"; NO info loss — every
+ * section/datum from the prior surface is STAYS/MOVES, nothing removed):
+ *   1. Vivid ROAS-band HEADER slab — the SAME band-card recipe PerStoreRow
+ *      uses: the <Card> primitive with `band` + `bandStrength="strong"` + the
+ *      `per-store-card` class, so the scoped globals.css rules paint the vivid
+ *      band gradient + guaranteed-AA white-on-band `.store-name`/`.v.banded`
+ *      text + dark-scrim `.band-tag`/`.store-delta-chip` chips. NO hand-rolled
+ *      glass + NO `!important` colour hack (the band colour comes straight from
+ *      the data-band recipe). Carries store name, band-tag pill, FreshnessBadge,
+ *      close ✕, big climbing ROAS, "ROAS · {rangeLabel}" caption, band-ink spark.
+ *   2. KPI INSET wells (הוצאה / הכנסה / רווח תפעולי / הזמנות / AOV) on the
+ *      canonical recessed `bg-pill-track` surface + a ▲▼% delta vs the previous
+ *      period (green=good, red=bad — note SPEND ↑ is BAD). MOBILE: a scroll-snap
+ *      CAROUSEL (PerStoreRow pattern); md+: a 5-col grid.
+ *   3. Per-store NC-ROAS / nCAC tile (its OWN "different question" band — kept
+ *      per-store even though the hero carries a business-wide NC chip).
+ *   4. ROAS-over-time trend — the store-scoped `RoasChart` in a `bg-pill-track`
+ *      well. Plots ROAS, so the chart-line band rule applies (owned internally
+ *      by RoasChart: line/area = band of the period-average, neutral plot scrim).
+ *   5. Per-platform breakdown — spend + CPM + ROAS per Meta/Google/TikTok, in
+ *      `bg-pill-track` insets; the ROAS reads as an AA-safe `chip-{band}` chip
+ *      (band strictly via `bandForRoas`).
+ *   6. Top campaigns — name + revenue/orders/spend + a solid colored ROAS chip;
+ *      clicking a row passes its {storeId,platform,campaignId} to
+ *      onOpenCampaigns to deep-link that campaign's drawer; the footer button
+ *      calls onOpenCampaigns() (no arg) to drill to the Campaigns table.
+ *   7. Footer — primary "פתח את כל הקמפיינים …" + secondary "סגור".
+ *
+ * NOTE: the mockup also sketches an "hourly-revenue" bar strip + a "top-products"
+ * tile, but `StoreDetailData` carries NO hourly-distribution or per-product field
+ * — those are illustrative future sections, not data this surface holds. We do
+ * NOT fabricate them (project rule: no fake numbers). The mockup's "top-products"
+ * maps to the real top-campaigns list, which is preserved.
  *
  * Token-driven only (designColorGuard): no raw hex/rgb/oklch/px colours in
  * this file — every colour is a theme token / Tailwind theme class, and the
  * white-on-band + dark-scrim recipes live in globals.css. All money renders
- * through <Money>.
+ * through <Money>; the type ramp uses `text-fs-*` (no sub-10.5px literal).
  */
 
 import { useMemo } from 'react';
@@ -54,11 +73,30 @@ import { useDrawerEsc } from '@/lib/drawerStack';
 import { useRoasBandGradient, BAND_TAG_LABEL } from '@/lib/format/useRoasBandGradient';
 import { adDisplayState, adDisplayBand } from '@/lib/adState';
 import { roasLabel } from '@/lib/analytics';
+import { bandForRoas, type CoreRoasBand } from '@/lib/roasBands';
 import { ROAS_TONE_BG, ROAS_BADGE_SHAPE } from '@/lib/format/roasCell';
 import { cn, formatNumber } from '@/lib/utils';
 import type { DailySeries } from '@/lib/analytics';
 import type { DailyRow } from '@/lib/types';
 import type { StoreDetailData } from '@/lib/home/storeDetail';
+
+/* --------------------------------------------------------------------------
+ * Per-platform ROAS chip band class. Strictly via `bandForRoas` (the single
+ * source of truth in lib/roasBands.ts — NO local threshold fork) → the shared
+ * AA-safe `chip-{band}` recipe (globals.css). A null ROAS (0-spend platform)
+ * has no meaningful band → gray.
+ * -------------------------------------------------------------------------- */
+const CHIP_CLASS_FOR_BAND: Record<CoreRoasBand, string> = {
+  red: 'chip-red',
+  orange: 'chip-orange',
+  green: 'chip-green',
+  blue: 'chip-blue',
+  gray: 'chip-gray',
+};
+function platformRoasChipClass(roas: number | null, spend: number): string {
+  if (roas == null) return CHIP_CLASS_FOR_BAND.gray;
+  return CHIP_CLASS_FOR_BAND[bandForRoas(roas, { spend })];
+}
 
 /* --------------------------------------------------------------------------
  * Band-tag wording: the SHARED canonical BAND_TAG_LABEL (P2-33, 2026-06-10
@@ -214,15 +252,21 @@ export function StoreDetailModal({
         className="p-0 sm:w-[min(840px,92vw)]"
       >
         {/* ── 1. Vivid ROAS-band HEADER slab ───────────────────────────────
-            Reuses the `.per-store-card .glass[data-band]` treatment: vivid
-            band gradient + guaranteed-AA white-on-band text + dark-scrim chips.
-            data-mounted is pinned true so the slab paints immediately (the
-            Sheet's own zoom-in handles the entrance). */}
-        <header
-          className="glass per-store-card sticky top-0 z-10 !rounded-none !p-5 sm:!p-6"
-          data-band={band}
-          data-band-strength="strong"
-          data-mounted="true"
+            The SAME band-card recipe PerStoreRow uses — the <Card> primitive
+            with `band` + `bandStrength="strong"` + the `per-store-card` class,
+            so the scoped globals.css rules paint the vivid band gradient,
+            guaranteed-AA white-on-band `.store-name` / `.v.banded` text, and
+            the dark-scrim `.band-tag` / `.store-delta-chip` chips. Card owns
+            the data-mounted entrance flip (no hand-pinned attribute) and the
+            band ::before/tint. The Sheet's `overflow-hidden` + hero radius clip
+            the slab's top corners, so the header is square + sticky + flush to
+            the top edge (radius/padding overrides are LAYOUT only — never an
+            !important color hack; the band colour comes straight from the
+            data-band recipe). */}
+        <Card
+          band={band}
+          bandStrength="strong"
+          className="per-store-card sticky top-0 z-10 rounded-none [&]:rounded-none p-5 sm:p-6"
           data-testid="store-detail-hero"
         >
           <div className="store-top flex items-start justify-between gap-3">
@@ -291,7 +335,7 @@ export function StoreDetailModal({
               />
             )}
           </div>
-        </header>
+        </Card>
 
         <SheetBody className="space-y-5">
           {/* ── 2. KPI cards + delta vs prev ─────────────────────────────
@@ -310,12 +354,16 @@ export function StoreDetailModal({
               {kpis.map((k) => {
                 const chip = fmtDeltaChip(k.deltaPct);
                 return (
-                  <Card
+                  // KPI inset well — canonical recessed `bg-pill-track` surface
+                  // (mockup `bg-lightPrimary dark:bg-navy-900`), NOT a glass Card.
+                  // Text sits on the neutral inset so `text-ink` / `text-ink-muted`
+                  // stay AA in both themes.
+                  <div
                     key={k.testId}
                     data-testid={k.testId}
-                    className="snap-center shrink-0 basis-[46%] sm:basis-[31%] md:basis-auto !p-3"
+                    className="snap-center shrink-0 basis-[46%] sm:basis-[31%] md:basis-auto rounded-hz bg-pill-track p-3"
                   >
-                    <span className="block text-[10px] uppercase tracking-[0.05em] text-ink-muted">
+                    <span className="block text-fs-2xs uppercase tracking-[0.05em] text-ink-muted">
                       {k.label}
                     </span>
                     <div className="mt-1 text-lg font-extrabold text-ink tabular-nums">
@@ -336,7 +384,7 @@ export function StoreDetailModal({
                         {chip}
                       </div>
                     )}
-                  </Card>
+                  </div>
                 );
               })}
             </div>
@@ -433,9 +481,16 @@ export function StoreDetailModal({
               <h3 className="text-xs font-bold uppercase tracking-[0.06em] text-ink-muted mb-2.5">
                 ROAS לאורך זמן
               </h3>
-              <Card className="!p-3 sm:!p-4">
+              {/* Trend plots ROAS over time → the chart-line band rule applies.
+                  RoasChart OWNS that rule internally (line/area = band of the
+                  period-average via the locked palette + a neutral plot scrim /
+                  casing so the ink stays legible on any surface, both themes);
+                  `bare` drops its own card chrome since we wrap it in a neutral
+                  recessed `bg-pill-track` well (mockup `bg-lightPrimary
+                  dark:bg-navy-900`). */}
+              <div className="rounded-hz bg-pill-track">
                 <RoasChart data={chartSeries} stores={[data.storeName]} rows={chartRows} brandColorByName={brandColorByName} bare />
-              </Card>
+              </div>
             </section>
           )}
 
@@ -447,7 +502,14 @@ export function StoreDetailModal({
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 {data.platforms.map((p) => (
-                  <Card key={p.platform} data-testid={`platform-${p.platform}`} className="!p-3">
+                  // Per-platform inset well — `bg-pill-track` recessed surface.
+                  // Platform identity (dot + label) via <PlatformBadge>, which
+                  // sources `var(--chart-platform-*)` (designColorGuard-clean).
+                  <div
+                    key={p.platform}
+                    data-testid={`platform-${p.platform}`}
+                    className="rounded-hz bg-pill-track p-3"
+                  >
                     <PlatformBadge platform={p.platform} size="md" />
                     <dl className="mt-2 space-y-1.5 text-[11px]">
                       <div className="flex items-center justify-between gap-2">
@@ -464,12 +526,21 @@ export function StoreDetailModal({
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <dt className="text-ink-secondary">ROAS</dt>
-                        <dd className="text-ink font-semibold tabular-nums">
-                          <bdi dir="ltr">{p.roas == null ? '—' : `${p.roas.toFixed(2)}x`}</bdi>
+                        {/* AA-safe banded chip — band strictly via bandForRoas
+                            → the shared `chip-{band}` recipe. */}
+                        <dd>
+                          <span
+                            className={cn(
+                              'band-chip text-fs-2xs tabular-nums',
+                              platformRoasChipClass(p.roas, p.spend),
+                            )}
+                          >
+                            <bdi dir="ltr">{p.roas == null ? '—' : `${p.roas.toFixed(2)}x`}</bdi>
+                          </span>
                         </dd>
                       </div>
                     </dl>
-                  </Card>
+                  </div>
                 ))}
               </div>
             </section>
@@ -507,7 +578,7 @@ export function StoreDetailModal({
                         <div className="text-[12px] font-semibold text-ink tabular-nums">
                           <Money value={c.revenue} compactAbove={100_000} />
                         </div>
-                        <div className="text-[10px] text-ink-muted tabular-nums whitespace-nowrap">
+                        <div className="text-fs-2xs text-ink-muted tabular-nums whitespace-nowrap">
                           {formatNumber(c.orders, 0)} הזמ׳ · <Money value={c.spend} compactAbove={10_000} /> הוצ׳
                         </div>
                       </div>

@@ -203,3 +203,71 @@ describe('<StoreDetailModal> — NC-ROAS net-adj label + confidence gate', () =>
     expect(within(nc).getByText(/לא מספיק דאטה/)).toBeInTheDocument();
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// Horizon re-skin (Wave 3.8) — band-header recipe + pill-track insets + AA chips
+// + no-info-loss. These pin the re-skin so a regression to the old hand-rolled
+// glass header / glass KPI cards / unbanded chips would FAIL.
+// ───────────────────────────────────────────────────────────────────────────
+describe('<StoreDetailModal> — Horizon re-skin', () => {
+  it('header is a banded Card via the data-band recipe (roas 3.45 → blue), NOT a hand-rolled glass+!important hack', () => {
+    // roas 3.45 > 3.0 → blue (bandForRoas, single source of truth).
+    render(<StoreDetailModal data={makeData({ roas: 3.45 })} open onClose={() => {}} rangeLabel="30 ימים" onOpenCampaigns={() => {}} />);
+    const hero = screen.getByTestId('store-detail-hero');
+    // Band recipe: the slab carries data-band + the per-store-card scope class
+    // (so the scoped white-on-band globals.css rules apply), AND the Card
+    // primitive's glass base (proves it's the <Card> primitive, not a bespoke
+    // <header className="glass …"> with a hand-pinned data-mounted).
+    expect(hero.getAttribute('data-band')).toBe('blue');
+    expect(hero.className).toContain('per-store-card');
+    expect(hero.className).toContain('glass');
+    // No `!important` COLOUR hack survives on the header — the band colour comes
+    // straight from the data-band recipe, not a `!bg-…`/`!text-…` override.
+    expect(hero.className).not.toMatch(/![a-z-]*(?:bg|text|from|to|via)-/);
+  });
+
+  it('alarm-red header maps to the red-alarm band (zeroSalesWithSpend)', () => {
+    render(<StoreDetailModal data={makeData({ roas: null, zeroSalesWithSpend: true })} open onClose={() => {}} rangeLabel="30 ימים" onOpenCampaigns={() => {}} />);
+    expect(screen.getByTestId('store-detail-hero').getAttribute('data-band')).toBe('red-alarm');
+  });
+
+  it('KPI insets render on the canonical bg-pill-track recessed surface', () => {
+    render(<StoreDetailModal data={makeData()} open onClose={() => {}} rangeLabel="30 ימים" onOpenCampaigns={() => {}} />);
+    for (const id of ['kpi-spend', 'kpi-revenue', 'kpi-op', 'kpi-orders', 'kpi-aov']) {
+      expect(screen.getByTestId(id).className).toContain('bg-pill-track');
+    }
+  });
+
+  it('per-platform insets use bg-pill-track and an AA-safe chip-{band} ROAS chip (bandForRoas)', () => {
+    // meta roas 3.6 → blue, google 3.1 → blue, tiktok 2.4 → orange.
+    render(<StoreDetailModal data={makeData()} open onClose={() => {}} rangeLabel="30 ימים" onOpenCampaigns={() => {}} />);
+    const meta = screen.getByTestId('platform-meta');
+    expect(meta.className).toContain('bg-pill-track');
+    // The ROAS chip carries the shared band-chip recipe + the correct band class.
+    const metaChip = within(meta).getByText(/3\.60x/);
+    expect(metaChip.closest('.band-chip')?.className).toContain('chip-blue');
+    const ttChip = within(screen.getByTestId('platform-tiktok')).getByText(/2\.40x/);
+    expect(ttChip.closest('.band-chip')?.className).toContain('chip-orange');
+  });
+
+  it('no-info-loss — every section + the trend still render (header / KPIs / NC tile / trend / per-platform / top-campaigns)', () => {
+    render(<StoreDetailModal data={makeData()} open onClose={() => {}} rangeLabel="30 ימים" onOpenCampaigns={() => {}} />);
+    expect(screen.getByTestId('store-detail-hero')).toBeInTheDocument();      // header KPIs + ROAS hero
+    expect(screen.getByTestId('kpi-spend')).toBeInTheDocument();              // 5-up KPI insets
+    expect(screen.getByTestId('store-detail-nc')).toBeInTheDocument();        // per-store NC tile (kept)
+    expect(screen.getByTestId('store-detail-chart')).toBeInTheDocument();     // ROAS trend (≥2 days)
+    expect(screen.getByTestId('platform-meta')).toBeInTheDocument();          // per-platform breakdown
+    expect(screen.getByTestId('platform-google')).toBeInTheDocument();
+    expect(screen.getByTestId('platform-tiktok')).toBeInTheDocument();
+    expect(screen.getByText('Meta · ABO – Hero Video')).toBeInTheDocument();  // top campaigns (= mockup "top products")
+    expect(screen.getByTestId('store-detail-open-campaigns')).toBeInTheDocument(); // footer CTAs
+    expect(screen.getByTestId('store-detail-close')).toBeInTheDocument();
+  });
+
+  it('contains no emoji (lucide icons only)', () => {
+    render(<StoreDetailModal data={makeData()} open onClose={() => {}} rangeLabel="30 ימים" onOpenCampaigns={() => {}} />);
+    const text = screen.getByTestId('store-detail-modal').textContent ?? '';
+    // Pictographic emoji range (NOT the ▲/▼/✕ geometric glyphs the deltas use).
+    expect(text).not.toMatch(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
+  });
+});
