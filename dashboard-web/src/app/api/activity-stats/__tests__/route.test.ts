@@ -38,6 +38,10 @@ const db = vi.hoisted(() => ({
   ordersError: null as { message: string } | null,
   eventsError: null as { message: string } | null,
   productsError: null as { message: string } | null,
+  // Tables in this set return a FULL PAGE_SIZE page on every .range() call, so
+  // the route's pagination loop never short-circuits and exhausts MAX_PAGES →
+  // exercises the P0 truncation flag.
+  fullTables: new Set<string>(),
 }));
 
 function rowsFor(table: string): Row[] {
@@ -84,6 +88,14 @@ function makeBuilder(table: string) {
       return builder;
     },
     range() {
+      // Full-page mode: 1000 rows (= the route's PAGE_SIZE) every call → the
+      // loop keeps going until it hits MAX_PAGES and flags truncation.
+      if (db.fullTables.has(table) && !error) {
+        return Promise.resolve({
+          data: Array.from({ length: 1000 }, () => ({ source: 'meta-paid', total_cad: 1, line_items: [] })),
+          error: null,
+        });
+      }
       if (served) return Promise.resolve({ data: [], error });
       served = true;
       return Promise.resolve({ data: error ? null : rows, error });
@@ -112,6 +124,7 @@ beforeEach(() => {
   db.ordersError = null;
   db.eventsError = null;
   db.productsError = null;
+  db.fullTables.clear();
 });
 
 // ---------------------------------------------------------------------------
@@ -512,5 +525,53 @@ describe('GET /api/activity-stats — safety', () => {
     expect(body.orders.total).toBe(0);
     expect(body.atc.total).toBe(0);
     expect(body.perProduct).toEqual([]);
+  });
+});
+
+describe('GET /api/activity-stats — audit 2026-06-15 fixes', () => {
+  it('P0: flags dataTruncated when a table keeps returning full pages (50k cap hit)', async () => {
+    db.fullTables.add('orders_attribution'); // never short-pages → loop exhausts MAX_PAGES
+    const res = await GET(reqWith());
+    const body = (await res.json()) as ActivityStatsResponse;
+    expect(body.dataTruncated).toBe(true);
+  });
+
+  it('P0: dataTruncated is absent when every table short-pages normally', async () => {
+    db.orders = [{ source: 'meta-paid', total_cad: 1 }];
+    const res = await GET(reqWith());
+    const body = (await res.json()) as ActivityStatsResponse;
+    expect(body.dataTruncated).toBeUndefined();
+  });
+
+  it('P2: totalProducts counts DISTINCT products even when perProduct is sliced to the top 20', async () => {
+    db.products = Array.from({ length: 25 }, (_, i) => ({ product_id: `P${i}`, product_title: `Prod ${i}` }));
+    db.orders = Array.from({ length: 25 }, (_, i) => ({
+      source: 'meta-paid',
+      total_cad: 25 - i, // descending so the sort is deterministic
+      line_items: [{ p: `P${i}`, u: 1, r: 10 }],
+    }));
+    const res = await GET(reqWith());
+    const body = (await res.json()) as ActivityStatsResponse;
+    expect(body.perProduct.length).toBe(20); // TOP_PRODUCTS cap
+    expect(body.totalProducts).toBe(25); // but the true distinct count is surfaced
+  });
+
+  it('P1b: a historical ATC titled "מגנטו זן" merges with the purchase of catalog "מגנטו-זן" (punctuation-insensitive titleKey)', async () => {
+    db.products = [{ product_id: 'M1', product_title: 'מגנטו-זן' }]; // catalog uses a maqaf "־"
+    db.orders = [{ source: 'meta-paid', total_cad: 100, line_items: [{ p: 'M1', u: 1, r: 100 }] }];
+    db.events = [
+      // Historical ATC: NO product_id; title uses a plain SPACE instead of the maqaf.
+      { source: 'meta-paid', product_title: 'מגנטו זן', first_touch_source: null },
+    ];
+    const res = await GET(reqWith());
+    const body = (await res.json()) as ActivityStatsResponse;
+    const rows = body.perProduct.filter((p) => /מגנטו/.test(p.productTitle));
+    // Must collapse into ONE row — not split into a pid-row (purchase) + a
+    // title-row (ATC), which would read 100%/∞ instead of a sane joined rate.
+    expect(rows.length).toBe(1);
+    expect(rows[0].productId).toBe('M1');
+    expect(rows[0].purchaseCount).toBe(1);
+    expect(rows[0].atcCount).toBe(1);
+    expect(rows[0].conversionPct).toBeCloseTo(100, 5);
   });
 });

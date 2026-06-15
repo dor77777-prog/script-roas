@@ -92,6 +92,7 @@ function fullResp(over: Partial<ActivityStatsResponse> = {}): ActivityStatsRespo
         atcBySource: [{ bucket: 'meta', count: 236 }],
       },
     ],
+    totalProducts: 2,
     firstTouchCoverage: { orders: { withFt: 978, total: 11506, pct: 8.5 } },
     ...over,
   };
@@ -258,11 +259,59 @@ describe('<ActivityStatsTab> — loading / error / empty', () => {
         },
         atc: { total: 0, byPlatform: [] },
         perProduct: [],
+        totalProducts: 0,
         firstTouchCoverage: { orders: { withFt: 0, total: 0, pct: 0 } },
       }),
       error: undefined,
     };
     render(<ActivityStatsTab range={RANGE} globalStore="All" />);
     expect(screen.getByTestId('as-empty')).toBeInTheDocument();
+  });
+});
+
+describe('<ActivityStatsTab> — audit 2026-06-15 fixes', () => {
+  it('P0: shows the data-incomplete banner when dataTruncated=true', () => {
+    swrReturn = { data: fullResp({ dataTruncated: true }), error: undefined };
+    render(<ActivityStatsTab range={RANGE} globalStore="All" />);
+    expect(screen.getByTestId('as-truncated')).toBeInTheDocument();
+  });
+
+  it('P0: NO banner when the data is complete', () => {
+    swrReturn = { data: fullResp(), error: undefined };
+    render(<ActivityStatsTab range={RANGE} globalStore="All" />);
+    expect(screen.queryByTestId('as-truncated')).toBeNull();
+  });
+
+  it('P1a: the paid% KPI follows the orders↔revenue toggle (was frozen on orders)', () => {
+    swrReturn = { data: fullResp(), error: undefined };
+    render(<ActivityStatsTab range={RANGE} globalStore="All" />);
+    const kpis = screen.getByTestId('as-kpis');
+    // orders mode: 9141 / 11506 ≈ 79.4%
+    expect(within(kpis).getByText(/79\.4%/)).toBeInTheDocument();
+    // revenue mode: 820,000 / 1,010,000 ≈ 81.2% — the KPI must MOVE, not freeze.
+    fireEvent.click(screen.getByRole('radio', { name: 'לפי הכנסה' }));
+    expect(within(kpis).getByText(/81\.2%/)).toBeInTheDocument();
+    expect(within(kpis).queryByText(/79\.4%/)).toBeNull();
+  });
+
+  it('P2: surfaces "showing N of M" when the product table is capped', () => {
+    swrReturn = { data: fullResp({ totalProducts: 137 }), error: undefined };
+    render(<ActivityStatsTab range={RANGE} globalStore="All" />);
+    const note = screen.getByTestId('as-top-n');
+    expect(note.textContent).toMatch(/2/); // showing 2 rows
+    expect(note.textContent).toMatch(/137/); // of 137 total
+  });
+
+  it('P2: omits "showing N of M" when the table is the whole list', () => {
+    swrReturn = { data: fullResp({ totalProducts: 2 }), error: undefined };
+    render(<ActivityStatsTab range={RANGE} globalStore="All" />);
+    expect(screen.queryByTestId('as-top-n')).toBeNull();
+  });
+
+  it('footnote explains a >100% conversion is a tracking gap, not an error', () => {
+    swrReturn = { data: fullResp(), error: undefined };
+    render(<ActivityStatsTab range={RANGE} globalStore="All" />);
+    expect(screen.getByText(/מעל 100%/)).toBeInTheDocument();
+    expect(screen.getByText(/לא שגיאה/)).toBeInTheDocument();
   });
 });

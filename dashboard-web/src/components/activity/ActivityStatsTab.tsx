@@ -32,8 +32,9 @@
 
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { BarChart3 } from 'lucide-react';
+import { BarChart3, Info, AlertTriangle } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Heading } from '@/components/ui/Typography';
 import { Money } from '@/components/ui/Money';
 import { Button } from '@/components/ui/Button';
@@ -300,13 +301,34 @@ function StackedBar({ split, testId }: { split: SourceSplit[]; testId: string })
  * KPI tile
  * -------------------------------------------------------------------------- */
 
-function Kpi({ value, label, emphasis }: { value: string; label: string; emphasis?: boolean }) {
+function Kpi({
+  value,
+  label,
+  emphasis,
+  hint,
+}: {
+  value: string;
+  label: string;
+  emphasis?: boolean;
+  hint?: string;
+}) {
   return (
     <Card className="p-4 flex-1 min-w-[130px]">
       <div className={cn('text-xl font-extrabold tabular-nums', emphasis ? 'text-accent' : 'text-ink')}>
         {value}
       </div>
-      <div className="mt-0.5 text-2xs text-ink-muted">{label}</div>
+      <div className="mt-0.5 text-2xs text-ink-muted">
+        {hint ? (
+          <HelpTooltip content={hint}>
+            <span className="inline-flex items-center gap-1 cursor-help">
+              {label}
+              <Info size={11} aria-hidden className="text-ink-subtle" />
+            </span>
+          </HelpTooltip>
+        ) : (
+          label
+        )}
+      </div>
     </Card>
   );
 }
@@ -390,12 +412,18 @@ export function ActivityStatsTab({ range, globalStore }: ActivityStatsTabProps) 
   // The platform donut center = the leading bucket + its share.
   const topPlatform = platformSlices[0];
 
+  // P1a (audit 2026-06-15): follow the orders↔revenue toggle so the KPI and the
+  // donut center never disagree. In revenue mode both use the revenue split.
   const paidPct = useMemo(() => {
     if (!data) return 0;
     const { paid, organic } = data.orders.paidVsOrganic;
+    if (donutMode === 'revenue') {
+      const denom = paid.revenueCad + organic.revenueCad;
+      return denom > 0 ? (paid.revenueCad / denom) * 100 : 0;
+    }
     const denom = paid.orders + organic.orders;
     return denom > 0 ? (paid.orders / denom) * 100 : 0;
-  }, [data]);
+  }, [data, donutMode]);
 
   // ── Loading / error / empty ───────────────────────────────────────────────
   if (isLoading) {
@@ -462,6 +490,22 @@ export function ActivityStatsTab({ range, globalStore }: ActivityStatsTabProps) 
 
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in-up" data-testid="activity-stats-tab">
+      {/* P0 (audit 2026-06-15): the data layer caps at 50k rows/table. If that
+          ceiling was hit the totals below are INCOMPLETE — say so loudly rather
+          than render skewed numbers as if whole. */}
+      {data?.dataTruncated && (
+        <div
+          role="status"
+          data-testid="as-truncated"
+          className="flex items-start gap-2 rounded-xl bg-status-warningBg px-4 py-2.5 text-xs font-medium text-status-warningFg"
+        >
+          <AlertTriangle size={14} aria-hidden className="mt-0.5 shrink-0" />
+          <span>
+            הנתונים חלקיים — נחתכו ב-50,000 שורות לטווח הזה, אז הסכומים והאחוזים נמוכים מהאמת. צמצם את
+            טווח-התאריכים או סנן לחנות בודדת לקבלת מספרים מלאים.
+          </span>
+        </div>
+      )}
       {/* Header + the orders/revenue toggle (drives both donuts). */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-start gap-2.5 min-w-0 flex-1">
@@ -497,7 +541,11 @@ export function ActivityStatsTab({ range, globalStore }: ActivityStatsTabProps) 
         <Kpi value={countText(ordersTotal)} label="הזמנות בטווח" />
         <Kpi value={pctText(paidPct)} label="מיוחס לפרסום ממומן" emphasis />
         <Kpi value={countText(atcTotal)} label="הוספות לעגלה" />
-        <Kpi value={pctText(ftPct)} label="כיסוי קליק-ראשון" />
+        <Kpi
+          value={pctText(ftPct)}
+          label="כיסוי קליק-ראשון"
+          hint="אחוז ההזמנות שיש להן אות קליק-ראשון כלשהו — כולל 'ישיר' (ביקור ללא מקור מזוהה). זהו כיסוי האות, לא בהכרח קליק-ראשון מפרסום ממומן."
+        />
       </div>
 
       {/* Two donuts */}
@@ -512,7 +560,7 @@ export function ActivityStatsTab({ range, globalStore }: ActivityStatsTabProps) 
           </p>
           <Donut
             slices={paidSlices}
-            centerTop={pctText(donutMode === 'revenue' ? (paidSlices[0]?.pct ?? 0) : paidPct)}
+            centerTop={pctText(paidPct)}
             centerBottom="ממומן"
             mode={donutMode}
             testId="as-donut-paid"
@@ -545,6 +593,11 @@ export function ActivityStatsTab({ range, globalStore }: ActivityStatsTabProps) 
             </Heading>
             <p className="mt-0.5 text-2xs text-ink-subtle">
               לכל מוצר: כמה הוספות-לעגלה וכמה רכישות, והפילוח לפי פלטפורמה/ערוץ
+              {data && data.totalProducts > perProduct.length && (
+                <span data-testid="as-top-n" className="text-ink-muted">
+                  {' · '}מציג {perProduct.length} מתוך {countText(data.totalProducts)} מוצרים
+                </span>
+              )}
             </p>
           </div>
           <SegToggle<ProductMetric>
@@ -627,12 +680,22 @@ export function ActivityStatsTab({ range, globalStore }: ActivityStatsTabProps) 
           </TableBase>
         </div>
 
-        <div className="border-t border-glass-edge bg-glass-2 px-4 py-3 text-2xs leading-relaxed text-ink-subtle">
-          מקורות: ה<b>עוגות</b> מ-<code dir="ltr" className="font-mono">orders_attribution.source</code> ·
-          ה<b>טבלה לפי מוצר</b> מ-<code dir="ltr" className="font-mono">orders_attribution.line_items</code>{' '}
-          (רכישות) +{' '}
-          <code dir="ltr" className="font-mono">store_events</code> add_to_cart (עגלה). האחוז מחושב לפי
-          מספר {donutMode === 'revenue' ? 'הכנסה' : 'הזמנות'}.
+        <div className="border-t border-glass-edge bg-glass-2 px-4 py-3 text-2xs leading-relaxed text-ink-subtle space-y-1">
+          <p>
+            ה<b>עוגות</b> מ-<code dir="ltr" className="font-mono">orders_attribution.source</code> — מתחלקות
+            לפי{' '}
+            {donutMode === 'revenue' ? 'הכנסה (נטו, אחרי החזרים)' : 'מספר הזמנות'} בהתאם למתג למעלה.
+          </p>
+          <p>
+            ה<b>טבלה לפי מוצר</b>: רכישות מ-
+            <code dir="ltr" className="font-mono">orders_attribution.line_items</code> (צד-שרת, מלא) ·
+            הוספות-לעגלה מ-<code dir="ltr" className="font-mono">store_events</code> add_to_cart (beacon
+            בצד-לקוח, <b>עלול להיות חלקי</b> — במיוחד בחנות usmile ה-headless).
+          </p>
+          <p>
+            <b>המרה</b> = רכישות ÷ הוספות-לעגלה. ערך <b>מעל 100%</b> = יותר רכישות מהוספות-עגלה שתועדו,
+            כלומר מעקב-ה-ATC חסר למוצר הזה — <b>לא שגיאה</b>.
+          </p>
         </div>
       </Card>
     </div>

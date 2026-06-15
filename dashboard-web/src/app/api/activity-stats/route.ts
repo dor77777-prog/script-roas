@@ -106,7 +106,13 @@ export interface ActivityStatsResponse {
   };
   atc: { total: number; byPlatform: AtcBucketCount[] };
   perProduct: PerProduct[];
+  /** Total distinct products in range (perProduct is capped to TOP_PRODUCTS);
+   *  lets the UI show "showing 20 of N" instead of implying the list is whole. */
+  totalProducts: number;
   firstTouchCoverage: { orders: Coverage };
+  /** True when a 50k-row page cap was hit on orders/ATC → totals are INCOMPLETE.
+   *  UI must render a "data incomplete" banner (audit 2026-06-15, P0). */
+  dataTruncated?: boolean;
   /** Present only on the degraded-error path; UI renders an inline notice. */
   error?: string;
 }
@@ -140,9 +146,21 @@ function clampTitle(v: unknown): string {
 }
 
 /** Normalize a title for matching purchases (titled via catalog) with ATC
- *  (titled via store_events) — case/space-insensitive so trivial drift joins. */
+ *  (titled via store_events). Case/space-insensitive AND punctuation-insensitive
+ *  so trivial drift joins — e.g. "מגנטו-זן" (maqaf) and "מגנטו זן" (space) must
+ *  collapse to the SAME key, otherwise a historical title-only ATC splits off
+ *  into its own row and the purchase row reads an inflated >100% conversion
+ *  (audit 2026-06-15, P1b). Strips combining diacritics + common punctuation
+ *  (Hebrew maqaf U+05BE, hyphen/dash, slash, comma, etc.) → space, then collapses. */
 function titleKey(title: string): string {
-  return title.trim().toLowerCase().replace(/\s+/g, ' ');
+  return title
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '') // drop combining diacritics
+    .replace(/[־‐-―\-_/.,:;'"`(){}[\]]+/g, ' ') // punctuation → space
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 type OrderRow = {
@@ -165,8 +183,13 @@ interface RangeableBuilder {
 
 /** Generic paginated range read on the admin client. The `build` callback
  *  applies the table-specific filters; we only add `.range()`. Stops when a
- *  page is short or empty. */
-async function fetchAllRows<T>(build: () => RangeableBuilder): Promise<T[]> {
+ *  page is short or empty. Returns `truncated: true` when the MAX_PAGES ceiling
+ *  is hit with a still-full final page — i.e. there were MORE rows we did NOT
+ *  fetch, so every downstream total/pct is silently incomplete. Callers MUST
+ *  surface this (audit 2026-06-15, P0). */
+async function fetchAllRows<T>(
+  build: () => RangeableBuilder,
+): Promise<{ rows: T[]; truncated: boolean }> {
   const out: T[] = [];
   for (let page = 0; page < MAX_PAGES; page++) {
     const lo = page * PAGE_SIZE;
@@ -175,9 +198,10 @@ async function fetchAllRows<T>(build: () => RangeableBuilder): Promise<T[]> {
     if (error) throw new Error(error.message);
     const rows = (data as T[] | null) ?? [];
     out.push(...rows);
-    if (rows.length < PAGE_SIZE) break;
+    if (rows.length < PAGE_SIZE) return { rows: out, truncated: false };
   }
-  return out;
+  // Exhausted MAX_PAGES and every page was full → there is very likely more.
+  return { rows: out, truncated: true };
 }
 
 function toNumber(v: unknown): number {
@@ -213,6 +237,7 @@ function emptyBody(range: { from: string; to: string }, error?: string): Activit
     },
     atc: { total: 0, byPlatform: [] },
     perProduct: [],
+    totalProducts: 0,
     firstTouchCoverage: { orders: { withFt: 0, total: 0, pct: 0 } },
     ...(error ? { error } : {}),
   };
@@ -236,7 +261,7 @@ export async function GET(req: Request): Promise<NextResponse<ActivityStatsRespo
     const sb = getSupabaseAdmin();
 
     // ── Orders — marketing/product columns only, never order/customer ids. ──
-    const orderRows = await fetchAllRows<OrderRow>(() => {
+    const { rows: orderRows, truncated: ordersTruncated } = await fetchAllRows<OrderRow>(() => {
       let q = sb
         .from('orders_attribution')
         .select('source, total_cad, first_touch_source, line_items')
@@ -249,7 +274,7 @@ export async function GET(req: Request): Promise<NextResponse<ActivityStatsRespo
     // ── ATC — store_events of type add_to_cart, IL-anchored received_at. ───
     const fromTs = `${from}T00:00:00.000${IL_OFFSET}`;
     const toTs = `${to}T23:59:59.999${IL_OFFSET}`;
-    const eventRows = await fetchAllRows<EventRow>(() => {
+    const { rows: eventRows, truncated: atcTruncated } = await fetchAllRows<EventRow>(() => {
       let q = sb
         .from('store_events')
         // PPJ-T2: read the beacon-captured numeric productId for an EXACT
@@ -266,7 +291,7 @@ export async function GET(req: Request): Promise<NextResponse<ActivityStatsRespo
     // ── Products — productId → title bridge for per-product purchases. The
     //    line_items column carries only the productId (compact {p,u,r}); the
     //    human title lives in products_daily / store_events. ────────────────
-    const productRows = await fetchAllRows<ProductRow>(() => {
+    const { rows: productRows } = await fetchAllRows<ProductRow>(() => {
       let q = sb.from('products_daily').select('product_id, product_title').gte('date', from).lte('date', to);
       if (storeId) q = q.eq('store_id', storeId);
       return q as unknown as RangeableBuilder;
@@ -447,11 +472,25 @@ export async function GET(req: Request): Promise<NextResponse<ActivityStatsRespo
         atcBySource: splitOf(acc.atcBySource),
       }));
 
+    // P0 (audit 2026-06-15): if orders OR ATC hit the 50k page cap, the totals
+    // below are INCOMPLETE — flag it so the UI can warn instead of silently
+    // showing skewed numbers.
+    const dataTruncated = ordersTruncated || atcTruncated;
+    if (dataTruncated) {
+      console.warn(
+        `/api/activity-stats: row cap (${MAX_PAGES * PAGE_SIZE}) hit — totals incomplete`,
+        { range, storeId, ordersTruncated, atcTruncated },
+      );
+    }
+
     const body: ActivityStatsResponse = {
       range,
       orders: { total: orderTotal, paidVsOrganic, byPlatform },
       atc: { total: atcTotal, byPlatform: atcByPlatform },
       perProduct,
+      // Distinct products in range (perProduct is sliced to TOP_PRODUCTS); the UI
+      // shows "20 מתוך N" so the table never implies it's the whole catalog.
+      totalProducts: byKey.size,
       firstTouchCoverage: {
         orders: {
           withFt: orderFt,
@@ -459,6 +498,7 @@ export async function GET(req: Request): Promise<NextResponse<ActivityStatsRespo
           pct: orderTotal > 0 ? (orderFt / orderTotal) * 100 : 0,
         },
       },
+      ...(dataTruncated ? { dataTruncated: true } : {}),
     };
 
     return NextResponse.json<ActivityStatsResponse>(body, {
