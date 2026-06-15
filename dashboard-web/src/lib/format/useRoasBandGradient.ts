@@ -61,11 +61,19 @@ export function useRoasBandGradient(
   roas: number | null | undefined,
   isStale = false,
   zeroSalesWithSpend = false,
+  spentNoSales = false,
 ): BandResult {
-  // Top priority — spent money, zero return. Wins over the null→gray check
-  // below because such a store carries `roas: null` upstream.
+  // Top priority — the LOUD alarm: spent real money (> $100) with zero return.
+  // Wins over the null→gray check below because such a store carries
+  // `roas: null` upstream. Caller passes `isSpendAlarm(...)`.
   if (zeroSalesWithSpend) return { band: 'red-alarm', desaturate: isStale };
   if (roas == null || Number.isNaN(roas)) {
+    // Spent money but the ratio is null because revenue is 0 — BELOW the alarm
+    // threshold but still a BAD state (burning money, no return), so it reads as
+    // regular RED ("דורש בחינה"), NOT the neutral "no data" gray. Genuine
+    // no-activity (spend === 0 → caller passes spentNoSales=false) stays gray.
+    // Caller passes `isSpendNoSales(...)`. (Operator decision 2026-06-15.)
+    if (spentNoSales) return { band: 'red', desaturate: isStale };
     return { band: 'gray', desaturate: isStale };
   }
   // Threshold ladder is delegated to the single source of truth

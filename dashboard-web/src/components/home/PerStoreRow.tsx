@@ -55,7 +55,7 @@ import {
 import { aovEmphasis } from '@/lib/format/aovEmphasis';
 import { useStaleness } from '@/lib/freshness/useStaleness';
 import { adDisplayState, adDisplayBand } from '@/lib/adState';
-import { isSpendAlarm } from '@/lib/roasBands';
+import { isSpendAlarm, isSpendNoSales } from '@/lib/roasBands';
 
 /* Operator-locked factual alarm copy. Shown in the card's scrim sub-surface
  * when a store has spent over the alarm threshold ($100 CAD) with ZERO sales.
@@ -299,16 +299,22 @@ function StoreCard({
   onSelect?: (storeId: string) => void;
   rangeLabel?: string;
 }) {
-  // Operator-locked "alarm-red" state: the store SPENT real money (> $100 CAD)
-  // but made ZERO sales (the worst outcome). Such a store carries `roas: null`
-  // upstream (a 0-revenue ROAS isn't a meaningful ratio), so we derive the flag
-  // from raw spend/revenue via the single source of truth (`isSpendAlarm` in
-  // lib/roasBands.ts) and let it drive the band. The threshold ($100 CAD) keeps
-  // early-day "money out, no sales yet" trickles from false-alarming — a store
-  // at $20 spend / 0 sales at 7am is normal, not an emergency. Spend ≤ $100 with
-  // 0 sales is NOT alarm and falls through (roas is null upstream → gray
-  // "אין נתונים"); genuine no-activity (spend === 0) also stays gray.
+  // Two "spent money, zero sales" tiers (operator decision 2026-06-15):
+  //   • isAlarm  — > $100 CAD spend, 0 sales → LOUD pulsing red-alarm + note.
+  //     The $100 threshold keeps early-day "money out, no sales yet" trickles
+  //     from false-alarming (a store at $20 / 0 sales at 7am isn't an emergency).
+  //   • spentNoSales — ANY spend > 0, 0 sales → at least regular RED. Below the
+  //     alarm threshold the store still burned money with zero return, so it must
+  //     NOT read as the neutral gray "אין נתונים" (which would look identical to
+  //     an off / no-activity store). Genuine no-activity (spend === 0) stays gray.
+  // Both carry `roas: null` upstream (a 0-revenue ratio is meaningless), so we
+  // derive them from raw spend/revenue via the single source of truth
+  // (lib/roasBands.ts) and let them drive the band.
   const isAlarm = isSpendAlarm({
+    spend: store.spend ?? 0,
+    revenue: store.revenue ?? 0,
+  });
+  const spentNoSales = isSpendNoSales({
     spend: store.spend ?? 0,
     revenue: store.revenue ?? 0,
   });
@@ -334,7 +340,7 @@ function StoreCard({
   // The 2nd arg (isStale) keeps its default false here (per-card desaturation
   // is driven by data-freshness, not this flag); the 3rd arg flips the card
   // to the alarm-red band.
-  const roasBand = useRoasBandGradient(store.roas, false, isAlarm);
+  const roasBand = useRoasBandGradient(store.roas, false, isAlarm, spentNoSales);
   // Off-band override wins when set (organic→blue, off-empty→gray).
   const band = offBandId
     ? { band: offBandId, desaturate: false }
@@ -453,16 +459,17 @@ function StoreCard({
           {/* Ads-off Phase 2 — off-display takes priority over numeric ROAS:
               organic (off + rev>0) → Hebrew "אורגני" static label.
               off-empty/off-negative (off + rev≤0) → plain "0".
-              Alarm-red state shows an explicit "0.00x" (spent money, zero
-              return) — kept STATIC (it's literally zero, nothing to climb to).
-              Genuine ROAS values climb in via <CountUp> ("numbers come alive"),
-              reduced-motion-aware; a null ROAS renders the "—" placeholder
-              (CountUp's own empty-state), matching the prior behaviour. */}
+              ANY "spent money, zero sales" state (spentNoSales — covers both the
+              >$100 alarm and the smaller regular-red case) shows an explicit
+              "0.00x" — the ROAS literally IS zero (0 revenue / spend), so this is
+              the truthful value, NOT the "—" no-data placeholder. Kept STATIC
+              (nothing to climb to). Genuine ROAS values climb in via <CountUp>
+              ("numbers come alive"), reduced-motion-aware. */}
           {offState === 'organic'
             ? 'אורגני'
             : offState !== 'normal'
             ? '0'
-            : isAlarm
+            : spentNoSales
             ? '0.00x'
             : <CountUp value={store.roas} format={(n) => `${n.toFixed(2)}x`} />}
         </bdi>

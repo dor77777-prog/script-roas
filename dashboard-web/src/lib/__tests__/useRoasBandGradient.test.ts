@@ -99,9 +99,51 @@ describe('useRoasBandGradient — red-alarm (spent money, ZERO sales)', () => {
       band: 'orange',
       desaturate: false,
     });
-    // No-activity / no-data path: null roas + flag false → gray (unchanged).
+    // No-activity / no-data path: null roas + both flags false → gray (unchanged).
     expect(useRoasBandGradient(null, false, false)).toEqual({
       band: 'gray',
+      desaturate: false,
+    });
+  });
+});
+
+describe('useRoasBandGradient — spentNoSales (regular RED below the alarm threshold)', () => {
+  it('null roas + spentNoSales=true → regular RED, not gray (burning money is never "no data")', () => {
+    // The $40-spend / $0-sales store: roas null upstream, NOT the >$100 alarm,
+    // but must read red — not the neutral gray that an off store gets.
+    expect(useRoasBandGradient(null, false, false, true)).toEqual({
+      band: 'red',
+      desaturate: false,
+    });
+  });
+
+  it('the LOUD alarm still wins over plain red when BOTH flags are set (> $100 case)', () => {
+    // A >$100/$0 store sets both predicates; the red-alarm branch is checked
+    // first so it wins.
+    expect(useRoasBandGradient(null, false, true, true)).toEqual({
+      band: 'red-alarm',
+      desaturate: false,
+    });
+  });
+
+  it('null roas + spentNoSales=false → gray (genuine no-activity, spend === 0)', () => {
+    expect(useRoasBandGradient(null, false, false, false)).toEqual({
+      band: 'gray',
+      desaturate: false,
+    });
+  });
+
+  it('propagates desaturate on the regular-red spentNoSales band when stale', () => {
+    expect(useRoasBandGradient(null, true, false, true)).toEqual({
+      band: 'red',
+      desaturate: true,
+    });
+  });
+
+  it('spentNoSales does NOT override a real numeric ROAS (only the null branch)', () => {
+    // Defensive: a genuine ratio classifies normally even if the flag leaked true.
+    expect(useRoasBandGradient(2.8, false, false, true)).toEqual({
+      band: 'green',
       desaturate: false,
     });
   });

@@ -39,15 +39,30 @@ export function bandForRoas(roas: number, opts?: { spend?: number }): CoreRoasBa
 }
 
 /**
- * Alarm state: real money out (> $100 CAD), zero sales back.
- * Strictly ABOVE the threshold — $99 spend with no sales is still "morning".
- *
- * SUPERSEDES the legacy zeroSalesWithSpend = spend > 0 derivation in
- * PerStoreRow.tsx/storeDetail.ts — those call sites MUST switch to this
- * predicate during the band-drain migration (W0.3/W3). Deliberate visible
- * change: stores with ≤$100 spend and zero sales drop from red-alarm to
- * plain red.
+ * ALARM state (the loud, pulsing red-alarm): real money out (> $100 CAD), zero
+ * sales back. Strictly ABOVE the threshold — $99 spend with no sales is still
+ * "morning". This is the LOUD subset of {@link isSpendNoSales}: it adds the
+ * pulsing ring + the "go look NOW" note.
  */
 export function isSpendAlarm(m: { spend: number; revenue: number }): boolean {
   return m.spend > ALARM_SPEND_THRESHOLD_CAD && m.revenue === 0;
+}
+
+/**
+ * "Spent money, made zero sales" at ANY amount (spend > 0 && revenue === 0).
+ *
+ * Such a store carries `roas: null` upstream (a 0-revenue ratio is meaningless)
+ * — but it is NOT "no data". It is actively burning money with zero return, so
+ * it must read RED, never the neutral gray "אין נתונים" (which is reserved for
+ * genuine no-activity, spend === 0). {@link isSpendAlarm} is the louder subset
+ * (> $100) that also earns the pulsing red-alarm; between $0 and $100 it is
+ * plain red ("דורש בחינה").
+ *
+ * Operator decision 2026-06-15: a $40-spend / $0-sales store was rendering gray
+ * on the per-store card (looked identical to an OFF store), while the detail
+ * modal showed it as full red-alarm — the two surfaces disagreed. Both now use
+ * this split: alarm > $100, plain red below, gray only at spend === 0.
+ */
+export function isSpendNoSales(m: { spend: number; revenue: number }): boolean {
+  return m.spend > 0 && m.revenue === 0;
 }

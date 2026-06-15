@@ -226,9 +226,45 @@ describe('<StoreDetailModal> — Horizon re-skin', () => {
     expect(hero.className).not.toMatch(/![a-z-]*(?:bg|text|from|to|via)-/);
   });
 
-  it('alarm-red header maps to the red-alarm band (zeroSalesWithSpend)', () => {
-    render(<StoreDetailModal data={makeData({ roas: null, zeroSalesWithSpend: true })} open onClose={() => {}} rangeLabel="30 ימים" onOpenCampaigns={() => {}} />);
+  it('alarm-red header: >$100 spend with zero sales → red-alarm band', () => {
+    // The modal now derives the LOUD alarm from kpis (spend>$100 & revenue 0),
+    // matching PerStoreRow — NOT from the legacy any-spend zeroSalesWithSpend
+    // flag. (Operator decision 2026-06-15.)
+    render(
+      <StoreDetailModal
+        data={makeData({
+          roas: null,
+          zeroSalesWithSpend: true,
+          kpis: { spend: 1840, revenue: 0, operatingProfit: -1840, orders: 0, aov: 0 },
+        })}
+        open
+        onClose={() => {}}
+        rangeLabel="30 ימים"
+        onOpenCampaigns={() => {}}
+      />,
+    );
     expect(screen.getByTestId('store-detail-hero').getAttribute('data-band')).toBe('red-alarm');
+  });
+
+  it('regular-red header: ≤$100 spend with zero sales → red (NOT red-alarm, NOT gray)', () => {
+    // The $40 / $0 case the operator flagged: below the alarm threshold but
+    // still burning money — regular red here too, in lock-step with the card.
+    render(
+      <StoreDetailModal
+        data={makeData({
+          roas: null,
+          zeroSalesWithSpend: true,
+          kpis: { spend: 40, revenue: 0, operatingProfit: -40, orders: 0, aov: 0 },
+        })}
+        open
+        onClose={() => {}}
+        rangeLabel="30 ימים"
+        onOpenCampaigns={() => {}}
+      />,
+    );
+    const band = screen.getByTestId('store-detail-hero').getAttribute('data-band');
+    expect(band).toBe('red');
+    expect(band).not.toBe('red-alarm');
   });
 
   it('KPI insets render on the canonical bg-pill-track recessed surface', () => {

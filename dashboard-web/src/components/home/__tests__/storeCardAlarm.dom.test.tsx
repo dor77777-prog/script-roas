@@ -67,26 +67,31 @@ describe('store-card alarm threshold (W3.1)', () => {
     expect(card?.textContent).not.toContain(REJECTED_COPY);
   });
 
-  it('spend $99 / revenue 0 → NOT alarm (no red-alarm band, no alarm copy)', () => {
+  it('spend $99 / revenue 0 → regular RED (below the alarm threshold, but NOT gray)', () => {
     const { container } = render(<PerStoreRow stores={[makeStore(99, 0)]} />);
     const card = container.querySelector('[data-testid="per-store-card"]');
     expect(card).not.toBeNull();
 
-    // Below the $100 threshold → must NOT be the alarm band. roas is null
-    // upstream for a 0-revenue store, so it falls through to gray "אין נתונים".
+    // Below the $100 threshold → NOT the loud alarm band. But the store still
+    // burned $99 with zero return, so it reads as regular RED — NOT the neutral
+    // gray "אין נתונים" (reserved for genuine no-activity, spend === 0).
+    // (Operator decision 2026-06-15: gray made a money-losing store look
+    // identical to an off store.)
     expect(card?.getAttribute('data-band')).not.toBe('red-alarm');
-    expect(card?.getAttribute('data-band')).toBe('gray');
+    expect(card?.getAttribute('data-band')).toBe('red');
 
-    // W8-T5 — NO pulse affordance in the non-alarm state.
+    // W8-T5 — NO pulse affordance below the alarm threshold.
     expect(card?.hasAttribute('data-alarm-pulse')).toBe(false);
 
-    // No alarm note, no alarm copy at all.
+    // No alarm note, no alarm copy at all (that "go look NOW" line is the
+    // >$100 affordance only).
     expect(card?.querySelector('.store-alarm-note')).toBeNull();
     expect(card?.textContent).not.toContain(ALARM_COPY);
     expect(card?.textContent).not.toContain(REJECTED_COPY);
 
-    // Not the alarm "0.00x" hero either — a true null ROAS renders the "—".
-    expect(card?.querySelector('.v.banded')?.textContent).toBe('—');
+    // ROAS hero reads the truthful 0.00x (0 revenue / spend), NOT the "—"
+    // no-data placeholder — the card is red, it has data, the return is zero.
+    expect(card?.querySelector('.v.banded')?.textContent).toBe('0.00x');
   });
 
   it('spend exactly $100 / revenue 0 → NOT alarm (threshold is strictly >$100)', () => {

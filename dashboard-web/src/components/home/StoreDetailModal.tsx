@@ -73,7 +73,7 @@ import { useDrawerEsc } from '@/lib/drawerStack';
 import { useRoasBandGradient, BAND_TAG_LABEL } from '@/lib/format/useRoasBandGradient';
 import { adDisplayState, adDisplayBand } from '@/lib/adState';
 import { roasLabel } from '@/lib/analytics';
-import { bandForRoas, type CoreRoasBand } from '@/lib/roasBands';
+import { bandForRoas, isSpendAlarm, type CoreRoasBand } from '@/lib/roasBands';
 import { ROAS_TONE_BG, ROAS_BADGE_SHAPE } from '@/lib/format/roasCell';
 import { cn, formatNumber } from '@/lib/utils';
 import type { DailySeries } from '@/lib/analytics';
@@ -176,11 +176,21 @@ export function StoreDetailModal({
   const offBandId = adDisplayBand(offState); // null when 'normal'
 
   // Band for the header slab. Always call unconditionally (rules-of-hooks).
-  // Off-band override wins when set; otherwise mirrors PerStoreRow's derivation:
-  // the alarm-red "spent money, zero sales" flag wins over a null ROAS.
+  // Off-band override wins when set; otherwise mirrors PerStoreRow EXACTLY
+  // (operator decision 2026-06-15): the LOUD red-alarm fires only > $100 spend
+  // with zero sales (3rd arg = isSpendAlarm), while ANY spend with zero sales
+  // (`data.zeroSalesWithSpend` = spend > 0 & rev === 0) still reads as regular
+  // RED, not gray (4th arg). Previously this surface passed `zeroSalesWithSpend`
+  // as the ALARM flag, so a $40 / $0 store screamed red-alarm here but was gray
+  // on the card — the two disagreed.
+  const headerIsAlarm = isSpendAlarm({
+    spend: data?.kpis.spend ?? 0,
+    revenue: data?.kpis.revenue ?? 0,
+  });
   const roasBand = useRoasBandGradient(
     data?.roas ?? null,
     false,
+    headerIsAlarm,
     data?.zeroSalesWithSpend ?? false,
   ).band;
   const band = offBandId ?? roasBand;
