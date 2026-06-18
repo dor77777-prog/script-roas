@@ -75,6 +75,16 @@ const MAD_FALLBACK_FRACTION = 0.05;
  *  ladder mirrors the SAME P1-8b cap threshold instead of hardcoding 2. */
 export const COVERAGE_WARNING_THRESHOLD = 2;
 
+/** Spend (CAD) below which a campaign's matched-order sample is too small for the
+ *  coverage / ROAS-interval to carry statistical weight. The "low spend = small
+ *  sample" caveat fires at EVERY trust level (bug #4, audit 2026-06-18) — not only
+ *  'medium', where it used to be nested. */
+export const SMALL_SAMPLE_SPEND_CAD = 200;
+
+/** Matched-order count below which the 95% ROAS interval is too thin to trust;
+ *  the panel + reasons carry a "based on N orders" caveat (bug #5b). */
+export const SMALL_SAMPLE_ORDERS = 5;
+
 export type AttributionAnalysis = {
   /** Sum of order totals where the order is provably from this campaign. */
   deterministicRevenue: number;
@@ -358,30 +368,49 @@ export function orderMatchesCampaign(
   }
   if (campaign.platform !== 'Meta' && campaign.platform !== 'TikTok') return false;
 
-  // Tier 1 — last-click utm_id authoritative when present.
-  // If campaignId is configured AND the IDs match, accept.
-  // If campaignId mismatches or campaign.campaignId is undefined,
-  // DO NOT fall through — utm_id is the trusted signal on this order,
-  // and falling back to name would mis-attribute to namesake campaigns
-  // (e.g. duplicated campaigns "Summer Sale" vs "Summer Sale - Retargeting"
-  // sharing a name across stores/accounts).
-  if (order.utmId) {
-    return !!campaign.campaignId
-      && order.utmId.trim() === campaign.campaignId.trim();
+  // Tier 1 — last-click utm_id: ACCEPT when it matches the configured campaignId.
+  // 2026-06-18 (operator decision): a present-but-MISMATCHED utm_id no longer
+  // HARD-REJECTS the order — it now FALLS THROUGH to the Tier-2 name match below.
+  // Rationale: the prior `return` on any utm_id presence silently dropped orders
+  // whose utm_id was stale/wrong (or whose campaign had no configured id) even
+  // when their utm_campaign NAME matched exactly → under-counted deterministic
+  // revenue → a false "low coverage / platform lying" verdict. The namesake-
+  // collision risk of name matching is the operator-accepted trade-off (bug #2a).
+  if (
+    order.utmId &&
+    !!campaign.campaignId &&
+    order.utmId.trim() === campaign.campaignId.trim()
+  ) {
+    return true;
   }
 
-  // Tier 2 — last-click utm_campaign name match.
+  // Tier 2 — last-click utm_campaign NAME match.
   if (order.utmCampaign) {
     return order.utmCampaign.trim().toLowerCase()
          === campaign.campaignName.trim().toLowerCase();
   }
 
+  // Last-click AUTHORITY: when a last-click utm_id WAS present (even though it
+  // mismatched, and there was no last-click utm_campaign to name-match), do NOT
+  // fall back to the first-touch tiers — the last click is the trusted signal.
+  // The #2a relaxation only opens the Tier-1→Tier-2 (id→name) path within the
+  // last click; it must not leak the last-click miss into first-touch (preserves
+  // CR5-01 + the last-touch-wins-over-first-touch contract).
+  if (order.utmId) return false;
+
   // Tier 3 — FIRST-TOUCH fallback (last-click carried no campaign signal at all).
-  if (order.firstUtmId) {
-    return !!campaign.campaignId && order.firstUtmId.trim() === campaign.campaignId.trim();
+  // Same id-then-name precedence; a mismatched first-touch utm_id likewise falls
+  // through to the first-touch name match rather than hard-rejecting.
+  if (
+    order.firstUtmId &&
+    !!campaign.campaignId &&
+    order.firstUtmId.trim() === campaign.campaignId.trim()
+  ) {
+    return true;
   }
   if (order.firstUtmCampaign) {
-    return order.firstUtmCampaign.trim().toLowerCase() === campaign.campaignName.trim().toLowerCase();
+    return order.firstUtmCampaign.trim().toLowerCase()
+         === campaign.campaignName.trim().toLowerCase();
   }
   return false;
 }
@@ -556,6 +585,38 @@ export function analyzeAttribution(
   // Meta-only example. See platformTaggingGuide.
   const tag = platformTaggingGuide(campaign.platform);
 
+  // Bug #2b (audit 2026-06-18): a Google campaign whose OWN campaign_id is missing
+  // in our data (googleStatus can emit '' when the resource id is absent) can NEVER
+  // match an order — Google matches strictly by numeric campaign_id with NO name
+  // fallback (its utm_campaign carries the id, not a name). Such a campaign would
+  // otherwise fall into the generic "אף הזמנה לא תויגה — הוסף URL Parameters" branch
+  // below, misdirecting the operator to their ORDER tagging when the real gap is OUR
+  // missing campaign_id. Surface that honestly instead of a false "0 coverage". (Only
+  // when there's a claim to analyse; metaClaim===0 falls through to "אין המרות".)
+  if (
+    campaign.platform === 'Google' &&
+    !campaign.campaignId?.trim() &&
+    campaign.metaClaim > 0
+  ) {
+    return {
+      deterministicRevenue: 0,
+      deterministicOrders: 0,
+      modeledRevenue: Math.max(0, campaign.metaClaim),
+      coverage: 0,
+      coverageExceedsClamp: false,
+      trust: { level: 'unknown', label: 'אין מזהה קמפיין', score: 0 },
+      reasons: [
+        'לקמפיין Google הזה אין campaign_id בנתונים שלנו — בלי מזהה אי-אפשר להתאים הזמנות (Google מותאם לפי מזהה בלבד, ללא נפילה-לשם).',
+        'זו בעיית-נתונים (מזהה חסר), לא בעיית-תיוג בצד ההזמנות.',
+      ],
+      recommendation:
+        'רענן את חיבור Google Ads / ודא שה-campaign_id נמשך כראוי. עד אז אי-אפשר לאמת את ה-ROAS של הקמפיין הזה מול Shopify.',
+      roasInterval: null,
+      windowStability: null,
+      outlierDays: [],
+    };
+  }
+
   if (campaign.metaClaim === 0 && deterministicOrders === 0) {
     // No conversions on either side — common for brand-awareness / reach
     // campaigns, paused campaigns with no activity in the range, or genuinely
@@ -634,9 +695,8 @@ export function analyzeAttribution(
     reasons.push(
       `${modeledPct}% modeled — ${platformLabel} מייחס בלי click-id (view-through, cross-device, סטטיסטי)`,
     );
-    if (campaign.spend < 200) {
-      reasons.push(`הוצאה נמוכה (${fmtMoneyString(campaign.spend)}) — מדגם קטן מגדיל אי-ודאות`);
-    }
+    // (small-sample caveat is now hoisted post-ladder so it fires at every trust
+    //  level, not only here — bug #4.)
     // Guard divide-by-zero: when spend === 0 (operator-backfilled or
     // attribution-only campaigns), the ratio is Infinity and toFixed(2)
     // yields the literal string "Infinity", which renders as
@@ -704,6 +764,16 @@ export function analyzeAttribution(
       `${trackingCheck} לפני כל החלטת תקציב — הפער החריג מעיד על דיווח-חסר של ${platformLabel}, לא בהכרח על ביצועים.`;
   }
 
+  // Bug #4 (audit 2026-06-18): the small-sample caveat fires at EVERY trust level
+  // now — previously it was nested in the 'medium' branch only, so a 'low' (or
+  // 'high') verdict computed off n=2 orders / $50 spend looked authoritative with
+  // no "this is a tiny sample" warning.
+  if (campaign.spend > 0 && campaign.spend < SMALL_SAMPLE_SPEND_CAD) {
+    reasons.push(
+      `הוצאה נמוכה (${fmtMoneyString(campaign.spend)}) — מדגם קטן, אי-ודאות גבוהה במספרים`,
+    );
+  }
+
   // Augment reasons + recommendation with the new signals.
   //
   // Audit fix 2026-05-24 (U-04): the 'mixed' verdict was previously
@@ -748,8 +818,15 @@ export function analyzeAttribution(
     );
   }
   if (roasInterval) {
+    // Bug #5b (audit 2026-06-18): a CI computed off n=2/3 orders renders as a
+    // falsely-precise "95% range" — append an explicit small-sample caveat so the
+    // operator doesn't read a 2-order interval as statistically solid.
+    const ciCaveat =
+      deterministicOrders < SMALL_SAMPLE_ORDERS
+        ? ` (מבוסס על ${deterministicOrders} הזמנות בלבד — מדגם קטן, הטווח אינדיקטיבי)`
+        : '';
     reasons.push(
-      `טווח אמינות 95% ל-ROAS אמיתי: ${roasInterval.low.toFixed(2)}x – ${roasInterval.high.toFixed(2)}x`,
+      `טווח אמינות 95% ל-ROAS אמיתי: ${roasInterval.low.toFixed(2)}x – ${roasInterval.high.toFixed(2)}x${ciCaveat}`,
     );
   }
 
@@ -851,7 +928,12 @@ export function computeWindowStability(
 
   const mean = coverages.reduce((s, x) => s + x, 0) / coverages.length;
   const variance =
-    coverages.reduce((s, x) => s + (x - mean) ** 2, 0) / coverages.length;
+    // Bug #5a (audit 2026-06-18): Bessel correction (n-1) for SAMPLE variance —
+    // matches the roasInterval CI above and avoids understating σ on the small
+    // week-bucket samples (3-5 windows), which biased the verdict toward 'stable'
+    // when it should read 'volatile'. Guarded by `coverages.length < 2` early-
+    // return above, so (n-1) ≥ 1.
+    coverages.reduce((s, x) => s + (x - mean) ** 2, 0) / (coverages.length - 1);
   const stdDev = Math.sqrt(variance);
   const verdict: WindowStability['verdict'] =
     stdDev < STABLE_THRESHOLD ? 'stable'

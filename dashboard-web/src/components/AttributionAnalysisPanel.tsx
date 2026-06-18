@@ -3,7 +3,7 @@
 import { TrendingUp, AlertTriangle, Lightbulb } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Money } from '@/components/ui/Money';
-import type { AttributionAnalysis } from '@/lib/attributionAnalysis';
+import { SMALL_SAMPLE_ORDERS, type AttributionAnalysis } from '@/lib/attributionAnalysis';
 import { Heading } from '@/components/ui/Typography';
 import { InsightActions } from '@/components/insights/InsightActions';
 import { useStoreAdAccounts } from '@/lib/hooks/useStoreAdAccounts';
@@ -142,6 +142,13 @@ export function AttributionAnalysisPanel({
                 {analysis.roasInterval && (
                   <div className="text-fs-2xs text-ink-muted tabular-nums">
                     טווח 95%: {analysis.roasInterval.low.toFixed(2)} – {analysis.roasInterval.high.toFixed(2)}
+                    {/* Bug #5b — a CI off n<5 orders is indicative only; flag it so the
+                        operator doesn't read a 2-order range as statistically solid. */}
+                    {analysis.deterministicOrders < SMALL_SAMPLE_ORDERS && (
+                      <span className="text-status-warningFg">
+                        {' '}· מדגם קטן ({analysis.deterministicOrders})
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

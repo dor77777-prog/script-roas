@@ -216,11 +216,13 @@ describe('analyzeAttribution — U-04 (2026-05-24) surface mixed window-stabilit
         totalCad: 90,
         storeId: 'uzoshop',
       }),
-      // 1 order × 40 CAD in window 2 (coverage 0.4 vs meta 100)
+      // 1 order × 50 CAD in window 2 (coverage 0.5 vs meta 100). Coverages
+      // 0.9/0.5 → Bessel σ≈0.283 → 'mixed'. Retuned 2026-06-18 for the n-1
+      // variance fix (#5a): the old 0.9/0.4 now lands at σ≈0.354 → 'volatile'.
       makeOrder({
         date: '2026-05-10',
         utmCampaign: 'mixed-camp',
-        totalCad: 40,
+        totalCad: 50,
         storeId: 'uzoshop',
       }),
     ];
@@ -256,7 +258,8 @@ describe('analyzeAttribution — U-04 (2026-05-24) surface mixed window-stabilit
     //
     // High trust requires coverage~1.0 + enough orders. We build a
     // metaSeries + orders where total coverage is ~0.65 (high-ish)
-    // and per-window coverages are 0.9 / 0.4 (mixed σ).
+    // and per-window coverages are 0.9 / 0.5 → Bessel σ≈0.283 → 'mixed'
+    // (retuned 2026-06-18 for the n-1 variance fix #5a; old 0.9/0.4 → 'volatile').
     const metaSeries = [
       { date: '2026-05-03', value: 100 },
       { date: '2026-05-10', value: 100 },
@@ -271,7 +274,7 @@ describe('analyzeAttribution — U-04 (2026-05-24) surface mixed window-stabilit
       makeOrder({
         date: '2026-05-10',
         utmCampaign: 'mixed-trust',
-        totalCad: 40,
+        totalCad: 50,
         storeId: 'uzoshop',
       }),
     ];
@@ -339,5 +342,78 @@ describe('analyzeAttribution — U-04 (2026-05-24) surface mixed window-stabilit
     expect(result!.windowStability!.verdict).toBe('stable');
     const reasonsConcat = result!.reasons.join(' | ');
     expect(reasonsConcat).toContain('יחס Meta:Shopify יציב');
+  });
+});
+
+describe('analyzeAttribution — audit 2026-06-18 attribution bug fixes', () => {
+  it('#2a: a mismatched utm_id falls through to the utm_campaign NAME match (no longer hard-rejects)', () => {
+    const orders = [
+      makeOrder({
+        date: '2026-05-05',
+        storeId: 'uzoshop',
+        utmId: 'STALE-9999', // does NOT match campaignId '12345'
+        utmCampaign: 'Summer Sale', // DOES match the campaign name
+        totalCad: 120,
+      }),
+    ];
+    const result = analyzeAttribution(
+      { campaignName: 'Summer Sale', campaignId: '12345', storeId: 'uzoshop', platform: 'Meta', metaClaim: 100, spend: 50 },
+      orders,
+      '2026-05-01',
+      '2026-05-14',
+    );
+    expect(result).not.toBeNull();
+    // Before #2a the stale utm_id hard-rejected the order → deterministicOrders 0
+    // → false "0 coverage / platform lying". Now it falls through to the name match.
+    expect(result!.deterministicOrders).toBe(1);
+    expect(result!.deterministicRevenue).toBe(120);
+  });
+
+  it('#2b: a Google campaign with an EMPTY campaign_id returns an honest "missing id" verdict', () => {
+    const orders = [makeOrder({ date: '2026-05-05', storeId: 'uzoshop', utmCampaign: '99', totalCad: 80 })];
+    const result = analyzeAttribution(
+      { campaignName: 'PMax', campaignId: '', storeId: 'uzoshop', platform: 'Google', metaClaim: 100, spend: 50 },
+      orders,
+      '2026-05-01',
+      '2026-05-14',
+    );
+    expect(result).not.toBeNull();
+    // NOT the generic "אף הזמנה לא תויגה — הוסף URL Parameters" verdict that
+    // misdirects to ORDER tagging; an honest "our campaign_id is missing".
+    expect(result!.trust.label).toBe('אין מזהה קמפיין');
+    expect(result!.deterministicOrders).toBe(0);
+    expect(result!.reasons.join(' ')).toMatch(/campaign_id/);
+  });
+
+  it('#4: a LOW-trust campaign with spend < $200 now carries the small-sample caveat', () => {
+    // High claim, near-zero matched revenue → coverage ≈ 0.01 → LOW trust branch
+    // (which previously had NO spend check).
+    const orders = [makeOrder({ date: '2026-05-05', storeId: 'uzoshop', utmCampaign: 'lowcov', totalCad: 10 })];
+    const result = analyzeAttribution(
+      { campaignName: 'lowcov', campaignId: 'c1', storeId: 'uzoshop', platform: 'Meta', metaClaim: 1000, spend: 50 },
+      orders,
+      '2026-05-01',
+      '2026-05-14',
+    );
+    expect(result).not.toBeNull();
+    expect(result!.trust.level).toBe('low');
+    expect(result!.reasons.join(' | ')).toMatch(/הוצאה נמוכה/);
+  });
+
+  it('#5b: the 95% ROAS interval carries a small-sample caveat when matched orders < 5', () => {
+    const orders = [
+      makeOrder({ date: '2026-05-05', storeId: 'uzoshop', utmCampaign: 'few', totalCad: 100 }),
+      makeOrder({ date: '2026-05-06', storeId: 'uzoshop', utmCampaign: 'few', totalCad: 200 }),
+    ];
+    const result = analyzeAttribution(
+      { campaignName: 'few', campaignId: 'c2', storeId: 'uzoshop', platform: 'Meta', metaClaim: 300, spend: 100 },
+      orders,
+      '2026-05-01',
+      '2026-05-14',
+    );
+    expect(result).not.toBeNull();
+    expect(result!.roasInterval).not.toBeNull();
+    expect(result!.deterministicOrders).toBe(2);
+    expect(result!.reasons.join(' | ')).toMatch(/מבוסס על 2 הזמנות/);
   });
 });

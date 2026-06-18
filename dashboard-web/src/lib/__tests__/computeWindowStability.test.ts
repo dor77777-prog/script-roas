@@ -124,19 +124,20 @@ describe('computeWindowStability', () => {
 
   it('verdict is mixed when coverage σ is between 0.15 and 0.35', () => {
     // Window 1: meta=100, matched=90 → coverage=0.9
-    // Window 2: meta=100, matched=40 → coverage=0.4
-    // mean=0.65, σ = sqrt(((0.9-0.65)²+(0.4-0.65)²)/2) = sqrt(0.03125) ≈ 0.25 → mixed
+    // Window 2: meta=100, matched=50 → coverage=0.5
+    // mean=0.7, Bessel σ = sqrt(((0.9-0.7)²+(0.5-0.7)²)/(2-1)) = sqrt(0.08) ≈ 0.283 → mixed
+    // (retuned 2026-06-18 for the n-1 variance fix #5a; old 0.9/0.4 → σ≈0.354 → volatile)
     const metaSeries = [
       { date: '2026-05-03', value: 100 },
       { date: '2026-05-10', value: 100 },
     ];
     const orders = [
       makeOrder({ date: '2026-05-03', totalCad: 90, storeId: 'uzoshop' }),
-      makeOrder({ date: '2026-05-10', totalCad: 40, storeId: 'uzoshop' }),
+      makeOrder({ date: '2026-05-10', totalCad: 50, storeId: 'uzoshop' }),
     ];
     const result = computeWindowStability(orders, metaSeries, '2026-05-01', '2026-05-14');
     expect(result).not.toBeNull();
-    // σ ≈ 0.25, in range [0.15, 0.35] → mixed
+    // Bessel σ ≈ 0.283, in range [0.15, 0.35) → mixed
     expect(result!.verdict).toBe('mixed');
   });
 

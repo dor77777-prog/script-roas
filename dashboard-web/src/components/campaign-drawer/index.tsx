@@ -412,6 +412,40 @@ export function CampaignDrawer({
     return out;
   }, [campaignsData, effectiveStoreId]);
 
+  // Bug #1 fix (audit 2026-06-18, CRITICAL): align BOTH sides of the per-campaign
+  // attribution to ONE store scope. The orders side already matches
+  // `effectiveStoreId`, but the platform-claim side (metaClaim / spend / daily
+  // series) comes from `summary`, which is aggregated from the RAW-store `rows`.
+  // For a remapped TikTok campaign (effectiveStoreId !== storeId) that compared a
+  // claim from one store against orders from ANOTHER → wrong coverage/trust with NO
+  // warning. Recompute the claim from `campaignsData` scoped to the effective store
+  // + this campaign + range. No-op (uses the raw-store summary verbatim) when not
+  // remapped, so every non-TikTok / non-remapped drawer is byte-identical.
+  const effectiveClaim = useMemo(() => {
+    if (effectiveStoreId === storeId) {
+      return {
+        value: summary?.value ?? 0,
+        spend: summary?.spend ?? 0,
+        dailyArr: (summary?.dailyArr ?? []).map((d) => ({ date: d.date, value: d.value })),
+      };
+    }
+    let value = 0;
+    let spend = 0;
+    const byDay = new Map<string, number>();
+    for (const r of campaignsData?.rows ?? []) {
+      if (r.storeId !== effectiveStoreId) continue;
+      if (r.campaignId !== campaignId) continue;
+      if (r.date < rangeFrom || r.date > rangeTo) continue;
+      value += r.conversionValue;
+      spend += r.spend;
+      byDay.set(r.date, (byDay.get(r.date) ?? 0) + r.conversionValue);
+    }
+    const dailyArr = Array.from(byDay.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, v]) => ({ date, value: v }));
+    return { value, spend, dailyArr };
+  }, [effectiveStoreId, storeId, summary, campaignsData, campaignId, rangeFrom, rangeTo]);
+
   const otherCampaignsByProduct = useMemo(() => {
     const out = new Map<string, string[]>();
     const storePrefix = `${effectiveStoreId}::`;
@@ -659,13 +693,16 @@ export function CampaignDrawer({
       // matched zero orders (wrong-store attribution). No-op when not remapped.
       storeId: effectiveStoreId,
       platform: summary.platform,
-      metaClaim: summary.value,
-      spend: summary.spend,
+      // Bug #1 fix — claim + spend + daily series from the EFFECTIVE store (see
+      // `effectiveClaim` above), so they share the same scope as the matched
+      // orders. Identical to summary.* when the campaign isn't remapped.
+      metaClaim: effectiveClaim.value,
+      spend: effectiveClaim.spend,
     },
     ordersAttrData?.rows ?? [],
     rangeFrom,
     rangeTo,
-    summary.dailyArr.map(d => ({ date: d.date, value: d.value })),
+    effectiveClaim.dailyArr,
   );
   const link = buildAdsManagerLink({
     platform: summary.platform,

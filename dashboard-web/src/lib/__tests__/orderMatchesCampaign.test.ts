@@ -13,29 +13,37 @@ describe('orderMatchesCampaign', () => {
     expect(orderMatchesCampaign(order, campaign)).toBe(true);
   });
 
-  it('Tier1 CR5-01: does NOT fall through to name match when utm_id is present but mismatches campaignId', () => {
-    // This is the critical test for CR5-01.
-    // The order has utmId='camp-99' and utmCampaign='Summer Sale'.
-    // The campaign has campaignId='camp-1' and campaignName='Summer Sale'.
-    // Because utm_id is present but mismatches, result must be FALSE —
-    // not true via name match.
+  it('Tier1→Tier2 (operator 2026-06-18): a mismatched utm_id NOW falls through to the name match', () => {
+    // Bug #2a (reverses the old CR5-01 contract): the order's utm_id ('camp-99')
+    // is stale/wrong but its utm_campaign NAME ('Summer Sale') matches the campaign
+    // exactly. The operator chose to ACCEPT this — a wrong utm_id no longer
+    // hard-rejects an order whose NAME matches. The namesake-collision risk
+    // (two campaigns sharing a name) is the operator-accepted trade-off.
     const order = makeOrder({ utmId: 'camp-99', utmCampaign: 'Summer Sale' });
     const campaign = makeCampaign({ campaignId: 'camp-1', campaignName: 'Summer Sale' });
-    expect(orderMatchesCampaign(order, campaign)).toBe(false);
+    expect(orderMatchesCampaign(order, campaign)).toBe(true);
   });
 
-  it('Tier1: returns false when utm_id is present but campaign has no campaignId (no fall-through)', () => {
-    // utm_id on the order but campaignId absent from campaign — must not
-    // fall through to name match.
+  it('Tier1→Tier2 (operator 2026-06-18): a campaign with NO campaignId now matches by name', () => {
+    // Bug #2a: with no configured campaignId the utm_id can't match, but the
+    // utm_campaign NAME does — now accepted rather than hard-rejected.
     const order = makeOrder({ utmId: 'camp-1', utmCampaign: 'Summer Sale' });
     const campaign = makeCampaign({ campaignName: 'Summer Sale' });
-    // Remove campaignId by omitting it
     const campaignWithoutId = {
       campaignName: campaign.campaignName,
       storeId: campaign.storeId,
       platform: campaign.platform,
     };
-    expect(orderMatchesCampaign(order, campaignWithoutId)).toBe(false);
+    expect(orderMatchesCampaign(order, campaignWithoutId)).toBe(true);
+  });
+
+  it('Tier1 authority preserved: a mismatched utm_id WITH NO utm_campaign does NOT fall through (CR5-01 narrowed)', () => {
+    // The #2a relaxation opens ONLY the last-click id→name path. A present
+    // last-click utm_id that mismatches AND has no utm_campaign to name-match
+    // still returns false (it does NOT leak into the first-touch tiers).
+    const order = makeOrder({ utmId: 'camp-99', utmCampaign: '' });
+    const campaign = makeCampaign({ campaignId: 'camp-1', campaignName: 'Summer Sale' });
+    expect(orderMatchesCampaign(order, campaign)).toBe(false);
   });
 
   // ----------------------------------------------------------------
@@ -198,7 +206,10 @@ describe('orderMatchesCampaign', () => {
       // this test would have caught a regression to Number coercion.
       const longId = '120207312456789999';
       const orderMatching = makeOrder({ utmId: longId });
-      const orderNeighbor = makeOrder({ utmId: '120207312456789998' });
+      // utmCampaign:'' so this stays a pure utm_id PRECISION test — otherwise the
+      // default utm_campaign would match the campaign name via the #2a Tier-2
+      // fallthrough and mask the id comparison.
+      const orderNeighbor = makeOrder({ utmId: '120207312456789998', utmCampaign: '' });
 
       const campaign = makeCampaign({ campaignId: longId });
       expect(orderMatchesCampaign(orderMatching, campaign)).toBe(true);
