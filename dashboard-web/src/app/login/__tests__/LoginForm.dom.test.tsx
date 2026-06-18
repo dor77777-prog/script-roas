@@ -40,7 +40,7 @@ describe('<LoginForm>', () => {
 
   it('renders the brand title, subtitle, password input and submit button', () => {
     render(<LoginForm />);
-    expect(screen.getByRole('heading', { name: 'דשבורד ROAS' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Insight Owl' })).toBeInTheDocument();
     expect(screen.getByText('הזינו סיסמה כדי להמשיך')).toBeInTheDocument();
     // sr-only label is wired to the password field via htmlFor/id.
     const input = screen.getByLabelText('סיסמה') as HTMLInputElement;

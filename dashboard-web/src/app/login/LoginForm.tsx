@@ -61,13 +61,19 @@ export function LoginForm() {
     // the opaque card surface — we only widen the inner padding here.
     <Card className="w-full max-w-sm p-7">
       <div className="flex flex-col items-center text-center gap-2 mb-6">
-        {/* Brand mark — same violet brand gradient as the sidebar logo (both
-            themes), bumped to `rounded-hz` so it echoes the card's 20px radius. */}
-        <div
-          className="h-12 w-12 rounded-hz bg-gradient-to-br from-[var(--sidebar-logo-1)] to-[var(--sidebar-logo-2)]"
+        {/* Brand mark — the "Insight Owl" mark, same static SVG as the sidebar +
+            favicon (brand hex lives in the .svg, so no raw colours in this .tsx).
+            `rounded-hz` echoes the card's 20px radius. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/owl-mark.svg"
+          alt=""
           aria-hidden
+          width={48}
+          height={48}
+          className="h-12 w-12 rounded-hz"
         />
-        <h1 className="text-fs-lg font-semibold text-ink">דשבורד ROAS</h1>
+        <h1 className="text-fs-lg font-semibold text-ink">Insight Owl</h1>
         <p className="text-fs-sm text-ink-muted">הזינו סיסמה כדי להמשיך</p>
       </div>
 

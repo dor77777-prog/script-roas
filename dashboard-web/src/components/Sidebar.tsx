@@ -166,7 +166,7 @@ function SidebarBody({
           />
           {!isCollapsed && (
             <span className="text-base font-black tracking-tight truncate text-[var(--sidebar-fg-active)]">
-              ROAS <span className="font-medium">TRACKER</span>
+              Insight <span className="font-medium">Owl</span>
             </span>
           )}
         </div>

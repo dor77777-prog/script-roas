@@ -38,7 +38,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'דשבורד ROAS',
+  title: 'Insight Owl',
   description: 'מעקב הוצאות ↔ הכנסות יומי לכל החנויות',
 };
 

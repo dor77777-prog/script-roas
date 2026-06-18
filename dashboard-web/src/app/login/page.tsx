@@ -16,7 +16,7 @@ import { Suspense } from 'react';
 import { LoginForm } from './LoginForm';
 
 export const metadata = {
-  title: 'כניסה — דשבורד ROAS',
+  title: 'כניסה — Insight Owl',
 };
 
 export default function LoginPage() {
