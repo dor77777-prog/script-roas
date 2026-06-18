@@ -150,10 +150,19 @@ function SidebarBody({
         )}
       >
         <div className={cn('flex items-center gap-2', isCollapsed && 'justify-center')}>
-          {/* Logo keeps the violet brand gradient in both themes (mockup .sb-logo). */}
-          <div
-            className="h-7 w-7 rounded-md shrink-0 bg-gradient-to-br from-[var(--sidebar-logo-1)] to-[var(--sidebar-logo-2)]"
+          {/* Brand mark — "Insight Owl" (the sharp-eyed watcher of your ad
+              spend; two eyes = two dashboards). Static SVG so the FIXED brand
+              violet/orange never trips the token-only designColorGuard, and the
+              SAME file backs the favicon (src/app/icon.svg). Fixed in both
+              themes, like the prior violet tile it replaces. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/owl-mark.svg"
+            alt=""
             aria-hidden
+            width={28}
+            height={28}
+            className="h-7 w-7 rounded-md shrink-0"
           />
           {!isCollapsed && (
             <span className="text-base font-black tracking-tight truncate text-[var(--sidebar-fg-active)]">
