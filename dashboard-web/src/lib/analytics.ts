@@ -420,7 +420,14 @@ export function dailySeries(
       });
     }
     const entry = map.get(r.date)!;
-    entry.byStore[r.storeName] = r.roas;
+    // FIX #20 (2026-06-20) — per-store ROAS cell is SPEND-GATED, mirroring the
+    // day-level gate in toChartPoints (which emits null when totalSpend===0).
+    // On a no-spend organic day the row carries roas=0 (a 0-spend ratio is
+    // meaningless); storing that 0 made the per-store sparkline / StoreDetail
+    // line plot a catastrophic ROAS=0 dip. Emit `null` (a gap) instead so the
+    // organic day reads as "no ad activity", not "the store crashed". LIVE on
+    // usmile360 (many zero-spend days with organic revenue).
+    entry.byStore[r.storeName] = r.totalSpend > 0 ? r.roas : null;
     entry.totalRevenue += r.revenue;
     entry.totalSpend += r.totalSpend;
   }
