@@ -712,6 +712,27 @@ async function runDailyForStoreInner(
         e,
         `Refresh the Meta access token in Vercel (${storeId.toUpperCase()}_META_ACCESS_TOKEN) and redeploy, OR check Meta's status page if recurrent.`,
       );
+      // #31 (2026-06-20): also write a transient_error freshness row for the
+      // kpi_daily/data_daily scope so the operator freshness matrix does NOT
+      // show this day healthy/finalized while its Meta spend is preserved-but-
+      // stale. Mirrors metaWorker's catch (recordFreshness transient_error).
+      await recordFreshness({
+        storeId,
+        platform: 'meta',
+        scope: 'kpi_daily',
+        tableName: 'data_daily',
+        status: 'transient_error',
+        errorMessage: e instanceof Error ? e.message : String(e),
+      });
+      // #2/#16 (2026-06-20): signal "unknown" with spend:null / impressions:null
+      // — NOT a 0 sentinel. The spend fetchers THROW on failure, so this catch
+      // is UNIQUELY the fetch-failure case (a genuine zero-activity day returns
+      // 0 via the SUCCESS path). null flows through mergeOverridesFromSupabase
+      // (spendToCad → null) so persist-batch OMITS fb_spend_cad + fb_impressions
+      // + the derived totals; ON CONFLICT preserves the prior real value. This
+      // mirrors the FX-failure null-preserve doctrine — never overwrite real
+      // data with a soft-fail 0 (which deflated total/roas/gross/net).
+      //
       // Phase 13.4.1 — Fallback shape must match the real fetchMetaBudgets
       // return shape (Record-of-id, not Map). Map crosses the step.run
       // boundary and Inngest JSON-serializes it to `{}` after memoization,
@@ -719,14 +740,21 @@ async function runDailyForStoreInner(
       // empty regardless. Now an honest `{}` + currency the cadFor path
       // can safely consume (no-op since campaigns/adSets are empty).
       return {
-        spend: { storeId, date: dateStr, spend: 0, currency: 'ILS', impressions: 0 },
+        spend: { storeId, date: dateStr, spend: null, currency: 'ILS', impressions: null },
         adsetRows: [],
         adRows: [],
         budgets: { currency: 'ILS', campaigns: {}, adSets: {} },
       };
     }
   })) as {
-    spend: Awaited<ReturnType<typeof fetchMetaSpendForDay>>;
+    // #2/#16 (2026-06-20): spend.spend / spend.impressions are `number | null`
+    // — the fetch-failure catch returns null (the "unknown" signal). Success +
+    // ads-off + budget-skip paths return numbers. The persist gate reads these
+    // only when merged.fbSpendCad !== null (i.e. spend was a real number).
+    spend: Omit<Awaited<ReturnType<typeof fetchMetaSpendForDay>>, 'spend' | 'impressions'> & {
+      spend: number | null;
+      impressions: number | null;
+    };
     adsetRows: Awaited<ReturnType<typeof fetchMetaAdSetInsights>>;
     adRows: Awaited<ReturnType<typeof fetchMetaAdInsights>>;
     budgets: Awaited<ReturnType<typeof fetchMetaBudgets>>;
@@ -767,14 +795,31 @@ async function runDailyForStoreInner(
         'Re-run the OAuth Playground flow to mint a fresh GOOGLEADS_REFRESH_TOKEN. ' +
           'Update Vercel env vars + redeploy. See docs/PROPS-MAP.md rows 28-32.',
       );
+      // #31 (2026-06-20): transient_error freshness for kpi_daily/data_daily.
+      await recordFreshness({
+        storeId,
+        platform: 'google',
+        scope: 'kpi_daily',
+        tableName: 'data_daily',
+        status: 'transient_error',
+        errorMessage: e instanceof Error ? e.message : String(e),
+      });
+      // #2/#16 (2026-06-20): spend:null / impressions:null "unknown" signal —
+      // see the Meta catch above. persist-batch omits ga_spend_cad +
+      // ga_impressions + derived totals; ON CONFLICT preserves the prior value.
       return {
-        spend: { storeId, date: dateStr, spend: 0, currency: 'CAD', impressions: 0 },
+        spend: { storeId, date: dateStr, spend: null, currency: 'CAD', impressions: null },
         adGroupRows: [],
         adRows: [],
       };
     }
   })) as {
-    spend: Awaited<ReturnType<typeof fetchGoogleAdsSpendForDay>>;
+    // #2/#16 (2026-06-20): spend.spend / spend.impressions are `number | null`
+    // — null is the fetch-failure "unknown" signal (see the Meta cast above).
+    spend: Omit<Awaited<ReturnType<typeof fetchGoogleAdsSpendForDay>>, 'spend' | 'impressions'> & {
+      spend: number | null;
+      impressions: number | null;
+    };
     adGroupRows: Awaited<ReturnType<typeof fetchGoogleAdsAdGroupInsights>>;
     adRows: Awaited<ReturnType<typeof fetchGoogleAdsAdInsights>>;
   };
@@ -1071,6 +1116,17 @@ async function runDailyForStoreInner(
         is_finalized: boolean;
         reconciled_at: string;
       };
+      // #2/#16 (2026-06-20): never stamp the (store, date) data_daily row
+      // finalized when Meta or Google spend could not be resolved this run
+      // (fetch failure OR FX failure → merged.* / ttSpendCad === null). The
+      // spend column was PRESERVED (not refreshed) via ON CONFLICT, so the day
+      // is NOT actually reconciled — finalizing it would let the provenance
+      // verdict (lib/freshness/provenance.ts) lie. The next clean nightly tick
+      // flips it true once all spend resolves. Gated together with the
+      // transient_error freshness rows recorded in the soft-fail catches (#31).
+      const adSpendUnresolved =
+        merged.fbSpendCad === null || merged.gaSpendCad === null || ttSpendCad === null;
+      const rowIsFinalized = isFinalized && !adSpendUnresolved;
       const dataDailyRow: DataDailyRow = {
         date: dateStr,
         store_id: storeId,
@@ -1081,23 +1137,31 @@ async function runDailyForStoreInner(
         cogs_cad: cogsCad,
         // Phase A 2026-05-29 (Task 13) — finalization fields.
         source: 'daily_reconcile',
-        is_finalized: isFinalized,
+        is_finalized: rowIsFinalized,
         reconciled_at: reconciledAt,
       };
       // P1-11: per-platform spend + impressions pairs land together or not
       // at all (mirrors the tt_spend_cad / tt_impressions gating below) so a
       // preserved spend column never sits next to a contradicting fresh
       // impressions count. Phase 13.8 note: impressions come directly from
-      // the platform fetcher (manual overrides only affect spend, not reach);
-      // the soft-fail fetch path carries `impressions: 0` so the column
-      // resets rather than hanging onto a stale prior value.
+      // the platform fetcher (manual overrides only affect spend, not reach).
+      // #2/#16 (2026-06-20): on a FETCH failure the catch returns
+      // spend:null / impressions:null → merged.fbSpendCad is null → this whole
+      // block is skipped → BOTH columns omitted → ON CONFLICT preserves the
+      // prior real value (never overwrite real data with a soft-fail 0). The
+      // `typeof === 'number'` guard is belt-and-suspenders: when spend is a real
+      // number the success path always carries a numeric impressions count.
       if (merged.fbSpendCad !== null) {
         dataDailyRow.fb_spend_cad = merged.fbSpendCad;
-        dataDailyRow.fb_impressions = meta.spend.impressions;
+        if (typeof meta.spend.impressions === 'number') {
+          dataDailyRow.fb_impressions = meta.spend.impressions;
+        }
       }
       if (merged.gaSpendCad !== null) {
         dataDailyRow.ga_spend_cad = merged.gaSpendCad;
-        dataDailyRow.ga_impressions = google.spend.impressions;
+        if (typeof google.spend.impressions === 'number') {
+          dataDailyRow.ga_impressions = google.spend.impressions;
+        }
       }
       // P1-11 follow-up (2026-06-11, adversarial review): the tt pair is
       // gated ONLY on TikTok's own FX success, mirroring the independent

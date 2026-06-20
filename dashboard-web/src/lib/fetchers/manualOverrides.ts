@@ -50,7 +50,13 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getFxRate } from '@/lib/fetchers/fx';
 
-export type SpendInput = { spend: number; currency: string };
+// `spend` is `number | null`: `null` is the "we don't know" signal raised by
+// cronDaily's per-platform soft-fail catch (FETCH failure — token expiry / 5xx
+// / network / parse). A genuine zero-activity day comes through the fetcher's
+// SUCCESS path as `spend: 0`, NOT null — so null is uniquely the fetch-failure
+// case. spendToCad maps a null spend → null (column omitted, prior preserved),
+// mirroring the FX-failure null-preserve doctrine.
+export type SpendInput = { spend: number | null; currency: string };
 
 export type MergeInput = {
   storeId: string;
@@ -100,6 +106,12 @@ type OverrideRow = {
 // semantics match cronDaily's documented FX doctrine (CRIT-5 / O4-CR-01):
 // persist-batch omits the column; ON CONFLICT preserves the prior value.
 async function spendToCad(input: SpendInput, dateStr: string): Promise<number | null> {
+  // #2/#16 (2026-06-20): a null spend is the FETCH-failure "unknown" signal
+  // from cronDaily's per-platform soft-fail catch. Return null so persist-batch
+  // OMITS the column (+ derived totals) and ON CONFLICT preserves the prior real
+  // value — never overwrite real data with a soft-fail 0. (FX-failure null
+  // below is the same doctrine on a different axis.)
+  if (input.spend === null) return null;
   if (input.currency === 'CAD') return input.spend;
   try {
     const rate = await getFxRate(input.currency, 'CAD', dateStr);
@@ -189,7 +201,12 @@ export async function mergeOverridesFromSupabase(
   if (tiktokRow) {
     ttSpendCad = await overrideToCad(tiktokRow, date);
     overridesApplied.tiktok = true;
-  } else if (tiktokSpend && tiktokSpend.currency === 'CAD') {
+  } else if (tiktokSpend && tiktokSpend.currency === 'CAD' && tiktokSpend.spend !== null) {
+    // #2/#16 (2026-06-20): a null fetched spend is the "unknown" signal — fall
+    // through to the 0 fallback here (cronDaily's persist-batch owns the real
+    // TikTok null/FX gating via its own fetchedTtSpendCad path and ignores this
+    // merge fallback unless an override applied). Meta/Google are the platforms
+    // whose null flows through merged.fb/gaSpendCad to the persist omit gate.
     ttSpendCad = tiktokSpend.spend;
   } else {
     ttSpendCad = 0;
