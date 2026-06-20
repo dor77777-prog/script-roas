@@ -20,6 +20,7 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { captureStepError } from '@/lib/sentry/capture';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -69,8 +70,14 @@ export async function recordFreshness(opts: {
     const now = new Date(Date.now());
     const nowIso = now.toISOString();
 
-    // 1. Read existing row to preserve last_success_at when this call is not a success.
-    const { data: existing } = await sb
+    // 2. Compute derived fields.
+    const isSuccess = opts.status === 'success';
+
+    // 1. Read existing row to preserve last_success_at when this call is not a
+    //    success. FIX #11: supabase-js does NOT reject on a DB-layer error
+    //    (RLS/constraint/type) — it resolves with `{ error }`. Destructure it
+    //    so a failed read is SURFACED instead of silently dropped.
+    const { data: existing, error: readError } = await sb
       .from('data_freshness')
       .select('*')
       .eq('store_id', opts.storeId)
@@ -79,8 +86,21 @@ export async function recordFreshness(opts: {
       .eq('table_name', opts.tableName)
       .maybeSingle();
 
-    // 2. Compute derived fields.
-    const isSuccess = opts.status === 'success';
+    if (readError) {
+      console.warn('[recordFreshness] prior-row read error:', readError.message);
+      captureStepError(
+        { fnId: 'recordFreshness', stepName: 'read-prior-row', storeId: opts.storeId },
+        new Error(readError.message),
+        { platform: opts.platform, scope: opts.scope, tableName: opts.tableName },
+      );
+      // FIX #18: on a NON-success tick we DERIVE last_success_at from the prior
+      // row. If that read failed we cannot trust the prior value — writing now
+      // would resolve last_success_at to null and CLOBBER a known-good
+      // timestamp, flipping a healthy scope to "never succeeded". Skip the
+      // write entirely. (A success tick is safe — last_success_at = now, not
+      // derived — so we let it proceed.)
+      if (!isSuccess) return;
+    }
 
     let lastSuccessAt: string | null;
     let lagMinutes: number | null;
@@ -108,8 +128,11 @@ export async function recordFreshness(opts: {
 
     const budgetSkip = opts.budgetSkip ?? opts.status === 'budget_skip';
 
-    // 3. Upsert.
-    await sb.from('data_freshness').upsert(
+    // 3. Upsert. FIX #11: destructure `{ error }` — supabase-js resolves (does
+    //    NOT reject) on a DB-layer error, so the prior bare `await` silently
+    //    dropped RLS/constraint/type failures, letting a broken pipeline look
+    //    healthy. Surface it.
+    const { error: upsertError } = await sb.from('data_freshness').upsert(
       {
         store_id: opts.storeId,
         platform: opts.platform,
@@ -126,8 +149,25 @@ export async function recordFreshness(opts: {
       },
       { onConflict: 'store_id,platform,scope,table_name' },
     );
+
+    if (upsertError) {
+      console.warn('[recordFreshness] upsert error:', upsertError.message);
+      captureStepError(
+        { fnId: 'recordFreshness', stepName: 'upsert', storeId: opts.storeId },
+        new Error(upsertError.message),
+        { platform: opts.platform, scope: opts.scope, tableName: opts.tableName },
+      );
+    }
   } catch (e) {
+    // Network/transport REJECTION (rare for supabase-js). Keep the soft-fail so
+    // a DB hiccup during a cron tick does not crash the Inngest function, but
+    // still surface it to Sentry so it is not invisible.
     console.warn('[recordFreshness] upsert failed:', e);
+    captureStepError(
+      { fnId: 'recordFreshness', stepName: 'upsert-throw', storeId: opts.storeId },
+      e,
+      { platform: opts.platform, scope: opts.scope, tableName: opts.tableName },
+    );
   }
 }
 

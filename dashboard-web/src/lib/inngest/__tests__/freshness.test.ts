@@ -6,6 +6,13 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { recordFreshness, getFreshness } from '../freshness';
+import { captureStepError } from '@/lib/sentry/capture';
+
+// Sentry capture is mocked so we can assert that DB-layer errors are SURFACED
+// (#11) rather than resolving silently. The helper is a no-op spy here.
+vi.mock('@/lib/sentry/capture', () => ({
+  captureStepError: vi.fn(),
+}));
 
 // --- Fake timers & epoch constant ------------------------------------------
 
@@ -107,6 +114,8 @@ beforeEach(() => {
 
   selectEqCallArgs.length = 0;
 
+  vi.mocked(captureStepError).mockClear();
+
   // Default: no existing row
   maybeSingleMock.mockReset().mockResolvedValue({ data: null, error: null });
   upsertMock.mockReset().mockResolvedValue({ error: null });
@@ -189,7 +198,7 @@ describe('freshness', () => {
       expect(opts.onConflict).toBe('store_id,platform,scope,table_name');
     });
 
-    it('swallows Supabase upsert errors — no throw, console.warn called', async () => {
+    it('swallows Supabase upsert REJECTION — no throw, console.warn called', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       upsertMock.mockRejectedValue(new Error('db unavailable'));
 
@@ -201,6 +210,59 @@ describe('freshness', () => {
         '[recordFreshness] upsert failed:',
         expect.any(Error),
       );
+      warnSpy.mockRestore();
+    });
+
+    // -- FIX A (#11): supabase-js resolves (does NOT reject) on DB-layer
+    //    errors. The non-rejecting `{ error }` channel must be SURFACED, not
+    //    silently dropped — otherwise the very mechanism meant to expose a
+    //    broken pipeline fails silently.
+    it('surfaces a non-rejecting upsert error ({ error }) via console.warn + Sentry', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      upsertMock.mockResolvedValue({ error: { message: 'RLS denied' } });
+
+      await expect(
+        recordFreshness({ ...BASE_OPTS, status: 'success' }),
+      ).resolves.toBeUndefined();
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[recordFreshness] upsert error'),
+        'RLS denied',
+      );
+      expect(captureStepError).toHaveBeenCalledTimes(1);
+      warnSpy.mockRestore();
+    });
+
+    // -- FIX A (#18): on a NON-success tick whose prior-row READ errored, we
+    //    must NOT write — otherwise lastSuccessAt resolves to null and clobbers
+    //    a known-good last_success_at, flipping a healthy scope to
+    //    "never succeeded".
+    it('non-success tick whose prior-row READ errored → SKIPS the write (no clobber)', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      maybeSingleMock.mockResolvedValue({ data: null, error: { message: 'read blip' } });
+
+      await recordFreshness({ ...BASE_OPTS, status: 'transient_error', errorCode: '429' });
+
+      expect(upsertMock).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[recordFreshness] prior-row read error'),
+        'read blip',
+      );
+      expect(captureStepError).toHaveBeenCalledTimes(1);
+      warnSpy.mockRestore();
+    });
+
+    // A success tick whose read errored is still safe to write (lastSuccessAt
+    // = now, not derived from the prior row), so it should NOT be skipped.
+    it('success tick whose prior-row READ errored → still writes (last_success_at = now)', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      maybeSingleMock.mockResolvedValue({ data: null, error: { message: 'read blip' } });
+
+      await recordFreshness({ ...BASE_OPTS, status: 'success' });
+
+      expect(upsertMock).toHaveBeenCalledOnce();
+      const [payload] = upsertMock.mock.calls[0];
+      expect(payload.last_success_at).toBe(FAKE_NOW_ISO);
       warnSpy.mockRestore();
     });
   });
