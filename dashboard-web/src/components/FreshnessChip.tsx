@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { HelpTooltip } from '@/components/ui/Tooltip';
+import { effectiveFreshnessAt } from '@/lib/freshness/adSpendFreshness';
+import type { AdSpendFreshness } from '@/lib/types';
 
 /**
  * Phase 05.7.6 — Freshness chip for the dashboard header. Shows the user
@@ -26,8 +28,15 @@ import { HelpTooltip } from '@/components/ui/Tooltip';
  */
 export function FreshnessChip(props: {
   dataLastWriteAt: string | null;
+  /**
+   * FIX #4 — per-platform AD-SPEND freshness. When supplied, the chip reflects
+   * the WORST of (data_daily write, ad-spend last_success_at): a stale ad-spend
+   * platform forces the chip out of green even while cron-live keeps bumping
+   * data_daily.updated_at with Shopify-only revenue writes every ~10 min.
+   */
+  adSpendFreshness?: AdSpendFreshness;
 }) {
-  const { dataLastWriteAt } = props;
+  const { dataLastWriteAt, adSpendFreshness } = props;
   // Re-render every 30s so "X minutes ago" updates without a server hit.
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -36,7 +45,10 @@ export function FreshnessChip(props: {
   }, []);
   void tick;
 
-  const { label, tone, warning } = formatTimeAgo(dataLastWriteAt);
+  // Drive the chip off the AD-SPEND freshness (folded with the data_daily
+  // write), NOT data_daily.updated_at alone.
+  const effectiveAt = effectiveFreshnessAt(dataLastWriteAt, adSpendFreshness);
+  const { label, tone, warning } = formatTimeAgo(effectiveAt);
 
   // Single theme-aware OKLCH palette. The `status-*Bg` / `status-*Fg` tokens
   // auto-flip per theme (light vs dark mode), so one palette works on both
@@ -55,8 +67,8 @@ export function FreshnessChip(props: {
   return (
     <HelpTooltip
       content={
-        dataLastWriteAt
-          ? `נכתב ע"י cron ב-${new Date(dataLastWriteAt).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}`
+        effectiveAt
+          ? `מבוסס על טריות הוצאת הפרסום (הישנה ביותר מבין הפלטפורמות + כתיבת ההכנסה). עודכן ב-${new Date(effectiveAt).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}`
           : 'אין נתוני freshness (אין שורות בטווח התאריכים)'
       }
     >

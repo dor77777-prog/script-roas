@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('@/lib/postgresReaders', () => ({
   fetchDailyDataFromPostgres: vi.fn(async () => []),
   fetchDataDailyLastWriteAt: vi.fn(async () => null),
+  fetchAdSpendFreshness: vi.fn(async () => ({ meta: null, google: null, tiktok: null })),
   fetchAdStateFromPostgres: vi.fn(async () => ({ 'zolplus:meta': false })),
   fetchStoreMetaFromPostgres: vi.fn(async () => [
     { storeId: 'uzoshop', storeName: 'uzoshop', metaAdAccountId: '1', googleAdsCustomerId: '2', tiktokAdvertiserId: null, planDisplayName: '', shopifyPlus: false, partnerDevelopment: false, updatedAt: null, lastError: null },
@@ -20,6 +21,8 @@ describe('/api/data attaches ad-state', () => {
     const res = await GET(new Request('http://x/api/data?from=2026-06-01&to=2026-06-06'));
     const body = await res.json();
     expect(body.adStateMap).toEqual({ 'zolplus:meta': false });
+    // FIX #4 — the route now also attaches per-platform ad-spend freshness.
+    expect(body.adSpendFreshness).toEqual({ meta: null, google: null, tiktok: null });
     expect([...body.storeApplicablePlatforms.uzoshop].sort()).toEqual(['google', 'meta', 'tiktok']);
     expect(body.storeApplicablePlatforms.zolplus).toEqual(['meta']);
   });

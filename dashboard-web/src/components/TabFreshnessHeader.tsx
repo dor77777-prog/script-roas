@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { FreshnessChip } from './FreshnessChip';
+import type { AdSpendFreshness } from '@/lib/types';
 import { useDashboardRefresh } from '@/lib/useDashboardRefresh';
 import { useStores } from '@/lib/useStores';
 import { Button } from '@/components/ui/Button';
@@ -49,8 +50,11 @@ const REFRESH_DURATION_TEXT = '60-120 שניות';
  */
 export function TabFreshnessHeader(props: {
   dataLastWriteAt: string | null;
+  /** FIX #4 — folded into the chip so a stale ad-spend platform forces it out
+   *  of green even while cron-live bumps data_daily.updated_at. */
+  adSpendFreshness?: AdSpendFreshness;
 }) {
-  const { dataLastWriteAt } = props;
+  const { dataLastWriteAt, adSpendFreshness } = props;
   const { isRefreshing, refresh } = useDashboardRefresh();
   // Dynamic store count (copy-truth, 2026-06-10 audit P1-26): the literal
   // "3 החנויות" lies the moment a store is added/archived via /operator.
@@ -74,7 +78,7 @@ export function TabFreshnessHeader(props: {
   return (
     <div className="flex items-center justify-between gap-3 mb-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <FreshnessChip dataLastWriteAt={dataLastWriteAt} />
+        <FreshnessChip dataLastWriteAt={dataLastWriteAt} adSpendFreshness={adSpendFreshness} />
         {isRefreshing && (
           <span
             className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md ring-1 ring-status-warning bg-status-warningBg text-status-warningFg text-[11px] sm:text-xs"

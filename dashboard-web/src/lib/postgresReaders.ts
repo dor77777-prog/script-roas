@@ -34,7 +34,10 @@
  */
 import { getSupabase } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import type { DailyRow } from './types';
+import type { DailyRow, AdSpendFreshness } from './types';
+// Re-export so callers that already import the reader can grab the type from
+// the same module (the canonical definition lives in ./types to avoid a cycle).
+export type { AdSpendFreshness } from './types';
 import type { DateRange } from './dateRange';
 import { isInRange } from './dateRange';
 import { COGS_RATE_OF_REVENUE } from './analytics';
@@ -1828,6 +1831,53 @@ export async function fetchCohortAsOf(): Promise<string | null> {
   } catch (e) {
     console.warn(`postgresReaders.fetchCohortAsOf: ${(e as Error).message}`);
     return null;
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 11b. fetchAdSpendFreshness — per-platform ad-spend liveness (FIX #4)
+//      The main "LIVE / fresh" chip + per-store/hero desaturation must read
+//      the AD-SPEND freshness, NOT data_daily.updated_at. cron-live writes
+//      Shopify-only revenue every ~10 min and bumps data_daily.updated_at, so
+//      a max(updated_at) signal stays green even while the meta/google/tiktok
+//      ad-spend workers are dead and ROAS/profit/MER go hours-stale.
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns the freshest successful `campaign_metrics` last_success_at PER
+ * PLATFORM (across all stores). campaign_metrics is the scope the meta /
+ * google / tiktok workers record after each ad-spend write, so its age is the
+ * true "how stale is my ad spend" signal.
+ *
+ * Per-platform (not a single max) so a single dead platform desaturates /
+ * flags independently — and so the chip can take the WORST of the three.
+ *
+ * Soft-fail to all-null (console.warn) — the UI then degrades to the prior
+ * data_daily.updated_at signal rather than crashing.
+ */
+export async function fetchAdSpendFreshness(): Promise<AdSpendFreshness> {
+  const out: AdSpendFreshness = { meta: null, google: null, tiktok: null };
+  try {
+    const { data, error } = await getSupabase()
+      .from('data_freshness')
+      .select('platform, last_success_at')
+      .eq('scope', 'campaign_metrics')
+      .eq('status', 'success')
+      .not('last_success_at', 'is', null)
+      .order('last_success_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    for (const r of (data as unknown as DbRow[] | null) ?? []) {
+      const platform = String(r.platform);
+      const ts = r.last_success_at == null ? null : String(r.last_success_at);
+      if (ts == null) continue;
+      if (platform === 'meta' && out.meta == null) out.meta = ts;
+      else if (platform === 'google' && out.google == null) out.google = ts;
+      else if (platform === 'tiktok' && out.tiktok == null) out.tiktok = ts;
+    }
+    return out;
+  } catch (e) {
+    console.warn(`postgresReaders.fetchAdSpendFreshness: ${(e as Error).message}`);
+    return out;
   }
 }
 

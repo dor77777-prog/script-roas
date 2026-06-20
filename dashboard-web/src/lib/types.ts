@@ -1,6 +1,18 @@
 import type { CompareBaseline } from './presets';
 import type { AdStateMap, AdPlatform } from '@/lib/adState';
 
+/**
+ * FIX #4 — per-platform AD-SPEND freshness: the freshest successful
+ * `campaign_metrics` last_success_at (data_freshness) per platform across all
+ * stores. null per platform when no ad-spend success has been recorded.
+ * Defined here (not in postgresReaders) to avoid an import cycle.
+ */
+export type AdSpendFreshness = {
+  meta: string | null;
+  google: string | null;
+  tiktok: string | null;
+};
+
 export type DailyRow = {
   date: string;        // YYYY-MM-DD
   storeId: string;
@@ -76,6 +88,16 @@ export type DashboardData = {
    * 2026-05-22 migration that added the column).
    */
   dataLastWriteAt: string | null;
+  /**
+   * FIX #4 — per-platform AD-SPEND freshness: the freshest successful
+   * `campaign_metrics` last_success_at (data_freshness) per platform. The
+   * "LIVE / fresh" chip + per-store/hero desaturation fold this in so a
+   * Shopify-only cron-live revenue write (which bumps data_daily.updated_at
+   * every ~10 min) can't make the dashboard look fresh while ad spend is
+   * hours-stale. All-null on cold start / read failure → consumers degrade to
+   * `dataLastWriteAt`. Optional so existing consumers/tests keep compiling.
+   */
+  adSpendFreshness?: AdSpendFreshness;
   fxIlsToCad: number | null; // current FX rate (ECB via Frankfurter). null on failure.
   /** ads-off Phase 2 — per (store,platform) toggle map (missing key = ON) +
    *  the applicable platforms per store (derived from store meta + the TikTok

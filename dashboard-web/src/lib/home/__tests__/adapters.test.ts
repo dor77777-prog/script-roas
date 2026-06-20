@@ -376,6 +376,61 @@ describe('toPerStoreData', () => {
     // Sanity: the old hardcoded-null path was stale.
     expect(computeStaleness(null, now).stage).toBe('stale');
   });
+
+  // FIX #4 — a stale AD-SPEND platform must desaturate the per-store card even
+  // when the Shopify-only cron-live write keeps dataLastWriteAt fresh. The card
+  // updatedAt folds in the worst ad-spend last_success_at, so a dead ad worker
+  // can't be masked by recent revenue writes.
+  it('stale ad spend desaturates the per-store card despite a fresh data_daily write', () => {
+    const now = Date.UTC(2026, 5, 1, 10, 0, 0);
+    const writeTs = new Date(now - 2 * 60_000).toISOString();        // revenue 2 min old
+    const staleMeta = new Date(now - 90 * 60_000).toISOString();     // meta 90 min stale
+    const freshGoogle = new Date(now - 3 * 60_000).toISOString();
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 5000, spend: 1500, roas: 3.3 }), store: 'uzoshop' },
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-01', to: '2026-05-31' },
+      {},
+      {},
+      writeTs,
+      undefined,
+      undefined,
+      {},
+      {},
+      { meta: staleMeta, google: freshGoogle, tiktok: null }, // FIX #4 arg
+    );
+    // updatedAt reflects the 90-min-stale ad spend, NOT the 2-min revenue write.
+    expect(computeStaleness(result[0].updatedAt, now).stage).toBe('stale');
+  });
+
+  it('fresh ad spend keeps the per-store card fresh (no over-desaturation)', () => {
+    const now = Date.UTC(2026, 5, 1, 10, 0, 0);
+    const writeTs = new Date(now - 2 * 60_000).toISOString();
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 5000, spend: 1500, roas: 3.3 }), store: 'uzoshop' },
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-01', to: '2026-05-31' },
+      {},
+      {},
+      writeTs,
+      undefined,
+      undefined,
+      {},
+      {},
+      {
+        meta: new Date(now - 4 * 60_000).toISOString(),
+        google: new Date(now - 5 * 60_000).toISOString(),
+        tiktok: new Date(now - 1 * 60_000).toISOString(),
+      },
+    );
+    expect(computeStaleness(result[0].updatedAt, now).stage).toBe('fresh');
+  });
 });
 
 describe('toPerStoreData — per-store ROAS sparkline + delta (mobile B1)', () => {

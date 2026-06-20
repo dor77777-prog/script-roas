@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import {
   fetchDailyDataFromPostgres,
   fetchDataDailyLastWriteAt,
+  fetchAdSpendFreshness,
   fetchAdStateFromPostgres,
   fetchStoreMetaFromPostgres,
 } from '@/lib/postgresReaders';
@@ -61,7 +62,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const [rows, fxIlsToCad, dataLastWriteAt, adStateMap, storeMeta] = await Promise.all([
+    const [rows, fxIlsToCad, dataLastWriteAt, adSpendFreshness, adStateMap, storeMeta] = await Promise.all([
       fetchDailyDataFromPostgres({ range }),
       fetchTodayFx(),
       // A7-F1 (2026-05-27): the freshness chip ("synced N min ago") must
@@ -71,6 +72,11 @@ export async function GET(req: Request) {
       // cron was writing today's rows every ~10 min. The data fetch above
       // stays range-scoped; only the freshness signal goes global.
       fetchDataDailyLastWriteAt(),
+      // FIX #4: per-platform ad-spend freshness (campaign_metrics
+      // last_success_at). The chip + per-store/hero desaturation fold this in
+      // so a Shopify-only cron-live write (which bumps data_daily.updated_at
+      // every ~10 min) can't mask hours-stale ad spend as fresh.
+      fetchAdSpendFreshness().catch(() => ({ meta: null, google: null, tiktok: null })),
       fetchAdStateFromPostgres().catch(() => ({})),
       fetchStoreMetaFromPostgres().catch(() => []),
     ]);
@@ -90,6 +96,7 @@ export async function GET(req: Request) {
       stores,
       lastUpdated: new Date().toISOString(),
       dataLastWriteAt,
+      adSpendFreshness,
       fxIlsToCad,
       adStateMap,
       storeApplicablePlatforms,

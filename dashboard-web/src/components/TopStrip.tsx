@@ -139,7 +139,10 @@ export function TopStrip({
           onRefresh={onRefresh}
           onOpenAiReport={onOpenAiReport}
         />
-        <FreshnessChip dataLastWriteAt={dataLastWriteAt} />
+        <FreshnessChip
+          dataLastWriteAt={dataLastWriteAt}
+          adSpendFreshness={data?.adSpendFreshness}
+        />
         <SyncIndicator />
         {/* AI-export — the brand `<Button>` primitive (NOT raw bg-brand/text-
             white). Mirrors AiReportButton's own trigger (Bot icon + copy); the

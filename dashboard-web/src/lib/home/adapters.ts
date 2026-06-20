@@ -39,6 +39,8 @@ import {
   type Annotation,
 } from '@/lib/annotations';
 import { isStoreFullyOff, type AdStateMap, type AdPlatform } from '@/lib/adState';
+import { effectiveFreshnessAt } from '@/lib/freshness/adSpendFreshness';
+import type { AdSpendFreshness } from '@/lib/types';
 
 /* --------------------------------------------------------------------------
  * CommandCenterHero
@@ -348,7 +350,16 @@ export function toPerStoreData(
   prevRoasByStore?: Record<string, number | null>,
   adStateMap: AdStateMap = {},
   storeApplicablePlatforms: Record<string, AdPlatform[]> = {},
+  // FIX #4 — per-platform ad-spend freshness. When supplied, each store's
+  // `updatedAt` is the WORST (oldest) of the data_daily write and the ad-spend
+  // last_success_at, so a stale ad-spend platform desaturates the card even
+  // while cron-live keeps bumping data_daily.updated_at with Shopify-only
+  // revenue writes. Omitted → cards stay on the prior dataLastWriteAt signal.
+  adSpendFreshness?: AdSpendFreshness,
 ): PerStoreData[] {
+  // Fold ad-spend staleness into the card freshness signal once (the map is
+  // business-wide, not per-store — a single dead worker affects every card).
+  const effectiveUpdatedAt = effectiveFreshnessAt(dataLastWriteAt, adSpendFreshness);
   // Aggregate per (store, platform) once so the inner loop below is O(1) per
   // store. Spend + impressions are summed across the requested range only.
   const byStorePlatform = new Map<string, CampaignsByStorePlatformAgg>();
@@ -430,7 +441,7 @@ export function toPerStoreData(
       // disagree with the modal for the same store (Wave 1 cross-surface fix).
       aov: storeOrders != null && storeOrders > 0 ? s.grossRevenue / storeOrders : null,
       roas: s.roas > 0 ? s.roas : null,
-      updatedAt: dataLastWriteAt,
+      updatedAt: effectiveUpdatedAt,
       perPlatformCpm: perPlatformCpm(s.store),
       roasSpark: roasSparkFor(s.store),
       roasDeltaPct: roasDeltaPctFor(s.store, s.roas),

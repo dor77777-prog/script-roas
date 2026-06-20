@@ -67,6 +67,7 @@ import { CommandCenterHero } from '@/components/home/CommandCenterHero';
 import { ReconcileBanner } from '@/components/home/ReconcileBanner';
 import { SourceHealthChip } from '@/components/home/SourceHealthChip';
 import { provenanceForRange } from '@/lib/freshness/provenance';
+import { effectiveFreshnessAt } from '@/lib/freshness/adSpendFreshness';
 import type { ActiveOverridesResponse } from '@/app/api/active-overrides/route';
 import type { OverridesActiveGroup } from '@/lib/home/overridesActive';
 import { PerStoreRow } from '@/components/home/PerStoreRow';
@@ -860,7 +861,10 @@ export function Dashboard() {
                   The refresh button fires sync-now for all 3 stores +
                   polls until backend is done + SWR-mutates every key. */}
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <TabFreshnessHeader dataLastWriteAt={data.dataLastWriteAt ?? null} />
+                <TabFreshnessHeader
+                  dataLastWriteAt={data.dataLastWriteAt ?? null}
+                  adSpendFreshness={data.adSpendFreshness}
+                />
                 {/* DQ-5 (Wave 3 data-trust) — SourceHealthChip self-fetches
                     /api/freshness-summary and renders nothing while healthy;
                     it appears only when a store×platform pipe is stuck/broken,
@@ -1450,6 +1454,10 @@ function HomeTab({
         compare.show ? prevRoasByStore : undefined,
         data?.adStateMap ?? {},
         data?.storeApplicablePlatforms ?? {},
+        // FIX #4 — fold ad-spend freshness into each card's updatedAt so a
+        // stale ad-spend platform desaturates the card despite cron-live's
+        // Shopify-only revenue write keeping data_daily.updated_at fresh.
+        data?.adSpendFreshness,
       ),
     [
       filtered.storeAggs,
@@ -1458,6 +1466,7 @@ function HomeTab({
       ordersByStore,
       storeIdByName,
       data?.dataLastWriteAt,
+      data?.adSpendFreshness,
       filtered.series,
       compare.show,
       prevRoasByStore,
@@ -1499,7 +1508,10 @@ function HomeTab({
           ? (prevOrdersByStore[storeName] ?? 0)
           : null
         : null,
-      updatedAt: data?.dataLastWriteAt ?? null,
+      // FIX #4 — fold ad-spend freshness so the modal's freshness mirrors the
+      // card it opened from (stale ad spend → desaturated, not masked by the
+      // Shopify-only revenue write).
+      updatedAt: effectiveFreshnessAt(data?.dataLastWriteAt ?? null, data?.adSpendFreshness) ?? null,
       // Phase 3 — per-store NC-ROAS / nCAC. toStoreDetail filters these by
       // storeName internally; MER spend = the store's mapping-aware cur.spend.
       firstOrderRows,
@@ -1520,6 +1532,7 @@ function HomeTab({
     prevOrdersByStore,
     compare.show,
     data?.dataLastWriteAt,
+    data?.adSpendFreshness,
     firstOrderRows,
   ]);
 
@@ -1719,7 +1732,9 @@ function HomeTab({
         coverageBreakdown={coverageBreakdown}
         comparisonLabel={compare.caption}
         comparisonUnavailable={comparisonUnavailable}
-        updatedAt={data.dataLastWriteAt ?? undefined}
+        // FIX #4 — fold ad-spend freshness so the hero desaturates when ad
+        // spend is stale even while cron-live keeps data_daily.updated_at fresh.
+        updatedAt={effectiveFreshnessAt(data.dataLastWriteAt ?? null, data.adSpendFreshness) ?? undefined}
         newCustomer={heroNewCustomer}
         provenanceVerdict={provenanceVerdict}
         overrideNote={overrideNote}
