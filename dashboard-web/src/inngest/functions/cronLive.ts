@@ -431,11 +431,35 @@ async function persistDayForStore(
     }
   }
 
+}
+
+// =============================================================================
+// #29 (2026-06-20) — agg split out of persistDayForStore.
+//
+// Pre-fix, persistDayForStore committed the revenue upsert and THEN called the
+// agg RPC in the same per-date iteration of a non-transactional loop. If the
+// agg threw for one date mid-loop, the remaining dates were never persisted or
+// aggregated at all, and the failing date kept fresh revenue with stale derived
+// totals — for up to one tick. Splitting the agg out lets the loop persist all
+// revenue first, then run a RESILIENT agg pass that attempts every date even if
+// one throws (re-throwing an aggregate at the end so Inngest still retries the
+// whole tick). ON CONFLICT idempotency keeps the retry safe + self-healing.
+// =============================================================================
+
+/**
+ * Re-aggregate campaigns_daily → data_daily.{fb,ga,tt}_spend_cad + impressions
+ * and re-derive total/roas/gross/net atomically for a single date. Throws on
+ * any Supabase error so the caller's resilient pass can record + re-throw.
+ */
+async function aggregateDataDailyForDate(
+  storeId: StoreId,
+  date: string,
+): Promise<void> {
+  const admin = getSupabaseAdmin();
   // Phase E1.7 (2026-05-30 night) — unified agg RPC. Re-aggregates
   // campaigns_daily into data_daily.{fb,ga,tt}_spend_cad + impressions
-  // and re-derives total/roas/gross/net atomically. Replaces the
-  // narrower `recompute_data_daily_derived` (which only did the derive
-  // step). Workers call the same RPC after their spend writes.
+  // and re-derives total/roas/gross/net atomically. Workers call the same
+  // RPC after their spend writes.
   const { error: aggErr } = await admin
     .rpc('agg_data_daily_for_date', { d: date });
   if (aggErr) {
@@ -654,6 +678,13 @@ async function runLiveForStoreInner(
   // them at the DB layer).
 
   await step.run('persist-rolling-3day', async () => {
+    // #29 (2026-06-20) — two-pass persist. Pass 1 writes Shopify revenue +
+    // products for every OK date. Pass 2 runs the agg RPC for each persisted
+    // date in a RESILIENT loop (one date's failure does NOT skip the others),
+    // re-throwing an aggregate at the end so Inngest still retries the tick.
+    // This avoids the prior mid-loop-failure hole where a date kept fresh
+    // revenue with stale derived totals AND the later dates were never written.
+    const persistedDates: string[] = [];
     for (let i = 0; i < dates.length; i++) {
       const date = dates[i];
       const shopify = shopifyByDate[date];
@@ -678,9 +709,28 @@ async function runLiveForStoreInner(
       // No spend cascade, no per-platform preserve, no spendOverride.
       // Workers (meta/google/tiktokWorker hot_metrics branches) own
       // fb/ga/tt_spend_cad + impressions; the agg RPC owns TikTok's
-      // per-store split; recompute_data_daily_derived re-derives
-      // total/roas/gross/net atomically in the DB after each write.
+      // per-store split; agg_data_daily_for_date re-derives
+      // total/roas/gross/net atomically in the DB (run in Pass 2 below).
       await persistDayForStore(storeId, date, shopify);
+      persistedDates.push(date);
+    }
+
+    // Pass 2 — resilient agg. Attempt every persisted date even if an
+    // earlier one throws; collect failures and re-throw an aggregate so
+    // (a) no date is left with revenue-but-no-derived-totals just because
+    // a sibling date's agg failed, and (b) Inngest still retries the tick.
+    const aggErrors: Error[] = [];
+    for (const date of persistedDates) {
+      try {
+        await aggregateDataDailyForDate(storeId, date);
+      } catch (e) {
+        aggErrors.push(e instanceof Error ? e : new Error(String(e)));
+      }
+    }
+    if (aggErrors.length > 0) {
+      throw new Error(
+        `cron-live ${storeId}: ${aggErrors.length} of ${persistedDates.length} agg RPC(s) failed — ${aggErrors.map((e) => e.message).join('; ')}`,
+      );
     }
 
     // Phase 05.7.8 — persist today's orders_attribution rows. Same UPSERT

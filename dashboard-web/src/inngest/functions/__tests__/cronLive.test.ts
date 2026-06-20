@@ -341,5 +341,63 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     );
   });
 
+  // #29 (2026-06-20): cronLive persists 3 rolling dates with separate
+  // non-transactional agg RPCs. Pre-fix, if the agg threw for one date
+  // mid-loop, the remaining dates were never persisted/aggregated AT ALL
+  // and the failing date kept fresh revenue with stale derived totals.
+  // The resilient-pass fix runs the agg for EVERY date even when one throws,
+  // then re-throws an aggregate so Inngest still retries the whole tick
+  // (ON CONFLICT idempotency makes the retry safe + self-healing).
+  it('#29: a mid-loop agg failure still runs the agg for the OTHER dates AND the tick surfaces an error (Inngest retries)', async () => {
+    const mod = await import('../cronLive');
+
+    vi.spyOn(shopifyFetcher, 'fetchShopifyDayRows').mockImplementation(
+      async (storeId, date) => ({
+        storeId,
+        date,
+        storeName: 'uzoshop',
+        revenueCad: 1000,
+        productRows: [],
+        customItemRefundCad: 0,
+        grossRevenueCad: 1000,
+        refundDeductionCad: 0,
+      }),
+    );
+
+    const { admin } = makeSupabaseAdminMock();
+    // Make the agg RPC fail for exactly ONE of the 3 rolling dates, succeed
+    // for the other two. Track which dates the agg was attempted for.
+    const aggDates: string[] = [];
+    let failDate: string | null = null;
+    admin.rpc = vi.fn((name: string, args: { d: string }) => {
+      if (name === 'agg_data_daily_for_date') {
+        aggDates.push(args.d);
+        // Choose the first date we see as the one that fails.
+        if (failDate === null) failDate = args.d;
+        if (args.d === failDate) {
+          return Promise.resolve({
+            data: null,
+            error: { message: 'deadlock detected' },
+          });
+        }
+      }
+      return Promise.resolve({ data: null, error: null });
+    }) as unknown as typeof admin.rpc;
+
+    vi.spyOn(supabaseAdminMod, 'getSupabaseAdmin').mockReturnValue(
+      admin as unknown as ReturnType<typeof supabaseAdminMod.getSupabaseAdmin>,
+    );
+
+    const { step } = makeStepStub();
+
+    // The tick must ultimately surface an error so Inngest retries.
+    await expect(mod.runLiveForStore('uzoshop', { step })).rejects.toThrow(
+      /agg_data_daily_for_date|deadlock/i,
+    );
+
+    // The agg must have been attempted for ALL 3 rolling dates — a mid-loop
+    // failure must NOT short-circuit the remaining dates' aggregation.
+    expect(new Set(aggDates).size).toBe(3);
+  });
 
 });
