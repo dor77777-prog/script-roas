@@ -235,6 +235,40 @@ export function _resetAdvertiserInfoCacheForTesting(): void {
   advertiserInfoCache.clear();
 }
 
+/**
+ * FIX D (#28) — the daily report window is sent as an Israel date (the
+ * dashboard's business TZ), but TikTok buckets the report in the advertiser
+ * ACCOUNT timezone (start_date/end_date are interpreted in that TZ — see the
+ * API-reference note at the top of this file). When the account TZ differs from
+ * Asia/Jerusalem, a single IL calendar day does not line up exactly with the
+ * account's calendar day → an edge-of-day spend "smear" (a sliver of spend
+ * lands on the neighbouring day).
+ *
+ * CONSERVATIVE handling: we do NOT shift the fetch window here — doing so would
+ * change the numbers reported for a live store and must be a separate,
+ * data-validated change. Instead this pure helper produces a warning so the
+ * discrepancy is OBSERVABLE in logs; `fetchTikTokAdvertiserInfo` console.warns
+ * it. Returns null when the TZ matches (no spurious warning) or is absent.
+ *
+ * TODO(#28, future): convert the IL business day to the account-TZ date range
+ * (start/end aligned to the advertiser timezone) so the window matches TikTok's
+ * bucketing exactly. Gate behind a reconcile-harness validation before changing
+ * live reported numbers.
+ */
+export function tiktokTimezoneSmearWarning(
+  accountTimezone: string | null | undefined,
+  storeId: string,
+): string | null {
+  const tz = String(accountTimezone ?? '').trim();
+  if (!tz) return null;
+  if (tz === 'Asia/Jerusalem') return null;
+  return (
+    `TikTok ${storeId}: advertiser account timezone is "${tz}" but the report ` +
+    `window is sent as an Asia/Jerusalem business date — possible edge-of-day ` +
+    `spend smear (TODO #28: align the window to the account TZ).`
+  );
+}
+
 export async function fetchTikTokAdvertiserInfo(
   storeId: string,
 ): Promise<TikTokAdvertiserInfo> {
@@ -279,6 +313,12 @@ export async function fetchTikTokAdvertiserInfo(
     currency: String(row.currency ?? 'USD').toUpperCase(),
     timezone: String(row.timezone ?? 'UTC'),
   };
+  // FIX D (#28) — surface a potential edge-of-day window smear when the account
+  // TZ differs from the IL business TZ. Cached below, so this warns at most once
+  // per process per store (the info lookup is process-lifetime cached). We do
+  // NOT discard info.timezone or shift the window here (see helper JSDoc).
+  const smearWarning = tiktokTimezoneSmearWarning(info.timezone, storeId);
+  if (smearWarning) console.warn(smearWarning);
   advertiserInfoCache.set(storeId, info);
   return info;
 }
