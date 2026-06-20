@@ -460,7 +460,7 @@ function StoreCard({
       <header className="store-top">
         <Heading
           level="panel"
-          className="store-name text-lg md:text-xl font-semibold whitespace-normal [overflow-wrap:anywhere] text-right"
+          className="store-name text-lg md:text-xl font-semibold whitespace-normal [overflow-wrap:anywhere] text-start"
           as="h3"
         >
           <bdi dir="ltr">{store.storeName}</bdi>
