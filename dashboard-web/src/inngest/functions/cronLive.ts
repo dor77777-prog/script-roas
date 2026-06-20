@@ -123,11 +123,10 @@ import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
 import { isAuthError } from '@/lib/notifications/detectAuthError';
 import { captureStepError, captureCronFetchError } from '@/lib/sentry/capture';
 // Phase 13.6 consolidation — single source of truth for backend store
-// constants. Aliases preserve the historical local names at the use sites
-// (minimizes diff churn).
-import {
-  STORE_ID_TO_NAME as STORE_NAMES,
-} from '@/lib/platformsByStore';
+// constants. Self-serve stores: the Shopify-failure sentinel now resolves the
+// store DISPLAY name via the DYNAMIC `storeIdToName` (DB-first, static fallback)
+// so a 4th store gets a real name instead of `undefined`.
+import { storeIdToName } from '@/lib/platformsByStore';
 
 // =============================================================================
 // Constants
@@ -140,14 +139,10 @@ import {
 const STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
 type StoreId = (typeof STORES)[number];
 
-// Canonical store-name map + per-store TikTok activation flag.
-// Phase 13.6: both live in `@/lib/platformsByStore` (single source of
-// truth) and are imported above under their historical aliases
-// (`STORE_NAMES`, `STORES_WITH_TIKTOK`). STORE_NAMES used by the
-// Shopify-fetch .catch fallback so a 401 / timeout never overwrites
-// the row's store_name with the literal 'unknown' string. TikTok flag
-// short-circuits TikTok fetches for stores without creds, avoiding the
-// OAuth-token-helper error path on every 10-min tick.
+// Store-name resolution lives in `@/lib/platformsByStore`. The
+// Shopify-fetch .catch fallback resolves the DISPLAY name via `storeIdToName`
+// (DB-first, self-serve aware) so a 401 / timeout never overwrites the row's
+// store_name with the literal 'unknown' string (or `undefined` for a new store).
 
 /**
  * Project TZ. Matches `Config.gs:6` + `dashboard-web/src/lib/fetchers/shopify.ts:77`.
@@ -508,6 +503,12 @@ async function runLiveForStoreInner(
   const dates = rollingWindowDates(ROLLING_WINDOW_DAYS);
   const today = dates[0];
 
+  // Self-serve stores: resolve the DISPLAY name once (DB-first; static fallback
+  // for the 3) so the Shopify-failure sentinel below stamps a real store_name
+  // (e.g. 'pdrn skin') instead of `undefined` for a store absent from the static
+  // STORE_ID_TO_NAME map. Byte-identical for the legacy 3.
+  const resolvedStoreName = await storeIdToName(storeId);
+
   // Phase 05.7.6 PROPER FIX v2 (2026-05-22 03:00 IL): every fetcher is
   // wrapped in a 12-second timeout. This GUARANTEES the cron-live step
   // completes within ~15 seconds total even if Meta / Google / Shopify
@@ -523,8 +524,8 @@ async function runLiveForStoreInner(
   //
   // On error/timeout: we return a sentinel ShopifyDayRows-shaped object
   // so the persist step can still run for the other 2 dates AND the
-  // 2 ad-platforms. CRITICAL: the sentinel uses the canonical store name
-  // from STORE_NAMES (NOT the literal 'unknown') — otherwise a Shopify
+  // 2 ad-platforms. CRITICAL: the sentinel uses the resolved DISPLAY name
+  // (resolvedStoreName above, NOT the literal 'unknown') — otherwise a Shopify
   // 401 would overwrite the row's store_name in data_daily with 'unknown',
   // breaking the dashboard's per-store grouping.
   //
@@ -569,7 +570,7 @@ async function runLiveForStoreInner(
             return {
               storeId,
               date: d,
-              storeName: STORE_NAMES[storeId],
+              storeName: resolvedStoreName,
               revenueCad: 0,
               productRows: [],
               customItemRefundCad: 0,
