@@ -32,6 +32,12 @@ export function CogsSettings({ storeNames, currentMonth, monthsInData }: {
   });
   const [scopeKind, setScopeKind] = useState<ScopeKind>('current');
   const [specificMonth, setSpecificMonth] = useState<string>(currentMonth);
+  // FIX #27 — inline Apply validation error. clampPct silently substituted the
+  // 25% default for a blank/invalid field, so clearing a field and hitting
+  // Apply persisted a surprise 25% the operator never typed. Apply now
+  // validates each ACTIVE input and surfaces this error (aborting the write)
+  // when one is blank/non-finite, instead of falling back to DEFAULT_COGS_PCT.
+  const [applyError, setApplyError] = useState<string | null>(null);
   // The per-month timeline is collapsed by default — it's a reference/audit
   // view, not something the operator needs open every time the COGS panel
   // renders. Operators expand it on demand.
@@ -71,15 +77,30 @@ export function CogsSettings({ storeNames, currentMonth, monthsInData }: {
   const onApply = () => {
     const apply = buildApply();
     if (mode === 'business') {
+      // FIX #27 — validate the ACTIVE field. A blank/non-finite value must
+      // ABORT the write with an inline error, never silently persist the 25%
+      // default that clampPct would have substituted.
+      if (!isValidPct(businessPct)) {
+        setApplyError('הזן אחוז תקין (0–100) לפני החלת השינוי');
+        return;
+      }
       const pct = clampPct(businessPct);
       const next: TCogs = { ...settings, mode, business: applyPctToScope(settings.business, pct, apply, months) };
+      setApplyError(null);
       update(next);
     } else {
+      // Validate EVERY store field up front so a single blank field aborts the
+      // WHOLE apply (no partial 25% write for the cleared store).
+      if (storeNames.some((s) => !isValidPct(storePct[s] ?? ''))) {
+        setApplyError('הזן אחוז תקין (0–100) לכל החנויות לפני החלת השינוי');
+        return;
+      }
       const perStore = { ...settings.perStore };
       for (const s of storeNames) {
         const scope: CogsScopeSettings = perStore[s] ?? { default: DEFAULT_COGS_PCT, byMonth: {} };
         perStore[s] = applyPctToScope(scope, clampPct(storePct[s]), apply, months);
       }
+      setApplyError(null);
       update({ ...settings, mode, perStore });
     }
   };
@@ -135,6 +156,15 @@ export function CogsSettings({ storeNames, currentMonth, monthsInData }: {
       </fieldset>
 
       <Button type="button" variant="primary" data-testid="cogs-apply" onClick={onApply} className="w-full">החל שינוי</Button>
+
+      {/* FIX #27 — inline validation error. Surfaced when an active % field is
+          blank/invalid on Apply; the write is aborted so no surprise 25%
+          default is persisted. Token-driven status colour (AA in both themes). */}
+      {applyError && (
+        <p data-testid="cogs-apply-error" role="alert" className="text-2xs font-medium text-status-redFg">
+          {applyError}
+        </p>
+      )}
 
       <p className="text-2xs text-ink-muted leading-relaxed">
         ברירת מחדל {DEFAULT_COGS_PCT}% לכל חודש שלא נערך. השינוי רטרואקטיבי ומיידי בכל הדשבורד. מסונכרן לענן.
@@ -208,6 +238,20 @@ function clampPct(v: string): number {
   const n = parseFloat(v);
   if (!Number.isFinite(n)) return DEFAULT_COGS_PCT;
   return Math.max(0, Math.min(100, n));
+}
+
+/**
+ * FIX #27 — strict validity check for an Apply field. Distinct from
+ * {@link clampPct}: clampPct legitimately clamps a VALID number into [0,100]
+ * (and is still used for that on write), but on Apply a blank/non-finite field
+ * must be REJECTED rather than silently defaulted to 25%. A blank string,
+ * whitespace, or anything non-finite is invalid. Out-of-range finite numbers
+ * are valid here (clampPct clamps them on write — that's an intentional clamp,
+ * not a silent default).
+ */
+function isValidPct(v: string): boolean {
+  if (v.trim() === '') return false;
+  return Number.isFinite(parseFloat(v));
 }
 
 /** Last `n` calendar months ending at `endMonth` (inclusive), 'YYYY-MM' desc-then-sorted by caller. */
