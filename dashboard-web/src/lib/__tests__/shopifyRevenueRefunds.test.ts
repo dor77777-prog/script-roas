@@ -267,6 +267,20 @@ const fixtureOrders: Order[] = [
 // filter on the refund-day attribution loop. Plan 09 reworks the expected
 // values below to match. See 05.2.3.0-08-SUMMARY.md §"Vitest Result Delta"
 // and Decision 4 for the hand-off.
+//
+// === BUG #6 FIX (2026-06-20): per-product is now SINGLE-counted ===
+// In this TS port there is ONE function (computeRevenueWithCrossDayRefunds)
+// feeding BOTH the store-level revenue AND the per-product breakdown — the
+// production code paths are NOT separate (fetchShopifyDayRows calls this one
+// function and maps byProduct[pid].netRevenueCad straight into
+// products_daily.net_revenue_cad). The pre-fix algorithm subtracted a
+// same-day order's intra-order refund TWICE in byProduct (once in the
+// same-day intra-order loop, once again in the refund-day attribution loop),
+// so products_daily.net_revenue_cad was gross − 2×refund for same-day
+// refunded orders. The fix gates the refund-day attribution per-product
+// subtraction to non-same-day orders. Store-level deduction and the null-pid
+// customItemRefundCad were always single-counted (unconditional) and are
+// unchanged. Single-counting is REQUIRED for products_daily correctness.
 
 // Total refund deduction across ALL refund_line_items for refunds processed
 // on DAY_D (no cross-day filter — every refund on D counts):
@@ -284,23 +298,17 @@ const STORE_REFUND_DEDUCTION_TOTAL =
 
 // Refund deduction grouped by product_id (skipping null/missing) for refunds
 // processed on DAY_D. Cross-day pids contribute their full subtotal; the
-// same-day prod-Z contributes TWICE under the new TS-mirror algorithm
-// (once via the intra-order map in the same-day branch, once via the
-// refund-day attribution loop — both run when the order is same-day AND
-// the refund is on the order's day). Plan 08 SUMMARY documents this
-// intentional shape: under gap-closure 08 the TS mirror's per-product
-// path absorbs the same-day intra-order refund twice; in the production
-// Apps Script the store-level (getShopifyRevenue) and per-product
-// (getShopifyProductSalesForDay) code paths are separate so the
-// double-deduction does not appear in the dashboard's pre-computed
-// data-daily rows.
+// same-day prod-Z contributes ONCE (bug #6 fix 2026-06-20). The same-day
+// intra-order refund branch already subtracts prod-Z's 20.00; the refund-day
+// attribution loop now SKIPS the per-product subtraction for same-day orders
+// (it would otherwise double-count, see bug #6). Store-level and customItem
+// deduction stay unconditional.
 //   cross-day pids (uzoshop/zolplus/usmile360 a+b): 68.8 + 65.28 + 81.08 + 55.35 = 270.51
-//   same-day prod-Z double-attribution:             20.00 (intra-order) + 20.00 (refund-day) = 40.00
+//   same-day prod-Z single-attribution:             20.00 (intra-order only)
 const BY_PID_REFUND_PORTION =
   68.8 + 65.28 + 81.08 + 55.35  // cross-day pids (-270.51 total in byProduct)
-  + 20.00                       // prod-Z intra-order refund (same-day branch)
-  + 20.00;                      // prod-Z refund-day attribution (refund-day loop)
-// = 310.51
+  + 20.00;                      // prod-Z intra-order refund (same-day branch, single-counted)
+// = 290.51 (was 310.51 under the pre-bug-#6 double-count)
 
 // Custom-item portion (null/missing product_id, surfaced ONLY here):
 const CUSTOM_ITEM_REFUND_TOTAL = 5.00;
@@ -313,18 +321,14 @@ const SAME_DAY_GROSS = 50.00; // sameDayOrder.total_price (was 30.00 current_tot
 // refund portion in invariant 3):
 const SAME_DAY_PROD_Z_LINE_GROSS = 50.00; // 50.00 price * 1 quantity
 
-// Same-day per-product net for prod-Z under gap-closure 08:
+// Same-day per-product net for prod-Z (bug #6 fix 2026-06-20):
 //   line gross  = 50.00 (price * quantity)
 //   minus intra-order refund (same-day branch)             = -20.00 (running total: 30.00)
-//   minus refund-day attribution (no-cross-day filter)     = -20.00 (running total: 10.00)
-// Plan 08 SUMMARY §"Vitest Result Delta": "byProduct values are 20.00 CAD
-// lower than the old expectations ... making prod-Z's net = 50 - 20 - 20 = 10
-// instead of the old 50 - 20 = 30."
-const SAME_DAY_PROD_Z_NET = 10.00; // was 30.00 under old algorithm
-
-// Same-day refund that gets double-counted in byProduct under gap-closure 08
-// (only the same-day-order's intra-order refund with a concrete pid qualifies):
-const SAME_DAY_INTRA_ORDER_REFUND_FOR_CONCRETE_PIDS = 20.00; // prod-Z's intra-order refund
+//   refund-day attribution loop SKIPS per-product for same-day orders (bug #6)
+// Net = 50 - 20 = 30. The same-day intra-order refund is single-counted in
+// byProduct now (the duplicate refund-day subtraction is gone). Store-level
+// deduction is unchanged (still single-counted, was always correct).
+const SAME_DAY_PROD_Z_NET = 30.00; // single-counted after bug #6 fix (was 10.00 under the doubled algorithm)
 
 // ===========================================================================
 // Tests — one `it(...)` per D-C3 invariant (REVISED for gap-closure 08).
@@ -340,13 +344,13 @@ describe('cross-day refunds', () => {
     expect(result.storeNetCad).toBeCloseTo(-245.51, 2);
   });
 
-  it('D-C3 invariant 2: per-product net = (line gross for orders.created_at=D after intra-order refund deduction) - sum(refund_line_items.subtotal for refunds.processed_at=D, grouped by product_id, skipping null/missing product_id) (REVISED gap-closure 08 — no cross-day filter on refund-day attribution)', () => {
+  it('D-C3 invariant 2: per-product net = (line gross for orders.created_at=D after intra-order refund deduction) - sum(refund_line_items.subtotal for refunds.processed_at=D, grouped by product_id, skipping null/missing product_id) (bug #6 fix — same-day per-product refund single-counted)', () => {
     const result = computeRevenueWithCrossDayRefunds(fixtureOrders, DAY_D, PROBE_TZ);
 
     // Per-product expectations:
     //   - Cross-day refund pids get NEGATIVE entries (-Σ refund_line_items.subtotal).
-    //   - Same-day pid gets line gross MINUS intra-order MINUS refund-day-path
-    //     (double-attribution by design under gap-closure 08, see Plan 08 SUMMARY).
+    //   - Same-day pid gets line gross MINUS intra-order refund ONCE (bug #6 fix:
+    //     the refund-day attribution loop skips per-product for same-day orders).
     //   - Null product_id NEVER appears in byProduct.
     expect(result.byProduct['prod-uzoshop-1']).toBeDefined();
     expect(result.byProduct['prod-uzoshop-1'].netRevenueCad).toBeCloseTo(-68.8, 2);
@@ -360,11 +364,10 @@ describe('cross-day refunds', () => {
     expect(result.byProduct['prod-usmile360-b']).toBeDefined();
     expect(result.byProduct['prod-usmile360-b'].netRevenueCad).toBeCloseTo(-55.35, 2);
 
-    // Same-day prod-Z under gap-closure 08: line gross 50.00 minus intra-order
-    // refund 20.00 minus refund-day-path attribution 20.00 = 10.00. The
-    // same-day refund is counted TWICE in byProduct (once via intra-order map,
-    // once via refund-day loop — both run for a same-day order with a same-day
-    // refund). See SAME_DAY_PROD_Z_NET comment block above for the derivation.
+    // Same-day prod-Z (bug #6 fix): line gross 50.00 minus intra-order refund
+    // 20.00 = 30.00. The same-day refund is counted ONCE in byProduct (via the
+    // intra-order map); the refund-day attribution loop now skips per-product
+    // subtraction for same-day orders. See SAME_DAY_PROD_Z_NET above.
     expect(result.byProduct['prod-Z']).toBeDefined();
     expect(result.byProduct['prod-Z'].netRevenueCad).toBeCloseTo(SAME_DAY_PROD_Z_NET, 2);
 
@@ -373,25 +376,24 @@ describe('cross-day refunds', () => {
     expect(result.byProduct['']).toBeUndefined();
   });
 
-  it('D-C3 invariant 3: cross-path reconciliation — storeRefundDeduction == BY_PID refund portion + customItemRefundCad (REVISED gap-closure 08 — BY_PID includes the same-day double-attribution)', () => {
+  it('D-C3 invariant 3: cross-path reconciliation — storeRefundDeduction == BY_PID refund portion + customItemRefundCad (bug #6 fix — per-product single-counted, identity is exact)', () => {
     const result = computeRevenueWithCrossDayRefunds(fixtureOrders, DAY_D, PROBE_TZ);
 
     // Store-level total refund deduction (recovered from storeNetCad and
     // same-day total_price gross):
     //   storeLevelDeduction = SAME_DAY_GROSS - storeNetCad = 50 - (-245.51) = 295.51
     // This equals Σ refund_line_items.subtotal across ALL refunds processed on
-    // D (including null-pid + same-day intra-order). It does NOT double-count
-    // same-day refunds because store-level only runs the refund-day attribution
-    // loop (no intra-order map at the store level).
+    // D (including null-pid + same-day intra-order). Store-level was always
+    // single-counted (no double-deduction here).
     const storeLevelDeduction = SAME_DAY_GROSS - result.storeNetCad;
     expect(storeLevelDeduction).toBeCloseTo(STORE_REFUND_DEDUCTION_TOTAL, 2);
 
     // Per-product refund portion (recovered from line gross minus net for the
     // same-day pid, plus the negative-only sum for cross-day pids):
-    //   sumByProductNet = -68.8 -65.28 -81.08 -55.35 +10.00 = -260.51
-    //   line_gross(prod-Z) - net(prod-Z) = 50.00 - 10.00 = 40.00 (= 20 intra + 20 refund-day)
+    //   sumByProductNet = -68.8 -65.28 -81.08 -55.35 +30.00 = -240.51
+    //   line_gross(prod-Z) - net(prod-Z) = 50.00 - 30.00 = 20.00 (intra-order only)
     //   cross-day refund portion = -sum of cross-day pids = 270.51
-    //   BY_PID refund portion total = 40.00 + 270.51 = 310.51
+    //   BY_PID refund portion total = 20.00 + 270.51 = 290.51
     const sumByProductNet = Object.values(result.byProduct).reduce(
       (s, p) => s + p.netRevenueCad,
       0,
@@ -399,16 +401,14 @@ describe('cross-day refunds', () => {
     const byProductRefundPortion = SAME_DAY_PROD_Z_LINE_GROSS - sumByProductNet;
     expect(byProductRefundPortion).toBeCloseTo(BY_PID_REFUND_PORTION, 2);
 
-    // Cross-path identity: storeLevelDeduction (295.51) equals the BY_PID
-    // portion (310.51) MINUS the same-day double-count (20.00) PLUS
-    // customItemRefundCad (5.00). The −20.00 correction removes the
-    // intra-order refund counted twice in byProduct but only once in
-    // storeRefundDeduction.
-    //   295.51 == 310.51 - 20.00 + 5.00 = 295.51 ✓
+    // Cross-path identity (bug #6 fix — now exact): storeLevelDeduction (295.51)
+    // equals the BY_PID portion (290.51) PLUS customItemRefundCad (5.00). The
+    // per-product path is single-counted, so no double-count correction is
+    // needed; the only difference between store-level and per-product is the
+    // null-pid amount diverted to customItemRefundCad.
+    //   295.51 == 290.51 + 5.00 = 295.51 ✓
     expect(storeLevelDeduction).toBeCloseTo(
-      byProductRefundPortion
-      - SAME_DAY_INTRA_ORDER_REFUND_FOR_CONCRETE_PIDS
-      + result.customItemRefundCad,
+      byProductRefundPortion + result.customItemRefundCad,
       2,
     );
 
@@ -417,7 +417,7 @@ describe('cross-day refunds', () => {
     expect(result.customItemRefundCad).toBeCloseTo(CUSTOM_ITEM_REFUND_TOTAL, 2);
   });
 
-  it('D-C3 invariant 4: full reconciliation — store_net == sum(byProduct.netRevenueCad) + correction terms within ±0.01 CAD (REVISED gap-closure 08 — corrections account for the same-day double-attribution and customItem diversion)', () => {
+  it('D-C3 invariant 4: full reconciliation — store_net == sum(byProduct.netRevenueCad) - customItemRefundCad within ±0.01 CAD (bug #6 fix — per-product single-counted, only the customItem diversion correction remains)', () => {
     const result = computeRevenueWithCrossDayRefunds(fixtureOrders, DAY_D, PROBE_TZ);
 
     const sumByProductNet = Object.values(result.byProduct).reduce(
@@ -425,32 +425,24 @@ describe('cross-day refunds', () => {
       0,
     );
 
-    // REVISED gap-closure 08 D-C3 invariant 4: the new algorithm's per-product
-    // sum differs from storeNetCad by two structural corrections:
-    //   (a) Null/missing product_id refunds are diverted to customItemRefundCad
-    //       — byProduct understates the store-level deduction by this amount.
-    //       Recover by SUBTRACTING customItemRefundCad from sumByProductNet.
-    //   (b) Same-day intra-order refunds for concrete pids are counted TWICE
-    //       in byProduct (intra-order map + refund-day attribution) but only
-    //       ONCE in storeRefundDeduction. byProduct overstates the deduction
-    //       by this amount. Recover by ADDING the duplicate magnitude back to
-    //       sumByProductNet.
+    // Bug #6 fix D-C3 invariant 4: the per-product sum now differs from
+    // storeNetCad by ONLY ONE structural correction:
+    //   Null/missing product_id refunds are diverted to customItemRefundCad
+    //   — byProduct understates the store-level deduction by this amount.
+    //   Recover by SUBTRACTING customItemRefundCad from sumByProductNet.
+    // The pre-bug-#6 same-day double-count correction is gone: per-product
+    // same-day refunds are now single-counted, matching store-level.
     //
     // Identity:
-    //   storeNetCad == sumByProductNet
-    //                  - customItemRefundCad
-    //                  + SAME_DAY_INTRA_ORDER_REFUND_FOR_CONCRETE_PIDS
+    //   storeNetCad == sumByProductNet - customItemRefundCad
     //
     // Concrete:
     //   storeNetCad = -245.51
-    //   sumByProductNet = -260.51 (= -68.8 -65.28 -81.08 -55.35 +10.00)
+    //   sumByProductNet = -240.51 (= -68.8 -65.28 -81.08 -55.35 +30.00)
     //   customItemRefundCad = 5.00
-    //   same-day double-count = 20.00 (prod-Z's intra-order refund)
-    //   -260.51 - 5.00 + 20.00 = -245.51  ✓
+    //   -240.51 - 5.00 = -245.51  ✓
     expect(result.storeNetCad).toBeCloseTo(
-      sumByProductNet
-      - result.customItemRefundCad
-      + SAME_DAY_INTRA_ORDER_REFUND_FOR_CONCRETE_PIDS,
+      sumByProductNet - result.customItemRefundCad,
       2,
     );
   });

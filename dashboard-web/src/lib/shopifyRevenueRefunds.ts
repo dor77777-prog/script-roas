@@ -138,8 +138,12 @@ export type CrossDayRefundResult = {
    * Per-product net revenue for day D, keyed by product_id (string form):
    *   (per-pid line gross for orders.created_at=D after intra-order
    *    refund_line_items.subtotal deduction)
-   *   − Σ refund_line_items[].subtotal(cross-day, grouped by product_id,
-   *                                    skipping null/missing product_id).
+   *   − Σ refund_line_items[].subtotal(refunds.processed_at=D on
+   *                                    NON-same-day orders, grouped by
+   *                                    product_id, skipping null/missing pid).
+   * Bug #6 fix (2026-06-20): same-day orders' refunds are subtracted ONCE
+   * (in the intra-order loop only) — the refund-day attribution loop skips
+   * per-product for same-day orders to avoid the gross−2×refund double-count.
    * Null/missing product_id refunds are diverted to customItemRefundCad
    * (D-C2 / REVISED D-C3 invariant 3).
    */
@@ -385,9 +389,21 @@ export function computeRevenueWithCrossDayRefunds(
             : (rli.total ?? 0),
         );
         const pid = normalizeProductId(rli.product_id);
+        // Store-level and null-pid customItem deductions are ALWAYS counted
+        // here (the same-day intra-order loop above skips null-pid and never
+        // touches store/customItem) — keep them unconditional.
         storeRefundDeduction += amt;
         if (pid) {
-          bumpByProduct(pid, -amt);
+          // Bug #6 fix (2026-06-20): for a SAME-DAY order, the intra-order
+          // refund loop above already called bumpByProduct(pid, -amt) for this
+          // exact refund (same processed_at == dateStr filter). Subtracting
+          // again here double-deducts the per-product net (byProduct[pid] =
+          // gross − 2×refund), which flows straight into
+          // products_daily.net_revenue_cad via fetchShopifyDayRows. Only
+          // subtract here when the order is NOT same-day.
+          if (!isSameDayOrder) {
+            bumpByProduct(pid, -amt);
+          }
         } else {
           customItemRefundCad += amt;
         }
