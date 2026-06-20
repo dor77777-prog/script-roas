@@ -16,6 +16,7 @@ import * as Sentry from '@sentry/nextjs';
 import { fetchWithBackoff } from './withBackoff';
 import { recordMetaBucUsage } from '@/lib/notifications/metaBucUsage';
 import { getStoreSecret } from '@/lib/storeSecretsReader';
+import { loadActiveStoreIds } from '@/lib/getStores';
 
 // ---------------------------------------------------------------------------
 // Constants + public error class
@@ -65,16 +66,18 @@ export function extractAdAccountIdFromUrl(url: string): string | null {
 
 /**
  * Given a numeric ad account ID, find which store it belongs to by checking
- * the ${STORE}_META_AD_ACCOUNT_ID env vars (stripping any `act_` prefix from both sides).
+ * the ${STORE}_META_AD_ACCOUNT_ID secret/env (stripping any `act_` prefix from both sides).
  *
- * Known stores: uzoshop, zolplus, usmile360 (matches cronDaily/cronLive/cronLiveHeavy).
+ * Self-serve stores: iterates the LIVE active store list (loadActiveStoreIds →
+ * DB, static-3 fallback) so a 4th store's Meta BUC usage is attributed to it.
  */
 export async function lookupStoreByAdAccount(
   accountId: string | null,
 ): Promise<string | null> {
   if (!accountId) return null;
   const normalized = accountId.replace(/^act_/, '');
-  for (const storeId of ['uzoshop', 'zolplus', 'usmile360']) {
+  const storeIds = await loadActiveStoreIds().catch(() => ['uzoshop', 'zolplus', 'usmile360']);
+  for (const storeId of storeIds) {
     // Dual-read: store_secrets → ${STORE}_META_AD_ACCOUNT_ID env fallback.
     const envVal = await getStoreSecret(storeId, 'META_AD_ACCOUNT_ID');
     if (envVal && envVal.replace(/^act_/, '').trim() === normalized) {
