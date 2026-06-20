@@ -1,9 +1,12 @@
 /**
  * Cost configuration for true P&L calculation.
  *
- * Shopify revenue is already net of refunds (we sum `current_total_price`
- * which is the order's value after returns). So the only costs to subtract
- * are:
+ * Shopify revenue is already net of refunds: net revenue =
+ * Σ `total_price` (immutable order value at creation) − Σ
+ * `refund_line_items[].subtotal` on each refund's `processed_at` day (see
+ * shopifyRevenueRefunds.ts). `current_total_price` is NOT used — summing it
+ * double-deducts cross-day refunds once a backfill re-fetches the prior-day
+ * row (CR-01). So the only costs to subtract are:
  *
  *   1. Ad spend         — Meta + Google, already in data-daily
  *   2. COGS             — per-store calibration via `${STORE}_COGS_RATE`
