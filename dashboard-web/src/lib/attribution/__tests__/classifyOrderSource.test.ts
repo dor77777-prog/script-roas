@@ -266,6 +266,51 @@ describe('classifyOrderSource — ZERO REGRESSION for existing source values', (
   it('empty everything → direct', () => expect(classifyOrderSource({})).toBe('direct'));
 });
 
+/**
+ * FIX A (#25) — the live-feed badge wrapper `classifyOrderSource` must thread
+ * the order's created_at into the classifier so the cookie-only `_fbc`
+ * last-touch path (fbcIsFreshClick) fires IDENTICALLY to the canonical pipeline
+ * (shopify.ts passes conversionAt/created_at). Without it, an order whose ONLY
+ * Meta signal is a FRESH `_fbc` cookie (no fbclid URL param) gets a non-Meta
+ * badge, diverging from the dashboard's canonical attribution.
+ */
+describe('classifyOrderSource — fresh _fbc cookie uses created_at (FIX A #25)', () => {
+  // _fbc format: fb.<subdomainIndex>.<creationTimeMs>.<fbclid>
+  const orderMs = Date.parse('2026-06-06T12:00:00Z');
+  const freshClickMs = orderMs - 2 * 24 * 60 * 60 * 1000; // 2 days before order (within 7d window)
+  const staleClickMs = orderMs - 30 * 24 * 60 * 60 * 1000; // 30 days before order (outside window)
+  const freshFbc = `fb.1.${freshClickMs}.AbCdEf`;
+  const staleFbc = `fb.1.${staleClickMs}.AbCdEf`;
+
+  it('fresh _fbc cookie + created_at within window → meta-paid (matches pipeline)', () => {
+    expect(
+      classifyOrderSource({
+        landing_site: `/?_fbc=${encodeURIComponent(freshFbc)}`,
+        created_at: '2026-06-06T12:00:00Z',
+      }),
+    ).toBe('meta-paid');
+  });
+
+  it('fresh _fbc cookie but NO created_at → cannot verify freshness → direct', () => {
+    // Documents the pre-fix behavior: without a created_at the cookie path
+    // can't confirm freshness, so it must NOT over-attribute.
+    expect(
+      classifyOrderSource({
+        landing_site: `/?_fbc=${encodeURIComponent(freshFbc)}`,
+      }),
+    ).toBe('direct');
+  });
+
+  it('stale _fbc cookie (click 30d before order) → NOT meta-paid', () => {
+    expect(
+      classifyOrderSource({
+        landing_site: `/?_fbc=${encodeURIComponent(staleFbc)}`,
+        created_at: '2026-06-06T12:00:00Z',
+      }),
+    ).toBe('direct');
+  });
+});
+
 describe('classifyOrderAttribution — first-touch symmetry for expansion rules', () => {
   const ft = (attrs: Array<{ name: string; value: string }>) =>
     classifyOrderAttribution({ landing_site: '/', note_attributes: attrs }).firstTouchSource;

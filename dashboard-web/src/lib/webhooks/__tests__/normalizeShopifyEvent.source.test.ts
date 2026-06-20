@@ -38,4 +38,18 @@ describe('normalizeOrderEvent — source', () => {
     }, { storeId: 'uzoshop', webhookId: 'w5', cadConvert: fx });
     expect(ev?.source).toBe('tiktok-paid');
   });
+
+  // FIX A (#25) — an order whose ONLY Meta signal is a FRESH _fbc cookie
+  // (no fbclid URL param) must badge meta-paid, matching the canonical
+  // pipeline. Requires created_at to be threaded into the classifier.
+  it('classifies a Meta sale from a FRESH _fbc cookie + created_at', async () => {
+    const created_at = '2026-06-06T12:00:00Z';
+    const clickMs = Date.parse(created_at) - 2 * 24 * 60 * 60 * 1000; // 2d before → fresh
+    const fbc = `fb.1.${clickMs}.AbCdEf`;
+    const ev = await normalizeOrderEvent('sale', {
+      total_price: '100', currency: 'CAD', created_at,
+      landing_site: `/?_fbc=${encodeURIComponent(fbc)}`, line_items: [],
+    }, { storeId: 'uzoshop', webhookId: 'w6', cadConvert: fx });
+    expect(ev?.source).toBe('meta-paid');
+  });
 });

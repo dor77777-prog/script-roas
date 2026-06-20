@@ -465,11 +465,24 @@ export function classifyOrderSource(input: {
   referring_site?: string | null;
   note_attributes?: Array<{ name?: string; value?: string }> | null;
   source_name?: string | null;
+  /**
+   * FIX A (#25) — the order's conversion time (Shopify `created_at` / event
+   * `occurred_at`). Threading it lets the cookie-only `_fbc` last-touch path
+   * (`fbcIsFreshClick`) AND the first-touch freshness gate fire IDENTICALLY to
+   * the canonical orders pipeline (shopify.ts passes the same value). Without
+   * it, an order whose only Meta signal is a fresh `_fbc` cookie would badge
+   * non-Meta, diverging from the dashboard's canonical attribution.
+   */
+  created_at?: string | null;
 }): string {
-  return classifyOrderAttribution({
-    landing_site: input.landing_site ?? undefined,
-    referring_site: input.referring_site ?? undefined,
-    note_attributes: input.note_attributes ?? undefined,
-    source_name: input.source_name ?? undefined,
-  }).source;
+  return classifyOrderAttribution(
+    {
+      landing_site: input.landing_site ?? undefined,
+      referring_site: input.referring_site ?? undefined,
+      note_attributes: input.note_attributes ?? undefined,
+      source_name: input.source_name ?? undefined,
+      created_at: input.created_at ?? undefined,
+    },
+    { conversionAt: input.created_at ?? undefined },
+  ).source;
 }

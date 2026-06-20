@@ -214,6 +214,11 @@ export async function normalizeOrderEvent(
         referring_site: order.referring_site,
         note_attributes: order.note_attributes,
         source_name: order.source_name,
+        // FIX A (#25) — feed the conversion time so the cookie-only `_fbc`
+        // freshness check matches the canonical pipeline. `occurred_at` is the
+        // coerced/validated order created_at (safeIso); use it over the raw
+        // field so a garbage created_at can't poison the freshness math.
+        created_at: occurred_at,
       }),
       occurred_at,
       dedupe_key,
