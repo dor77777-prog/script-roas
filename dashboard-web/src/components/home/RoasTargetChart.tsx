@@ -35,7 +35,6 @@ import { ChartAnnotationPins } from '@/components/ui/ChartAnnotationPins';
 import { Heading } from '@/components/ui/Typography';
 import { cn, formatCurrency, formatNumber, formatDate } from '@/lib/utils';
 import {
-  useRoasBandGradient,
   BAND_TAG_LABEL,
   type RoasBand,
 } from '@/lib/format/useRoasBandGradient';
@@ -356,10 +355,6 @@ export function RoasTargetChart({
   // above 4.0 are never clamped onto the top gridline. Target line stays 3.0.
   const yMax = useMemo(() => computeYMax(minMax.max?.value), [minMax]);
   const gridValues = useMemo(() => gridValuesFor(yMax), [yMax]);
-  const roasBand = useRoasBandGradient(kpis.roas).band;
-  const accentBand: RoasBand =
-    synthesis.confidence === 'high' ? synthesis.band : roasBand;
-
   // Spec §3.2.2 — the LINE + AREA are a SINGLE hue = the band of the
   // PERIOD-AVERAGE ROAS (replaces the old two-tone area split at the target).
   // Source = the SAME headline aggregation the KPI tile shows: kpis.roas
@@ -369,6 +364,12 @@ export function RoasTargetChart({
     () => bandForPeriod({ roas: kpis.roas, spend: kpis.spend }),
     [kpis.roas, kpis.spend],
   );
+  // FIX #21 — the KPI tile + TL;DR band from the SAME spend-aware classifier
+  // the chart LINE uses, so an organic (spend===0) period reads gray "אורגני"
+  // on the tile instead of red "0.00x". For a spend-backed period this equals
+  // useRoasBandGradient(kpis.roas).band (bandForPeriod delegates to bandForRoas
+  // when spend>0), so the non-organic colouring is unchanged.
+  const kpiBand: RoasBand = chartBand.band;
   const lineStyle = useMemo(
     () => chartLineStyleForBand(chartBand.band, chartBand.isOrganic),
     [chartBand],
@@ -538,7 +539,11 @@ export function RoasTargetChart({
             className="text-base sm:text-lg leading-snug"
             data-testid="chart-tldr"
           >
-            {renderTldr(synthesis, accentBand, kpis.roas)}
+            {/* FIX #21 — organic (spend===0) period: the TL;DR fallback must
+                read gray "אורגני", never a red "0.00" beside the chart's gray
+                organic line. Spend-backed periods are unchanged (kpiBand equals
+                the displayed-number band). */}
+            {renderTldr(synthesis, kpiBand, kpis.roas, chartBand.isOrganic)}
           </Heading>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -581,16 +586,21 @@ export function RoasTargetChart({
         <KpiTile label="הכנסות" value={formatCurrency(kpis.revenue)} suffix="CAD" />
         <KpiTile
           label="ROAS"
-          value={`${kpis.roas.toFixed(2)}x`}
-          // 2026-06-09 (Task 9 + 10): band the tile from the DISPLAYED number
-          // (roasBand = useRoasBandGradient(kpis.roas)), not accentBand (which
-          // uses the unweighted daily-mean band when confidence is high) — so
-          // the color always matches the number on the tile. Wording is the
-          // canonical BAND_TAG_LABEL (shared with the per-store pills), not the
-          // bespoke "מול היעד" vocabulary.
-          chipClass={chipClassForBand(roasBand)}
-          chipLabel={BAND_TAG_LABEL[roasBand]}
-          accentClass={bandClassForRoas(roasBand)}
+          // FIX #21 (2026-06-20): in an ORGANIC period (spend===0) the ratio
+          // is meaningless (kpis.roas folds to 0). Banding from
+          // useRoasBandGradient(0) painted the tile RED "0.00x" while the chart
+          // LINE already read gray "organic" (bandForPeriod) — the two surfaces
+          // disagreed. Band + label the tile from the SAME spend-aware source
+          // the line uses (chartBand = bandForPeriod) and render "אורגני"
+          // instead of a fake "0.00x".
+          value={chartBand.isOrganic ? 'אורגני' : `${kpis.roas.toFixed(2)}x`}
+          // 2026-06-09 (Task 9 + 10): band the tile from the DISPLAYED number,
+          // not accentBand (which uses the unweighted daily-mean band when
+          // confidence is high) — so the color always matches the tile. Wording
+          // is the canonical BAND_TAG_LABEL (shared with the per-store pills).
+          chipClass={chipClassForBand(kpiBand)}
+          chipLabel={BAND_TAG_LABEL[kpiBand]}
+          accentClass={bandClassForRoas(kpiBand)}
           highlight
           testId="chart-kpi-roas"
         />
@@ -1199,7 +1209,19 @@ function renderTldr(
   synthesis: RoasChartSynthesisResult,
   band: RoasBand,
   roasFallback: number,
+  isOrganic = false,
 ) {
+  // FIX #21 — organic period (no ad spend): ROAS is undefined, so the header
+  // states the organic fact instead of a misleading "0.00" average.
+  if (isOrganic) {
+    return (
+      <span>
+        תקופה אורגנית — אין הוצאת פרסום, לכן אין{' '}
+        <span className={cn('font-bold', bandClassForRoas('gray'))}>ROAS</span>{' '}
+        משוקלל למדידה.
+      </span>
+    );
+  }
   // Confidence='low' → fall back to a single neutral sentence so the
   // header doesn't lie about a non-existent trend.
   if (synthesis.confidence === 'low' || !synthesis.text) {
