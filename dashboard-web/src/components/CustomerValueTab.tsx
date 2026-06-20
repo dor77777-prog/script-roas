@@ -41,7 +41,11 @@ import {
   COGS_SETTINGS_EVENT,
   type CogsSettings,
 } from '@/lib/cogsSettings';
-import { computeCustomerValue, type CustomerValue } from '@/lib/home/customerValue';
+import {
+  computeCustomerValue,
+  blendedCogsPctByMonth,
+  type CustomerValue,
+} from '@/lib/home/customerValue';
 import { getTodayInIsraelTz } from '@/lib/dateRange';
 import { CustomerValueCurve } from '@/components/CustomerValueCurve';
 import { CohortGridAdvanced } from '@/components/CohortGridAdvanced';
@@ -190,14 +194,18 @@ export function CustomerValueTab({
 
   // Per-cohort-month editable COGS fraction. effectiveCogsPct ignores the store
   // name in business mode and falls back to the default otherwise.
+  //
+  // Fix #14: on the 'all stores' view (storeName === undefined) in per-store
+  // COGS mode, blend each cohort month's rate by store revenue rather than
+  // collapsing to stores[0] — otherwise one store's COGS rate is applied to
+  // every store's pooled cohort revenue (wrong blended profit/LTV/payback when
+  // stores diverge). Single-store view + business mode are unaffected.
   const cogsPctByMonth = useMemo<Record<string, number> | undefined>(() => {
     if (!cogs) return undefined;
-    const lookupStore = storeName ?? stores[0] ?? '';
-    const months = [...new Set(allRows.map((r) => r.firstOrderMonth))];
-    const out: Record<string, number> = {};
-    for (const m of months) out[m] = effectiveCogsPct(cogs, lookupStore, m);
-    return out;
-  }, [cogs, storeName, stores, allRows]);
+    return blendedCogsPctByMonth(allRows, storeName, (store, m) =>
+      effectiveCogsPct(cogs, store, m),
+    );
+  }, [cogs, storeName, allRows]);
 
   const scopedRows = useMemo(
     () => (storeName ? allRows.filter((r) => r.storeId === storeName) : allRows),

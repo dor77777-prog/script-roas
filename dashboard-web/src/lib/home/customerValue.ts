@@ -138,6 +138,81 @@ function cohortAgeMonths(firstOrderMonth: string, todayMonth: string): number {
 }
 
 /**
+ * Fix #14 — build the per-cohort-month COGS fraction map (`cogsPctByMonth`)
+ * that `computeCustomerValue` consumes via `keepRate`.
+ *
+ * `keepRate` looks COGS up by cohort first-order-month only — it has NO store
+ * dimension. On the 'all stores' view in per-store COGS mode the cohort
+ * revenue for a given month is POOLED across stores with divergent rates, so a
+ * single store's rate (the old `stores[0]` collapse) is wrong. This helper
+ * returns a REVENUE-WEIGHTED blend per cohort month:
+ *
+ *   blendedCogs(m) = Σ_store(rev_store_m × cogsPct(store, m)) / Σ_store(rev_store_m)
+ *
+ * where `rev_store_m` is the store's total net revenue for cohort month `m`
+ * (summed across all months-since — the same revenue `keepRate` scales).
+ *
+ * - When `storeName` is set (single-store view) the result is just that store's
+ *   own per-month rate — identical to the prior behaviour, no blend.
+ * - When a month has zero total revenue across stores (weights all zero) we
+ *   fall back to a simple mean of the present stores' rates, so the keep-rate
+ *   is still a sensible blend rather than collapsing to one store.
+ *
+ * The COGS lookup is injected (`cogsForStoreMonth`) to keep this module free of
+ * a `cogsSettings.ts` import; the component passes
+ * `(store, m) => effectiveCogsPct(cogs, store, m)`.
+ */
+export function blendedCogsPctByMonth(
+  rows: CohortMonthlyRow[],
+  storeName: string | undefined,
+  cogsForStoreMonth: (store: string, month: string) => number,
+): Record<string, number> {
+  const months = [...new Set(rows.map((r) => r.firstOrderMonth))];
+  const out: Record<string, number> = {};
+
+  // Single-store view: that store's own per-month rate (no blend).
+  if (storeName) {
+    for (const m of months) out[m] = cogsForStoreMonth(storeName, m);
+    return out;
+  }
+
+  // 'all' view: revenue-weight each store's rate per cohort month.
+  // Aggregate per (month → store) net revenue first.
+  const revByMonthStore = new Map<string, Map<string, number>>();
+  for (const r of rows) {
+    const net = Number.isFinite(r.netCad) ? r.netCad : 0;
+    let inner = revByMonthStore.get(r.firstOrderMonth);
+    if (!inner) {
+      inner = new Map<string, number>();
+      revByMonthStore.set(r.firstOrderMonth, inner);
+    }
+    inner.set(r.storeId, (inner.get(r.storeId) ?? 0) + net);
+  }
+
+  for (const m of months) {
+    const inner = revByMonthStore.get(m) ?? new Map<string, number>();
+    let weighted = 0;
+    let totalRev = 0;
+    let rateSum = 0;
+    let storeCount = 0;
+    for (const [store, rev] of inner) {
+      const rate = cogsForStoreMonth(store, m);
+      weighted += rev * rate;
+      totalRev += rev;
+      rateSum += rate;
+      storeCount += 1;
+    }
+    out[m] =
+      totalRev > 0
+        ? weighted / totalRev
+        : storeCount > 0
+          ? rateSum / storeCount // zero-revenue month → simple mean of present stores
+          : cogsForStoreMonth('', m);
+  }
+  return out;
+}
+
+/**
  * Pooled / M0-weighted cumulative-net curve (per customer) over a set of cells,
  * plus the per-month-since pooled retention. Returns 12-length arrays.
  */

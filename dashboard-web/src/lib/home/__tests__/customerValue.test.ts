@@ -16,7 +16,7 @@
  *    passed in (mapping-aware upstream).
  */
 import { describe, it, expect } from 'vitest';
-import { computeCustomerValue } from '@/lib/home/customerValue';
+import { computeCustomerValue, blendedCogsPctByMonth } from '@/lib/home/customerValue';
 import type { CohortMonthlyRow } from '@/lib/postgresReaders';
 
 function cell(over: Partial<CohortMonthlyRow>): CohortMonthlyRow {
@@ -477,5 +477,53 @@ describe('computeCustomerValue — store scope + empty', () => {
     expect(r.ltv12Net).toBeNull();
     expect(r.repeatRate).toBe(0);
     expect(r.paybackMonths).toBeNull();
+  });
+});
+
+// ── Fix #14: revenue-weighted blended COGS% for the 'all stores' view ─────────
+// In per-store COGS mode on the 'all stores' view the old component collapsed
+// the COGS lookup to stores[0], applying ONE store's rate to every store's
+// pooled cohort revenue. blendedCogsPctByMonth produces a revenue-weighted
+// blend per cohort first-order-month instead:
+//   Σ(store_revenue_m × cogsPct(store, m)) / Σ(store_revenue_m).
+describe('blendedCogsPctByMonth — revenue-weighted per-cohort-month COGS (fix #14)', () => {
+  // Two stores, divergent per-store COGS rates: uzoshop 18%, zolplus 30%.
+  const cogsForStoreMonth = (store: string, _month: string): number =>
+    store === 'uzoshop' ? 0.18 : store === 'zolplus' ? 0.30 : 0.25;
+
+  // Cohort month 2025-01: uzoshop contributes net 1000 (across all months-since),
+  // zolplus contributes net 3000. Revenue-weighted COGS:
+  //   (1000×0.18 + 3000×0.30) / (1000+3000) = (180 + 900)/4000 = 1080/4000 = 0.27
+  const rows: CohortMonthlyRow[] = [
+    cell({ storeId: 'uzoshop', firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, netCad: 600 }),
+    cell({ storeId: 'uzoshop', firstOrderMonth: '2025-01', monthSince: 1, activeCustomers: 4, netCad: 400 }),
+    cell({ storeId: 'zolplus', firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, netCad: 2000 }),
+    cell({ storeId: 'zolplus', firstOrderMonth: '2025-01', monthSince: 1, activeCustomers: 5, netCad: 1000 }),
+  ];
+
+  it("'all' view: blends per cohort month by store revenue, NOT stores[0]'s rate", () => {
+    const out = blendedCogsPctByMonth(rows, undefined, cogsForStoreMonth);
+    // Revenue-weighted blend = 0.27 — NOT stores[0] (uzoshop 0.18) nor zolplus 0.30.
+    expect(out['2025-01']).toBeCloseTo(0.27, 5);
+    expect(out['2025-01']).not.toBeCloseTo(0.18, 3); // not stores[0]'s rate
+    expect(out['2025-01']).not.toBeCloseTo(0.30, 3); // not zolplus's rate
+  });
+
+  it("single-store view: uses that store's own rate (unchanged behaviour)", () => {
+    const u = blendedCogsPctByMonth(rows, 'uzoshop', cogsForStoreMonth);
+    expect(u['2025-01']).toBeCloseTo(0.18, 5);
+    const z = blendedCogsPctByMonth(rows, 'zolplus', cogsForStoreMonth);
+    expect(z['2025-01']).toBeCloseTo(0.30, 5);
+  });
+
+  it("'all' view, zero revenue for a month → simple mean of present stores' rates", () => {
+    // Both stores present for 2025-02 but each contributes net 0 → no weight.
+    const zeroRev: CohortMonthlyRow[] = [
+      cell({ storeId: 'uzoshop', firstOrderMonth: '2025-02', monthSince: 0, activeCustomers: 5, netCad: 0 }),
+      cell({ storeId: 'zolplus', firstOrderMonth: '2025-02', monthSince: 0, activeCustomers: 5, netCad: 0 }),
+    ];
+    const out = blendedCogsPctByMonth(zeroRev, undefined, cogsForStoreMonth);
+    // Simple mean of 0.18 and 0.30 = 0.24 (revenue weights all zero).
+    expect(out['2025-02']).toBeCloseTo(0.24, 5);
   });
 });
