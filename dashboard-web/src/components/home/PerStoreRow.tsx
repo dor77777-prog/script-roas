@@ -263,7 +263,7 @@ export function PerStoreRow({
         {stores.map((store) => (
           <div
             key={store.storeId}
-            className="snap-center shrink-0 basis-[88%] sm:basis-[62%] md:basis-auto"
+            className="snap-center shrink-0 basis-[88%] sm:basis-[62%] md:basis-auto h-full"
           >
             <StoreCard store={store} onSelect={onStoreSelect} rangeLabel={rangeLabel} />
           </div>
@@ -381,6 +381,26 @@ function StoreCard({
         ? 'grid-cols-2'
         : 'grid-cols-1';
 
+  // Redesign 2026-06-20 — no-spend strip. The per-platform CPM section only has
+  // content when the store actually has ad spend (cpmEntries > 0). For a store
+  // with NO ad spend we render a subtle full-width strip in the CPM slot so the
+  // card height matches the spend cards and reads intentionally (instead of a
+  // ragged short card). spentNoSales / alarm cards DO have spend (they keep
+  // their CPM section if present), so they never hit the strip.
+  //   • off/organic (ads toggled off → no spend) → "אין הוצאת פרסום היום"
+  //   • genuine no-data (spend 0, never advertised) → "אין נתונים עדיין"
+  // Discriminator is the existing off-state: any explicit ads-off state
+  // ('organic' / 'off-empty' / 'off-negative') reads "no ad spend"; a 'normal'
+  // store that still has no CPM data is treated as "no data yet".
+  // Only when the store TRULY has no ad spend: `(spend ?? 0) === 0` excludes
+  // spentNoSales / alarm cards (spend > 0, 0 sales) — those are NOT a "no ad
+  // spend" state even if their perPlatformCpm map happens to be empty, so they
+  // never get the strip (they'd keep a CPM section when CPM data exists).
+  const hasNoAdSpend = (store.spend ?? 0) === 0;
+  const showNoSpendStrip = cpmEntries.length === 0 && hasNoAdSpend;
+  const noSpendText =
+    offState !== 'normal' ? 'אין הוצאת פרסום היום' : 'אין נתונים עדיין';
+
   const interactive = typeof onSelect === 'function';
 
   const handleClick = () => {
@@ -418,7 +438,11 @@ function StoreCard({
         // breathe — see 2.5.4 patch notes. The `!p-6 md:!p-7` overrides the
         // Card default `p-5` without churning every other consumer of the
         // primitive.
-        '!p-6 md:!p-7 per-store-card',
+        // Redesign 2026-06-20 — `h-full` makes the card fill its grid cell so
+        // all cards in a row are the SAME height (the Card primitive is already
+        // `flex flex-col`, so the metric row can be pushed to the bottom with
+        // `mt-auto`). The grid-cell wrapper also carries `h-full` to stretch.
+        '!p-6 md:!p-7 per-store-card h-full',
         interactive &&
           'cursor-pointer transition-colors hover:border-glass-edge/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
       )}
@@ -428,15 +452,20 @@ function StoreCard({
           ~35% of the card. Store name + band chip + ROAS hero sit ON this
           slab so the band colour is what the operator's eye lands on first
           ("the store IS this band" rather than "the store has a hint of"). */}
-      <header className="store-top flex items-center justify-between gap-3">
+      {/* Redesign 2026-06-20 — the full store name sits on its OWN line (never
+          truncated; long latin names like "360usmile" wrap to 2 lines instead
+          of clipping to "…0usmile"). The badges (LIVE/freshness + band-tag)
+          drop to a second row BELOW the name. The name stays a latin-isolated
+          <bdi dir="ltr"> right-aligned (RTL start) so it doesn't bidi-flip. */}
+      <header className="store-top">
         <Heading
           level="panel"
-          className="store-name truncate text-lg md:text-xl font-semibold"
+          className="store-name text-lg md:text-xl font-semibold whitespace-normal [overflow-wrap:anywhere] text-right"
           as="h3"
         >
           <bdi dir="ltr">{store.storeName}</bdi>
         </Heading>
-        <div className="flex items-center gap-2">
+        <div className="store-badges mt-2.5 flex items-center gap-2 flex-wrap">
           <FreshnessBadge updatedAt={store.updatedAt} />
           {/* Band-tag pill. On the vivid band card it reads as the mockup's
               white-on-white-alpha pill via the `.per-store-card .band-tag`
@@ -452,35 +481,39 @@ function StoreCard({
         </div>
       </header>
 
-      {/* ROAS hero — huge banded number with the band caption beneath it
-          (mockup `.roas-big` + `.roas-cap`). The number gets the full width
-          so the operator can read today's ROAS from across the room; the
-          uppercase "ROAS · היום" caption sits under it. */}
+      {/* ROAS hero — ONE horizontal line (redesign 2026-06-20): the uppercase
+          "ROAS · <range>" caption sits on the RIGHT (RTL start) and the huge
+          banded number on the LEFT (RTL end), aligned on the same baseline
+          (mockup `.roas` { display:flex; justify-content:space-between;
+          align-items:baseline }). The number keeps its existing 50/60px size,
+          banded class, tabular-nums and ALL off-state logic. */}
       <div className="mt-2 min-w-0">
-        <bdi
-          dir="ltr"
-          className="v banded block text-[50px] md:text-[60px] font-light tabular-nums tracking-tight leading-none whitespace-nowrap"
-        >
-          {/* Ads-off Phase 2 — off-display takes priority over numeric ROAS:
-              organic (off + rev>0) → Hebrew "אורגני" static label.
-              off-empty/off-negative (off + rev≤0) → plain "0".
-              ANY "spent money, zero sales" state (spentNoSales — covers both the
-              >$100 alarm and the smaller regular-red case) shows an explicit
-              "0.00x" — the ROAS literally IS zero (0 revenue / spend), so this is
-              the truthful value, NOT the "—" no-data placeholder. Kept STATIC
-              (nothing to climb to). Genuine ROAS values climb in via <CountUp>
-              ("numbers come alive"), reduced-motion-aware. */}
-          {offState === 'organic'
-            ? 'אורגני'
-            : offState !== 'normal'
-            ? '0'
-            : spentNoSales
-            ? '0.00x'
-            : <CountUp value={store.roas} format={(n) => `${n.toFixed(2)}x`} />}
-        </bdi>
-        <span className="roas-cap mt-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-ink-muted">
-          ROAS · {rangeLabel ?? 'היום'}
-        </span>
+        <div className="roas-hero flex items-baseline justify-between gap-3.5">
+          <span className="roas-cap font-mono text-[11px] uppercase tracking-[0.08em] text-ink-muted whitespace-nowrap">
+            ROAS · {rangeLabel ?? 'היום'}
+          </span>
+          <bdi
+            dir="ltr"
+            className="v banded text-[50px] md:text-[60px] font-light tabular-nums tracking-tight leading-none whitespace-nowrap"
+          >
+            {/* Ads-off Phase 2 — off-display takes priority over numeric ROAS:
+                organic (off + rev>0) → Hebrew "אורגני" static label.
+                off-empty/off-negative (off + rev≤0) → plain "0".
+                ANY "spent money, zero sales" state (spentNoSales — covers both the
+                >$100 alarm and the smaller regular-red case) shows an explicit
+                "0.00x" — the ROAS literally IS zero (0 revenue / spend), so this is
+                the truthful value, NOT the "—" no-data placeholder. Kept STATIC
+                (nothing to climb to). Genuine ROAS values climb in via <CountUp>
+                ("numbers come alive"), reduced-motion-aware. */}
+            {offState === 'organic'
+              ? 'אורגני'
+              : offState !== 'normal'
+              ? '0'
+              : spentNoSales
+              ? '0.00x'
+              : <CountUp value={store.roas} format={(n) => `${n.toFixed(2)}x`} />}
+          </bdi>
+        </div>
 
         {/* Alarm note — operator-locked factual line shown ONLY in the
             red-alarm state (spend > $100 CAD with ZERO sales). It sits on a
@@ -537,7 +570,10 @@ function StoreCard({
           is a COUNT (no `$`-prefix) → a plain `whitespace-nowrap` span, never
           <Money>. The `.sv` class hook is kept so the per-band on-color CSS
           (`.scard-main-grid .sv`) + the 20/22px size rule still apply. */}
-      <div className="scard-main-grid grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-4 border-t border-glass-edge">
+      {/* Redesign 2026-06-20 — `mt-auto` pushes the metric row to the BOTTOM of
+          the (now equal-height) card so the freed vertical space sits between
+          the ROAS hero and the metrics. */}
+      <div className="scard-main-grid grid grid-cols-2 sm:grid-cols-4 gap-4 mt-auto pt-4 border-t border-glass-edge">
         <div className="cell spend" data-cell="spend">
           <span className="sl">הוצאה</span>
           <Money value={store.spend} compactAbove={1_000} className="sv num" />
@@ -561,7 +597,7 @@ function StoreCard({
       {/* Zone 3 — per-platform CPM. CPM cells use ONLY `cell` (no emphasis).
           Bumped sizes per 2.5.4 patch: label 10→12, value 14→18. */}
       {cpmEntries.length > 0 && (
-        <div className="cpm-row mt-5 pt-4 border-t border-dashed border-glass-edge">
+        <div className="cpm-row mt-4 pt-4 border-t border-dashed border-glass-edge">
           <div className="cpm-row-label font-mono text-[11px] md:text-[12px] uppercase tracking-[0.08em] text-ink-subtle font-bold mb-3">
             CPM לפי פלטפורמה
           </div>
@@ -597,6 +633,20 @@ function StoreCard({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Zone 3 alt — no-spend strip (redesign 2026-06-20). Fills the CPM slot
+          when the store has NO ad spend so the card height matches the spend
+          cards and the empty state reads intentionally. Muted CENTERED text on
+          a faint surface with a dashed top border (mockup `.nospend`). The text
+          uses the muted on-band token (`.roas-cap` recipe → `--on-band-*-muted`,
+          guaranteed-legible on EVERY band in both themes) via the
+          `.per-store-card .nospend-strip` rule in globals.css — never a
+          text-color-from-band. */}
+      {showNoSpendStrip && (
+        <div className="nospend-strip mt-4 pt-4 border-t border-dashed border-glass-edge text-center text-[12.5px]">
+          {noSpendText}
         </div>
       )}
     </Card>

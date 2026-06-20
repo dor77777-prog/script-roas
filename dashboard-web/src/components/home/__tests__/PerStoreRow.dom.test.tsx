@@ -68,6 +68,88 @@ describe('PerStoreRow', () => {
     expect(cards).toHaveLength(3);
   });
 
+  // ── Redesign 2026-06-20 — per-store card layout contracts ──────────────────
+
+  // (1) Full store name, never truncated. The name sits on its OWN line and is
+  // NOT `truncate`d (long latin brand names like "360usmile" / "Zol Plus" used
+  // to clip to "…0usmile"). The full text must be present and the name element
+  // must not carry the `truncate` class.
+  it('renders the full store name (no truncate class) on its own line', () => {
+    const longName: PerStoreData = {
+      ...STORES[0],
+      storeId: 'long-store',
+      storeName: '360usmile',
+    };
+    const { container } = render(<PerStoreRow stores={[longName]} />);
+    const name = container.querySelector('[data-testid="per-store-card"] .store-name');
+    expect(name).not.toBeNull();
+    expect(name?.textContent).toBe('360usmile');
+    expect(name?.classList.contains('truncate')).toBe(false);
+  });
+
+  // (2) ROAS hero on ONE horizontal line — the "ROAS · <range>" caption and the
+  // big number share a single row container (`.roas-hero`). Both the `.roas-cap`
+  // caption and the `.v.banded` number are descendants of that one row.
+  it('renders the ROAS label and number in the SAME row container', () => {
+    const { container } = render(<PerStoreRow stores={[STORES[0]]} />);
+    const heroRow = container.querySelector('[data-testid="per-store-card"] .roas-hero');
+    expect(heroRow).not.toBeNull();
+    expect(heroRow?.querySelector('.roas-cap')).not.toBeNull();
+    expect(heroRow?.querySelector('.v.banded')).not.toBeNull();
+  });
+
+  // (5a) A no-ad-spend store renders the no-spend strip in place of the CPM
+  // section, and does NOT render a CPM section. An ads-off store reads
+  // "אין הוצאת פרסום היום".
+  it('no ad spend (ads off) → renders no-spend strip "אין הוצאת פרסום", no CPM section', () => {
+    const offStore: PerStoreData = {
+      storeId: 'off-store',
+      storeName: 'off-store',
+      spend: 0,
+      revenue: 0,
+      orders: 0,
+      aov: null,
+      roas: null,
+      updatedAt: null,
+      perPlatformCpm: {},
+      adOff: true,
+    };
+    const { container } = render(<PerStoreRow stores={[offStore]} />);
+    const card = container.querySelector('[data-testid="per-store-card"]');
+    expect(card?.querySelector('.cpm-row')).toBeNull();
+    const strip = card?.querySelector('.nospend-strip');
+    expect(strip).not.toBeNull();
+    expect(strip?.textContent).toContain('אין הוצאת פרסום');
+  });
+
+  // (5b) A genuine no-data store (spend=0, not ads-off) reads "אין נתונים עדיין".
+  it('no data (spend=0, not off) → no-spend strip reads "אין נתונים עדיין"', () => {
+    const noData: PerStoreData = {
+      storeId: 'nodata-store',
+      storeName: 'nodata-store',
+      spend: 0,
+      revenue: 0,
+      orders: 0,
+      aov: null,
+      roas: null,
+      updatedAt: null,
+      perPlatformCpm: {},
+    };
+    const { container } = render(<PerStoreRow stores={[noData]} />);
+    const card = container.querySelector('[data-testid="per-store-card"]');
+    expect(card?.querySelector('.cpm-row')).toBeNull();
+    const strip = card?.querySelector('.nospend-strip');
+    expect(strip?.textContent).toContain('אין נתונים עדיין');
+  });
+
+  // (5c) A spend store still renders its CPM section and NOT the no-spend strip.
+  it('spend store → renders CPM section, NOT the no-spend strip', () => {
+    const { container } = render(<PerStoreRow stores={[STORES[0]]} />);
+    const card = container.querySelector('[data-testid="per-store-card"]');
+    expect(card?.querySelector('.cpm-row')).not.toBeNull();
+    expect(card?.querySelector('.nospend-strip')).toBeNull();
+  });
+
   // Regression (2026-06-01): the per-store "ROAS · <range>" caption was
   // hardcoded to "היום", so the ROAS NUMBER tracked the selected range but the
   // caption text never changed. It must reflect the passed rangeLabel.

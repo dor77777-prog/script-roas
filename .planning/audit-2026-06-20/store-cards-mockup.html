@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Insight Owl — per-store cards (גרסה ב', שמות מלאים)</title>
+<style>
+  :root{
+    --bg:#0b1330;
+    --neutral-top:#41507a; --neutral-bot:#2e3a59;
+    --red-top:#cf4d61; --red-bot:#a5374d;
+    --edge:rgba(255,255,255,.14);
+    --ink:#eef1fb; --ink-muted:rgba(255,255,255,.62); --ink-sub:rgba(255,255,255,.46);
+    --scrim:rgba(13,18,40,.40);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,#1a2552,transparent),var(--bg);
+       color:var(--ink);font-family:-apple-system,"Segoe UI",Heebo,Arial,sans-serif;padding:28px 32px 60px}
+  h1{font-size:18px;font-weight:700;margin:0 0 4px}
+  .sub{color:var(--ink-muted);font-size:13px;margin:0 0 8px}
+  .tag{display:inline-block;font-size:11px;color:#cdd6ff;background:rgba(120,140,240,.16);
+       border:1px solid rgba(120,140,240,.3);border-radius:999px;padding:2px 9px;margin-inline-start:8px}
+  .note{color:var(--ink-sub);font-size:12.5px;margin:0 0 18px;max-width:1000px;line-height:1.55}
+  .note b{color:#bcd0ff}
+
+  .deck{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));
+        align-items:stretch;max-width:1500px}
+
+  .card{position:relative;border-radius:22px;border:1px solid var(--edge);
+        padding:24px 26px 22px;min-height:340px;
+        display:flex;flex-direction:column;overflow:hidden;
+        box-shadow:0 18px 40px -24px rgba(0,0,0,.7)}
+  .card.neutral{background:linear-gradient(165deg,var(--neutral-top),var(--neutral-bot))}
+  .card.red{background:linear-gradient(165deg,var(--red-top),var(--red-bot));
+            box-shadow:0 24px 60px -26px rgba(190,60,80,.6),0 18px 40px -24px rgba(0,0,0,.7)}
+
+  /* header: full store name on its OWN line (never truncated) + badges below */
+  .name{font-size:20px;font-weight:600;line-height:1.2;direction:ltr;unicode-bidi:isolate;
+        text-align:right;white-space:normal;overflow-wrap:anywhere}
+  .badges{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .pill{font-size:11px;font-weight:600;border-radius:999px;padding:4px 9px;
+        background:var(--scrim);color:#fff;border:1px solid rgba(255,255,255,.14);white-space:nowrap}
+  .pill.live{display:flex;align-items:center;gap:6px}
+  .pill.live i{width:6px;height:6px;border-radius:50%;background:#4ade80;display:inline-block}
+
+  /* ROAS hero as ONE horizontal line: label+range on the RIGHT (RTL start),
+     big number on the LEFT (RTL end), same baseline. */
+  .roas{margin-top:16px;display:flex;align-items:baseline;justify-content:space-between;gap:14px}
+  .roas .v{font-size:56px;font-weight:300;letter-spacing:-.02em;line-height:1;
+           font-variant-numeric:tabular-nums;white-space:nowrap;order:2}
+  .roas .cap{font:600 12px/1 ui-monospace,monospace;letter-spacing:.09em;
+             text-transform:uppercase;color:var(--ink-muted);order:1;white-space:nowrap}
+
+  .metrics{margin-top:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;
+           padding-top:18px;border-top:1px solid var(--edge)}
+  /* RTL: flex-start on the cross axis = the INLINE-START = right edge, so each
+     metric hugs the card's natural right reading edge (no left indent). */
+  .m{display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:right}
+  .m .lab{font:600 10.5px/1 ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-sub)}
+  .m .val{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+  .cpm{margin-top:18px;padding-top:16px;border-top:1px solid var(--edge)}
+  .cpm .hd{font:700 11px/1 ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-sub);margin-bottom:12px;text-align:right}
+  .cpm .cells{display:grid;gap:12px}
+  .cpm .cells.c1{grid-template-columns:1fr}
+  .cpm .cells.c3{grid-template-columns:repeat(3,1fr)}
+  .chip{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px}
+  .chip .plat{display:flex;align-items:center;justify-content:flex-end;gap:6px;font-size:12.5px;font-weight:600}
+  .chip .plat b{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .chip .spend{font-size:11px;color:var(--ink-muted);text-align:right;margin-top:4px}
+  .chip .big{font-size:21px;font-weight:700;margin-top:6px}
+
+  /* Option B — no-spend strip fills the CPM slot so heights match exactly */
+  .nospend{margin-top:18px;padding:18px;border-top:1px dashed var(--edge);border-radius:0;
+           color:var(--ink-sub);font-size:12.5px;text-align:center}
+  .dot.meta{background:#2f6bff}.dot.tiktok{background:#fff}.dot.google{background:#f7b500}
+</style>
+</head>
+<body>
+  <h1>Insight Owl — כרטיסי "לפי חנות", 4 חנויות <span class="tag">mockup · גרסה ב'</span></h1>
+  <p class="sub">auto-fit (≥360px לכרטיס, גולש לשורה) · גבהים שווים · מטריקות בתחתית · כרטיס-אפס עם רצועת "אין הוצאת פרסום".</p>
+  <p class="note"><b>שמות מלאים:</b> שם החנות מוצג <b>במלואו</b> בשורה משלו (ללא חיתוך/נקודות), והתגיות (LIVE · מצב) יורדות לשורה שמתחתיו. שם ארוך במיוחד יישבר לשתי שורות במקום להיחתך.</p>
+  <div class="deck" id="deck"></div>
+
+<script>
+const stores = [
+  {cls:'neutral', name:'360usmile', status:'כבוי',       roas:'0',     aov:'—',  orders:'0',  rev:'$0',    spend:'$0',   cpm:null, off:'off'},
+  {cls:'neutral', name:'pdrn skin', status:'אין נתונים', roas:'—',     aov:'—',  orders:'0',  rev:'$0',    spend:'$0',   cpm:null, off:'nodata'},
+  {cls:'red',     name:'Zol Plus',  status:'דורש בחינה', roas:'1.53x', aov:'$71',orders:'1',  rev:'$71',   spend:'$47',  cpm:[{p:'Meta',d:'meta',s:'$47',v:'$37'}]},
+  {cls:'red',     name:'uzoshop',   status:'דורש בחינה', roas:'1.75x', aov:'$98',orders:'11', rev:'$1.1K', spend:'$619', cpm:[{p:'TikTok',d:'tiktok',s:'$22',v:'$7'},{p:'Google',d:'google',s:'$71',v:'$12'},{p:'Meta',d:'meta',s:'$525',v:'$37'}]},
+];
+const metrics = s => `<div class="metrics">
+    <div class="m"><span class="lab">↓ הוצאה</span><span class="val">${s.spend}</span></div>
+    <div class="m"><span class="lab">↑ הכנסה</span><span class="val">${s.rev}</span></div>
+    <div class="m"><span class="lab">הזמנות</span><span class="val">${s.orders}</span></div>
+    <div class="m"><span class="lab">AOV</span><span class="val">${s.aov}</span></div>
+  </div>`;
+const cpm = s => !s.cpm ? '' :
+  `<div class="cpm"><div class="hd">CPM לפי פלטפורמה</div><div class="cells ${s.cpm.length===1?'c1':'c3'}">`+
+  s.cpm.map(c=>`<div class="chip"><div class="plat">${c.p} <b class="dot ${c.d}"></b></div><div class="spend">spend · ${c.s}</div><div class="big">${c.v}</div></div>`).join('')+
+  `</div></div>`;
+const nospend = s => `<div class="nospend">${s.off==='nodata'?'אין נתונים עדיין':'אין הוצאת פרסום היום'}</div>`;
+const card = s => `<div class="card ${s.cls}">
+    <div class="name">${s.name}</div>
+    <div class="badges"><span class="pill live"><i></i>LIVE · 5M</span><span class="pill">${s.status}</span></div>
+    <div class="roas"><span class="v">${s.roas}</span><span class="cap">ROAS · היום</span></div>
+    ${metrics(s)}
+    ${s.cpm ? cpm(s) : nospend(s)}
+  </div>`;
+document.getElementById('deck').innerHTML = stores.map(card).join('');
+</script>
+</body>
+</html>

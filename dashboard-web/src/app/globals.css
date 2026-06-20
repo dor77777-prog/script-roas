@@ -1908,6 +1908,16 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    The card is always Hebrew/RTL, so `right` is the correct physical edge. */
 .per-store-card .scard-main-grid .sv { text-align: right; }
 
+/* Redesign 2026-06-20 — metrics hug the inline-START (RIGHT in this RTL card)
+   so the 4-up row reads naturally right-to-left with no left indent. The cell
+   is a column flexbox; `align-items: flex-start` on the cross axis = the
+   INLINE-START = the card's natural right reading edge in RTL (mockup `.m`
+   { align-items: flex-start; text-align: right }). The label keeps its physical
+   right text-align so a wrapped label stays right-anchored too. Scoped to
+   `.per-store-card` so other `.scard-main-grid` consumers are untouched. */
+.per-store-card .scard-main-grid .cell { align-items: flex-start; text-align: right; }
+.per-store-card .scard-main-grid .sl   { text-align: right; }
+
 /* Wave 3.0 (2026-05-31) — mockup `.store` header parity.
    The band-tag pill + the "ROAS · היום" caption sit ON the vivid band
    gradient, so they read as WHITE-on-white-alpha (verbatim from the mockup
@@ -2192,4 +2202,26 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    band-agnostically below so EVERY deep per-store card (incl. gray) reads it. */
 .per-store-card.glass[data-band] .cpm-row-label {
   color: var(--on-band-gray-muted);
+}
+
+/* ===========================================================================
+   NO-SPEND STRIP — redesign 2026-06-20.
+   Fills the per-platform CPM slot when a store has NO ad spend so its card is
+   the SAME height as the spend cards (a no-spend card must not be shorter than
+   a CPM card). Mockup `.nospend`: a dashed top border, muted CENTERED text on
+   a faint surface.
+
+   The dashed top border + the dark-scrim faint surface come from the .tsx
+   (`border-t border-dashed border-glass-edge`) + this rule. The TEXT colour
+   must stay legible on EVERY band in BOTH themes, so it reuses the same muted
+   on-band token the `.roas-cap` caption uses (`--on-band-red-muted`, the
+   near-white ≥3:1-on-deep-surface secondary tone — band-agnostic, NEVER a
+   text-color-from-band). A faint white-alpha sub-surface lifts the strip off
+   the band tint so the muted text reads cleanly. */
+.per-store-card .nospend-strip {
+  border-radius: 8px;
+}
+.per-store-card.glass[data-band] .nospend-strip {
+  color: var(--on-band-red-muted);
+  background: rgba(255, 255, 255, 0.06);
 }
