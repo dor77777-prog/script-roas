@@ -218,24 +218,29 @@ export function PerStoreRow({
   if (!stores.length) return null;
 
   // Self-serve stores Phase 2 — the desktop grid column count tracks the
-  // number of stores instead of being hardcoded to 3. For 1-4 stores we emit a
+  // number of stores instead of being hardcoded to 3. For 1-3 stores we emit a
   // FULL Tailwind literal `md:grid-cols-N` so the JIT compiler can statically
   // extract the class (never build it dynamically as `md:grid-cols-${n}` — that
-  // string is invisible to the scanner and would be purged). For 5+ stores
-  // Tailwind can't express an arbitrary `repeat(auto-fit, …)`, so we fall back
-  // to an inline `gridTemplateColumns` style and drop the literal class. The
-  // 3-store case stays byte-identical to today (`md:grid-cols-3`, no inline
-  // style) — the zero-regression anchor.
+  // string is invisible to the scanner and would be purged). The 3-store case
+  // stays byte-identical to today (`md:grid-cols-3`, no inline style) — the
+  // zero-regression anchor.
+  //
+  // For 4+ stores a fixed `md:grid-cols-4` forced four equal columns into ONE
+  // row, so on a typical laptop each card collapsed to ~350px and the rich
+  // internals (the 50-60px ROAS figure, the 4-up metric row, the per-platform
+  // CPM chips) crammed and jumbled. Instead we use an inline auto-fit grid with
+  // a COMFORTABLE minimum card width (~360px): the row keeps as many cards as
+  // fit at a legible width and WRAPS the rest to a second row, so the layout
+  // adapts to any store count and never breaks the card content.
   const fixedDesktopColsClass: Record<number, string> = {
     1: 'md:grid-cols-1',
     2: 'md:grid-cols-2',
     3: 'md:grid-cols-3',
-    4: 'md:grid-cols-4',
   };
-  const desktopColsClass = fixedDesktopColsClass[stores.length]; // undefined for 5+
+  const desktopColsClass = fixedDesktopColsClass[stores.length]; // undefined for 4+
   const autoFitStyle =
     desktopColsClass === undefined
-      ? { gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))' }
+      ? { gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))' }
       : undefined;
 
   return (

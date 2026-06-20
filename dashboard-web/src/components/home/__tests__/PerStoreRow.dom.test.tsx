@@ -431,12 +431,16 @@ describe('PerStoreRow', () => {
     expect(grid.style.gridTemplateColumns).toBe('');
   });
 
-  it('4 stores → desktop wrapper uses md:grid-cols-4 (no inline grid-template)', () => {
+  it('4 stores → NO fixed md:grid-cols-N literal; inline auto-fit so cards keep a legible width and wrap (not 4 crammed columns)', () => {
     const { container } = render(<PerStoreRow stores={makeStores(4)} />);
     const grid = getGridWrapper(container);
-    expect(grid.classList.contains('md:grid-cols-4')).toBe(true);
+    // A fixed md:grid-cols-4 forced four equal columns into one row → on a
+    // laptop each card collapsed to ~350px and the internals jumbled. 4+ stores
+    // now use the same auto-fit fallback as 5+ (comfortable min card width).
+    expect(grid.classList.contains('md:grid-cols-4')).toBe(false);
     expect(grid.classList.contains('md:grid-cols-3')).toBe(false);
-    expect(grid.style.gridTemplateColumns).toBe('');
+    expect(grid.style.gridTemplateColumns).toContain('auto-fit');
+    expect(grid.classList.contains('md:grid')).toBe(true);
   });
 
   it('5+ stores → NO md:grid-cols-N literal; inline auto-fit gridTemplateColumns', () => {
