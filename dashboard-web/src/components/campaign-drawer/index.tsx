@@ -56,6 +56,7 @@ import {
   analyzeAttribution,
   analyzeProductChannel,
 } from '@/lib/attributionAnalysis';
+import { netAdjustFactor } from '@/lib/home/revenueBasis';
 import { useCampaignAttribution } from '@/lib/hooks/useCampaignAttribution';
 import { cn } from '@/lib/utils';
 import type { CampaignRow } from '@/lib/campaigns';
@@ -684,6 +685,23 @@ export function CampaignDrawer({
     rangeFrom,
     rangeTo,
   });
+  // Fix #13: blended NET/GROSS factor for the effective store over the range,
+  // from products_daily (gross `revenue` vs `netRevenue`). Threaded into
+  // analyzeAttribution so the drawer's "ROAS אמיתי לפי click-id" sits on the
+  // SAME net basis as the headline MER (the matched-orders sum is gross-of-
+  // refunds — no refund rows are recorded on the attribution path). Uniform per
+  // store/period; degrades to factor 1 when there's no gross in the range.
+  const effectiveNetAdjust = (() => {
+    let net = 0;
+    let gross = 0;
+    for (const p of productsData?.rows ?? []) {
+      if (p.storeId !== effectiveStoreId) continue;
+      if (p.date < rangeFrom || p.date > rangeTo) continue;
+      gross += p.revenue;
+      net += p.netRevenue ?? p.revenue;
+    }
+    return netAdjustFactor(net, gross).factor;
+  })();
   const analysis = analyzeAttribution(
     {
       campaignName: summary.campaignName,
@@ -703,6 +721,7 @@ export function CampaignDrawer({
     rangeFrom,
     rangeTo,
     effectiveClaim.dailyArr,
+    effectiveNetAdjust,
   );
   const link = buildAdsManagerLink({
     platform: summary.platform,

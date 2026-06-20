@@ -455,6 +455,17 @@ export function analyzeAttribution(
    *  by median + MAD — usually modeled / view-through bursts that
    *  artificially inflate the period total. */
   dailyMetaSeries?: Array<{ date: string; value: number }>,
+  /**
+   * Fix #13 — blended store/period net/gross factor (the SAME factor NC-ROAS
+   * uses, via `netAdjustFactor(net, gross)`). Default 1 = no adjustment
+   * (gross basis). The matched-orders revenue here is GROSS total_price (no
+   * refund rows are recorded on this path), while the headline MER is NET, so
+   * the unadjusted deterministicRevenue/ROAS reads HIGH vs the net headline and
+   * a refunded campaign can wrongly hit the high-trust grow-budget branch.
+   * Applying this factor re-bases deterministicRevenue → coverage → ROAS onto
+   * the net basis so per-campaign numbers reconcile with the headline.
+   */
+  netAdjust: number = 1,
 ): AttributionAnalysis | null {
   // Phase 05.7.9c — extended to TikTok. T0 (2026-06-02) — extended to
   // Google at CAMPAIGN GRAIN ONLY (ads_daily has no Google rows, so the
@@ -488,7 +499,16 @@ export function analyzeAttribution(
   // signed-row contract) subtract from deterministicRevenue. This is the
   // intended behavior so a refund of an attributed order doesn't leave
   // the deterministic side artificially high. (TEST-03)
-  const deterministicRevenue = matchedOrders.reduce((s, o) => s + o.totalCad, 0);
+  //
+  // Fix #13: re-base the GROSS matched-orders revenue onto the headline NET
+  // basis via the blended store/period netAdjust factor (default 1 = no-op).
+  // Refund rows are NOT recorded on this attribution path, so without this the
+  // deterministic side is gross-of-refunds and reads HIGH vs the net MER. The
+  // factor is uniform per store/period, so it scales revenue uniformly; AOV
+  // dispersion (roasInterval) is computed on the same re-based AOVs.
+  const adjFactor = Number.isFinite(netAdjust) && netAdjust > 0 ? netAdjust : 1;
+  const grossDeterministicRevenue = matchedOrders.reduce((s, o) => s + o.totalCad, 0);
+  const deterministicRevenue = grossDeterministicRevenue * adjFactor;
   const deterministicOrders = matchedOrders.length;
   const modeledRevenue = Math.max(0, campaign.metaClaim - deterministicRevenue);
 
@@ -505,7 +525,9 @@ export function analyzeAttribution(
   // -----------------------------------------------------------------------
   let roasInterval: AttributionAnalysis['roasInterval'] = null;
   if (campaign.spend > 0 && deterministicOrders > 0) {
-    const aovs = matchedOrders.map(o => o.totalCad);
+    // Fix #13: AOVs re-based by the same netAdjust factor so the CI (low/high)
+    // and mid (= deterministicRevenue/spend) share the NET basis.
+    const aovs = matchedOrders.map(o => o.totalCad * adjFactor);
     const n = aovs.length;
     if (n < 2) {
       roasInterval = null;

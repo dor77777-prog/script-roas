@@ -301,6 +301,65 @@ describe('analyzeAttribution', () => {
   });
 
   // ----------------------------------------------------------------
+  // Fix #13 — net-adjust deterministicRevenue to the headline NET basis
+  // ----------------------------------------------------------------
+  //
+  // The matched-orders revenue is GROSS total_price (no refund rows are
+  // recorded on this attribution path), while the headline store/business MER
+  // is NET (refund-adjusted via netAdjustFactor). Threading the same blended
+  // net/gross factor in re-bases deterministicRevenue (and thus ROAS +
+  // coverage) so a refunded campaign no longer reads HIGH vs the net headline.
+
+  describe('net-adjust factor (fix #13)', () => {
+    it('applies netAdjust < 1 to matched-orders revenue → deterministicRevenue == gross × factor', () => {
+      const campaign = makeCampaign({ metaClaim: 500, spend: 200, campaignId: 'camp-1' });
+      // 5 orders × 100 = 500 GROSS.
+      const orders = Array.from({ length: 5 }, (_, i) =>
+        makeOrder({ orderId: `o-${i}`, totalCad: 100, utmId: 'camp-1', date: '2026-05-10' }),
+      );
+      const grossDet = 500;
+      const factor = 0.8; // store/period net/gross blend (20% refunded)
+
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO, undefined, factor);
+      expect(result).not.toBeNull();
+      // deterministicRevenue is NET-adjusted: 500 × 0.8 = 400, NOT the gross 500.
+      expect(result!.deterministicRevenue).toBeCloseTo(grossDet * factor, 4);
+      expect(result!.deterministicRevenue).not.toBeCloseTo(grossDet, 1);
+      // coverage re-bases too: 400 / 500 = 0.8 (was 1.0 gross-of-refunds).
+      expect(result!.coverage).toBeCloseTo(0.8, 4);
+      // roasInterval.mid re-bases: 400 / 200 = 2.0 (was 2.5 gross).
+      // (variance=0 here → roasInterval null, so assert via coverage/det only.)
+    });
+
+    it('default netAdjust (omitted) = 1 → deterministicRevenue stays gross (unchanged behaviour)', () => {
+      const campaign = makeCampaign({ metaClaim: 500, spend: 200, campaignId: 'camp-1' });
+      const orders = Array.from({ length: 5 }, (_, i) =>
+        makeOrder({ orderId: `o-${i}`, totalCad: 100, utmId: 'camp-1', date: '2026-05-10' }),
+      );
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.deterministicRevenue).toBeCloseTo(500, 4);
+      expect(result!.coverage).toBeCloseTo(1.0, 4);
+    });
+
+    it('a refunded campaign is demoted out of the high-trust grow-budget branch under net-adjust', () => {
+      // Gross-of-refunds this reads coverage 1.0 → high trust + "grow budget".
+      // With a 0.5 net/gross factor (half refunded) coverage drops to 0.5 →
+      // medium trust, no aggressive scale advice.
+      const campaign = makeCampaign({ metaClaim: 500, spend: 200, campaignId: 'camp-1' });
+      const orders = Array.from({ length: 5 }, (_, i) =>
+        makeOrder({ orderId: `o-${i}`, totalCad: 100, utmId: 'camp-1', date: '2026-05-10' }),
+      );
+      const gross = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(gross!.trust.level).toBe('high');
+
+      const netAdj = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO, undefined, 0.5);
+      expect(netAdj!.trust.level).toBe('medium');
+      expect(netAdj!.recommendation.toLowerCase()).not.toMatch(/גידול תקציב/);
+    });
+  });
+
+  // ----------------------------------------------------------------
   // computeCoverage shared helper (IN-04 — single source of truth)
   // ----------------------------------------------------------------
 

@@ -8,6 +8,7 @@ import {
   analyzeAttribution,
   type AttributionAnalysis,
 } from '@/lib/attributionAnalysis';
+import { netAdjustFactor } from '@/lib/home/revenueBasis';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
@@ -442,6 +443,26 @@ export function useCampaignTrueRevenue(opts: {
       }
     }
 
+    // Fix #13: blended NET/GROSS factor per store over the period, from
+    // products_daily (gross `revenue` vs `netRevenue`). Threaded into
+    // analyzeAttribution so the per-campaign deterministic ROAS sits on the
+    // SAME net basis as the headline MER (refund rows are never recorded on the
+    // attribution path, so the matched-orders sum is gross-of-refunds). The
+    // factor is uniform per store/period — the exact contract netAdjustFactor
+    // documents. Stores with no/zero gross degrade to factor 1 (no adjustment).
+    const storeNetGross = new Map<string, { net: number; gross: number }>();
+    for (const p of productsResp.rows) {
+      if (p.date < localRange.from || p.date > localRange.to) continue;
+      const acc = storeNetGross.get(p.storeId) ?? { net: 0, gross: 0 };
+      acc.gross += p.revenue;
+      acc.net += p.netRevenue ?? p.revenue;
+      storeNetGross.set(p.storeId, acc);
+    }
+    const storeNetAdjust = new Map<string, number>();
+    for (const [storeId, { net, gross }] of storeNetGross) {
+      storeNetAdjust.set(storeId, netAdjustFactor(net, gross).factor);
+    }
+
     // Step 3: run the allocator per store (keeps the storeId scoping that
     // campaignsForProduct enforces). The allocator now returns both
     // revenue and units per campaign, sharing the same spend-proportional
@@ -557,6 +578,10 @@ export function useCampaignTrueRevenue(opts: {
               localRange.from,
               localRange.to,
               dailyMeta,
+              // Fix #13: re-base deterministic revenue onto the NET headline
+              // basis using this store's blended net/gross factor (default 1
+              // when the store has no gross in the period).
+              storeNetAdjust.get(a.storeId) ?? 1,
             )
           : null;
 
