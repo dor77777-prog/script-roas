@@ -5,11 +5,32 @@ import {
   computeNewCustomerMetrics,
   type FirstOrderInput,
 } from '@/lib/home/newCustomerMetrics';
+import { getTodayInIsraelTz } from '@/lib/dateRange';
 
 const BASE = process.env.AUDIT_BASE_URL ?? 'https://roas-dashboard-smoky.vercel.app';
+
+// Recent rolling window — yesterday + the day before, in the dashboard's own
+// Israel-timezone notion of "today" (getTodayInIsraelTz, the canonical helper).
+// This is the HOT today/yesterday path that the static May windows never
+// exercised — the live cron refreshes campaigns_daily for today/yesterday every
+// few minutes, so the agg double-count latent bug (the class INV-7 guards: the
+// strict-single-dim-per-data_level + Pass-1a-zero contract that keeps
+// data_daily.{fb,ga,tt}Spend == SUM(campaigns_daily per-platform spend)) can
+// ONLY fire here, not on a frozen historical range. We derive it relative to
+// the run date so the harness always covers the live edge, never a stale date.
+function recentWindow(): { from: string; to: string } {
+  const today = getTodayInIsraelTz(); // 'YYYY-MM-DD' in Asia/Jerusalem
+  const t = new Date(`${today}T00:00:00Z`).getTime();
+  const day = 86_400_000;
+  const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  // [day-before-yesterday .. yesterday] — the two most-recently-refreshed dates.
+  return { from: iso(t - 2 * day), to: iso(t - day) };
+}
+
 const WINDOWS = [
   { from: '2026-05-01', to: '2026-05-26' },
   { from: '2026-05-20', to: '2026-05-26' },
+  recentWindow(),
 ];
 // Real storeName values as returned by the API (confirmed via Step 0 curl):
 //   '360usmile', 'Zol Plus', 'uzoshop'
