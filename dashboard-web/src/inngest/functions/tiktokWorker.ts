@@ -733,14 +733,18 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
 
     // 5. Re-aggregate AFTER fresh writes so data_daily.tt_spend_cad
     //    reflects the new campaigns_daily values (otherwise the RPC
-    //    call at step 1 saw pre-write state). Soft-fail same as step 1.
+    //    call at step 1 saw pre-write state).
+    //
+    // #8 (2026-06-20): this is NOT soft-failed (unlike the step-1 pre-fetch
+    // agg). Fresh adset/ad spend was just written to campaigns_daily; if this
+    // re-aggregate fails persistently, campaigns_daily holds fresh spend while
+    // data_daily.tt_spend_cad stays stale — the freshness invariant is broken.
+    // A bare await re-throws into the outer catch → transient_error → Inngest
+    // retry, matching metaWorker + googleWorker (whose post-upsert agg is also
+    // a bare await). The step-1 pre-fetch agg may still soft-fail because it
+    // runs before any write.
     if (input.aggregateDataDaily) {
-      try {
-        await input.aggregateDataDaily(today);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`tiktokWorker aggregateDataDaily (post-upsert) ${today}: ${message}`);
-      }
+      await input.aggregateDataDaily(today);
     }
 
     // 6. Mark freshness success for both campaign_metrics + ad_metrics.

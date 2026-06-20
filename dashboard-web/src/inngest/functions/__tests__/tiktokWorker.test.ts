@@ -236,16 +236,25 @@ describe('runTikTokWorkerJob() — hot_metrics Phase E1.6.1 per-store agg RPC', 
     expect(aggregateDataDaily).toHaveBeenNthCalledWith(2, '2026-05-29');
   });
 
-  it('soft-fails on agg RPC rejection — hot_metrics success still recorded', async () => {
-    const aggregateDataDaily = vi.fn().mockRejectedValue(
-      new Error('agg_tiktok_spend_per_store_for_date(2026-05-29): function not found'),
-    );
+  // #8 (2026-06-20): only the STEP-1 PRE-fetch agg is soft-failed (it runs
+  // before any write, so a failure there leaves no fresh-without-derived
+  // inconsistency). Here the first agg call (pre-fetch) rejects but the
+  // second (post-upsert) succeeds → the worker still records success.
+  it('soft-fails on the PRE-fetch agg RPC rejection — hot_metrics success still recorded', async () => {
+    const aggregateDataDaily = vi.fn()
+      .mockRejectedValueOnce( // step-1 pre-fetch agg: soft-fail
+        new Error('agg_tiktok_spend_per_store_for_date(2026-05-29): function not found'),
+      )
+      .mockResolvedValueOnce(undefined); // step-5 post-upsert agg: OK
     const recordFreshness = vi.fn();
     await runTikTokWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
       loadStoreMap: async () => ({}),
       fetchStatus: vi.fn(),
-      fetchHotMetrics: vi.fn().mockResolvedValue({ adsets: [], ads: [] }),
+      fetchHotMetrics: vi.fn().mockResolvedValue({
+        adsets: [{ store_id: 'uzoshop', campaign_id: 'TC1', ad_set_id: 'TG1', spend_cad: 12 }],
+        ads: [],
+      }),
       getHotCampaignIds: async () => ['TC1'], getHotAdgroupIds: async () => ['TG1'], getHotAdIds: async () => [],
       loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
       upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
@@ -257,10 +266,57 @@ describe('runTikTokWorkerJob() — hot_metrics Phase E1.6.1 per-store agg RPC', 
       nowIso: '2026-05-29T16:00:00.000Z',
       isTikTokConfigured: () => true,
     });
-    expect(aggregateDataDaily).toHaveBeenCalled();
+    expect(aggregateDataDaily).toHaveBeenCalledTimes(2);
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({
       scope: 'campaign_metrics', status: 'success',
     }));
+  });
+
+  // #8 (2026-06-20): the POST-upsert agg (step 5) must NOT be soft-failed.
+  // When fresh adset/ad spend is written to campaigns_daily but the
+  // re-aggregate RPC fails persistently, campaigns_daily holds fresh spend
+  // while data_daily.tt_spend_cad stays stale (invariant broken) — yet the
+  // old code console.warn'd and recorded success (false-green). The step-1
+  // PRE-fetch agg may still soft-fail (it runs before any write). Here the
+  // first agg call (pre-fetch) succeeds and the second (post-upsert) throws.
+  it('#8: re-throws when the POST-upsert agg fails after fresh rows are written — records transient_error, NOT success', async () => {
+    const aggregateDataDaily = vi.fn()
+      .mockResolvedValueOnce(undefined) // step-1 pre-fetch agg: OK
+      .mockRejectedValueOnce( // step-5 post-upsert agg: persistent failure
+        new Error('agg_tiktok_spend_per_store_for_date(2026-05-29): deadlock detected'),
+      );
+    const recordFreshness = vi.fn();
+    const upsertCampaignsDaily = vi.fn();
+    await expect(runTikTokWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      loadStoreMap: async () => ({}),
+      fetchStatus: vi.fn(),
+      // Fresh rows ARE written → upsertCampaignsDaily runs → step-5 agg fires.
+      fetchHotMetrics: vi.fn().mockResolvedValue({
+        adsets: [{ store_id: 'uzoshop', campaign_id: 'TC1', ad_set_id: 'TG1', spend_cad: 12 }],
+        ads: [],
+      }),
+      getHotCampaignIds: async () => ['TC1'], getHotAdgroupIds: async () => ['TG1'], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily, upsertAdsDaily: vi.fn(),
+      recordFreshness,
+      getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
+      getFxCadFor: async () => async () => 1.4,
+      aggregateDataDaily,
+      nowIso: '2026-05-29T16:00:00.000Z',
+      isTikTokConfigured: () => true,
+    })).rejects.toThrow(/deadlock detected/);
+    // Fresh rows really were written before the agg failed.
+    expect(upsertCampaignsDaily).toHaveBeenCalled();
+    // Both agg calls fired (pre-fetch OK, post-upsert threw).
+    expect(aggregateDataDaily).toHaveBeenCalledTimes(2);
+    // Must NOT record success; must record transient_error so the panel
+    // reflects the broken invariant + Inngest retries.
+    const successCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'success');
+    expect(successCalls).toHaveLength(0);
+    const errorCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'transient_error');
+    expect(errorCalls.map(c => c[0].scope).sort()).toEqual(['ad_metrics', 'campaign_metrics']);
   });
 });
 
