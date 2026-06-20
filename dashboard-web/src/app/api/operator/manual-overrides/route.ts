@@ -48,6 +48,19 @@ import {
   VALID_PLATFORMS,
   VALID_CURRENCIES,
 } from '@/lib/operatorManualOverrides';
+import { loadActiveStoreIds } from '@/lib/getStores';
+
+// Self-serve stores: resolve the LIVE set of valid store ids at request time so
+// a 4th active store passes validation. Falls back to the static legacy 3 if the
+// store-list read fails — byte-identical to the pre-self-serve behavior.
+async function resolveValidStores(): Promise<ReadonlySet<string>> {
+  try {
+    const ids = await loadActiveStoreIds();
+    return ids.length ? new Set(ids) : VALID_STORES;
+  } catch {
+    return VALID_STORES;
+  }
+}
 
 export const dynamic = 'force-dynamic';
 // NOTE: revalidate is intentionally NOT exported here — see Pitfall 11.
@@ -100,7 +113,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const raw = await req.json();
-    const valid = validatePost(raw);
+    const valid = validatePost(raw, await resolveValidStores());
     if (typeof valid === 'string') {
       return NextResponse.json({ error: valid }, { status: 400 });
     }
@@ -156,7 +169,9 @@ export async function PATCH(req: Request) {
       patch.date = rest.date;
     }
     if (rest.store_id !== undefined) {
-      if (typeof rest.store_id !== 'string' || !VALID_STORES.has(rest.store_id)) {
+      // Self-serve: validate against the LIVE active store list (static 3 fallback).
+      const validStores = await resolveValidStores();
+      if (typeof rest.store_id !== 'string' || !validStores.has(rest.store_id)) {
         return NextResponse.json({ error: `unknown store_id: ${String(rest.store_id)}` }, { status: 400 });
       }
       patch.store_id = rest.store_id;

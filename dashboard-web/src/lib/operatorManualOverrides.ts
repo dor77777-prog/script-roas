@@ -15,6 +15,10 @@
 
 import { isDate } from '@/lib/dateValidation';
 
+// Static fallback for the legacy 3. Self-serve stores: the route resolves the
+// LIVE active store ids (loadActiveStoreIds) at request time and passes them as
+// `validStores` to validatePost so a 4th active store id is accepted. This
+// static set is the byte-identical fallback when no set is supplied.
 export const VALID_STORES = new Set(['uzoshop', 'zolplus', 'usmile360']);
 export const VALID_PLATFORMS = new Set(['meta', 'google', 'tiktok']);
 export const VALID_CURRENCIES = new Set(['ILS', 'CAD', 'USD']);
@@ -46,12 +50,20 @@ export function parseStrictNumeric(value: unknown): number {
 /**
  * Validate + normalise a POST body. Returns the normalised body on
  * success, or a human-readable error string on failure.
+ *
+ * `validStores` (optional) — the set of currently-valid store ids. Self-serve
+ * stores: the route resolves the LIVE active store list and passes it so a 4th
+ * store id validates. Omitted → falls back to the static `VALID_STORES` (the
+ * legacy 3), byte-identical for existing callers.
  */
-export function validatePost(body: unknown): PostBody | string {
+export function validatePost(
+  body: unknown,
+  validStores: ReadonlySet<string> = VALID_STORES,
+): PostBody | string {
   if (!body || typeof body !== 'object') return 'body must be a JSON object';
   const b = body as Record<string, unknown>;
   if (!isDate(b.date)) return 'date must be YYYY-MM-DD';
-  if (typeof b.store_id !== 'string' || !VALID_STORES.has(b.store_id)) {
+  if (typeof b.store_id !== 'string' || !validStores.has(b.store_id)) {
     return `unknown store_id: ${String(b.store_id)}`;
   }
   const platform = String(b.platform ?? '').toLowerCase();
