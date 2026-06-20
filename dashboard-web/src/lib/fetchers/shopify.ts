@@ -64,7 +64,7 @@ import {
   getShopifyAccessToken,
   invalidateShopifyToken,
 } from '@/lib/fetchers/shopifyAuth';
-import { STORE_ID_TO_NAME } from '@/lib/platformsByStore';
+import { storeIdToName } from '@/lib/platformsByStore';
 import { getStoreSecret } from '@/lib/storeSecretsReader';
 import { primaryGateway } from '@/lib/payments';
 import { fetchWithBackoff } from './withBackoff';
@@ -639,12 +639,12 @@ export async function fetchShopifyDayRows(
     storeRefundDeductionCad,
   } = computeRevenueWithCrossDayRefunds(orders, dateStr, SHOPIFY_TZ);
 
-  // Cast through `keyof` because `storeId` is `string` at this call-site
-  // (the fetcher is intentionally type-loose so non-canonical IDs fall
-  // back to the literal id below). Same behavior as the previous
-  // `Record<string, string>` table.
-  const storeName =
-    (STORE_ID_TO_NAME as Record<string, string>)[storeId] ?? storeId;
+  // Self-serve stores: resolve the DISPLAY name DB-first (getStores → static
+  // fallback for the 3 → the id itself). A 4th store's data_daily rows must
+  // carry its operator-chosen name (e.g. 'pdrn skin', not the slug
+  // 'pdrn-skin') so the dashboard cards group it correctly. Byte-identical to
+  // the previous STORE_ID_TO_NAME lookup for the legacy 3.
+  const storeName = await storeIdToName(storeId);
 
   return {
     storeId,

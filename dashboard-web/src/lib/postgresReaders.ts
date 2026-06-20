@@ -51,6 +51,7 @@ import { categorizePaymentGateway, type PaymentCategory } from './payments';
 import type { OverrideRowAsRead } from '@/lib/home/overridesActive';
 import type { AdStateMap } from '@/lib/adState';
 import { getStoreSecret } from '@/lib/storeSecretsReader';
+import { buildStoreIdToNameMap } from '@/lib/platformsByStore';
 
 /**
  * Generic row type. Without a generated `Database` schema, supabase-js's
@@ -733,11 +734,11 @@ export async function fetchProductsFromPostgres(
  * Empty-row filter mirrors campaigns.ts:140 — drop rows with zero spend,
  * impressions, AND conversions.
  */
-const STORE_NAME_BY_ID: Record<string, string> = {
-  uzoshop: 'uzoshop',
-  zolplus: 'Zol Plus',
-  usmile360: '360usmile',
-};
+// Self-serve stores: campaigns_daily / ads_daily / orders_attribution / cohort
+// / payment / product-catalog rows carry only store_id, so we project
+// store_name on the boundary via the DYNAMIC store_id → DISPLAY name map
+// (`buildStoreIdToNameMap` — DB-first, with a static fallback for the legacy 3),
+// resolved once per fetch. Replaces the old hardcoded 3-store STORE_NAME_BY_ID.
 
 export async function fetchCampaignsFromPostgres(
   opts?: { range?: DateRange },
@@ -745,7 +746,7 @@ export async function fetchCampaignsFromPostgres(
   // NOTE: campaigns_daily schema does NOT include a store_name column (only
   // data_daily + products_daily do). Querying it caused a Postgres error
   // surfaced as a soft-fail with 0 rows. We project store_name on the
-  // boundary via STORE_NAME_BY_ID below.
+  // boundary via the dynamic store_id → name map (resolved below).
   let data: DbRow[];
   try {
     data = await paginate<DbRow>(() => {
@@ -788,6 +789,11 @@ export async function fetchCampaignsFromPostgres(
   } catch (e) {
     throw new Error(`postgresReaders.fetchCampaigns: ${(e as Error).message}`);
   }
+
+  // Self-serve stores: resolve store_id → DISPLAY name once (DB-first, static
+  // fallback for the 3). A 4th store's rows then project its operator name so
+  // they join to its per-store card (the home adapter keys campaigns by name).
+  const storeNameById = await buildStoreIdToNameMap();
 
   const rows: CampaignRow[] = [];
   for (const r of data) {
@@ -846,8 +852,8 @@ export async function fetchCampaignsFromPostgres(
       date: dateStr,
       storeId,
       // campaigns_daily has no store_name column — derive from store_id via
-      // the canonical map (mirrors campaigns.ts:38 sheets-side behavior).
-      storeName: STORE_NAME_BY_ID[storeId] ?? storeId,
+      // the dynamic DB-first map (self-serve aware; static fallback for the 3).
+      storeName: storeNameById[storeId] ?? storeId,
       platform: titleCasePlatform(r.platform),
       campaignId: String(r.campaign_id),
       campaignName: preferName(
@@ -1220,6 +1226,9 @@ export async function fetchAdsFromPostgres(
     throw new Error(`postgresReaders.fetchAds: ${(e as Error).message}`);
   }
 
+  // Self-serve stores: resolve store_id → DISPLAY name once (DB-first).
+  const storeNameById = await buildStoreIdToNameMap();
+
   const rows: AdRow[] = [];
   for (const r of data) {
     const dateStr = String(r.date);
@@ -1234,8 +1243,9 @@ export async function fetchAdsFromPostgres(
     rows.push({
       date: dateStr,
       storeId,
-      // ads_daily doesn't carry store_name; fall back to the canonical map.
-      storeName: STORE_NAME_BY_ID[storeId] ?? storeId,
+      // ads_daily doesn't carry store_name; derive from the dynamic DB-first
+      // map (self-serve aware; static fallback for the 3).
+      storeName: storeNameById[storeId] ?? storeId,
       platform: titleCasePlatform(r.platform),
       campaignId: String(r.campaign_id),
       campaignName: preferName(
@@ -1344,6 +1354,7 @@ export async function fetchOrdersAttributionFromPostgres(
     throw new Error(`postgresReaders.fetchOrdersAttribution: ${(e as Error).message}`);
   }
 
+  const storeNameById = await buildStoreIdToNameMap();
   const rows: OrderAttributionRow[] = [];
   for (const r of data) {
     const dateStr = String(r.date);
@@ -1356,8 +1367,9 @@ export async function fetchOrdersAttributionFromPostgres(
     rows.push({
       date: dateStr,
       storeId,
-      // orders_attribution doesn't carry store_name; fall back to canonical map.
-      storeName: STORE_NAME_BY_ID[storeId] ?? storeId,
+      // orders_attribution doesn't carry store_name; derive from the dynamic
+      // DB-first map (self-serve aware; static fallback for the 3).
+      storeName: storeNameById[storeId] ?? storeId,
       orderId,
       totalCad: toNumber(r.total_cad),
       source: String(r.source ?? '').trim() as OrderAttributionRow['source'],
@@ -1481,6 +1493,7 @@ export async function fetchCohortMonthlyFromPostgres(
     throw new Error(`postgresReaders.fetchCohortMonthly: ${(e as Error).message}`);
   }
 
+  const storeNameById = await buildStoreIdToNameMap();
   const rows: CohortMonthlyRow[] = [];
   for (const r of data) {
     rows.push({
@@ -1489,7 +1502,7 @@ export async function fetchCohortMonthlyFromPostgres(
       // (data.stores), so emitting the raw store_id matched only uzoshop
       // (identical string) and rendered an all-zero tab for Zol Plus / 360usmile.
       // Mirrors every sibling reader (campaigns/products/payments).
-      storeId: STORE_NAME_BY_ID[String(r.store_id)] ?? String(r.store_id),
+      storeId: storeNameById[String(r.store_id)] ?? String(r.store_id),
       firstOrderMonth: String(r.first_order_month ?? '').trim(),
       monthSince: toNumber(r.month_since),
       activeCustomers: toNumber(r.active_customers),
@@ -1559,8 +1572,9 @@ function emptyCategoryTotals(): PaymentCategoryTotals {
  * - month = to_char(date, 'YYYY-MM') — same value the previous
  *   `String(r.date).slice(0, 7)` produced (date is DATE NOT NULL in the
  *   initial schema, so it is always well-formed).
- * - Per-store buckets are keyed by the store DISPLAY NAME (STORE_NAME_BY_ID,
- *   e.g. 'Zol Plus' / '360usmile') — NOT the raw store_id — so the keys match
+ * - Per-store buckets are keyed by the store DISPLAY NAME (via the dynamic
+ *   store_id → name map, e.g. 'Zol Plus' / '360usmile') — NOT the raw store_id
+ *   — so the keys match
  *   `data.stores` (built from `storeName`) and the global store filter that the
  *   client layer uses everywhere. (Keying by store_id silently broke the
  *   per-store picker for every store whose name ≠ id: 2026-06-04 incident.)
@@ -1576,6 +1590,7 @@ export async function readPaymentMethodsByMonth(): Promise<PaymentMethodsByMonth
     throw new Error(`postgresReaders.readPaymentMethodsByMonth: ${(e as Error).message}`);
   }
 
+  const storeNameById = await buildStoreIdToNameMap();
   // month → { perStore, business }
   const byMonth = new Map<string, PaymentMethodsMonth>();
 
@@ -1588,7 +1603,7 @@ export async function readPaymentMethodsByMonth(): Promise<PaymentMethodsByMonth
     const storeId = String(r.store_id);
     // Key per-store buckets by the DISPLAY NAME so they match data.stores /
     // the global store filter (the client identifies stores by name, not id).
-    const storeKey = STORE_NAME_BY_ID[storeId] ?? storeId;
+    const storeKey = storeNameById[storeId] ?? storeId;
     // gateway is COALESCE(payment_gateway, '') from the RPC; '' and NULL
     // categorize identically ('other') — see categorizePaymentGateway.
     const category = categorizePaymentGateway(r.gateway == null ? null : String(r.gateway));
@@ -1644,6 +1659,7 @@ export async function fetchProductCatalogFromPostgres(): Promise<CatalogProduct[
     throw new Error(`postgresReaders.fetchProductCatalog: ${(e as Error).message}`);
   }
 
+  const storeNameById = await buildStoreIdToNameMap();
   const rows: CatalogProduct[] = [];
   for (const r of data) {
     const productId = String(r.product_id ?? '').trim();
@@ -1653,7 +1669,7 @@ export async function fetchProductCatalogFromPostgres(): Promise<CatalogProduct[
     rows.push({
       productId,
       storeId,
-      storeName: STORE_NAME_BY_ID[storeId] ?? storeId,
+      storeName: storeNameById[storeId] ?? storeId,
       title: String(r.title ?? '').trim() || '(ללא שם)',
       handle: String(r.handle ?? '').trim(),
       status: String(r.status ?? '').trim(),

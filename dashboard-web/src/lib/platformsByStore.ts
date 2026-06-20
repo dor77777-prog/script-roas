@@ -117,6 +117,26 @@ export async function storeIdToName(id: string): Promise<string> {
 }
 
 /**
+ * Build the full `storeId → DISPLAY name` map, DB-first (getStores → static
+ * fallback for the legacy 3). Use this in hot read paths that need to project
+ * many rows' names in a sync loop: resolve the map ONCE (await), then index it.
+ * Merges the static map under the DB result so the legacy 3 are always present
+ * even if the DB omits one. Never throws.
+ */
+export async function buildStoreIdToNameMap(): Promise<Record<string, string>> {
+  const map: Record<string, string> = { ...STORE_ID_TO_NAME };
+  try {
+    const stores = await loadStoresCached();
+    for (const s of stores) {
+      if (s.storeName) map[s.storeId] = s.storeName;
+    }
+  } catch {
+    // keep the static map — byte-identical for the legacy 3 on a DB blip.
+  }
+  return map;
+}
+
+/**
  * Set of store IDS that advertise on TikTok (incl. via the shared account),
  * derived from `stores.has_tiktok`. This is the "advertises on TikTok"
  * membership — distinct from the static `STORES_WITH_TIKTOK_IDS` ("has its own
