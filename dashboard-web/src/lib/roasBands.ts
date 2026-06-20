@@ -29,12 +29,24 @@ export type CoreRoasBand = 'red' | 'orange' | 'green' | 'blue' | 'gray';
  */
 export const ALARM_SPEND_THRESHOLD_CAD = 100;
 
-/** Classify a ROAS value into its operator-locked band. `spend === 0` → gray. */
+/** Classify a ROAS value into its operator-locked band. `spend === 0` → gray.
+ *
+ * FIX #24 (2026-06-20): classify from the DISPLAYED value, not the raw ratio.
+ * Every ROAS surface renders 2 decimals (`.toFixed(2)`), so a value like 2.698
+ * shows "2.70" — at the green threshold — yet the raw 2.698 < 2.7 would paint
+ * it the LOWER (orange) band, a colour that disagrees with the digits. Rounding
+ * to 2dp HERE (the single source of truth) fixes every caller at once: the band
+ * always matches the number the operator reads. Values already at ≤2 decimals
+ * are unaffected (rounding is a no-op), so the operator-locked thresholds
+ * (2.0 / 2.7 / 3.0) are unchanged. */
 export function bandForRoas(roas: number, opts?: { spend?: number }): CoreRoasBand {
   if (opts && opts.spend === 0) return 'gray';
-  if (roas > 3.0) return 'blue';
-  if (roas >= 2.7) return 'green';
-  if (roas >= 2.0) return 'orange';
+  // Band the same 2-decimal value the UI displays so the colour can never
+  // disagree with the rendered digits at a threshold boundary.
+  const shown = Number.isFinite(roas) ? Number(roas.toFixed(2)) : roas;
+  if (shown > 3.0) return 'blue';
+  if (shown >= 2.7) return 'green';
+  if (shown >= 2.0) return 'orange';
   return 'red';
 }
 
