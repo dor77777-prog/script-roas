@@ -63,6 +63,7 @@ describe('CommandCenterHero MER — ROAS delta consistency (FIX B #23)', () => {
       roas: null, // FIX B — adapter nulls it for spent-no-sales
       netProfit: null,
       operatingProfit: null,
+      operatingProfitPct: null,
       revenuePct: null,
       spendPct: null,
       cpmPct: null,

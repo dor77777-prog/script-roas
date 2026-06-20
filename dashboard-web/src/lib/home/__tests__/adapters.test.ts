@@ -202,6 +202,40 @@ describe('toHeroDelta', () => {
     expect(d.cogs).toBe(100);
   });
 
+  // FIX #22 — operating-profit % delta must use the ACTUAL prevOperatingProfit
+  // with a |prev| denominator and a null-when-prev≈0 rule. The old hero math
+  // (delta / Math.max(1, |cur − delta|)) floored the denominator at 1, so a
+  // near-break-even prev produced a bogus percentage (e.g. +30000%).
+  it('computes operatingProfitPct from the real prev with a |prev| denominator', () => {
+    const d = toHeroDelta(
+      // cur opProfit = 600 − 100 − 0 = 500
+      agg({ revenue: 600, spend: 100, roas: 6, cogs: 0 }),
+      // prev opProfit = 400 − 200 − 0 = 200 → Δ = 300, pct = 300/|200| = 1.5
+      agg({ revenue: 400, spend: 200, roas: 2, cogs: 0 }),
+      { cpm: 0, impressions: 0, spend: 0 },
+      { cpm: 0, impressions: 0, spend: 0 },
+      0,
+      0,
+    );
+    expect(d.operatingProfit).toBe(300);
+    expect(d.operatingProfitPct).toBeCloseTo(1.5, 6);
+  });
+
+  it('nulls operatingProfitPct when prev operating profit is ≈0 (near break-even)', () => {
+    const d = toHeroDelta(
+      // cur opProfit = 300 − 0 − 0 = 299.80 (spend 0.20)
+      agg({ revenue: 300, spend: 0.2, roas: 1500, cogs: 0 }),
+      // prev opProfit = 100 − 100.20 − 0 = -0.20 (≈ break-even) → pct must be null,
+      // NOT +30000% from a denominator floored at 1.
+      agg({ revenue: 100, spend: 100.2, roas: 0.998, cogs: 0 }),
+      { cpm: 0, impressions: 0, spend: 0 },
+      { cpm: 0, impressions: 0, spend: 0 },
+      0,
+      0,
+    );
+    expect(d.operatingProfitPct).toBeNull();
+  });
+
   // FIX #23 — spent-money-zero-sales: cur.roas is 0 (a 0-revenue ratio is
   // meaningless and the hero tile renders "0.00x"/"—"). The ROAS delta must be
   // NULL, not the concrete "cur − prev" (= 0 − prev) that printed a bogus

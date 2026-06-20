@@ -141,6 +141,17 @@ export function toHeroDelta(
   const baselineEmpty = prev.spend === 0 && prev.revenue === 0;
   const curOperatingProfit = cur.revenue - cur.spend - cur.cogs;
   const prevOperatingProfit = prev.revenue - prev.spend - prev.cogs;
+  // FIX #22 — operating-profit % from the ACTUAL prev with a |prev| denominator
+  // and a null-when-prev≈0 rule (mirrors deltaPct / fracDelta). The old hero
+  // math (delta / Math.max(1, |cur − delta|)) reconstructed prev by subtraction
+  // and floored the denominator at 1, so a near-break-even prev produced a
+  // bogus +30000%. A sub-$1 |prev| is treated as ≈0 (break-even) → null, since
+  // a sub-dollar denominator yields a meaningless percentage.
+  const OP_PROFIT_PCT_EPSILON = 1; // CAD — below this, prev is "≈ break-even"
+  const operatingProfitPct =
+    baselineEmpty || Math.abs(prevOperatingProfit) < OP_PROFIT_PCT_EPSILON
+      ? null
+      : (curOperatingProfit - prevOperatingProfit) / Math.abs(prevOperatingProfit);
   return {
     // FIX #23 — when the CURRENT period is spent-money-zero-sales (revenue 0 →
     // roas folds to 0), the hero MER tile renders "0.00x"/"—" (FIX A), so the
@@ -155,6 +166,7 @@ export function toHeroDelta(
     operatingProfit: baselineEmpty
       ? null
       : curOperatingProfit - prevOperatingProfit,
+    operatingProfitPct,
     revenuePct:
       baselineEmpty || prev.revenue === 0
         ? null

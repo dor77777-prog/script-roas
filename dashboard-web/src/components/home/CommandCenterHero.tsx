@@ -136,6 +136,14 @@ export interface CommandCenterDelta {
    * delta-vs-previous line on the featured "רווח תפעולי" card.
    */
   operatingProfit: number | null;
+  /**
+   * Operating-profit delta as a SIGNED FRACTION, computed from the ACTUAL
+   * previous operating profit with a |prev| denominator (FIX #22). null when
+   * the previous operating profit is ≈0 (near break-even) so the card can't
+   * print a bogus percentage. Precomputed here — the hero must NOT reconstruct
+   * prev by subtraction or floor the denominator at 1.
+   */
+  operatingProfitPct: number | null;
   /** Revenue delta as fraction ((cur − prev) / prev). Signed. */
   revenuePct: number | null;
   /** Spend delta as fraction. ↑ spend is a NEGATIVE signal (inverse). */
@@ -725,15 +733,12 @@ export function CommandCenterHero({
                 ) : (
                   <DeltaLine
                     text={fmtMoneyDelta(delta?.operatingProfit)}
-                    pctText={fmtPctDelta(
-                      delta?.operatingProfit != null && current.operatingProfit != null
-                        ? delta.operatingProfit /
-                            Math.max(
-                              1,
-                              Math.abs(current.operatingProfit - delta.operatingProfit),
-                            )
-                        : null,
-                    )}
+                    // FIX #22 — render the adapter-precomputed pct (real prev,
+                    // |prev| denominator, null near break-even). The old inline
+                    // math reconstructed prev by subtraction + floored the
+                    // denominator at 1, producing bogus percentages (e.g.
+                    // +30000%) near break-even.
+                    pctText={fmtPctDelta(delta?.operatingProfitPct)}
                     label={comparisonLabel}
                     positive={(delta?.operatingProfit ?? 0) >= 0}
                   />
