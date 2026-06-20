@@ -198,6 +198,27 @@ describe('fetchMetaHotMetricsForStore()', () => {
     ).rejects.toThrow(/code=400.*too many calls/);
   });
 
+  // #17 (2026-06-20): a 200 part with a corrupt/unparseable body must THROW
+  // (worker catch → transient_error → Inngest retry), not silently return []
+  // — which made hot-metrics spend stop refreshing while the panel stayed
+  // green. The code already throws on code!==200 + null part; the parse-fail
+  // branch was the lone false-success.
+  it('#17: throws when a 200 part has an unparseable body (not silently [])', async () => {
+    const batchBody = JSON.stringify([
+      { code: 200, body: '<html>502 Bad Gateway</html>' },
+      { code: 200, body: AD_INSIGHTS_BODY },
+    ]);
+    const fetchMock = mockFetch(batchBody);
+    await expect(
+      fetchMetaHotMetricsForStore({
+        storeId: 'uzoshop', adAccountId: 'act_111', accessToken: 'tok',
+        hotCampaignIds: ['C1'], hotAdsetIds: ['AS1'], hotAdIds: ['AD1'],
+        dateStr: '2026-05-30', fetcher: fetchMock,
+        getFxCadFor: async (amount) => amount,
+      }),
+    ).rejects.toThrow(/unparseable/i);
+  });
+
   it('uses filtering=[IN, hot_ids] in each sub-request URL', async () => {
     const fetchMock = mockFetch(BATCH_BODY);
     await fetchMetaHotMetricsForStore({

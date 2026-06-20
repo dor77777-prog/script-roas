@@ -127,7 +127,12 @@ function asArray(part: { code: number; body: string } | null | undefined): Array
     const parsed = JSON.parse(part.body) as { data?: unknown };
     return Array.isArray(parsed.data) ? (parsed.data as Array<Record<string, unknown>>) : [];
   } catch {
-    return [];
+    // #17 (2026-06-20): a corrupt-but-200 part body that fails JSON.parse must
+    // THROW, not return [] — returning [] made the worker upsert zero rows yet
+    // record freshness='success' (status scopes green), so newly-active adsets
+    // silently vanished. Throwing routes through the worker try/catch →
+    // transient_error → Inngest retry.
+    throw new Error('Meta status batch part body unparseable (code=200): ' + part.body.slice(0, 200));
   }
 }
 

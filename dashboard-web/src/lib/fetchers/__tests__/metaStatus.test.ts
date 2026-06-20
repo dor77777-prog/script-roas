@@ -138,4 +138,25 @@ describe('fetchMetaStatusForStore()', () => {
       }),
     ).rejects.toThrow(/batch part missing\/null/);
   });
+
+  // #17 (2026-06-20): a 200 part with a corrupt/unparseable body must THROW
+  // (worker catch → transient_error → Inngest retry), not silently return []
+  // — which made the worker upsert zero rows yet mark status scopes green,
+  // so newly-active adsets silently vanished. The parse-fail branch was the
+  // lone false-success path left after P1-12.
+  it('#17: throws when a 200 part has an unparseable body (not silently [])', async () => {
+    const bodyWithCorruptPart = JSON.stringify([
+      { code: 200, body: '<html>502 Bad Gateway</html>' },
+      { code: 200, body: JSON.stringify({ data: [] }) },
+      { code: 200, body: JSON.stringify({ data: [] }) },
+    ]);
+    const fetchMock = mockFetch(bodyWithCorruptPart, '{}');
+    await expect(
+      fetchMetaStatusForStore({
+        storeId: 'uzoshop', adAccountId: 'act_111', accessToken: 'tok',
+        fetcher: fetchMock,
+        getFxCadFor: async () => 0,
+      }),
+    ).rejects.toThrow(/unparseable/i);
+  });
 });
