@@ -9,10 +9,17 @@
  * Table: data_freshness
  * PK:    (store_id, platform, scope, table_name)
  *
- * lag_minutes is computed AT WRITE TIME:
+ * lag_minutes is computed AT WRITE TIME (an AUDIT field only — see FIX #5):
  *   - status === 'success' → 0 (just refreshed)
  *   - else, prior last_success_at exists → floor((now - last_success_at) / 60_000)
  *   - else → null (never succeeded; lag undefined)
+ *
+ * IMPORTANT (FIX #5): lag_minutes is FROZEN at write time, so a worker that
+ * stops being invoked keeps lag_minutes=0 forever and looks "freshest". All
+ * liveness judgements (ordering here, the sourceStatusRollup age gate, the
+ * FreshnessPanel Lag column) compute LIVE lag from last_success_at vs an
+ * injectable `now` instead. getFreshness therefore orders by last_success_at
+ * ASC NULLS FIRST (stalest source first), NOT by the stored lag_minutes.
  *
  * Error swallow pattern: console.warn('[recordFreshness] …') — same as
  * recordMetaBucUsage in src/lib/notifications/metaBucUsage.ts so that a DB
@@ -179,12 +186,21 @@ export async function getFreshness(scope?: string): Promise<FreshnessRow[]> {
   try {
     const sb = getSupabaseAdmin();
     const base = sb.from('data_freshness').select('*');
-    const ORDER_OPTS = { ascending: false, nullsFirst: false } as const;
+    // FIX #5: order by last_success_at ASC NULLS FIRST so the stalest source
+    // (oldest / never-succeeded last_success_at = highest LIVE lag) sorts
+    // first. The stored lag_minutes is FROZEN at write time (0 on success), so
+    // ordering by it made a worker that stopped being invoked sort as the
+    // "freshest" row. last_success_at is the only field that keeps advancing in
+    // age while a worker is dead. Consumers compute LIVE lag from this column
+    // (computeStaleness / sourceStatusRollup age gate); lag_minutes is now only
+    // a write-time audit field.
+    const ORDER_FIELD = 'last_success_at';
+    const ORDER_OPTS = { ascending: true, nullsFirst: true } as const;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (scope
-      ? (base as any).eq('scope', scope).order('lag_minutes', ORDER_OPTS)
-      : (base as any).order('lag_minutes', ORDER_OPTS)
+      ? (base as any).eq('scope', scope).order(ORDER_FIELD, ORDER_OPTS)
+      : (base as any).order(ORDER_FIELD, ORDER_OPTS)
     ) as { data: FreshnessRow[] | null; error: unknown };
 
     return data ?? [];

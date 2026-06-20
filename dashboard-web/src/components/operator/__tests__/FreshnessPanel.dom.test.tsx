@@ -93,7 +93,9 @@ describe('FreshnessPanel', () => {
     expect(screen.getByText('usmile360')).toBeDefined();
   });
 
-  it('renders rows in the order returned by the API (lag DESC from helper)', () => {
+  it('renders rows in the order returned by the API (stalest-first from helper)', () => {
+    // The helper now returns rows ordered by last_success_at ASC NULLS FIRST
+    // (stalest source first); the panel renders them in that order verbatim.
     const rows = [
       makeRow({ store_id: 'uzoshop', lag_minutes: 42 }),
       makeRow({ store_id: 'zolplus', lag_minutes: 15 }),
@@ -155,18 +157,41 @@ describe('FreshnessPanel', () => {
     expect(redIcons.length).toBeGreaterThan(0);
   });
 
-  it('displays lag_minutes as a number in the lag column', () => {
+  // FIX #5: the Lag column now shows LIVE lag computed from last_success_at,
+  // NOT the frozen lag_minutes (which is pinned to 0 on every success, so a
+  // dead worker would otherwise read "0 min stale" forever).
+  it('displays LIVE lag (from last_success_at) in the lag column, not frozen lag_minutes', () => {
+    const fortyMinAgo = new Date(Date.now() - 40 * 60_000).toISOString();
     setSwrResult({
-      data: freshnessResp([makeRow({ lag_minutes: 37 })]),
+      data: freshnessResp([
+        // status success + frozen lag_minutes 0, but last_success_at is 40 min old.
+        makeRow({ status: 'success', lag_minutes: 0, last_success_at: fortyMinAgo }),
+      ]),
       isLoading: false,
     });
     render(<FreshnessPanel />);
-    expect(screen.getByText('37')).toBeDefined();
+    // Live lag ≈ 40 (allow 39/40 for tick boundary), NOT the frozen 0.
+    expect(screen.queryByText('0')).toBeNull();
+    expect(screen.getByText(/^(39|40)$/)).toBeDefined();
   });
 
-  it('displays — when lag_minutes is null', () => {
+  it('flags an aged success row (> 60 min SLA) as stale (not green) — dead worker', () => {
+    const ninetyMinAgo = new Date(Date.now() - 90 * 60_000).toISOString();
     setSwrResult({
-      data: freshnessResp([makeRow({ lag_minutes: null })]),
+      data: freshnessResp([
+        makeRow({ scope: 'campaign_metrics', status: 'success', lag_minutes: 0, last_success_at: ninetyMinAgo }),
+      ]),
+      isLoading: false,
+    });
+    const { container } = render(<FreshnessPanel />);
+    // No green icon — the aged success is downgraded to a stale (red) flag.
+    expect(container.querySelectorAll('.text-status-greenFg').length).toBe(0);
+    expect(container.querySelectorAll('.text-status-redFg').length).toBeGreaterThan(0);
+  });
+
+  it('displays — when last_success_at is null (never succeeded)', () => {
+    setSwrResult({
+      data: freshnessResp([makeRow({ lag_minutes: null, last_success_at: null })]),
       isLoading: false,
     });
     render(<FreshnessPanel />);

@@ -272,7 +272,11 @@ describe('freshness', () => {
   // ---------------------------------------------------------------------------
 
   describe('getFreshness', () => {
-    it('with no scope arg — calls .order() and returns all rows', async () => {
+    // FIX #5: order by last_success_at ASC NULLS FIRST so the stalest source
+    // (oldest / never-succeeded last_success_at = highest LIVE lag) sorts
+    // first. The stored lag_minutes is frozen at write time (0 on success), so
+    // ordering by it made a DEAD worker sort as "freshest".
+    it('with no scope arg — orders by last_success_at ASC NULLS FIRST and returns all rows', async () => {
       const rows = [
         makeExistingRow({ status: 'success' }),
         makeExistingRow({ last_success_at: '2026-05-29T08:00:00.000Z', status: 'transient_error' }),
@@ -282,9 +286,9 @@ describe('freshness', () => {
       const result = await getFreshness();
 
       expect(orderResultMock).toHaveBeenCalledOnce();
-      expect(orderResultMock).toHaveBeenCalledWith('lag_minutes', {
-        ascending: false,
-        nullsFirst: false,
+      expect(orderResultMock).toHaveBeenCalledWith('last_success_at', {
+        ascending: true,
+        nullsFirst: true,
       });
       expect(result).toEqual(rows);
     });

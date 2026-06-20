@@ -31,6 +31,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getFreshness } from '@/lib/inngest/freshness';
+import { isAgeStale } from '@/lib/freshness/sourceStatus';
 import { userFacingError } from '@/lib/apiErrors';
 import { captureRouteError } from '@/lib/sentry/capture';
 
@@ -72,7 +73,15 @@ export async function GET() {
     // freshness: same reader the FreshnessPanel uses.
     const rows = await getFreshness();
     const total = rows.length;
-    const success = rows.filter((r) => r.status === 'success').length;
+    // FIX #5: a row counts as "fresh" only if its status is 'success' AND its
+    // last_success_at is within the per-scope SLA. A dead worker keeps writing
+    // 'success' status forever (status = "last write SUCCEEDED", not "data is
+    // CURRENTLY fresh"); the age gate is what stops a stopped pipeline from
+    // masking the outage as GREEN.
+    const now = Date.now();
+    const success = rows.filter(
+      (r) => r.status === 'success' && !isAgeStale(r.last_success_at, r.scope, now),
+    ).length;
     // When data_freshness is empty (cold start) we treat the pipeline as
     // GREEN — there is nothing wrong yet, just nothing to compare against.
     const freshnessPct = total === 0 ? 1 : success / total;

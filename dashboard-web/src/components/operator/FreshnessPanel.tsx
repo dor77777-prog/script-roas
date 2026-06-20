@@ -22,6 +22,7 @@ import useSWR from 'swr';
 import { CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
 import { type FreshnessRow } from '@/lib/inngest/freshness';
+import { isAgeStale, SYNTHETIC_STALE_STATUS } from '@/lib/freshness/sourceStatus';
 import { TableBase } from '@/components/ui/TableBase';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import type { FreshnessResponse } from '@/app/api/operator/freshness/route';
@@ -50,6 +51,35 @@ function formatRelative(iso: string | null): string {
   if (dHr < 24) return `${dHr} שע׳ לפני`;
   const dDay = Math.floor(dHr / 24);
   return `${dDay} ימים לפני`;
+}
+
+/**
+ * FIX #5 — LIVE lag computed at READ time from last_success_at, NOT the stored
+ * lag_minutes (which is frozen at write time: 0 on every success, so a worker
+ * that stopped firing would read "0 min stale" forever). null when there has
+ * never been a success.
+ */
+function liveLagMinutes(lastSuccessAt: string | null, now: number): number | null {
+  if (lastSuccessAt == null) return null;
+  const parsed = Date.parse(lastSuccessAt);
+  if (Number.isNaN(parsed)) return null;
+  return Math.max(0, Math.floor((now - parsed) / 60_000));
+}
+
+/**
+ * FIX #5 — effective status. A `success`/`budget_skip` row whose last_success_at
+ * has aged past its scope SLA is downgraded to a SYNTHETIC stale: the stored
+ * status says "last write succeeded" but the worker has stopped being invoked.
+ * Real error statuses pass through unchanged.
+ */
+function effectiveStatus(row: FreshnessRow, now: number): string {
+  if (
+    (row.status === 'success' || row.status === 'budget_skip') &&
+    isAgeStale(row.last_success_at, row.scope, now)
+  ) {
+    return SYNTHETIC_STALE_STATUS;
+  }
+  return row.status;
 }
 
 // ---------------------------------------------------------------------------
@@ -151,6 +181,16 @@ function FreshnessTableRow({ row }: { row: FreshnessRow }) {
       ? row.error_message.slice(0, 60)
       : '—';
 
+  // FIX #5: derive status + lag LIVE at read time. A row whose stored status is
+  // 'success' but whose last_success_at has aged past its SLA is shown as
+  // SYNTHETIC stale (red), and the Lag column shows the real elapsed minutes —
+  // never the frozen lag_minutes (pinned 0 on success).
+  const now = Date.now();
+  const shownStatus = effectiveStatus(row, now);
+  const isSyntheticStale =
+    shownStatus === SYNTHETIC_STALE_STATUS && row.status !== SYNTHETIC_STALE_STATUS;
+  const lag = liveLagMinutes(row.last_success_at, now);
+
   return (
     <tr className="border-t border-glass-edge">
       <td className="px-3 py-2 font-semibold">{row.store_id}</td>
@@ -159,10 +199,16 @@ function FreshnessTableRow({ row }: { row: FreshnessRow }) {
       <td className="px-3 py-2 font-mono text-xs">{row.table_name}</td>
       <td className="px-3 py-2">
         <span
-          className={`inline-flex items-center gap-1 ${statusTextClass(row.status)}`}
+          className={`inline-flex items-center gap-1 ${statusTextClass(shownStatus)}`}
         >
-          <StatusIcon status={row.status} />
-          <span className="font-mono">{statusLabel(row.status)}</span>
+          <StatusIcon status={shownStatus} />
+          <span className="font-mono">{statusLabel(shownStatus)}</span>
+          {isSyntheticStale && (
+            <span className="ms-1 inline-flex items-center gap-0.5 text-status-redFg">
+              <AlertCircle size={11} />
+              <span className="text-2xs">stuck (was {row.status})</span>
+            </span>
+          )}
           {row.budget_skip && row.status !== 'budget_skip' && (
             <span className="ms-1 inline-flex items-center gap-0.5 text-status-orangeFg">
               <AlertCircle size={11} />
@@ -172,7 +218,7 @@ function FreshnessTableRow({ row }: { row: FreshnessRow }) {
         </span>
       </td>
       <td className="px-3 py-2 text-end tabular-nums">
-        {row.lag_minutes !== null ? row.lag_minutes : '—'}
+        {lag !== null ? lag : '—'}
       </td>
       <HelpTooltip content={row.last_attempt_at}>
         <td className="px-3 py-2 text-ink-secondary">

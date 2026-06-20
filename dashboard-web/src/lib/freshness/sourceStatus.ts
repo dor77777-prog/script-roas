@@ -53,6 +53,78 @@ function severityOf(status: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// Age gate (FIX #5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-scope freshness SLA, in MINUTES. A `success`/`budget_skip` row is only
+ * actually healthy if `now − last_success_at` is within this window. The
+ * stored `status` says "the last write SUCCEEDED"; it says NOTHING about
+ * whether the worker is STILL being invoked. A paused / never-fanned-out
+ * worker keeps its 'success' forever and, without this gate, sorts as the
+ * freshest source while the pipeline is dead.
+ *
+ * This is the ONE source of truth for the SLA — health-summary and the
+ * read-time live-lag helpers import it from here.
+ *
+ *   - status / metric scopes (campaign_metrics, campaign_status, ad_metrics,
+ *     adset_metrics, hot_metrics, status, kpi_daily, read_orders) → 60 min.
+ *     These are driven by the 10-min worker / 30-min cron cadence; one missed
+ *     hour means something is wrong.
+ *   - cohort_monthly → 7 days. The cohort/LTV refresh is intentionally
+ *     infrequent, so an hour-scale SLA would false-alarm every day.
+ */
+const SCOPE_SLA_MINUTES: Record<string, number> = {
+  campaign_metrics: 60,
+  campaign_status: 60,
+  ad_metrics: 60,
+  adset_metrics: 60,
+  hot_metrics: 60,
+  status: 60,
+  kpi_daily: 60,
+  read_orders: 60,
+  cohort_monthly: 7 * 24 * 60,
+};
+
+/** Default SLA for any unrecognized scope — treat as a 60-min status scope. */
+const DEFAULT_SLA_MINUTES = 60;
+
+/** Synthetic status assigned to a success/budget_skip row that has aged out. */
+export const SYNTHETIC_STALE_STATUS = 'stale';
+
+export function scopeSlaMinutes(scope: string): number {
+  return SCOPE_SLA_MINUTES[scope] ?? DEFAULT_SLA_MINUTES;
+}
+
+/**
+ * True when a row's `last_success_at` is older than its scope SLA (or is null /
+ * unparseable — never-succeeded is never fresh). `now` is injected so the
+ * function stays pure/testable, mirroring `computeStaleness`.
+ */
+export function isAgeStale(
+  lastSuccessAt: string | null | undefined,
+  scope: string,
+  now: number = Date.now(),
+): boolean {
+  if (lastSuccessAt == null) return true;
+  const parsed = Date.parse(lastSuccessAt);
+  if (Number.isNaN(parsed)) return true;
+  const ageMin = (now - parsed) / 60_000;
+  return ageMin > scopeSlaMinutes(scope);
+}
+
+/** Live lag in whole minutes from last_success_at to now; null if unknown. */
+function liveLagMinutes(
+  lastSuccessAt: string | null | undefined,
+  now: number,
+): number | null {
+  if (lastSuccessAt == null) return null;
+  const parsed = Date.parse(lastSuccessAt);
+  if (Number.isNaN(parsed)) return null;
+  return Math.max(0, Math.floor((now - parsed) / 60_000));
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -72,19 +144,34 @@ export type SourceStatusRollup = {
 // sourceStatusRollup
 // ---------------------------------------------------------------------------
 
-export function sourceStatusRollup(rows: FreshnessRow[]): SourceStatusRollup {
+export function sourceStatusRollup(
+  rows: FreshnessRow[],
+  now: number = Date.now(),
+): SourceStatusRollup {
   // worst non-healthy row seen so far, per `${store_id}::${platform}`.
   const worstByGroup = new Map<string, UnhealthySource>();
 
   for (const r of rows) {
-    if (HEALTHY_STATUSES.has(r.status)) continue;
+    // FIX #5: a `success`/`budget_skip` row is healthy ONLY if its
+    // last_success_at is within the scope SLA. An aged one is treated as a
+    // SYNTHETIC stale (it reads "succeeded" but the worker stopped firing).
+    // Compute lag LIVE from last_success_at — the stored lag_minutes is frozen
+    // at write time (0 on success) and would let a dead worker look freshest.
+    let status = r.status;
+    let lagMinutes = r.lag_minutes;
+
+    if (HEALTHY_STATUSES.has(r.status)) {
+      if (!isAgeStale(r.last_success_at, r.scope, now)) continue; // genuinely fresh
+      status = SYNTHETIC_STALE_STATUS;
+      lagMinutes = liveLagMinutes(r.last_success_at, now);
+    }
 
     const key = `${r.store_id}::${r.platform}`;
     const candidate: UnhealthySource = {
       storeId: r.store_id,
       platform: r.platform,
-      status: r.status,
-      lagMinutes: r.lag_minutes,
+      status,
+      lagMinutes,
     };
 
     const incumbent = worstByGroup.get(key);

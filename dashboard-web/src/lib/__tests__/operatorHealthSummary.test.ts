@@ -34,15 +34,15 @@ vi.mock('@/lib/sentry/capture', () => ({
 
 import { GET } from '@/app/api/operator/health-summary/route';
 
-function makeRow(status: string): FreshnessRow {
+function makeRow(status: string, lastSuccessAt?: string): FreshnessRow {
   const now = new Date().toISOString();
   return {
     store_id: 'uzoshop',
     platform: 'meta',
-    scope: 'campaign_status',
+    scope: 'campaign_metrics',
     table_name: 'campaigns_daily',
     last_attempt_at: now,
-    last_success_at: now,
+    last_success_at: lastSuccessAt ?? now,
     status,
     lag_minutes: 0,
     error_code: null,
@@ -50,6 +50,11 @@ function makeRow(status: string): FreshnessRow {
     budget_skip: false,
     updated_at: now,
   };
+}
+
+/** A `success` row whose last_success_at is N minutes in the past. */
+function makeAgedSuccess(minutesAgo: number): FreshnessRow {
+  return makeRow('success', new Date(Date.now() - minutesAgo * 60_000).toISOString());
 }
 
 describe('/api/operator/health-summary — status thresholds', () => {
@@ -127,6 +132,35 @@ describe('/api/operator/health-summary — status thresholds', () => {
     const body = await res.json();
     expect(body.status).toBe('green');
     expect(body.freshness_pct).toBe(1);
+  });
+
+  // FIX #5 — an aged `success` row (last_success_at older than the scope SLA)
+  // must NOT count toward freshness_pct, even though its stored status is
+  // 'success'. A dead worker keeps writing 'success' status forever; the age
+  // gate is what stops it from masking the outage as GREEN.
+  it('aged success rows (> 60 min) drop freshness_pct and downgrade status', async () => {
+    // 1 fresh + 4 aged successes → 1/5 = 0.20 freshness → RED
+    nextRows = [
+      makeRow('success'),
+      makeAgedSuccess(90),
+      makeAgedSuccess(90),
+      makeAgedSuccess(90),
+      makeAgedSuccess(90),
+    ];
+    nextCount = 0;
+    const res = await GET();
+    const body = await res.json();
+    expect(body.freshness_pct).toBeCloseTo(0.2, 5);
+    expect(body.status).toBe('red');
+  });
+
+  it('fresh success rows still count (age gate does not over-fire)', async () => {
+    nextRows = [makeAgedSuccess(59), makeAgedSuccess(30), makeRow('success')];
+    nextCount = 0;
+    const res = await GET();
+    const body = await res.json();
+    expect(body.freshness_pct).toBe(1);
+    expect(body.status).toBe('green');
   });
 
   it('returns lastUpdated as an ISO string', async () => {
