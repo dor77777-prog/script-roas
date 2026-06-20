@@ -79,6 +79,8 @@ Apps Script triggers יורדים ידנית במהלך 28.4 cutover.
 
 **מיגרציות**: `supabase/migrations/*.sql`. נדחפות ל-production עם `supabase db push --linked --include-all`.
 
+> **⚠️ Known duplicate migration version `20260530300000` (DO NOT "fix" by renaming).** Two files share the version prefix `20260530300000`: `..._recompute_data_daily_derived.sql` ו-`..._phase_d_soak_cleanup_stale_tiktok_uzoshop_campaigns_daily.sql`. **שניהם כבר הוחלו ב-prod** (קיימים ב-`schema_migrations`). לשנות את שם אחד מהם ל-version חדש יגרום ל-`supabase db push` לראות migration "חדש" לא-מוחל ולנסות להריץ אותו מחדש — מסוכן (re-run של DELETE/recompute על prod). **לכן משאירים אותם כמו שהם.** ה-workaround המתועד ל-`--include-all` (שנכשל על duplicate-key כשדוחפים): מסירים זמנית הצידה את ה-duplicate (`20260530300000_phase_d_soak_cleanup_*`) + `20260530310000` (וכן מסתירים זמנית את ה-`.env` בשורש, ששמות-המשתנים עם נקודות/מקפים מפילים את ה-parser של ה-CLI), דוחפים רק את הקבצים החדשים, ואז מחזירים. ראו גם §הערה inline ב-Plan B (`20260602120000/20260602130000`) ו-`reference_supabase_migration_procedure`. **Guard:** `dashboard-web/src/lib/__tests__/migrationUniqueness.guard.test.ts` בודק ש-version-prefixes ייחודיים, עם allowlist מתועד לזוג היחיד הזה — כל duplicate חדש ייכשל ב-CI.
+
 **אבטחה (RLS)**: RLS **כבוי בכוונה** על כל 10 הטבלאות. מודל האמון = URL-obscurity יחיד-משתמש. `anon key` ב-Vercel היא ה-credential היחיד שמגיע ל-Supabase. ה-`anon` role יכול לבצע SELECT בלבד (לא DELETE/INSERT). DML מתבצע עם `SUPABASE_SERVICE_ROLE_KEY` server-side בלבד.
 
 Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public` — תקין ומכוון. אל תפעיל RLS ללא policies — זה ישבור את `/api/health` ping (`SELECT count(*) FROM stores`) ויהפוך את ה-SyncIndicator לצהוב.
