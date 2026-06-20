@@ -461,11 +461,28 @@ export function parseShopifyBillsCsv(
   }
 
   const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''));
+  // #15 — pick the MOST SPECIFIC money column. A real multi-line Shopify bill
+  // has BOTH a bare `Total` (the whole-bill grand total, repeated on every
+  // row) and a `Line item amount` (the per-line cost). The previous detector
+  // `findIndex(h => h.includes('amount') || h.includes('total'))` matched the
+  // bare `Total` FIRST (findIndex returns the first match), so every cost row
+  // got the grand total → fixed costs in the P&L inflated ~N× the real bill.
+  // Order of preference: `line item amount` / `item amount` → any `amount`
+  // header → bare `total` only as a last resort when no amount column exists.
+  const findAmountIdx = (): number => {
+    const lineAmount = header.findIndex(
+      h => h.includes('line item amount') || h.includes('item amount'),
+    );
+    if (lineAmount >= 0) return lineAmount;
+    const anyAmount = header.findIndex(h => h.includes('amount'));
+    if (anyAmount >= 0) return anyAmount;
+    return header.findIndex(h => h.includes('total'));
+  };
   const idx = {
     billNumber: header.findIndex(h => h.includes('bill') && h.includes('number')),
     date: header.findIndex(h => h.includes('date')),
     desc: header.findIndex(h => h.includes('description') || h.includes('item')),
-    amount: header.findIndex(h => h.includes('amount') || h.includes('total')),
+    amount: findAmountIdx(),
     currency: header.findIndex(h => h.includes('currency')),
   };
 

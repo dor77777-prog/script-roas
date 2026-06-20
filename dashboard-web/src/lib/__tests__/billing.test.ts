@@ -364,6 +364,44 @@ b1,2026-05-15,CAD,42.5,Some App,42.5`;
 });
 
 // ---------------------------------------------------------------------------
+// #15 — amount-column detector must prefer the per-line amount over the
+// whole-bill grand total. Pre-fix the detector did
+//   findIndex(h => h.includes('amount') || h.includes('total'))
+// which matched a bare `Total` (bill grand total) BEFORE `Line item amount`
+// (findIndex returns the FIRST match), so EVERY cost row got the bill's
+// grand total → fixed costs in the P&L inflated ~N× the real bill.
+// ---------------------------------------------------------------------------
+
+describe('parseShopifyBillsCsv (#15 — line amount preferred over grand total)', () => {
+  it('imports each row its OWN line amount, not the bill grand total', () => {
+    // A real multi-line Shopify bill: the `Total` column repeats the bill's
+    // GRAND total (60) on every row, while `Line item amount` carries the
+    // per-line cost (10, 20, 30) — which sum to the grand total.
+    const csv = `Bill number,Issue date,Currency,Total,Line item description,Line item amount
+b1,2026-05-15,CAD,60,Klaviyo: Monthly app charge,10
+b1,2026-05-15,CAD,60,ReConvert subscription,20
+b1,2026-05-15,CAD,60,Shopify plan,30`;
+    const { parsed } = parseShopifyBillsCsv(csv, 'uzoshop');
+    expect(parsed).toHaveLength(3);
+    // Each row must carry its own LINE amount, never the grand total (60).
+    expect(parsed.map(p => p.amountCAD)).toEqual([10, 20, 30]);
+    for (const p of parsed) {
+      expect(p.amountCAD).not.toBe(60);
+    }
+  });
+
+  it('still falls back to a bare Total column when no amount column exists', () => {
+    // No `amount` header at all — `Total` is the only money column, so the
+    // detector must fall back to it.
+    const csv = `Bill number,Issue date,Currency,Total,Line item description
+b1,2026-05-15,CAD,42.5,Some App`;
+    const { parsed } = parseShopifyBillsCsv(csv, 'uzoshop');
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].amountCAD).toBe(42.5);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Phase 13.1 (2026-05-24) — billingForRange `revenueByStore` plumbing
 // ---------------------------------------------------------------------------
 
