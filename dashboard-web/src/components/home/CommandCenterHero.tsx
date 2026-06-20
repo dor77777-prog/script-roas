@@ -81,6 +81,7 @@ import {
   useRoasBandGradient,
   type RoasBand,
 } from '@/lib/format/useRoasBandGradient';
+import { isSpendNoSales } from '@/lib/roasBands';
 import { useStaleness, type StalenessInput } from '@/lib/freshness/useStaleness';
 
 /* --------------------------------------------------------------------------
@@ -594,6 +595,19 @@ export function CommandCenterHero({
   // of the hero's MER band. Hidden entirely when newCustomer is omitted.
   const ncBand = useRoasBandGradient(newCustomer?.ncRoas ?? null);
 
+  // FIX #7 — "spent money, made zero sales" (spend>0 & revenue=0). The adapter
+  // nulls current.roas (a 0-revenue ratio is meaningless), so the MER tile
+  // can't classify a band from `bandRoas` and would render the neutral "—".
+  // But this is NOT "no data": the business is burning money with zero return,
+  // which the per-store card already paints RED "0.00x". Mirror it on the hero:
+  // when spentNoSales we FORCE the red band on the MER Widget + render the
+  // truthful "0.00x" instead of "—". Derived here from the period's own
+  // spend/revenue via the single source of truth (lib/roasBands.ts).
+  const merSpentNoSales = isSpendNoSales({
+    spend: current.spend ?? 0,
+    revenue: current.revenue ?? 0,
+  });
+
   return (
     <section
       aria-label="סקירת תקופה"
@@ -753,13 +767,27 @@ export function CommandCenterHero({
             freshness={freshnessStage}
             icon={<Gauge aria-hidden="true" />}
             title="MER"
-            bandRoas={current.roas ?? undefined}
-            value={<CountUp value={current.roas} format={fmtRoas} />}
+            // FIX #7 — spent-money-zero-sales forces RED + "0.00x" (the ROAS
+            // literally IS zero: 0 revenue / spend > 0), mirroring the per-store
+            // card; otherwise classify from the live ratio via `bandRoas`.
+            band={merSpentNoSales ? 'red' : undefined}
+            bandRoas={merSpentNoSales ? undefined : current.roas ?? undefined}
+            value={
+              merSpentNoSales ? (
+                '0.00x'
+              ) : (
+                <CountUp value={current.roas} format={fmtRoas} />
+              )
+            }
             sub={
-              <DeltaLine
-                text={fmtRoasDelta(delta?.roas)}
-                positive={(delta?.roas ?? 0) >= 0}
-              />
+              // FIX #23 — suppress the delta in the spent-no-sales state so the
+              // tile + delta agree (a concrete "▾ −X" beside "0.00x" was the bug).
+              merSpentNoSales ? undefined : (
+                <DeltaLine
+                  text={fmtRoasDelta(delta?.roas)}
+                  positive={(delta?.roas ?? 0) >= 0}
+                />
+              )
             }
           />
         </HelpTooltip>

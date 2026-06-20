@@ -69,6 +69,16 @@ export interface WidgetProps
    */
   bandRoas?: number;
   /**
+   * EXPLICIT band override (FIX #7, 2026-06-20). When set, it WINS over
+   * `bandRoas` and forces the value/badge/tag colour. The hero MER tile uses
+   * this for the "spent money, made zero sales" state: the ROAS is null
+   * upstream (a 0-revenue ratio is meaningless), so `bandRoas` can't classify
+   * it — yet the tile must read RED "0.00x" (actively burning money, zero
+   * return), exactly like the per-store card, never the neutral "—". Pass
+   * `band="red"` + `value="0.00x"` for that state.
+   */
+  band?: CoreRoasBand;
+  /**
    * Freshness desaturation signal — forwarded to the inner {@link Card}'s
    * `freshness` prop (→ `data-freshness="…"`), which the
    * `.glass[data-freshness]` rule in globals.css turns into the operator-locked
@@ -135,6 +145,7 @@ export function Widget({
   value,
   sub,
   bandRoas,
+  band: bandOverride,
   freshness,
   className,
   ...rest
@@ -154,10 +165,14 @@ export function Widget({
   void _ignoredStrayBand;
   void _ignoredStrayFreshness;
 
+  // An explicit `band` override (FIX #7) wins over `bandRoas`: the hero MER
+  // tile uses it to force RED for "spent money, zero sales" where `bandRoas`
+  // is unavailable (roas is null upstream).
   const band =
-    typeof bandRoas === 'number' && Number.isFinite(bandRoas)
+    bandOverride ??
+    (typeof bandRoas === 'number' && Number.isFinite(bandRoas)
       ? bandForRoas(bandRoas)
-      : null;
+      : null);
 
   // Neutral (un-banded) badge mirrors the Horizon default:
   // bg-lightPrimary dark:bg-navy-700 + brand/white icon. Banded badge swaps
