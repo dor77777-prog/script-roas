@@ -53,11 +53,19 @@ vi.mock('../whatsapp', () => ({
   sendWhatsAppTemplate: (...args: unknown[]) => sendMock(...args),
 }));
 
+// Sentry fallback path: when WhatsApp can't deliver (token dead / provider
+// IS whatsapp), the notifier must still raise the alert via Sentry.
+const captureExceptionMock = vi.fn();
+vi.mock('@sentry/nextjs', () => ({
+  captureException: (...args: unknown[]) => captureExceptionMock(...args),
+}));
+
 const ORIGINAL_ENV = { ...process.env };
 
 beforeEach(() => {
   upsertCapture.payload = null;
   sendMock.mockReset();
+  captureExceptionMock.mockClear();
   process.env.SUPABASE_URL = 'https://test.supabase';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
 });
@@ -174,5 +182,86 @@ describe('notifyTokenFailure (d/CR-09 — throttle clock advances on send failur
     expect(upsertCapture.payload?.last_alert_sent_at).toBeTruthy();
     // alerts_sent_count must increment on success.
     expect(upsertCapture.payload?.alerts_sent_count).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #34 — non-WhatsApp fallback when WhatsApp itself is the dead dependency.
+//
+// When the WhatsApp TOKEN is what died (exactly when a token-failure alert is
+// most needed), the WhatsApp send throws and the operator learns nothing in
+// real time. The notifier must route a `provider==='whatsapp'` failure OR a
+// dead-token send error to Sentry as an alternate alert path, so a dead
+// notifier channel can't silence ALL token-failure alerts. The DB row must
+// still be written and the function must still soft-fail (never throw).
+// ---------------------------------------------------------------------------
+describe('notifyTokenFailure (#34 — Sentry fallback when WhatsApp can\'t deliver)', () => {
+  it('routes to Sentry when the WhatsApp send throws (dead-token send error)', async () => {
+    sendMock.mockRejectedValue(new Error('OAuthException: WhatsApp token expired'));
+
+    const { notifyTokenFailure } = await import('../tokenFailures');
+    const result = await notifyTokenFailure({
+      provider: 'meta',
+      storeId: 'uzoshop',
+      operation: 'access_token',
+      errorMsg: 'OAuthException: expired token',
+      advice: 'Refresh OAuth + redeploy',
+    });
+
+    // Fallback alert path was invoked.
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1);
+    // DB row still written; function did not throw.
+    expect(result.dbWritten).toBe(true);
+    expect(upsertCapture.payload).not.toBeNull();
+  });
+
+  it('routes to Sentry when the failing provider IS whatsapp (even if the send would succeed)', async () => {
+    // A whatsapp-provider token failure means our own notifier channel is the
+    // dead dependency — we can't trust WhatsApp to carry its own alert, so the
+    // Sentry path must fire regardless of the send outcome.
+    sendMock.mockResolvedValue(undefined);
+
+    const { notifyTokenFailure } = await import('../tokenFailures');
+    const result = await notifyTokenFailure({
+      provider: 'whatsapp',
+      storeId: 'global',
+      operation: 'send_template',
+      errorMsg: '132001: template send rejected — token invalid',
+    });
+
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1);
+    expect(result.dbWritten).toBe(true);
+  });
+
+  it('does NOT route to Sentry for a healthy non-whatsapp alert', async () => {
+    sendMock.mockResolvedValue(undefined);
+
+    const { notifyTokenFailure } = await import('../tokenFailures');
+    await notifyTokenFailure({
+      provider: 'google',
+      storeId: 'usmile360',
+      operation: 'oauth_refresh',
+      errorMsg: 'invalid_grant',
+    });
+
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+  });
+
+  it('Sentry fallback itself soft-fails: a throwing capture must not crash the notifier', async () => {
+    sendMock.mockRejectedValue(new Error('WhatsApp token dead'));
+    captureExceptionMock.mockImplementation(() => {
+      throw new Error('Sentry transport down');
+    });
+
+    const { notifyTokenFailure } = await import('../tokenFailures');
+    // Must not throw despite both WhatsApp AND Sentry failing.
+    const result = await notifyTokenFailure({
+      provider: 'meta',
+      storeId: 'uzoshop',
+      operation: 'access_token',
+      errorMsg: 'expired token',
+    });
+
+    expect(result.dbWritten).toBe(true);
   });
 });

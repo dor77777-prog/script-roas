@@ -16,25 +16,34 @@
  *      (one per cron-live tick).
  *
  *   3. When sending: posts a WhatsApp template message via the existing
- *      `sendWhatsAppTemplate` helper. We reuse the operator-approved
- *      `roas_daily_summary` template (5 placeholders) so we don't have
- *      to wait 24-48h for Meta to approve a new template. The 5 slots
- *      are repurposed to carry the alert payload.
+ *      `sendWhatsAppTemplate` helper. Uses the dedicated 4-placeholder
+ *      `token_failure_alert` template (English / `en`), which Meta
+ *      APPROVED on 2026-05-24 — sends go through normally, no template
+ *      fallback or repurposing is needed.
  *
  *   4. ALWAYS sends to the single recipient `+972524809540` — explicit
  *      operator instruction (2026-05-23): "alerts only to this number,
  *      not to phone1/phone2 of the daily summary config".
  *
+ *   5. #34 — non-WhatsApp fallback: if the WhatsApp send itself fails
+ *      (dead WhatsApp token, network), OR the failing provider IS
+ *      'whatsapp' (our own notifier channel is the dead dependency), we
+ *      ALSO raise the alert to Sentry. Otherwise a dead WhatsApp token —
+ *      exactly when an alert matters most — would silence every
+ *      token-failure alert except the passive /operator DB row.
+ *
  * Soft-fail policy: the notifier MUST NEVER throw. If anything goes
- * wrong (DB down, WhatsApp 401, etc.) we log + return. The caller's
- * primary path (the fetcher's original error) keeps propagating
- * normally — we don't want notifier failures to mask the real problem.
+ * wrong (DB down, WhatsApp 401, Sentry transport down, etc.) we log +
+ * return. The caller's primary path (the fetcher's original error) keeps
+ * propagating normally — we don't want notifier failures to mask the real
+ * problem.
  *
  * Operator UI: `/operator > בעיות טוקן` (TODO follow-up commit) reads
  * `token_failures` directly to show the operator the unresolved list +
  * how many alerts were sent for each.
  */
 
+import * as Sentry from '@sentry/nextjs';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { sendWhatsAppTemplate } from './whatsapp';
 
@@ -228,12 +237,8 @@ export async function notifyTokenFailure(
   let sendError: string | null = null;
   if (shouldSendWhatsapp) {
     try {
-      // 4-placeholder template `token_failure_alert` — submit this body
-      // to Meta WhatsApp Manager (English / `en` language code). Until
-      // Meta approves it, this send will throw 132001 ("Template name
-      // does not exist") — the DB row still records the failure for
-      // /operator and we'll auto-start delivering alerts the moment
-      // the approval lands. No code change needed.
+      // 4-placeholder template `token_failure_alert` (English / `en`),
+      // APPROVED by Meta on 2026-05-24 — this send goes through normally.
       //
       // Slot mapping (matches the approved body, all English):
       //   {{1}} = `GOOGLE · uzoshop · oauth_refresh @ 23/05 11:30`
@@ -261,15 +266,47 @@ export async function notifyTokenFailure(
       console.warn(
         `tokenFailures: WhatsApp send failed for ${provider}/${storeId}/${operation}: ${sendError}`,
       );
-      // CAUTION: if the failure was IN WhatsApp itself (token dead), we
-      // can't notify via WhatsApp. The DB row still gets written, so the
-      // operator can see it on /operator. A future iteration could
-      // fallback to email here.
-      //
-      // Also caught here: Meta error 132001 "Template name does not
-      // exist" — this fires until the operator submits the
-      // `token_failure_alert` template to Meta. The DB row is still
-      // written so the operator sees the failure on /operator.
+      // #34 — the WhatsApp send itself failed. If the dead dependency IS
+      // WhatsApp (dead token), we obviously can't alert via WhatsApp, so we
+      // fall back to Sentry below (a dead notifier channel must not silence
+      // every token-failure alert). The DB row is still written either way.
+    }
+  }
+
+  // --------- 3b. Non-WhatsApp fallback (#34) ----------
+  // Raise the alert to Sentry when the WhatsApp channel can't be trusted to
+  // carry it: either the send just threw (dead WhatsApp token / network), OR
+  // the failing provider IS 'whatsapp' (our own notifier channel is the dead
+  // dependency — don't rely on it to alert about itself). This runs only when
+  // we actually attempted (or would have attempted) a real send — budget_skip
+  // suppressions are not failures and must stay quiet. The DB row + soft-fail
+  // contract are unchanged; a throwing Sentry transport must not crash us.
+  const whatsappChannelUntrusted =
+    sendError !== null || provider === 'whatsapp';
+  if (shouldAlert && !BUDGET_SKIP_OPERATION_RE.test(operation) && whatsappChannelUntrusted) {
+    try {
+      Sentry.captureException(
+        new Error(
+          `token-failure alert could not be delivered via WhatsApp: ` +
+            `${provider}/${storeId}/${operation} — ${sanitizeForWhatsApp(errorMsg)}` +
+            (sendError ? ` (WhatsApp send error: ${sendError})` : ''),
+        ),
+        {
+          tags: {
+            layer: 'token-failure-fallback',
+            provider,
+            storeId,
+            operation,
+          },
+          fingerprint: ['token-failure-fallback', provider, storeId, operation],
+          extra: { advice: advice ?? null, sendError },
+        },
+      );
+    } catch (e) {
+      // Soft-fail: even the fallback must never throw.
+      console.warn(
+        `tokenFailures: Sentry fallback failed for ${provider}/${storeId}/${operation}: ${e instanceof Error ? e.message : e}`,
+      );
     }
   }
 
