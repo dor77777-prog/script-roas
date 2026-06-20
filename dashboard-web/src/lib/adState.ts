@@ -12,7 +12,16 @@ export type AdPlatform = 'meta' | 'google' | 'tiktok';
 export type AdStateMap = Record<string, boolean>;
 
 /** Stores that share uzoshop's single TikTok ad account (Phase A.5 v2). The
- *  account is fetched once + split per-store via campaignStoreMap. */
+ *  account is fetched once + split per-store via campaignStoreMap.
+ *
+ *  SCOPE (self-serve stores): this is the SHARED-ACCOUNT FETCH membership — a
+ *  config fact about which stores live on uzoshop's ONE TikTok advertiser
+ *  account. It is the ONLY thing `tiktokAccountFetchEnabled` gates on, and it is
+ *  INTENTIONALLY static + distinct from the "advertises on TikTok" set
+ *  (`getStoresWithTikTok*` in platformsByStore, derived from stores.has_tiktok).
+ *  A self-serve store with has_tiktok=true (e.g. pdrn, with its OWN account) is
+ *  in the "advertises" set but NOT here — it does not share uzoshop's account.
+ *  Do NOT derive this from has_tiktok (see storesNoRegressionAnchor). */
 export const TIKTOK_SHARED_STORES = ['uzoshop', 'usmile360'] as const;
 
 export function adStateKey(storeId: string, platform: AdPlatform): string {

@@ -29,9 +29,9 @@ import {
 import {
   applicablePlatforms,
   isStoreFullyOff,
-  TIKTOK_SHARED_STORES,
   type AdStateMap,
 } from '@/lib/adState';
+import { getStoresWithTikTokIdSet } from '@/lib/platformsByStore';
 
 export type SendResult = {
   dateStr: string;
@@ -196,7 +196,11 @@ async function buildOffStoreIds(
       fetchStoreMetaFromPostgres().catch(() => []),
     ]);
 
-  const tiktokStores = new Set<string>(TIKTOK_SHARED_STORES);
+  // Self-serve stores: "advertises on TikTok" applicability is derived from
+  // stores.has_tiktok (getStores → hardcoded fallback {uzoshop, usmile360}), so a
+  // 4th store with has_tiktok=true is classified correctly in the digest's
+  // off-store detection. Byte-identical for the 3.
+  const tiktokStores = await getStoresWithTikTokIdSet().catch(() => new Set<string>());
   const metaById = new Map(storeMeta.map((r) => [r.storeId, r]));
 
   const offStoreIds: Record<string, boolean> = {};
