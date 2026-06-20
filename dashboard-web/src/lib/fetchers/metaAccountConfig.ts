@@ -18,6 +18,7 @@
 import { getFxRate } from '@/lib/fetchers/fx';
 import { notifyFxFailure } from '@/lib/notifications/fxFailure';
 import { getStoreSecret, getGlobalSecret } from '@/lib/storeSecretsReader';
+import { getTodayInIsraelTz } from '@/lib/dateRange';
 import type { StoreId } from '@/lib/registries/types';
 
 export async function getAdAccountIdForStore(storeId: StoreId): Promise<string> {
@@ -120,8 +121,16 @@ export async function getMetaAccessTokenForStore(storeId: StoreId): Promise<stri
  */
 export async function getFxCadAdapterForStore(
   _storeId: StoreId,
+  /**
+   * FIX C (#19) — the IL business date ('YYYY-MM-DD' from
+   * getTodayInIsraelTz(nowIso)) the worker is writing rows under. The FX lookup
+   * MUST use the same date as the row, NOT the UTC date: in the 00:00-03:00 IL
+   * window the UTC date is one day behind, so recomputing it here mis-converted
+   * intraday spend at the prior day's rate. Defaults to the IL date for "now"
+   * for back-compat with any caller that omits it.
+   */
+  dateStr: string = getTodayInIsraelTz(),
 ): Promise<(amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number | null>> {
-  const dateStr = new Date().toISOString().slice(0, 10);
   const ratePromiseCache = new Map<string, Promise<number | null>>();
   // Never rejects — failures resolve to the null sentinel (P1-11 contract),
   // so a cached promise can be awaited by any number of rows safely.

@@ -337,11 +337,14 @@ async function safeAccount(
 
 async function safeFxCadFor(
   storeId: StoreId,
+  ilDate: string,
   override?: RunTikTokWorkerJobInput['getFxCadFor'],
 ): Promise<TikTokHotMetricsInput['getFxCadFor']> {
   if (override) return override(storeId);
   try {
-    return await getTikTokFxCadAdapterForStore(storeId);
+    // FIX C (#19) — pass the IL business date so the FX lookup matches the date
+    // the worker writes rows under (cross-midnight 00:00-03:00 IL correctness).
+    return await getTikTokFxCadAdapterForStore(storeId, ilDate);
   } catch (err) {
     // In vitest the fetch is stubbed and the test never exercises FX, so
     // a no-op stub keeps tests free of network setup. In production
@@ -610,7 +613,7 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
       getHotAdIds(storeId),
       loadStoreMap(),
       safeAccount(storeId, getAccount),
-      safeFxCadFor(storeId, getFxCadFor),
+      safeFxCadFor(storeId, getTodayInIsraelTz(nowIso), getFxCadFor),
     ]);
     const today = getTodayInIsraelTz(nowIso);
 

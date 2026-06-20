@@ -187,7 +187,7 @@ async function checkMetaConfigured(
   return isMetaConfiguredForStoreAsync(storeId);
 }
 
-async function defaultCredentials(storeId: StoreId): Promise<{
+async function defaultCredentials(storeId: StoreId, ilDate: string): Promise<{
   adAccountId: string;
   accessToken: string;
   getFxCadFor: MetaStatusFetchInput['getFxCadFor'];
@@ -195,18 +195,21 @@ async function defaultCredentials(storeId: StoreId): Promise<{
   const [adAccountId, accessToken, getFxCadFor] = await Promise.all([
     getAdAccountIdForStore(storeId),
     getMetaAccessTokenForStore(storeId),
-    getFxCadAdapterForStore(storeId),
+    // FIX C (#19) — pass the IL business date so the FX lookup date matches the
+    // date the worker writes rows under (cross-midnight 00:00-03:00 IL correctness).
+    getFxCadAdapterForStore(storeId, ilDate),
   ]);
   return { adAccountId, accessToken, getFxCadFor };
 }
 
 async function safeCredentials(
   storeId: StoreId,
+  ilDate: string,
   override?: RunMetaWorkerJobInput['getCredentials'],
 ): Promise<{ adAccountId: string; accessToken: string; getFxCadFor: MetaStatusFetchInput['getFxCadFor'] }> {
   if (override) return override(storeId);
   try {
-    return await defaultCredentials(storeId);
+    return await defaultCredentials(storeId, ilDate);
   } catch (err) {
     // P1-12 (2026-06-10): swallow ONLY under vitest (the fetchStatus stub is
     // a vi.fn() that ignores the input shape, so synthetic placeholders are
@@ -324,7 +327,7 @@ export async function runMetaWorkerJob(input: RunMetaWorkerJobInput): Promise<vo
   //    3 entity types. safeCredentials swallows env-var errors ONLY under
   //    vitest so unit tests with stubbed fetchStatus run without
   //    UZOSHOP_META_ACCESS_TOKEN set; in production it rethrows.
-  const creds = await safeCredentials(storeId, getCredentials);
+  const creds = await safeCredentials(storeId, getTodayInIsraelTz(nowIso), getCredentials);
   const status: MetaStatusResult = await fetchStatus({
     storeId,
     adAccountId: creds.adAccountId,
@@ -570,7 +573,7 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
     // write (below) AND the hot-set fetch (further down) need them. Moved
     // above the empty-hot-set gate by the 2026-05-30 regression fix so
     // account-aggregate spend runs every tick regardless of hot-set state.
-    const creds = await safeCredentials(storeId, getCredentials);
+    const creds = await safeCredentials(storeId, getTodayInIsraelTz(nowIso), getCredentials);
 
     // 3. Phase E1.7 (2026-05-30 night) — pre-fetch agg RPC call.
     // Re-aggregates existing campaigns_daily values into data_daily.

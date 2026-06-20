@@ -39,6 +39,7 @@ import { getFxRate } from './fx';
 import { notifyFxFailure } from '@/lib/notifications/fxFailure';
 import type { StoreId } from '@/lib/registries/types';
 import { getStoreSecret } from '@/lib/storeSecretsReader';
+import { getTodayInIsraelTz } from '@/lib/dateRange';
 
 export type TikTokAccountConfig = {
   advertiserId: string;
@@ -183,8 +184,14 @@ export async function getTikTokAccountForStore(
  */
 export async function getTikTokFxCadAdapterForStore(
   _storeId: StoreId,
+  /**
+   * FIX C (#19) — the IL business date the worker writes rows under (mirrors
+   * getFxCadAdapterForStore). Use the row's IL date for the FX lookup, NOT the
+   * UTC date, which is one day behind in the 00:00-03:00 IL window. Defaults to
+   * "now" in IL for back-compat with callers that omit it.
+   */
+  dateStr: string = getTodayInIsraelTz(),
 ): Promise<(amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number | null>> {
-  const dateStr = new Date().toISOString().slice(0, 10);
   const ratePromiseCache = new Map<string, Promise<number | null>>();
   // Never rejects — failures resolve to the null sentinel (P1-11 contract),
   // so a cached promise can be awaited by any number of rows safely.
