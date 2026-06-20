@@ -142,7 +142,15 @@ export function toHeroDelta(
   const curOperatingProfit = cur.revenue - cur.spend - cur.cogs;
   const prevOperatingProfit = prev.revenue - prev.spend - prev.cogs;
   return {
-    roas: baselineEmpty || prev.roas === 0 ? null : cur.roas - prev.roas,
+    // FIX #23 — when the CURRENT period is spent-money-zero-sales (revenue 0 →
+    // roas folds to 0), the hero MER tile renders "0.00x"/"—" (FIX A), so the
+    // delta is unknowable and MUST be null. Pre-fix the delta was computed from
+    // the raw cur.roas (0), printing a concrete "▾ −2.00" beside the null tile.
+    // `cur.roas <= 0` covers it without a separate revenue check.
+    roas:
+      baselineEmpty || prev.roas === 0 || cur.roas <= 0
+        ? null
+        : cur.roas - prev.roas,
     netProfit: baselineEmpty ? null : cur.trueNetProfit - prev.trueNetProfit,
     operatingProfit: baselineEmpty
       ? null

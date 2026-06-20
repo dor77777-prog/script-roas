@@ -201,6 +201,24 @@ describe('toHeroDelta', () => {
     );
     expect(d.cogs).toBe(100);
   });
+
+  // FIX #23 — spent-money-zero-sales: cur.roas is 0 (a 0-revenue ratio is
+  // meaningless and the hero tile renders "0.00x"/"—"). The ROAS delta must be
+  // NULL, not the concrete "cur − prev" (= 0 − prev) that printed a bogus
+  // "▾ −2.00" beside the null/0 tile. Folds with FIX A so tile + delta agree.
+  it('nulls the ROAS delta when cur is spent-no-sales (roas 0) even with a real prev', () => {
+    const d = toHeroDelta(
+      // spent money, ZERO sales → roas 0, revenue 0, spend > 0
+      agg({ revenue: 0, spend: 250, roas: 0 }),
+      // real previous baseline (roas 2.0)
+      agg({ revenue: 400, spend: 200, roas: 2.0 }),
+      { cpm: 0, impressions: 0, spend: 0 },
+      { cpm: 0, impressions: 0, spend: 0 },
+      0,
+      8,
+    );
+    expect(d.roas).toBeNull();
+  });
 });
 
 describe('toPerStoreData', () => {
