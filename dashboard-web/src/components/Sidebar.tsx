@@ -13,6 +13,7 @@ import { LogoutButton } from '@/components/LogoutButton';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/Sheet';
 import { useSidebarPin } from '@/lib/hooks/useSidebarPin';
+import { useStores } from '@/lib/useStores';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import type { TabKey } from '@/lib/urlState';
 
@@ -119,6 +120,11 @@ function SidebarBody({
   const { choice, setChoice } = useTheme();
   const isCollapsed = variant === 'desktop' && collapsed;
   const showTooltips = isCollapsed;
+  // Brand subtitle lists the LIVE store display names (self-serve dynamic) —
+  // was hardcoded "uzoshop · zolplus · usmile" (3 short forms, missed pdrn skin
+  // + a 4th store). useStores falls back to the canonical 3 if the DB read fails.
+  const { stores } = useStores();
+  const storeSubtitle = stores.map((s) => s.storeName).join(' · ');
   // Horizon rail is a SOLID surface — white in light, navy-800 in dark — in
   // BOTH the desktop rail and the mobile drawer (both paint --sidebar). Inner
   // items render through the sidebar fg tokens (dark-navy ink on white / light
@@ -172,7 +178,7 @@ function SidebarBody({
         </div>
         {!isCollapsed && (
           <div className="mt-1.5 text-[11px] font-medium truncate text-[var(--sidebar-fg)]">
-            uzoshop · zolplus · usmile
+            {storeSubtitle}
           </div>
         )}
       </div>

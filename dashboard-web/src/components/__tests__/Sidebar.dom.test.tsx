@@ -10,6 +10,21 @@ import { ThemeProvider } from '../ThemeProvider';
 // canonical over-promotion regression for Task 1.4.
 vi.mock('@/lib/hooks/useIsMobile', () => ({ useIsMobile: () => false }));
 
+// Redesign 2026-06-20 — the brand subtitle under "Insight Owl" must list the
+// LIVE store DISPLAY names (from useStores), not a hardcoded "uzoshop · zolplus
+// · usmile". Mock a 4-store business (incl. a self-serve 4th store) with real
+// display names so the dynamic-subtitle test is deterministic.
+vi.mock('@/lib/useStores', () => ({
+  useStores: () => ({
+    stores: [
+      { storeId: 'uzoshop',   storeName: 'uzoshop',   brandColor: null, isHeadless: false, hasTikTok: true,  status: 'active', displayOrder: 1, enableCustomerJourney: false },
+      { storeId: 'zolplus',   storeName: 'Zol Plus',  brandColor: null, isHeadless: false, hasTikTok: false, status: 'active', displayOrder: 2, enableCustomerJourney: false },
+      { storeId: 'usmile360', storeName: '360usmile', brandColor: null, isHeadless: true,  hasTikTok: true,  status: 'active', displayOrder: 3, enableCustomerJourney: false },
+      { storeId: 'pdrn-skin', storeName: 'pdrn skin', brandColor: null, isHeadless: true,  hasTikTok: true,  status: 'active', displayOrder: 4, enableCustomerJourney: false },
+    ],
+  }),
+}));
+
 afterEach(() => {
   // The sidebar pin persists to localStorage and FocusMode mutates
   // documentElement — reset both so the shortcut/collision tests start from a
@@ -37,6 +52,16 @@ function renderSidebar(props: {
 }
 
 describe('Sidebar', () => {
+  it('brand subtitle lists the LIVE store display names dynamically (incl. a 4th store, real display names)', () => {
+    // Mobile drawer renders the sidebar EXPANDED, so the subtitle is visible.
+    renderSidebar({ isMobileOpen: true });
+    expect(
+      screen.getByText('uzoshop · Zol Plus · 360usmile · pdrn skin'),
+    ).toBeInTheDocument();
+    // The old hardcoded short-form string must be gone.
+    expect(screen.queryByText('uzoshop · zolplus · usmile')).toBeNull();
+  });
+
   it('renders all 9 tab destinations + operator link + theme toggle', () => {
     renderSidebar();
     // 'פעילות' (Activity) sits RIGHT AFTER 'בית' (Home) — first after Home.
