@@ -7,8 +7,9 @@ import {
   fetchStoreMetaFromPostgres,
 } from '@/lib/postgresReaders';
 import type { DashboardData } from '@/lib/types';
-import { applicablePlatforms, TIKTOK_SHARED_STORES } from '@/lib/adState';
+import { applicablePlatforms } from '@/lib/adState';
 import type { AdPlatform } from '@/lib/adState';
+import { getStoresWithTikTokIdSet } from '@/lib/platformsByStore';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
@@ -62,7 +63,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const [rows, fxIlsToCad, dataLastWriteAt, adSpendFreshness, adStateMap, storeMeta] = await Promise.all([
+    const [rows, fxIlsToCad, dataLastWriteAt, adSpendFreshness, adStateMap, storeMeta, tiktokStores] = await Promise.all([
       fetchDailyDataFromPostgres({ range }),
       fetchTodayFx(),
       // A7-F1 (2026-05-27): the freshness chip ("synced N min ago") must
@@ -79,8 +80,11 @@ export async function GET(req: Request) {
       fetchAdSpendFreshness().catch(() => ({ meta: null, google: null, tiktok: null })),
       fetchAdStateFromPostgres().catch(() => ({})),
       fetchStoreMetaFromPostgres().catch(() => []),
+      // Self-serve stores: TikTok applicability is derived from stores.has_tiktok
+      // (getStores → hardcoded fallback) so a 4th store with has_tiktok=true
+      // renders TikTok. Byte-identical for the 3 (uzoshop + usmile360).
+      getStoresWithTikTokIdSet().catch(() => new Set<string>()),
     ]);
-    const tiktokStores = new Set<string>(TIKTOK_SHARED_STORES);
     const storeApplicablePlatforms: Record<string, AdPlatform[]> = {};
     for (const s of storeMeta) storeApplicablePlatforms[s.storeId] = applicablePlatforms(s, tiktokStores);
     // P0-1 (2026-06-10): >= not > — paginate() caps at EXACTLY 50,000 rows,

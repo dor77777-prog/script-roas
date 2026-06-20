@@ -1438,6 +1438,20 @@ function HomeTab({
     }
     return out;
   }, [data.rows]);
+  // Self-serve stores: the set of store DISPLAY names that advertise on TikTok,
+  // derived from /api/data's storeApplicablePlatforms (already self-serve aware,
+  // built from stores.has_tiktok) re-keyed by display name. Lets toPerStoreData
+  // treat a 4th store with has_tiktok=true first-class instead of the static 3.
+  const tiktokStoreNames = useMemo<Set<string>>(() => {
+    const out = new Set<string>();
+    const appl = data.storeApplicablePlatforms ?? {};
+    const nameById: Record<string, string> = {};
+    for (const [name, id] of Object.entries(storeIdByName)) nameById[id] = name;
+    for (const [storeId, plats] of Object.entries(appl)) {
+      if (plats.includes('tiktok')) out.add(nameById[storeId] ?? storeId);
+    }
+    return out;
+  }, [data.storeApplicablePlatforms, storeIdByName]);
   const perStoreData = useMemo(
     () =>
       toPerStoreData(
@@ -1458,6 +1472,8 @@ function HomeTab({
         // stale ad-spend platform desaturates the card despite cron-live's
         // Shopify-only revenue write keeping data_daily.updated_at fresh.
         data?.adSpendFreshness,
+        // Self-serve: TikTok membership by display name (from has_tiktok).
+        tiktokStoreNames,
       ),
     [
       filtered.storeAggs,
@@ -1472,6 +1488,7 @@ function HomeTab({
       prevRoasByStore,
       data?.adStateMap,
       data?.storeApplicablePlatforms,
+      tiktokStoreNames,
     ],
   );
 

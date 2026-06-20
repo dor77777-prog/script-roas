@@ -2,15 +2,12 @@
 // ads-off Phase 1 — client container: loads the ad-state map + store meta,
 // renders the AdStatePanel matrix, persists toggles via the gated operator API.
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AdStatePanel } from '@/components/operator/AdStatePanel';
 import { operatorFetch } from '@/lib/operatorClient';
 import type { StoreMetaRow } from '@/lib/postgresReaders';
-import { TIKTOK_SHARED_STORES, type AdPlatform, type AdStateMap } from '@/lib/adState';
-
-// Hoisted: the shared-TikTok-account membership never changes at runtime, so
-// build the Set once rather than per render.
-const TIKTOK_STORES = new Set<string>(TIKTOK_SHARED_STORES);
+import { type AdPlatform, type AdStateMap } from '@/lib/adState';
+import { useStores } from '@/lib/useStores';
 
 export function AdStateTab(props: {
   // Optional: forwarded to the panel's unconnected cells. When wired, the
@@ -23,6 +20,17 @@ export function AdStateTab(props: {
   const [map, setMap] = useState<AdStateMap>({});
   const [meta, setMeta] = useState<StoreMetaRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // Self-serve stores: TikTok membership is derived from the live store list
+  // (stores.has_tiktok), NOT a hardcoded set — so a 4th store with
+  // has_tiktok=true shows a TikTok toggle in 'מצב פרסום'. useStores falls back
+  // to the hardcoded 3 (uzoshop + usmile360 hasTikTok) so this is byte-identical
+  // for the existing stores even if /api/stores is unreachable.
+  const { stores } = useStores();
+  const tiktokStores = useMemo(
+    () => new Set<string>(stores.filter((s) => s.hasTikTok).map((s) => s.storeId)),
+    [stores],
+  );
 
   // Reconcile against the server. Returns true on success. Surfaces a read
   // error but never throws (callers may ignore the result).
@@ -75,7 +83,7 @@ export function AdStateTab(props: {
   return (
     <div className="space-y-3">
       {error && <p className="text-status-redFg text-sm">{error}</p>}
-      <AdStatePanel storeMeta={meta} map={map} tiktokStores={TIKTOK_STORES} onToggle={onToggle} onConnect={onConnect} />
+      <AdStatePanel storeMeta={meta} map={map} tiktokStores={tiktokStores} onToggle={onToggle} onConnect={onConnect} />
     </div>
   );
 }

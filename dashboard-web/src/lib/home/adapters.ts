@@ -356,6 +356,11 @@ export function toPerStoreData(
   // while cron-live keeps bumping data_daily.updated_at with Shopify-only
   // revenue writes. Omitted → cards stay on the prior dataLastWriteAt signal.
   adSpendFreshness?: AdSpendFreshness,
+  // Self-serve stores: the set of store DISPLAY names that advertise on TikTok
+  // (stores.has_tiktok). When supplied, the per-platform-CPM TikTok guard honors
+  // it so a 4th store with has_tiktok=true is treated first-class; omitted →
+  // falls back to the static legacy set (byte-identical for the 3).
+  tiktokStoreNames?: ReadonlySet<string>,
 ): PerStoreData[] {
   // Fold ad-spend staleness into the card freshness signal once (the map is
   // business-wide, not per-store — a single dead worker affects every card).
@@ -383,7 +388,9 @@ export function toPerStoreData(
       if (!v || v.spend <= 0) continue;
       // Skip TikTok for stores that genuinely don't have it wired AND have
       // 0 spend — guards a stuck-impression edge from polluting the row.
-      if (plat === 'tiktok' && !storeHasTikTok(storeName) && v.spend === 0) {
+      // Self-serve aware: honors the dynamic tiktok-name set when supplied so a
+      // 4th store with has_tiktok=true is recognized (static legacy set else).
+      if (plat === 'tiktok' && !storeHasTikTok(storeName, tiktokStoreNames) && v.spend === 0) {
         continue;
       }
       out[plat] = {

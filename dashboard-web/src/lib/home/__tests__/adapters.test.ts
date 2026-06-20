@@ -284,6 +284,39 @@ describe('toPerStoreData', () => {
     expect(u.updatedAt).toBeNull();
   });
 
+  it('produces a card for a self-serve 4th store with its TikTok CPM (has_tiktok via the dynamic name set)', () => {
+    // A 4th store ('pdrn skin') NOT in the static STORES_WITH_TIKTOK set. With
+    // the dynamic tiktok-name set supplied + real TikTok spend, its TikTok CPM
+    // is attached and the card is produced — proving the feature flows through.
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 4000, grossRevenue: 4000, spend: 1200, roas: 3.3 }), store: 'pdrn skin' },
+    ];
+    const rows: CampaignsResponse['rows'] = [
+      makeRow({ storeName: 'pdrn skin', storeId: 'pdrn-skin', platform: 'TikTok', date: '2026-05-10', spend: 500, impressions: 100_000 }),
+      makeRow({ storeName: 'pdrn skin', storeId: 'pdrn-skin', platform: 'Meta',   date: '2026-05-10', spend: 700, impressions: 140_000 }),
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      rows,
+      { from: '2026-05-01', to: '2026-05-31' },
+      { 'pdrn skin': 40 },
+      { 'pdrn skin': 'pdrn-skin' },
+      null,
+      undefined,
+      undefined,
+      {},
+      {},
+      undefined,
+      new Set(['pdrn skin']), // dynamic TikTok-name set (stores.has_tiktok)
+    );
+    expect(result.length).toBe(1);
+    const p = result[0];
+    expect(p.storeId).toBe('pdrn-skin');
+    expect(p.storeName).toBe('pdrn skin');
+    expect(p.perPlatformCpm.tiktok?.spend).toBe(500);
+    expect(p.perPlatformCpm.meta?.spend).toBe(700);
+  });
+
   it('AOV is grossRevenue / orders, stable across a refund day (matches StoreDetailModal basis; the band never false-flips)', () => {
     // Wave 1 cross-surface fix: the per-store CARD carries the AOV emphasis
     // band ($50/$70), so its AOV MUST share the gross÷orders basis used by
