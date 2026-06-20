@@ -109,10 +109,19 @@ export function formatTimeAgo(
   if (min < 60) return { label: `עודכן לפני ${min} דק׳`, tone: 'yellow', warning: true };
   const h = Math.floor(min / 60);
   if (h < 24) return { label: `עודכן לפני ${h} שעות`, tone: 'red', warning: true };
-  const d = new Date(t);
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-  return { label: `${dd}/${mm} ${hh}:${mi}`, tone: 'red', warning: true };
+  // FIX E (#32) — render the >24h absolute fallback in Asia/Jerusalem, NOT the
+  // browser-local TZ. Local getDate/getHours showed a different wall-clock than
+  // this chip's own IL tooltip (toLocaleString tz=Asia/Jerusalem) on a non-IL
+  // browser. Intl with an explicit timeZone keeps the fallback TZ-correct.
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Jerusalem',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date(t));
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  const label = `${part('day')}/${part('month')} ${part('hour')}:${part('minute')}`;
+  return { label, tone: 'red', warning: true };
 }
