@@ -1,8 +1,10 @@
 // dashboard-web/src/components/CampaignFreshnessChip.tsx
 //
 // Phase C — small freshness chip for CampaignsTable rows. Reads
-// last_live_tick_at from campaigns_daily. Green if <15 min, yellow
-// if 15-60, gray if >60 min or null.
+// last_live_tick_at from campaigns_daily. Green if <15 min, orange if
+// 15-60 min, red if >60 min; gray (em-dash) when last_live_tick_at is null.
+// A future tick (host/browser clock skew) clamps to 0 → fresh, never a
+// negative-minute label (mirrors lib/freshness/useStaleness.ts:ageMinutes).
 
 import { HelpTooltip } from '@/components/ui/Tooltip';
 
@@ -18,7 +20,11 @@ function colorForMinutes(min: number | null): { dot: string; label: string } {
 }
 
 export function CampaignFreshnessChip({ lastLiveTickAt }: CampaignFreshnessChipProps) {
-  const min = lastLiveTickAt ? Math.floor((Date.now() - new Date(lastLiveTickAt).getTime()) / 60_000) : null;
+  // FIX F (#33) — clamp with Math.max(0, …) so a future last_live_tick_at
+  // (clock skew) reads as 0 min / fresh instead of a negative-minute label.
+  const min = lastLiveTickAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(lastLiveTickAt).getTime()) / 60_000))
+    : null;
   const { dot, label } = colorForMinutes(min);
   return (
     <HelpTooltip content={lastLiveTickAt ?? 'no live tick'}>
