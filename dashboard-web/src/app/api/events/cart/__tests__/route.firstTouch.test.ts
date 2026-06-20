@@ -108,6 +108,23 @@ describe('events/cart — first-touch (_ft_attr → raw.first_touch_source)', ()
     expect(inserted[0].raw.first_touch_source).toBe('meta-paid');
   });
 
+  // FIX B (#26) — the FIRST_TOUCH_KEYS allowlist must forward the Google
+  // iOS/display click IDs gbraid/wbraid/dclid so they reach the classifier and
+  // resolve to google-paid (mirroring gclid). Before the fix these keys were
+  // dropped by the allowlist → first_touch_source was null.
+  for (const key of ['gbraid', 'wbraid', 'dclid']) {
+    it(`first_touch with ${key} → raw.first_touch_source = google-paid`, async () => {
+      await post({
+        store_token: 't',
+        event_id: `ftg-${key}`,
+        product_title: 'P',
+        quantity: 1,
+        first_touch: `?${key}=Cj0xyz`,
+      });
+      expect(inserted[0].raw.first_touch_source).toBe('google-paid');
+    });
+  }
+
   it('first_touch with only a non-mappable signal (ft_set_at only) → first_touch_source null', async () => {
     await post({
       store_token: 't',

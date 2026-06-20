@@ -267,6 +267,50 @@ describe('classifyOrderSource — ZERO REGRESSION for existing source values', (
 });
 
 /**
+ * FIX B (#26) — Google iOS/display click IDs `gbraid` / `wbraid` / `dclid` must
+ * be recognized as google-paid, mirroring `gclid`. Previously only `gclid` was
+ * checked, so iOS-privacy / Display-network click-id orders misclassified as
+ * 'direct'. Applies to BOTH the last-touch chain AND the ft_* first-touch chain.
+ */
+describe('classifyOrderSource — Google gbraid/wbraid/dclid click IDs (FIX B #26)', () => {
+  const ls = (qs: string) => classifyOrderSource({ landing_site: `/?${qs}` });
+
+  it('gbraid (no gclid, no utm) → google-paid', () => {
+    expect(ls('gbraid=Cj0xyz')).toBe('google-paid');
+  });
+  it('wbraid (no gclid, no utm) → google-paid', () => {
+    expect(ls('wbraid=Cj0abc')).toBe('google-paid');
+  });
+  it('dclid (Display/DV360, no gclid) → google-paid', () => {
+    expect(ls('dclid=CL123')).toBe('google-paid');
+  });
+  it('gbraid in note_attributes → google-paid', () => {
+    expect(
+      classifyOrderSource({ landing_site: '/', note_attributes: [{ name: 'gbraid', value: 'X' }] }),
+    ).toBe('google-paid');
+  });
+  it('zero regression: gclid alone still → google-paid', () => {
+    expect(ls('gclid=G1')).toBe('google-paid');
+  });
+  it('click-id precedence preserved: fbclid + gbraid → meta-paid (fbclid checked first)', () => {
+    expect(ls('fbclid=F&gbraid=G')).toBe('meta-paid');
+  });
+
+  // First-touch chain mirror.
+  const ftSrc = (attrs: Array<{ name: string; value: string }>) =>
+    classifyOrderAttribution({ landing_site: '/', note_attributes: attrs }).firstTouchSource;
+  it('ft_gbraid → first-touch google-paid', () => {
+    expect(ftSrc([{ name: 'ft_gbraid', value: 'X' }])).toBe('google-paid');
+  });
+  it('ft_wbraid → first-touch google-paid', () => {
+    expect(ftSrc([{ name: 'ft_wbraid', value: 'X' }])).toBe('google-paid');
+  });
+  it('ft_dclid → first-touch google-paid', () => {
+    expect(ftSrc([{ name: 'ft_dclid', value: 'X' }])).toBe('google-paid');
+  });
+});
+
+/**
  * FIX A (#25) — the live-feed badge wrapper `classifyOrderSource` must thread
  * the order's created_at into the classifier so the cookie-only `_fbc`
  * last-touch path (fbcIsFreshClick) fires IDENTICALLY to the canonical pipeline

@@ -150,6 +150,13 @@ const FIRST_TOUCH_KEYS: ReadonlySet<string> = new Set([
   'utm_term',
   'fbclid',
   'gclid',
+  // FIX B (#26) — Google iOS/privacy (gbraid/wbraid) + Display/DV360 (dclid)
+  // click IDs. The classifier now treats them as google-paid, so the beacon's
+  // first-touch allowlist must forward them too (else they're silently dropped
+  // and the first-click lens shows no signal for these clicks).
+  'gbraid',
+  'wbraid',
+  'dclid',
   'ttclid',
   'set_at',
 ]);

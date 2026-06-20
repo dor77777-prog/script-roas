@@ -258,7 +258,10 @@ export function classifyOrderAttribution(
   const ftGet = (suffix: string): string => ftBag[`ft_${suffix}`] ?? '';
 
   const firstFbclid = !!ftGet('fbclid');
-  const firstGclid = !!ftGet('gclid');
+  // FIX B (#26) — mirror the last-touch broadening for the first-touch chain:
+  // gbraid/wbraid (iOS/privacy) and dclid (Display/DV360) are google-paid too.
+  const firstGclid =
+    !!ftGet('gclid') || !!ftGet('gbraid') || !!ftGet('wbraid') || !!ftGet('dclid');
   const firstTtclid = !!ftGet('ttclid');
   const firstUtmSourceRaw = ftGet('utm_source');
   const firstUtmMediumRaw = ftGet('utm_medium');
@@ -335,7 +338,11 @@ export function classifyOrderAttribution(
   // window vs the order (see fbcIsFreshClick) — its 90-day persistence would
   // otherwise over-attribute returning/organic buyers to Meta.
   const fbclid = !!params['fbclid'] || fbcIsFreshClick(params['_fbc'], order.created_at);
-  const gclid = !!params['gclid'];
+  // FIX B (#26) — Google tags iOS/privacy clicks with `gbraid`/`wbraid` and
+  // Display/DV360 clicks with `dclid` INSTEAD of `gclid`. Treat any of the four
+  // as a google-paid click signal; otherwise such orders misclassify as direct.
+  const gclid =
+    !!params['gclid'] || !!params['gbraid'] || !!params['wbraid'] || !!params['dclid'];
   // Phase 05.7.5: TikTok click ID. Same pattern as fbclid/gclid — TikTok's
   // ad SDK appends `ttclid` to landing URLs when the click came from a
   // TikTok ad. Promoted to its own variable for symmetry with the other
