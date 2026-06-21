@@ -29,11 +29,10 @@ function registeredIds(): string[] {
 // factories minted one function per store via `cron-{family}-{storeId}`.
 const STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
 
+// Pairs still registered with Inngest (not yet migrated to Vercel Cron + QStash).
 const NEW_PAIR_IDS = [
   'cron-daily-scheduler',
   'cron-daily-worker',
-  'cron-live-scheduler',
-  'cron-live-worker',
   'cron-yesterday-refresh-scheduler',
   'cron-yesterday-refresh-worker',
 ] as const;
@@ -65,6 +64,11 @@ const MIGRATED_TO_VERCEL_CRON_IDS = [
   'whatsapp-noon', // → /api/cron/whatsapp?slot=noon (Task 1.1)
   'whatsapp-evening', // → /api/cron/whatsapp?slot=evening (Task 1.1)
   'whatsapp-eod', // → /api/cron/whatsapp?slot=eod (Task 1.1)
+  // Stage 2 — heavy pipeline scheduler+worker pairs now run on Vercel Cron +
+  // QStash. Their createFunction exports remain on disk for rollback but are
+  // unregistered.
+  'cron-live-scheduler', // → /api/cron/live (Task 2.1)
+  'cron-live-worker', // → /api/worker/live-store (Task 2.1)
 ];
 
 describe('serve() registered function set — Phase 4b cutover', () => {

@@ -108,10 +108,10 @@ import {
   cronDailyScheduler,
   cronDailyWorker,
 } from '@/inngest/functions/cronDaily';
-import {
-  cronLiveScheduler,
-  cronLiveWorker,
-} from '@/inngest/functions/cronLive';
+// Stage 2 (Inngest → Vercel Cron + QStash migration): the live scheduler+worker
+// pair now runs on Vercel Cron (/api/cron/live) + QStash (/api/worker/live-store).
+// cronLiveScheduler/cronLiveWorker remain on disk in cronLive.ts for rollback but
+// are NO LONGER imported/registered here.
 import { cronLiveHeavyFunctions } from '@/inngest/functions/cronLiveHeavy';
 import {
   cronYesterdayRefreshScheduler,
@@ -168,8 +168,8 @@ export const inngestFunctions = [
   // list at runtime, so a store added via the DB joins the cron with no deploy.
   cronDailyScheduler, // replaces ...cronDailyFunctions (cron-daily-{store}); cron 'TZ=Asia/Jerusalem 5 0 * * *'
   cronDailyWorker, // event-driven worker (cron/daily.store.requested), concurrency-keyed by store
-  cronLiveScheduler, // replaces ...cronLiveFunctions (cron-live-{store})
-  cronLiveWorker, // event-driven worker (cron/live.store.requested), concurrency-keyed by store
+  // Stage 2 migration — cronLiveScheduler/cronLiveWorker moved to /api/cron/live
+  // (Vercel Cron) + /api/worker/live-store (QStash).
   ...cronLiveHeavyFunctions, // Phase E1 (2026-05-30) — DISABLED (empty array). cron-tick-orchestrator + hot_metrics workers cover today; cron-yesterday-refresh covers yesterday.
   cronYesterdayRefreshScheduler, // replaces ...cronYesterdayRefreshFunctions (cron-yesterday-refresh-{store}); Phase E1.5 2h cadence catching cross-day refunds + late attribution
   cronYesterdayRefreshWorker, // event-driven worker (cron/yesterday.store.requested), concurrency-keyed by store

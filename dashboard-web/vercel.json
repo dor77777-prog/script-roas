@@ -10,6 +10,7 @@
     { "path": "/api/cron/whatsapp?slot=evening", "schedule": "0 15 * * *" },
     { "path": "/api/cron/whatsapp?slot=evening", "schedule": "0 16 * * *" },
     { "path": "/api/cron/whatsapp?slot=eod", "schedule": "30 21 * * *" },
-    { "path": "/api/cron/whatsapp?slot=eod", "schedule": "30 22 * * *" }
+    { "path": "/api/cron/whatsapp?slot=eod", "schedule": "30 22 * * *" },
+    { "path": "/api/cron/live", "schedule": "*/10 * * * *" }
   ]
 }
