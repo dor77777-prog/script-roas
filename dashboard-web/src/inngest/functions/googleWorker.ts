@@ -571,19 +571,18 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
 // daily limit.
 // ---------------------------------------------------------------------------
 
-export const googleWorker = inngest.createFunction(
-  {
-    id: 'google-worker',
-    triggers: [{ event: GOOGLE_JOB_REQUESTED }],
-    concurrency: [{ key: 'event.data.store_id', limit: 1 }],
-    throttle: { limit: 600, period: '1h', key: 'event.data.store_id' },
-  },
-  async ({ event, step }) => {
-    await step.run('runGoogleWorkerJob', async () => {
-      const nowIso = new Date().toISOString();
-      const sb = getSupabaseAdmin();
-      const data = event.data as unknown as JobRequestedEvent;
-      const storeId = data.store_id;
+// ---------------------------------------------------------------------------
+// Wired job runner — Inngest → Vercel Cron + QStash migration (Stage 2 Task
+// 2.4). The full dependency wiring the Inngest binding built inside `step.run`
+// is hoisted here so BOTH the Inngest binding AND the `/api/worker/google`
+// QStash route call the SAME byte-identical wiring. The pure core
+// (`runGoogleWorkerJob`) is unchanged; its unit tests drive it directly and
+// stay green.
+// ---------------------------------------------------------------------------
+export async function runGoogleWorkerForJob(data: JobRequestedEvent): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const sb = getSupabaseAdmin();
+  const storeId = data.store_id;
 
       const loadPriorRegistry = async (): Promise<PriorMaps> => {
         const [c, a, ad] = await Promise.all([
@@ -671,6 +670,18 @@ export const googleWorker = inngest.createFunction(
         },
         nowIso,
       });
+}
+
+export const googleWorker = inngest.createFunction(
+  {
+    id: 'google-worker',
+    triggers: [{ event: GOOGLE_JOB_REQUESTED }],
+    concurrency: [{ key: 'event.data.store_id', limit: 1 }],
+    throttle: { limit: 600, period: '1h', key: 'event.data.store_id' },
+  },
+  async ({ event, step }) => {
+    await step.run('runGoogleWorkerJob', async () => {
+      await runGoogleWorkerForJob(event.data as unknown as JobRequestedEvent);
     });
   },
 );

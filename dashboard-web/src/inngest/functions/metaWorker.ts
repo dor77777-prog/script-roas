@@ -683,19 +683,19 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
 // without blowing past Meta's per-app limit.
 // ---------------------------------------------------------------------------
 
-export const metaWorker = inngest.createFunction(
-  {
-    id: 'meta-worker',
-    triggers: [{ event: META_JOB_REQUESTED }],
-    concurrency: [{ key: 'event.data.store_id', limit: 1 }],
-    throttle: { limit: 900, period: '1h', key: 'event.data.store_id' },
-  },
-  async ({ event, step }) => {
-    await step.run('runMetaWorkerJob', async () => {
-      const nowIso = new Date().toISOString();
-      const sb = getSupabaseAdmin();
-      const data = event.data as unknown as JobRequestedEvent;
-      const storeId = data.store_id;
+// ---------------------------------------------------------------------------
+// Wired job runner — Inngest → Vercel Cron + QStash migration (Stage 2 Task
+// 2.4). The full dependency wiring (Supabase client, fetchers, BUC probe,
+// freshness/notify/agg adapters) that the Inngest binding built inside
+// `step.run` is hoisted here so BOTH the Inngest binding AND the
+// `/api/worker/meta` QStash route call the SAME byte-identical wiring. The
+// pure core (`runMetaWorkerJob`) is unchanged; its unit tests drive it
+// directly and stay green.
+// ---------------------------------------------------------------------------
+export async function runMetaWorkerForJob(data: JobRequestedEvent): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const sb = getSupabaseAdmin();
+  const storeId = data.store_id;
 
       const bucProbe = async (): Promise<{ pct: number; etaMinutes: number }> => {
         const { data: row } = await sb
@@ -846,6 +846,18 @@ export const metaWorker = inngest.createFunction(
         },
         nowIso,
       });
+}
+
+export const metaWorker = inngest.createFunction(
+  {
+    id: 'meta-worker',
+    triggers: [{ event: META_JOB_REQUESTED }],
+    concurrency: [{ key: 'event.data.store_id', limit: 1 }],
+    throttle: { limit: 900, period: '1h', key: 'event.data.store_id' },
+  },
+  async ({ event, step }) => {
+    await step.run('runMetaWorkerJob', async () => {
+      await runMetaWorkerForJob(event.data as unknown as JobRequestedEvent);
     });
   },
 );

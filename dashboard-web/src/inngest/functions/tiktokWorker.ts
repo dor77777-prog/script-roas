@@ -786,19 +786,18 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
 // would generate, so the cap mainly protects against bug-induced bursts.
 // ---------------------------------------------------------------------------
 
-export const tiktokWorker = inngest.createFunction(
-  {
-    id: 'tiktok-worker',
-    triggers: [{ event: TIKTOK_JOB_REQUESTED }],
-    concurrency: [{ key: 'event.data.store_id', limit: 1 }],
-    throttle: { limit: 1500, period: '1h', key: 'event.data.store_id' },
-  },
-  async ({ event, step }) => {
-    await step.run('runTikTokWorkerJob', async () => {
-      const nowIso = new Date().toISOString();
-      const sb = getSupabaseAdmin();
-      const data = event.data as unknown as JobRequestedEvent;
-      const storeId = data.store_id;
+// ---------------------------------------------------------------------------
+// Wired job runner — Inngest → Vercel Cron + QStash migration (Stage 2 Task
+// 2.4). The full dependency wiring the Inngest binding built inside `step.run`
+// is hoisted here so BOTH the Inngest binding AND the `/api/worker/tiktok`
+// QStash route call the SAME byte-identical wiring. The pure core
+// (`runTikTokWorkerJob`) is unchanged; its unit tests drive it directly and
+// stay green.
+// ---------------------------------------------------------------------------
+export async function runTikTokWorkerForJob(data: JobRequestedEvent): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const sb = getSupabaseAdmin();
+  const storeId = data.store_id;
 
       const loadPriorRegistry = async (): Promise<PriorMaps> => {
         const [c, a, ad] = await Promise.all([
@@ -1010,6 +1009,18 @@ export const tiktokWorker = inngest.createFunction(
         },
         nowIso,
       });
+}
+
+export const tiktokWorker = inngest.createFunction(
+  {
+    id: 'tiktok-worker',
+    triggers: [{ event: TIKTOK_JOB_REQUESTED }],
+    concurrency: [{ key: 'event.data.store_id', limit: 1 }],
+    throttle: { limit: 1500, period: '1h', key: 'event.data.store_id' },
+  },
+  async ({ event, step }) => {
+    await step.run('runTikTokWorkerJob', async () => {
+      await runTikTokWorkerForJob(event.data as unknown as JobRequestedEvent);
     });
   },
 );
