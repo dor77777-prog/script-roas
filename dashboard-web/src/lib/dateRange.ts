@@ -184,7 +184,11 @@ export function israelWeekday(now: Date = new Date()): number {
   const map: Record<string, number> = {
     Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
   };
-  return map[wd] ?? new Date().getDay();
+  // `en-US` weekday:'short' always yields one of the 7 mapped names, so the
+  // map is exhaustive and the `?? 0` is unreachable — but it must NOT fall back
+  // to the server's LOCAL weekday (the #19/#32 cross-midnight TZ bug class the
+  // utcDateRatchet guard bans). 0 (Sun) is a safe deterministic default.
+  return map[wd] ?? 0;
 }
 
 /**
