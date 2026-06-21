@@ -137,9 +137,11 @@ import { cronLiveHeavyFunctions } from '@/inngest/functions/cronLiveHeavy';
 // disk for rollback but is NO LONGER imported/registered here.
 // Stage 1 migration — the 3 WhatsApp digest crons now run on Vercel Cron
 // (/api/cron/whatsapp?slot=…). Their createFunction exports remain on disk for
-// rollback but are NO LONGER imported/registered here. eventWhatsappSendNow
-// (operator "send now" button) STAYS registered until Stage 3.
-import { eventWhatsappSendNow } from '@/inngest/functions/cronWhatsapp';
+// rollback but are NO LONGER imported/registered here.
+// Stage 3 Task 3.3 migration — eventWhatsappSendNow (operator "send now" button)
+// now sends INLINE via runWhatsappSlot in /api/operator/notifications/send. Its
+// createFunction export remains on disk in cronWhatsapp.ts for rollback but is
+// NO LONGER imported/registered here.
 // Stage 1 migration — cronCohortRefresh now runs on Vercel Cron
 // (/api/cron/cohort). Its createFunction export remains on disk for rollback
 // but is NO LONGER imported/registered here.
@@ -192,8 +194,15 @@ export const inngestFunctions = [
   // (/api/operator/backfill → /api/worker/backfill). Unregistered here.
   // Stage 1 migration — cronOauthCanary moved to /api/cron/oauth-canary (Vercel Cron).
   // Stage 1 migration — whatsappCronFunctions moved to /api/cron/whatsapp (Vercel Cron).
-  eventWhatsappSendNow, // 1 function (operator "send WhatsApp now") — stays until Stage 3
+  // Stage 3 Task 3.3 migration — eventWhatsappSendNow now sends INLINE via
+  // runWhatsappSlot in /api/operator/notifications/send. Unregistered here.
   // Stage 1 migration — cronCohortRefresh moved to /api/cron/cohort (Vercel Cron).
+  //
+  // ALL functions are now migrated off Inngest. The only remaining entry is the
+  // `...cronLiveHeavyFunctions` spread, which is an EMPTY array (Phase E1
+  // disabled it on 2026-05-30) — so the registered set is empty. The serve()
+  // route + the createFunction exports stay on disk until Stage 4 (rollback
+  // safety); Stage 4 deletes cronLiveHeavy.ts + this whole route.
 ];
 
 export const { GET, POST, PUT } = serve({

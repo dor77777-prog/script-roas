@@ -102,8 +102,8 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 | `cron-live-heavy-uzoshop` | `*/30 * * * *` IL | Phase 13.9 — Meta adset+ad insights + budgets, Google ad-group+ad insights, TikTok ad insights → `persistCampaignsLive()` UPSERT ל-`campaigns_daily` + `ads_daily` בטווח [היום, אתמול] |
 | `cron-live-heavy-zolplus` | `*/30 * * * *` IL | אותו דבר ל-zolplus |
 | `cron-live-heavy-usmile360` | `*/30 * * * *` IL | אותו דבר ל-usmile360 |
-| `event-sync-now` | event-triggered (`event/sync-now`) | זהה ל-cron-live, ידני מ-`/operator` |
-| `event-backfill` | event-triggered (`event/backfill`) | טווח תאריכים נבחר × חנויות נבחרות |
+| `event-sync-now` | ~~event-triggered (`event/sync-now`)~~ → **QStash fan-out `/api/operator/sync-now` → `/api/worker/daily-store` (Stage 3, §4.10)** | זהה ל-cron-daily, ידני מ-`/operator` |
+| `event-backfill` | ~~event-triggered (`event/backfill`)~~ → **QStash `/api/operator/backfill` → `/api/worker/backfill` (Stage 3, §4.10)** | טווח תאריכים נבחר × חנויות נבחרות |
 | `cron-oauth-canary` | ~~`0 0 * * *` IL~~ → **Vercel Cron `/api/cron/oauth-canary` (Stage 1, §4.10)** | פעם ביום 5 בדיקות פינג מקבילות לטוקנים של פלטפורמות מתחלפות: Google×uzoshop + Meta×3-stores + TikTok×uzoshop. כל בדיקה ב-step.run עצמאי עם try/catch; כשל בודד → `notifyTokenFailure` (throttled WhatsApp 1/6h) + `captureStepError` (Sentry) + ממשיך לסיבלינגים. הפונקציה לעולם לא זורקת — מסתיימת ב-`{ status: ok\|partial, passed, failed[] }`. הורחב מ-Google-בלבד ב-Phase 14 (Phase 13.4 origins). |
 | `cron-cohort-refresh` | ~~`TZ=Asia/Jerusalem 0 4 * * 1` (שני 04:00 IL)~~ → **Vercel Cron `/api/cron/cohort` (Stage 1, §4.10)** | **Wave 2 (2026-06-03).** re-aggregate שבועי מלא של `customer_cohort_monthly` פר חנות (Shopify Bulk → CAD → `aggregateCohortCells` → full-replace DELETE+INSERT). decomposed לפי-חנות (כל חנות סט-steps משלה) + poll דרך `step.sleep` כדי שאף invocation בודד לא יחרוג מ-`maxDuration=60s`; FX memoized per (currency, date). soft-fail פר-חנות + `captureStepError` ל-partial. ראה §4.4. |
 
@@ -117,7 +117,7 @@ FX-rate correctness (2026-05-28 fix — FX-date artifact / P0-3): each date's `g
 
 ### 4.2 3 פונקציות WhatsApp (Phase 05.7.4)
 
-> **Stage 1 (§4.10): these 3 now run on Vercel Cron** at `/api/cron/whatsapp?slot=noon|evening|eod` (dual-fired UTC + IL-hour gate + `acquireJobLock` double-send guard). UNREGISTERED from Inngest; `createFunction` exports kept for rollback. `event-whatsapp-send-now` stays on Inngest until Stage 3.
+> **Stage 1 (§4.10): these 3 now run on Vercel Cron** at `/api/cron/whatsapp?slot=noon|evening|eod` (dual-fired UTC + IL-hour gate + `acquireJobLock` double-send guard). UNREGISTERED from Inngest; `createFunction` exports kept for rollback. **Stage 3 (§4.10): `event-whatsapp-send-now` now sends INLINE** via `runWhatsappSlot(trigger)` in `/api/operator/notifications/send` (no Inngest event, no fan-out).
 
 | Function ID | תזמון | תוכן |
 |---|---|---|
@@ -206,9 +206,9 @@ Inngest מ-serialize את ה-return של כל `step.run` callback דרך JSON. *
 | `cron-cohort-refresh` | `/api/cron/cohort` → `runCohortRefresh()` (inline step, real `sleep`, `maxDuration=300`) | `0 1 * * 1` + `0 2 * * 1` | Monday + hour 4 (04:00 IL) |
 | `whatsapp-noon` / `-evening` / `-eod` | `/api/cron/whatsapp?slot=…` → `runWhatsappSlot(slot)` | noon `0 9`+`0 10`; evening `0 15`+`0 16`; eod `30 21`+`30 22` | hour 12 / 18 / 0; **wrapped in `acquireJobLock('whatsapp:'+slot+':'+IL-day)` so a DST-seam double-fire can never double-send** |
 
-`event-whatsapp-send-now` (the operator "send now" button) STAYS on Inngest until Stage 3.
+`event-whatsapp-send-now` (the operator "send now" button) — **Stage 3 (§4.10): now sends INLINE** via `runWhatsappSlot(trigger)` in `/api/operator/notifications/send`. UNREGISTERED from Inngest.
 
-**Stage 2 PART A DONE — heavy pipeline LIVE / DAILY / YESTERDAY legs moved to Vercel Cron + QStash (fan-out).** Each leg is now a thin `/api/cron/*` scheduler (verify `CRON_SECRET` → fan out one QStash job per active store from `loadActiveStoreIds()`) + a `/api/worker/*` route (verify the QStash signature → parse `{ storeId }` → `acquireJobLock` → run the UNCHANGED Inngest handler with an inline step ctx `{ run:(_id,fn)=>fn() }` → release the lock in `finally`; `maxDuration=300`). The handler business logic is byte-identical to the Inngest path; QStash's per-job retry + the writers' `ON CONFLICT` idempotency replace Inngest's durable-step memoization. The scheduler+worker `createFunction` pairs are UNREGISTERED from `inngestFunctions` (kept on disk for rollback). Only the operator-button event functions (`event-sync-now` / `event-backfill` / `event-whatsapp-send-now`) stay on Inngest now (Stage 3).
+**Stage 2 PART A DONE — heavy pipeline LIVE / DAILY / YESTERDAY legs moved to Vercel Cron + QStash (fan-out).** Each leg is now a thin `/api/cron/*` scheduler (verify `CRON_SECRET` → fan out one QStash job per active store from `loadActiveStoreIds()`) + a `/api/worker/*` route (verify the QStash signature → parse `{ storeId }` → `acquireJobLock` → run the UNCHANGED Inngest handler with an inline step ctx `{ run:(_id,fn)=>fn() }` → release the lock in `finally`; `maxDuration=300`). The handler business logic is byte-identical to the Inngest path; QStash's per-job retry + the writers' `ON CONFLICT` idempotency replace Inngest's durable-step memoization. The scheduler+worker `createFunction` pairs are UNREGISTERED from `inngestFunctions` (kept on disk for rollback). (Stage 3 has since migrated the last operator-button event functions too — see the Stage 3 block below; `inngestFunctions` is now EMPTY.)
 
 | Leg (was Inngest pair) | Cron route | Worker route → handler | Vercel Cron schedule (UTC) | IL gate | Lock key |
 |---|---|---|---|---|---|
@@ -228,6 +228,16 @@ Daily/yesterday derive the day-that-just-ended via the now-exported `yesterdayJe
 | `tiktok-worker` | — | `/api/worker/tiktok` → `runTikTokWorkerForJob(data)` | — | — | `tiktok:{store_id}:{scope}` |
 
 After Stage 2 Part B, the only Inngest-resident functions are the 3 operator-button event functions (Stage 3).
+
+**Stage 3 DONE — the 3 operator-button event functions moved off Inngest. `inngestFunctions` is now EMPTY.** These were the LAST Inngest-registered functions. The serve() route + the `createFunction` exports stay on disk for rollback until Stage 4 (which deletes them).
+
+| Inngest fn (now unregistered) | Operator route | Transport | Worker / send | Lock |
+| --- | --- | --- | --- | --- |
+| `event-sync-now` | `/api/operator/sync-now` | QStash fan-out — one job per (store, date) | `/api/worker/daily-store` → `runDailyForStore(storeId, date)` (the worker now honors an optional `YYYY-MM-DD` `date` in the body; the cron-daily fan-out still publishes plain `{ storeId }` → yesterday) | `daily:{storeId}` |
+| `event-backfill` | `/api/operator/backfill` | QStash — ONE job carrying the whole range | `/api/worker/backfill` → the extracted `runEventBackfill({from,to,storeIds,step})` handler (byte-identical loop, now exported from `eventBackfill.ts`), `maxDuration=300` | — |
+| `event-whatsapp-send-now` | `/api/operator/notifications/send` | INLINE (single immediate send, no fan-out) | `await runWhatsappSlot(trigger)` directly in the route | — |
+
+The "Sync now" button preserves the old eventSyncNow work: `scope:'all'` → today + yesterday + day-before per store (3-day "Refresh All" window); `scope:'store'` → today only. The `registeredFunctions.test.ts` guard now asserts `registeredIds()` is `[]`.
 
 ---
 

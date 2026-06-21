@@ -31,10 +31,8 @@ const STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
 
 // Scheduler/worker pairs still registered with Inngest (not yet migrated to
 // Vercel Cron + QStash). Stage 2 (Tasks 2.1–2.3) migrated the live/daily/
-// yesterday pairs off Inngest, so this list is now empty — the remaining
-// Inngest-resident functions are the tick orchestrator + platform workers (Task
-// 2.4) and the operator-button event functions (Stage 3), asserted via
-// UNTOUCHED_IDS below.
+// yesterday pairs off Inngest; Stage 3 migrated the last 3 operator-button event
+// functions. NOTHING is registered with Inngest anymore — this list is empty.
 const NEW_PAIR_IDS: readonly string[] = [];
 
 const OLD_FACTORY_IDS = STORES.flatMap((s) => [
@@ -44,15 +42,10 @@ const OLD_FACTORY_IDS = STORES.flatMap((s) => [
 ]);
 
 // Other functions that MUST remain registered after the cutover.
-// Stage 2 Task 2.4 moved cron-tick-orchestrator + the 3 platform workers off
-// Inngest (see MIGRATED_TO_VERCEL_CRON_IDS); only the operator-button event
-// functions remain Inngest-resident until Stage 3.
-const UNTOUCHED_IDS = [
-  'event-sync-now',
-  'event-backfill',
-  // event-whatsapp-send-now (operator button) stays registered until Stage 3.
-  'event-whatsapp-send-now',
-];
+// Stage 3 migrated the last Inngest-resident functions (the 3 operator-button
+// event functions) off Inngest, so NOTHING remains registered — this list is now
+// empty. The full migrated-off set is asserted via MIGRATED_TO_VERCEL_CRON_IDS.
+const UNTOUCHED_IDS: readonly string[] = [];
 
 // Inngest → Vercel Cron migration (Stage 1): these standalone crons now run on
 // Vercel Cron (/api/cron/*) and MUST NOT be registered with Inngest anymore.
@@ -79,6 +72,11 @@ const MIGRATED_TO_VERCEL_CRON_IDS = [
   'meta-worker', // → /api/worker/meta (Task 2.4)
   'google-worker', // → /api/worker/google (Task 2.4)
   'tiktok-worker', // → /api/worker/tiktok (Task 2.4)
+  // Stage 3 — the 3 operator-button event functions now run via QStash / inline.
+  // Their createFunction exports remain on disk for rollback but are unregistered.
+  'event-sync-now', // → /api/operator/sync-now → /api/worker/daily-store (Task 3.1)
+  'event-backfill', // → /api/operator/backfill → /api/worker/backfill (Task 3.2)
+  'event-whatsapp-send-now', // → /api/operator/notifications/send (inline) (Task 3.3)
 ];
 
 describe('serve() registered function set — Phase 4b cutover', () => {
@@ -101,6 +99,15 @@ describe('serve() registered function set — Phase 4b cutover', () => {
     for (const id of UNTOUCHED_IDS) {
       expect(ids).toContain(id);
     }
+  });
+
+  it('registers NOTHING — all functions migrated off Inngest (Stage 3 complete)', () => {
+    // Stage 3 migrated the last 3 operator-button event functions. The
+    // inngestFunctions array now contributes ZERO functions (only the empty
+    // cronLiveHeavyFunctions spread remains). The serve() route + createFunction
+    // exports stay on disk until Stage 4 (rollback safety), but the registered
+    // set is empty.
+    expect(registeredIds()).toEqual([]);
   });
 
   it('does NOT register crons migrated to Vercel Cron + QStash (Stages 1–2)', () => {
