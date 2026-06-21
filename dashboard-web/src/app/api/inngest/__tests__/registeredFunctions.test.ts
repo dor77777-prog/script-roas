@@ -52,8 +52,15 @@ const UNTOUCHED_IDS = [
   'tiktok-worker',
   'event-sync-now',
   'event-backfill',
-  'cron-oauth-canary',
+  // event-whatsapp-send-now (operator button) stays registered until Stage 3.
   'event-whatsapp-send-now',
+];
+
+// Inngest → Vercel Cron migration (Stage 1): these standalone crons now run on
+// Vercel Cron (/api/cron/*) and MUST NOT be registered with Inngest anymore.
+// Their createFunction exports remain on disk for rollback but are unregistered.
+const MIGRATED_TO_VERCEL_CRON_IDS = [
+  'cron-oauth-canary', // → /api/cron/oauth-canary (Task 1.2)
 ];
 
 describe('serve() registered function set — Phase 4b cutover', () => {
@@ -75,6 +82,13 @@ describe('serve() registered function set — Phase 4b cutover', () => {
     const ids = registeredIds();
     for (const id of UNTOUCHED_IDS) {
       expect(ids).toContain(id);
+    }
+  });
+
+  it('does NOT register crons migrated to Vercel Cron (Stage 1)', () => {
+    const ids = registeredIds();
+    for (const id of MIGRATED_TO_VERCEL_CRON_IDS) {
+      expect(ids).not.toContain(id);
     }
   });
 

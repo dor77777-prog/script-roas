@@ -98,58 +98,92 @@ async function runCheck(
   return out as CheckResult;
 }
 
+/** Summary returned by a canary run. */
+export type OauthCanaryResult = {
+  status: 'ok' | 'partial';
+  checks: number;
+  passed: number;
+  failed: string[];
+};
+
+/** Minimal step shape the canary uses (real Inngest step OR the inline shim). */
+type CanaryStep = { run: (id: string, fn: () => Promise<CheckResult>) => Promise<unknown> };
+
+/**
+ * Inngest → Vercel Cron migration (Stage 1, Task 1.2). The canary work, lifted
+ * out of the Inngest handler into a plain async function the `/api/cron/oauth-
+ * canary` route can call inline. The original handler wrapped each probe in a
+ * `step.run` (so an Inngest function-level retry resumed mid-run); the Vercel
+ * route runs once per fire (no Inngest retries involved), so it passes no
+ * `step` and gets a trivial inline shim that just invokes the callback — same
+ * per-check soft-fail semantics (notifyTokenFailure + captureStepError, never
+ * throw), one HTTP invocation, no durable step memoization needed.
+ *
+ * `step` is injectable so the existing Inngest wrapper (and its unit tests,
+ * which assert step ids/order) keep their exact behavior; the route omits it.
+ */
+export async function runOauthCanary(step?: CanaryStep): Promise<OauthCanaryResult> {
+  // Inline step shim when none injected: run the callback directly. Each
+  // runCheck still owns its own try/catch + alert, so one platform failure
+  // cannot abort the others.
+  const stepImpl: CanaryStep =
+    step ?? { run: (_id: string, fn: () => Promise<CheckResult>): Promise<unknown> => fn() };
+
+  const yesterday = yesterdayInIsrael();
+
+  // Phase 4a: the per-store Meta probe list comes from the DB
+  // (loadActiveStoreIds → DB rows, hardcoded-3 fallback on a DB blip) so a
+  // store added later gets a Meta token canary with no code change. Zero
+  // behavior change for the current 3 stores (the list resolves to the same 3).
+  const stores = await loadActiveStoreIds();
+
+  // (3 + #stores) checks total: Google×1 + Meta×#stores + TikTok×1.
+  // Order: cheapest / most-likely-to-fail first.
+  const checks: Array<Promise<{ provider: CanaryProvider; storeId: CanaryStore; ok: boolean; error?: string }>> = [
+    // Google — historically the 7-day-expiry trap (now permanent if the
+    // OAuth consent screen is published, but kept for defense-in-depth).
+    runCheck(stepImpl, {
+      provider: 'google',
+      storeId: 'uzoshop',
+      advice: 'Re-mint GOOGLEADS_REFRESH_TOKEN via OAuth Playground + update Vercel env + redeploy.',
+      probe: () => fetchGoogleAdsSpendForDay('uzoshop', yesterday),
+    }),
+    // Meta — 60-day rotating access tokens, one per active store.
+    ...stores.map((storeId) =>
+      runCheck(stepImpl, {
+        provider: 'meta',
+        storeId,
+        advice: `Refresh META_ACCESS_TOKEN_${storeId.toUpperCase()} via Meta Business Manager + update Vercel env + redeploy.`,
+        probe: () => fetchMetaSpendForDayLight(storeId, yesterday),
+      }),
+    ),
+    // TikTok — uzoshop-only per STORES_WITH_TIKTOK_IDS.
+    runCheck(stepImpl, {
+      provider: 'tiktok',
+      storeId: 'uzoshop',
+      advice: 'Refresh TIKTOK_ACCESS_TOKEN_UZOSHOP in TikTok Marketing Business + update Vercel env + redeploy.',
+      probe: () => fetchTikTokAdvertiserInfo('uzoshop'),
+    }),
+  ];
+
+  const results = await Promise.all(checks);
+  const failed = results.filter((r) => !r.ok);
+  return {
+    status: failed.length === 0 ? 'ok' : 'partial',
+    checks: results.length,
+    passed: results.length - failed.length,
+    failed: failed.map((r) => `${r.provider}/${r.storeId}`),
+  };
+}
+
 export const cronOauthCanary = inngest.createFunction(
   {
     id: 'cron-oauth-canary',
     triggers: [{ cron: 'TZ=Asia/Jerusalem 0 0 * * *' }],
   },
-  async ({ step }) => {
-    const yesterday = yesterdayInIsrael();
-
-    // Phase 4a: the per-store Meta probe list comes from the DB
-    // (loadActiveStoreIds → DB rows, hardcoded-3 fallback on a DB blip) so a
-    // store added later gets a Meta token canary with no code change. Zero
-    // behavior change for the current 3 stores (the list resolves to the same
-    // 3). The canary is non-critical and iterates inside this single handler,
-    // so this is an in-handler read only — no Inngest registration change.
-    const stores = await loadActiveStoreIds();
-
-    // (3 + #stores) checks total: Google×1 + Meta×#stores + TikTok×1.
-    // Order: cheapest / most-likely-to-fail first.
-    const checks: Array<Promise<{ provider: CanaryProvider; storeId: CanaryStore; ok: boolean; error?: string }>> = [
-      // Google — historically the 7-day-expiry trap (now permanent if the
-      // OAuth consent screen is published, but kept for defense-in-depth).
-      runCheck(step, {
-        provider: 'google',
-        storeId: 'uzoshop',
-        advice: 'Re-mint GOOGLEADS_REFRESH_TOKEN via OAuth Playground + update Vercel env + redeploy.',
-        probe: () => fetchGoogleAdsSpendForDay('uzoshop', yesterday),
-      }),
-      // Meta — 60-day rotating access tokens, one per active store.
-      ...stores.map((storeId) =>
-        runCheck(step, {
-          provider: 'meta',
-          storeId,
-          advice: `Refresh META_ACCESS_TOKEN_${storeId.toUpperCase()} via Meta Business Manager + update Vercel env + redeploy.`,
-          probe: () => fetchMetaSpendForDayLight(storeId, yesterday),
-        }),
-      ),
-      // TikTok — uzoshop-only per STORES_WITH_TIKTOK_IDS.
-      runCheck(step, {
-        provider: 'tiktok',
-        storeId: 'uzoshop',
-        advice: 'Refresh TIKTOK_ACCESS_TOKEN_UZOSHOP in TikTok Marketing Business + update Vercel env + redeploy.',
-        probe: () => fetchTikTokAdvertiserInfo('uzoshop'),
-      }),
-    ];
-
-    const results = await Promise.all(checks);
-    const failed = results.filter((r) => !r.ok);
-    return {
-      status: failed.length === 0 ? 'ok' : 'partial',
-      checks: results.length,
-      passed: results.length - failed.length,
-      failed: failed.map((r) => `${r.provider}/${r.storeId}`),
-    };
-  },
+  // Forward the Inngest `step` so each probe keeps its own durable step.run
+  // (per-recipient memoization on a function-level retry). The Vercel Cron
+  // route omits `step` and gets the inline shim. Kept registered until Stage 1
+  // unregisters it; the createFunction export remains for rollback.
+  async ({ step }) => runOauthCanary(step),
 );

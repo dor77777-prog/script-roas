@@ -123,7 +123,9 @@ import { googleWorker } from '@/inngest/functions/googleWorker';
 import { tiktokWorker } from '@/inngest/functions/tiktokWorker';
 import { eventSyncNow } from '@/inngest/functions/eventSyncNow';
 import { eventBackfill } from '@/inngest/functions/eventBackfill';
-import { cronOauthCanary } from '@/inngest/functions/cronOauthCanary';
+// Stage 1 (Inngest → Vercel Cron migration): cronOauthCanary now runs on
+// Vercel Cron (/api/cron/oauth-canary). Its createFunction export remains on
+// disk for rollback but is NO LONGER imported/registered here.
 import {
   whatsappCronFunctions,
   eventWhatsappSendNow,
@@ -174,8 +176,8 @@ export const inngestFunctions = [
   tiktokWorker, // Phase C — 1 function (TikTok-platform worker invoked by orchestrator; handles status + hot_metrics scopes)
   eventSyncNow, // 1 function (operator "Sync now" button)
   eventBackfill, // 1 function (operator backfill range picker)
-  cronOauthCanary, // 1 function (Phase 13.4/14 — Google + Meta + TikTok token canary, 00:00 IL daily)
-  ...whatsappCronFunctions, // 3 functions (12:00, 18:00, 00:10 IL)
+  // Stage 1 migration — cronOauthCanary moved to /api/cron/oauth-canary (Vercel Cron).
+  ...whatsappCronFunctions, // 3 functions (12:00, 18:00, 00:30 IL)
   eventWhatsappSendNow, // 1 function (operator "send WhatsApp now")
   ...cronCohortRefreshFunctions, // Wave 2 (2026-06-03) — weekly cohort/LTV re-aggregate (Mon 04:00 IL, Shopify Bulk full replace)
 ];

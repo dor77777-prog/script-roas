@@ -151,6 +151,43 @@ export function getTodayInIsraelTz(nowIso?: string): string {
 }
 
 /**
+ * Returns the local hour (0..23) in Asia/Jerusalem for the given instant
+ * (or now). Used by the Vercel Cron routes (Inngest → Vercel Cron migration).
+ *
+ * Why: Vercel Cron fires in UTC and Israel is UTC+2 (winter / IST) or UTC+3
+ * (summer / IDT). Each TZ-sensitive cron is scheduled at BOTH candidate UTC
+ * times (dual-fire); the route handler proceeds only when this IL hour matches
+ * its target, so exactly ONE of the two fires per day does the work and the
+ * off-DST fire is a cheap 200 no-op. DST-safe because Intl resolves the offset
+ * for the actual instant.
+ */
+export function israelHour(now: Date = new Date()): number {
+  const hh = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Jerusalem',
+    hour: '2-digit',
+    hour12: false,
+  }).format(now);
+  // 'en-GB' renders '00'..'23'; midnight can come back as '24' on some ICU
+  // builds, so fold 24 → 0 to keep the contract 0..23.
+  return Number(hh) % 24;
+}
+
+/**
+ * Returns the local weekday (0=Sunday … 6=Saturday) in Asia/Jerusalem for the
+ * given instant (or now). Used by the weekly cohort cron's IL-day gate.
+ */
+export function israelWeekday(now: Date = new Date()): number {
+  const wd = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jerusalem',
+    weekday: 'short',
+  }).format(now);
+  const map: Record<string, number> = {
+    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+  };
+  return map[wd] ?? new Date().getDay();
+}
+
+/**
  * Builds the SWR cache key for a paginated route. SWR keys are strings,
  * so changing `range` (e.g., user picks a wider range in Filters) yields
  * a NEW key → SWR fires a fresh fetch (no stale-cache shadow).
