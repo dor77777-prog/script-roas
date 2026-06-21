@@ -177,6 +177,25 @@ Inngest מ-serialize את ה-return של כל `step.run` callback דרך JSON. *
 
 **CAPI-safe:** read-only מול Shopify; אפס כתיבה לפלטפורמות-מודעות / pixels / CAPI; רק `customer.id` האטום (ללא PII). הליבה הטהורה `runCohortRefreshOnce` (ללא steps) נשמרת לנתיב ה-backfill + unit tests; `runCohortRefreshStepped` הוא ה-orchestrator הפרודקשני המפורק-ל-steps (שניהם unit-tested עם deps מוזרקים).
 
+### 4.10 Vercel-Cron + QStash pipeline — env vars (migration off Inngest, IN PROGRESS)
+
+> **Status:** the platform is migrating the entire job runtime off **Inngest Cloud** onto **Vercel Cron + Upstash QStash**. See the plan/spec at `docs/superpowers/plans/2026-06-21-inngest-to-vercel-qstash-migration.md`. Stage 0 (shared primitives in `dashboard-web/src/lib/jobs/{qstash,verifyQstash,verifyCron,lock}.ts` + the `job_locks` migration) is in place; the cutover proceeds in staged waves.
+
+**Architecture (target):** Vercel Cron hits thin `/api/cron/*` routes on a schedule; those routes fan out work by publishing jobs to QStash, which delivers each job (with retries) as a POST to an absolute `/api/worker/*` URL. Cron routes authenticate via a shared secret; worker routes authenticate via the QStash request signature. Neither family can carry the dashboard cookie, so both `/api/cron/*` and `/api/worker/*` are in `isDashboardAuthAllowlisted` (the password gate skips them — same self-validating model as `/api/inngest`; see §4 / `src/lib/middlewareHelpers.ts`, guard test `jobRoutesAllowlist.guard.test.ts`).
+
+**New env vars required in Vercel Production** (inject + Redeploy):
+
+| Var | Used by | Purpose |
+|---|---|---|
+| `QSTASH_URL` | `src/lib/jobs/qstash.ts` (`Client` `baseUrl`) | Region-specific QStash publish endpoint. The operator's QStash project lives in a specific region; the `@upstash/qstash` `Client` forwards this as `baseUrl` so publishes hit the right region. Unset ⇒ Client uses its built-in default (safe). |
+| `QSTASH_TOKEN` | `src/lib/jobs/qstash.ts` | Auth token for **publishing** jobs to QStash. |
+| `QSTASH_CURRENT_SIGNING_KEY` | `src/lib/jobs/verifyQstash.ts` | QStash **signature verification** key (current). Worker routes reject any POST whose `Upstash-Signature` doesn't verify. URL-agnostic — independent of `QSTASH_URL`. |
+| `QSTASH_NEXT_SIGNING_KEY` | `src/lib/jobs/verifyQstash.ts` | QStash signature-verification key (next, for key rotation). |
+| `CRON_SECRET` | `src/lib/jobs/verifyCron.ts` | Shared secret for **Vercel-Cron auth**. Cron routes reject any request whose bearer header doesn't match. |
+| `ROAS_BASE_URL` | `src/lib/jobs/qstash.ts` (`workerUrl`) | Absolute base URL of the deployed dashboard (e.g. `https://roas-dashboard-smoky.vercel.app`). QStash needs absolute worker URLs; falls back to `https://$VERCEL_URL` when unset. |
+
+**`INNGEST_*` vars (`INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`) stay** until Stage 4 (Inngest decommission) — the Inngest runtime keeps serving jobs in parallel during the staged cutover. Remove them only when Stage 4 lands and the Inngest plan is cancelled.
+
 ---
 
 ## 5. Data Source APIs
