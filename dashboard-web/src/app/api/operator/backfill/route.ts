@@ -18,14 +18,15 @@
 // depth), but rejecting at the HTTP boundary returns a 400 immediately
 // instead of charging the operator an Inngest exec just to dead-letter.
 //
-// === Why a single inngest.send (not one per date × store) ===
+// === Why a single QStash job (not one per date × store) ===
 //
-// eventBackfill.ts implements the per-pair loop with W6 step-prefix
-// shimming (see eventBackfill.ts:159-164). Fanning out at the API layer
-// would lose that shared step-graph structure in the Inngest jobs table —
-// the operator would see N independent runs instead of one backfill row
-// with N internal steps. Plan 13's JobsTable filter UX is built around
-// the latter shape.
+// Inngest → Vercel Cron + QStash migration (Stage 3 Task 3.2): this route now
+// publishes ONE QStash job to /api/worker/backfill instead of firing
+// inngest.send('event/backfill'). The worker runs the SAME runEventBackfill
+// per-(date × store) loop unchanged. Fanning out at the API layer would split
+// the single backfill into N independent jobs — the worker keeps the whole
+// range as one job so its per-pair result matrix + systemic-failure threshold
+// stay intact (the JobsTable UX expects one backfill row, not N).
 //
 // === Why force-dynamic, no revalidate ===
 //
@@ -46,7 +47,7 @@
 // ever moves, the SUMMARY for that change must update all three.
 
 import { NextResponse } from 'next/server';
-import { inngest } from '@/inngest/client';
+import { publishJob } from '@/lib/jobs/qstash';
 import { userFacingError } from '@/lib/apiErrors';
 import { isDate } from '@/lib/dateValidation';
 import { captureRouteError } from '@/lib/sentry/capture';
@@ -132,24 +133,22 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await inngest.send({
-      name: 'event/backfill',
-      data: {
-        from: body.from,
-        to: body.to,
-        storeIds: body.storeIds,
-      },
+    // Publish ONE QStash job carrying the whole range — the worker runs the
+    // per-(date × store) loop. QStash delivers it as an independent HTTP POST
+    // to /api/worker/backfill (own timeout + retry).
+    await publishJob('/api/worker/backfill', {
+      from: body.from,
+      to: body.to,
+      storeIds: body.storeIds,
     });
 
     // Echo the validated range + storeIds so the client doesn't have to
-    // re-parse its own request body to render the confirmation. The
-    // `accepted` field is the count of Inngest events (always 1 for
-    // backfill — fan-out happens inside the worker via the (date, store)
-    // loop) for symmetry with sync-now's `accepted` shape.
+    // re-parse its own request body to render the confirmation. `accepted` is
+    // always 1 (fan-out happens inside the worker via the (date, store) loop)
+    // for symmetry with sync-now's `accepted` shape.
     return NextResponse.json(
       {
-        accepted: result.ids.length,
-        eventIds: result.ids,
+        accepted: 1,
         range: { from: body.from, to: body.to },
         storeIds: body.storeIds,
       },
@@ -157,8 +156,8 @@ export async function POST(req: Request) {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // Threat T-05.6-14-I4 mitigation — never leak raw inngest.send
-    // errors (could embed event-key fragments in network exceptions).
+    // Threat T-05.6-14-I4 mitigation — never leak raw publish errors (could
+    // embed token fragments in network exceptions).
     captureRouteError('operator/backfill', err);
     console.error('/api/operator/backfill POST failed:', message);
     return NextResponse.json(

@@ -7,9 +7,11 @@ vi.mock('@/lib/getStores', () => ({
   loadActiveStoreIds: mockLoadActiveStoreIds,
 }));
 
-const mockInngestSend = vi.hoisted(() => vi.fn());
-vi.mock('@/inngest/client', () => ({
-  inngest: { send: mockInngestSend },
+// Inngest → Vercel Cron + QStash migration (Stage 3 Task 3.2): the route now
+// publishes ONE QStash job to /api/worker/backfill instead of inngest.send.
+const mockPublishJob = vi.hoisted(() => vi.fn<(path: string, body: unknown) => Promise<void>>());
+vi.mock('@/lib/jobs/qstash', () => ({
+  publishJob: (path: string, body: unknown) => mockPublishJob(path, body),
 }));
 
 vi.mock('@/lib/sentry/capture', () => ({ captureRouteError: () => {} }));
@@ -21,7 +23,7 @@ import { POST } from '@/app/api/operator/backfill/route';
 beforeEach(() => {
   vi.clearAllMocks();
   mockLoadActiveStoreIds.mockResolvedValue(['uzoshop', 'zolplus', 'usmile360']);
-  mockInngestSend.mockResolvedValue({ ids: ['evt-backfill-1'] });
+  mockPublishJob.mockResolvedValue(undefined);
 });
 
 describe('POST /api/operator/backfill', () => {
@@ -34,8 +36,7 @@ describe('POST /api/operator/backfill', () => {
     expect(mockLoadActiveStoreIds).toHaveBeenCalledOnce();
   });
 
-  it('valid payload with known storeIds returns 202', async () => {
-    mockInngestSend.mockResolvedValue({ ids: ['evt-1'] });
+  it('valid payload with known storeIds returns 202 and publishes ONE backfill job', async () => {
     const req = new Request('http://x', {
       method: 'POST',
       body: JSON.stringify({ from: '2026-05-10', to: '2026-05-12', storeIds: ['uzoshop', 'zolplus'] }),
@@ -44,6 +45,13 @@ describe('POST /api/operator/backfill', () => {
     expect(res.status).toBe(202);
     const body = await res.json();
     expect(body.storeIds).toEqual(['uzoshop', 'zolplus']);
+    expect(body.accepted).toBe(1);
+    expect(mockPublishJob).toHaveBeenCalledTimes(1);
+    expect(mockPublishJob).toHaveBeenCalledWith('/api/worker/backfill', {
+      from: '2026-05-10',
+      to: '2026-05-12',
+      storeIds: ['uzoshop', 'zolplus'],
+    });
   });
 
   it('unknown storeId is rejected with 400', async () => {
@@ -53,7 +61,7 @@ describe('POST /api/operator/backfill', () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(400);
-    expect(mockInngestSend).not.toHaveBeenCalled();
+    expect(mockPublishJob).not.toHaveBeenCalled();
   });
 
   it('validates storeIds against loadActiveStoreIds result, not hardcoded list', async () => {
@@ -65,18 +73,18 @@ describe('POST /api/operator/backfill', () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(400);
-    expect(mockInngestSend).not.toHaveBeenCalled();
+    expect(mockPublishJob).not.toHaveBeenCalled();
   });
 
   it('DB-backed store is accepted when loadActiveStoreIds returns it', async () => {
     mockLoadActiveStoreIds.mockResolvedValue(['store-a', 'store-b']);
-    mockInngestSend.mockResolvedValue({ ids: ['evt-2'] });
     const req = new Request('http://x', {
       method: 'POST',
       body: JSON.stringify({ from: '2026-05-10', to: '2026-05-12', storeIds: ['store-a'] }),
     });
     const res = await POST(req);
     expect(res.status).toBe(202);
+    expect(mockPublishJob).toHaveBeenCalledTimes(1);
   });
 
   it('from before history boundary is rejected (400)', async () => {

@@ -228,7 +228,14 @@ export const eventBackfill = inngest.createFunction(
   },
 );
 
-async function runEventBackfill({
+/**
+ * Plain backfill handler — the EXACT per-(date × store) loop body the Inngest
+ * `eventBackfill` function wraps. Exported (Inngest → Vercel Cron + QStash
+ * migration, Stage 3 Task 3.2) so /api/worker/backfill can run it directly off a
+ * QStash message with an inline step ctx. Byte-identical logic to the old
+ * Inngest path — only the step runtime + trigger transport differ.
+ */
+export async function runEventBackfill({
   from,
   to,
   storeIds,

@@ -128,7 +128,10 @@ import { cronLiveHeavyFunctions } from '@/inngest/functions/cronLiveHeavy';
 // runs as a QStash fan-out from /api/operator/sync-now → /api/worker/daily-store.
 // Its createFunction export remains on disk in eventSyncNow.ts for rollback but
 // is NO LONGER imported/registered here.
-import { eventBackfill } from '@/inngest/functions/eventBackfill';
+// Stage 3 Task 3.2 migration — eventBackfill now runs as a QStash job
+// (/api/operator/backfill → /api/worker/backfill, which imports the extracted
+// runEventBackfill handler). Its createFunction export remains on disk in
+// eventBackfill.ts for rollback but is NO LONGER imported/registered here.
 // Stage 1 (Inngest → Vercel Cron migration): cronOauthCanary now runs on
 // Vercel Cron (/api/cron/oauth-canary). Its createFunction export remains on
 // disk for rollback but is NO LONGER imported/registered here.
@@ -185,7 +188,8 @@ export const inngestFunctions = [
   // disk for rollback but are NO LONGER registered here.
   // Stage 3 Task 3.1 migration — eventSyncNow moved to a QStash fan-out
   // (/api/operator/sync-now → /api/worker/daily-store). Unregistered here.
-  eventBackfill, // 1 function (operator backfill range picker)
+  // Stage 3 Task 3.2 migration — eventBackfill moved to a QStash job
+  // (/api/operator/backfill → /api/worker/backfill). Unregistered here.
   // Stage 1 migration — cronOauthCanary moved to /api/cron/oauth-canary (Vercel Cron).
   // Stage 1 migration — whatsappCronFunctions moved to /api/cron/whatsapp (Vercel Cron).
   eventWhatsappSendNow, // 1 function (operator "send WhatsApp now") — stays until Stage 3
