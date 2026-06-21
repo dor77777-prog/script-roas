@@ -313,8 +313,14 @@ function getCogsRateForStore(storeId: StoreId): number {
 //
 // Implementation: subtract 24h from now, then format with timeZone:
 // 'Asia/Jerusalem'. Using en-CA locale guarantees YYYY-MM-DD ordering.
+//
+// Exported (Stage 2 Inngest → Vercel Cron + QStash migration) so the QStash
+// daily/yesterday worker routes derive the same yesterday-IL date the Inngest
+// scheduler used — keeping the handler's date input byte-identical. Uses an
+// EXPLICIT-arg `new Date(...)` + Intl Asia/Jerusalem (NOT a no-arg local-clock
+// getter), so it is safe under the utcDateRatchet (#19/#32) guard.
 // ---------------------------------------------------------------------------
-function yesterdayJerusalem(): string {
+export function yesterdayJerusalem(): string {
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Jerusalem',
     year: 'numeric',

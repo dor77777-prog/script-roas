@@ -31,8 +31,6 @@ const STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
 
 // Pairs still registered with Inngest (not yet migrated to Vercel Cron + QStash).
 const NEW_PAIR_IDS = [
-  'cron-daily-scheduler',
-  'cron-daily-worker',
   'cron-yesterday-refresh-scheduler',
   'cron-yesterday-refresh-worker',
 ] as const;
@@ -69,6 +67,8 @@ const MIGRATED_TO_VERCEL_CRON_IDS = [
   // unregistered.
   'cron-live-scheduler', // → /api/cron/live (Task 2.1)
   'cron-live-worker', // → /api/worker/live-store (Task 2.1)
+  'cron-daily-scheduler', // → /api/cron/daily (Task 2.2)
+  'cron-daily-worker', // → /api/worker/daily-store (Task 2.2)
 ];
 
 describe('serve() registered function set — Phase 4b cutover', () => {
