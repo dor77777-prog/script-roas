@@ -149,7 +149,12 @@ FX-rate correctness (2026-05-28 fix — FX-date artifact / P0-3): each date's `g
 **Stage 4 — אין יותר serve()/registry.** ה-`/api/inngest` serve route + מערך `inngestFunctions` הוסרו. ה-handlers הפשוטים מ-`dashboard-web/src/inngest/functions/*.ts` מיובאים ונקראים ישירות ע"י נתיבי `/api/cron/*` (מופעלים ע"י Vercel Cron, מאומתים ב-`CRON_SECRET`) ו-`/api/worker/*` (מסופקים ע"י QStash, מאומתים בחתימת QStash). ראה §4.10 לפירוט מלא של ה-transport.
 
 ### 4.5 צפייה ב-runs
-- **Stage 4:** Inngest Dashboard ו-`/operator > ריצות אחרונות` (JobsTable + `/api/operator/jobs`, ה-proxy ל-Inngest REST) הוסרו — שום דבר לא רץ על Inngest. תצפית ריצות עכשיו ב-`/operator > פעילות`: **StatusEventsFeed** (`status_events` — מחזור-חיים של tick/worker, שגיאות, budget_skip) + **CronTickSnapshotsViewer** (`cron_tick_snapshots` — fan-out לכל tick). שתיהן מבוססות-DB ולא הושפעו מהמיגרציה.
+- **Stage 4:** Inngest Dashboard ו-ה-JobsTable הישן (`/api/operator/jobs`, ה-proxy ל-Inngest REST) הוסרו — שום דבר לא רץ על Inngest, ואין יותר run-log של Inngest ל-proxy.
+- **תחליף QStash/DB-backed — `RunsPanel` ("ריצות אחרונות" המחודש):** סיכום-בריאות **פר-job מאוחד** (שורה אחת לכל cron + worker) ב-`/operator > פעילות`. נתיב: `GET /api/operator/runs` (server-only, `supabaseAdmin`/`getFreshness` נשארים בשרת; soft-fail HTTP 200 + `{error}` מנוקה ב-`userFacingError` כמו ה-proxy הישן). הצבירה היא המודול הטהור והנבדק `lib/operator/runsSummary.ts#buildRunsSummary`, שמקפל:
+  - **`data_freshness`** (פר platform×scope: `last_success_at`/`last_error`/`status`) → `worker-meta`/`worker-google`/`worker-tiktok` + `cohort` (scope `cohort_monthly`). ה-verdict מוגן-גיל באותו per-scope SLA של `lib/freshness/sourceStatus.ts` — worker שהפסיק לרוץ נקרא **"תקוע" (stale)**, לא ירוק-קפוא.
+  - **`cron_tick_snapshots`** (fan-out פר-tick) → `cron-tick` (verdict לפי `events_failed_count` של ה-tick האחרון; הרחבה מציגה ticks אחרונים).
+  - jobs בלי טלמטריית-DB ייעודית (`cron-live`/`cron-daily`/`cron-yesterday`/`whatsapp`/`oauth-canary`) מוצגים תמיד ברוסטר עם verdict **`unknown` ("אין נתון")** + כיתוב-תזמון — ביושר, בלי אור-ירוק מזויף. (`oauth-canary` נצפה ב-`TokenFailuresTable` בטאב **בריאות**.)
+- ה-`RunsPanel` **משלים** (לא מכפיל) את שני פידי-הפירוט שלצידו: **StatusEventsFeed** (`status_events` — מחזור-חיים פר-ישות: tick/worker, שגיאות, budget_skip) + **CronTickSnapshotsViewer** (`cron_tick_snapshots` — fan-out לכל tick). שלושתם מבוססי-DB. ה-`RunsPanel` עושה SWR poll כל 20 שנ׳.
 
 ### 4.6 Sentry capture per פונקציה (Phase 13.2 + 13.2.2 + 13.2.3)
 כל פונקציית Inngest עוטפת את ה-top-level שלה ב-`captureStepError({fnId, stepName:'top-level', storeId?}, err)` ואז `throw e` — שומרת על Inngest retry/dead-letter, ובמקביל מטעינה ל-Sentry לטריאז'.
