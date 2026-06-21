@@ -454,7 +454,11 @@ export function toPerStoreData(
       roasDeltaPct: roasDeltaPctFor(s.store, s.roas),
       adOff: isStoreFullyOff(storeId, adStateMap, storeApplicablePlatforms[storeId] ?? []),
     };
-  });
+  })
+  // Operator-requested 2026-06-21: rank per-store cards by ad SPEND high→low
+  // (the stores to watch first), NOT by ROAS. Zero-spend stores sink to the
+  // end; among them, organic revenue breaks the tie.
+  .sort((a, b) => (b.spend ?? 0) - (a.spend ?? 0) || (b.revenue ?? 0) - (a.revenue ?? 0));
 }
 
 /* --------------------------------------------------------------------------

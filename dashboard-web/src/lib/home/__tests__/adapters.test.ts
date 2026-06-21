@@ -284,6 +284,26 @@ describe('toPerStoreData', () => {
     expect(u.updatedAt).toBeNull();
   });
 
+  it('orders cards by SPEND descending (zero-spend stores last; revenue breaks ties)', () => {
+    // Operator-requested 2026-06-21: the per-store cards must rank by ad spend
+    // high→low (the stores you should watch first), NOT by ROAS. Zero-spend
+    // stores sink to the end; among zero-spend, an organic-revenue store ranks
+    // above a fully-dead one.
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 71,   grossRevenue: 71,   spend: 53,  roas: 1.34 }), store: 'Zol Plus' },
+      { ...agg({ revenue: 1100, grossRevenue: 1100, spend: 551, roas: 1.99 }), store: 'uzoshop' },
+      { ...agg({ revenue: 0,    grossRevenue: 0,    spend: 0,   roas: 0 }),    store: 'pdrn skin' },
+      { ...agg({ revenue: 214,  grossRevenue: 214,  spend: 0,   roas: 0 }),    store: '360usmile' },
+    ];
+    const result = toPerStoreData(storeAggs, [], { from: '2026-06-01', to: '2026-06-30' }, {}, {});
+    expect(result.map((r) => r.storeName)).toEqual([
+      'uzoshop',   // spend 551
+      'Zol Plus',  // spend 53
+      '360usmile', // spend 0, revenue 214 (organic) → above pdrn
+      'pdrn skin', // spend 0, revenue 0 → last
+    ]);
+  });
+
   it('produces a card for a self-serve 4th store with its TikTok CPM (has_tiktok via the dynamic name set)', () => {
     // A 4th store ('pdrn skin') NOT in the static STORES_WITH_TIKTOK set. With
     // the dynamic tiktok-name set supplied + real TikTok spend, its TikTok CPM
