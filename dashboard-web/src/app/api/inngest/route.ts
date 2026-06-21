@@ -113,10 +113,10 @@ import { inngest } from '@/inngest/client';
 // cronLiveScheduler/cronLiveWorker remain on disk in cronLive.ts for rollback but
 // are NO LONGER imported/registered here.
 import { cronLiveHeavyFunctions } from '@/inngest/functions/cronLiveHeavy';
-import {
-  cronYesterdayRefreshScheduler,
-  cronYesterdayRefreshWorker,
-} from '@/inngest/functions/cronYesterdayRefresh';
+// Stage 2 (Inngest → Vercel Cron + QStash migration): the yesterday-refresh
+// scheduler+worker pair now runs on Vercel Cron (/api/cron/yesterday) + QStash
+// (/api/worker/yesterday-store). cronYesterdayRefreshScheduler/Worker remain on
+// disk in cronYesterdayRefresh.ts for rollback but are NO LONGER imported here.
 import { cronTickOrchestrator } from '@/inngest/functions/cronTickOrchestrator';
 import { metaWorker } from '@/inngest/functions/metaWorker';
 import { googleWorker } from '@/inngest/functions/googleWorker';
@@ -171,8 +171,8 @@ export const inngestFunctions = [
   // Stage 2 migration — cronLiveScheduler/cronLiveWorker moved to /api/cron/live
   // (Vercel Cron) + /api/worker/live-store (QStash).
   ...cronLiveHeavyFunctions, // Phase E1 (2026-05-30) — DISABLED (empty array). cron-tick-orchestrator + hot_metrics workers cover today; cron-yesterday-refresh covers yesterday.
-  cronYesterdayRefreshScheduler, // replaces ...cronYesterdayRefreshFunctions (cron-yesterday-refresh-{store}); Phase E1.5 2h cadence catching cross-day refunds + late attribution
-  cronYesterdayRefreshWorker, // event-driven worker (cron/yesterday.store.requested), concurrency-keyed by store
+  // Stage 2 migration — cronYesterdayRefreshScheduler/Worker moved to
+  // /api/cron/yesterday (Vercel Cron) + /api/worker/yesterday-store (QStash).
   cronTickOrchestrator, // Phase B — 1 function (Inngest tick orchestrator: scheduler + worker fan-out)
   metaWorker, // Phase B — 1 function (Meta-platform worker invoked by orchestrator); Phase C extended with 'hot_metrics' scope
   googleWorker, // Phase C — 1 function (Google-platform worker invoked by orchestrator; handles status + hot_metrics scopes)

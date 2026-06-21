@@ -29,11 +29,13 @@ function registeredIds(): string[] {
 // factories minted one function per store via `cron-{family}-{storeId}`.
 const STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
 
-// Pairs still registered with Inngest (not yet migrated to Vercel Cron + QStash).
-const NEW_PAIR_IDS = [
-  'cron-yesterday-refresh-scheduler',
-  'cron-yesterday-refresh-worker',
-] as const;
+// Scheduler/worker pairs still registered with Inngest (not yet migrated to
+// Vercel Cron + QStash). Stage 2 (Tasks 2.1–2.3) migrated the live/daily/
+// yesterday pairs off Inngest, so this list is now empty — the remaining
+// Inngest-resident functions are the tick orchestrator + platform workers (Task
+// 2.4) and the operator-button event functions (Stage 3), asserted via
+// UNTOUCHED_IDS below.
+const NEW_PAIR_IDS: readonly string[] = [];
 
 const OLD_FACTORY_IDS = STORES.flatMap((s) => [
   `cron-daily-${s}`,
@@ -69,10 +71,12 @@ const MIGRATED_TO_VERCEL_CRON_IDS = [
   'cron-live-worker', // → /api/worker/live-store (Task 2.1)
   'cron-daily-scheduler', // → /api/cron/daily (Task 2.2)
   'cron-daily-worker', // → /api/worker/daily-store (Task 2.2)
+  'cron-yesterday-refresh-scheduler', // → /api/cron/yesterday (Task 2.3)
+  'cron-yesterday-refresh-worker', // → /api/worker/yesterday-store (Task 2.3)
 ];
 
 describe('serve() registered function set — Phase 4b cutover', () => {
-  it('registers all 6 new scheduler/worker ids', () => {
+  it('registers every still-Inngest-resident scheduler/worker pair', () => {
     const ids = registeredIds();
     for (const id of NEW_PAIR_IDS) {
       expect(ids).toContain(id);
@@ -93,7 +97,7 @@ describe('serve() registered function set — Phase 4b cutover', () => {
     }
   });
 
-  it('does NOT register crons migrated to Vercel Cron (Stage 1)', () => {
+  it('does NOT register crons migrated to Vercel Cron + QStash (Stages 1–2)', () => {
     const ids = registeredIds();
     for (const id of MIGRATED_TO_VERCEL_CRON_IDS) {
       expect(ids).not.toContain(id);

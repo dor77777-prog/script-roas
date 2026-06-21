@@ -206,7 +206,17 @@ Inngest מ-serialize את ה-return של כל `step.run` callback דרך JSON. *
 | `cron-cohort-refresh` | `/api/cron/cohort` → `runCohortRefresh()` (inline step, real `sleep`, `maxDuration=300`) | `0 1 * * 1` + `0 2 * * 1` | Monday + hour 4 (04:00 IL) |
 | `whatsapp-noon` / `-evening` / `-eod` | `/api/cron/whatsapp?slot=…` → `runWhatsappSlot(slot)` | noon `0 9`+`0 10`; evening `0 15`+`0 16`; eod `30 21`+`30 22` | hour 12 / 18 / 0; **wrapped in `acquireJobLock('whatsapp:'+slot+':'+IL-day)` so a DST-seam double-fire can never double-send** |
 
-`event-whatsapp-send-now` (the operator "send now" button) STAYS on Inngest until Stage 3. The heavy data pipeline (live/daily/yesterday/tick) stays on Inngest until Stage 2.
+`event-whatsapp-send-now` (the operator "send now" button) STAYS on Inngest until Stage 3.
+
+**Stage 2 PART A DONE — heavy pipeline LIVE / DAILY / YESTERDAY legs moved to Vercel Cron + QStash (fan-out).** Each leg is now a thin `/api/cron/*` scheduler (verify `CRON_SECRET` → fan out one QStash job per active store from `loadActiveStoreIds()`) + a `/api/worker/*` route (verify the QStash signature → parse `{ storeId }` → `acquireJobLock` → run the UNCHANGED Inngest handler with an inline step ctx `{ run:(_id,fn)=>fn() }` → release the lock in `finally`; `maxDuration=300`). The handler business logic is byte-identical to the Inngest path; QStash's per-job retry + the writers' `ON CONFLICT` idempotency replace Inngest's durable-step memoization. The scheduler+worker `createFunction` pairs are UNREGISTERED from `inngestFunctions` (kept on disk for rollback). The tick orchestrator + meta/google/tiktok platform workers (Task 2.4) and the operator-button event functions stay on Inngest for now.
+
+| Leg (was Inngest pair) | Cron route | Worker route → handler | Vercel Cron schedule (UTC) | IL gate | Lock key |
+|---|---|---|---|---|---|
+| `cron-live-{scheduler,worker}` | `/api/cron/live` | `/api/worker/live-store` → `runLiveForStore(storeId)` | `*/10 * * * *` | none (10-min cadence is DST-agnostic) | `live:{storeId}` |
+| `cron-daily-{scheduler,worker}` | `/api/cron/daily` | `/api/worker/daily-store` → `runDailyForStore(storeId, yesterdayJerusalem())` | `5 21 * * *` + `5 22 * * *` (dual-fire) | hour 0 (00:05 IL) | `daily:{storeId}` |
+| `cron-yesterday-refresh-{scheduler,worker}` | `/api/cron/yesterday` | `/api/worker/yesterday-store` → `runDailyForStore(storeId, yesterdayJerusalem())` | `0 */2 * * *` | none (2-hourly cadence is DST-agnostic) | `yesterday:{storeId}` |
+
+Daily/yesterday derive the day-that-just-ended via the now-exported `yesterdayJerusalem()` in `cronDaily.ts` (explicit-arg `new Date(...)` + Intl `Asia/Jerusalem` — safe under the utcDateRatchet `#19/#32` guard). The orchestrator/platform-worker leg (Task 2.4) is the remaining heavy-pipeline cutover.
 
 ---
 
