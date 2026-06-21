@@ -115,7 +115,11 @@ export const cronTickOrchestrator = inngest.createFunction(
   },
 );
 
-async function loadMetaBucStateByStore(): Promise<Partial<Record<StoreId, { pct: number; etaMinutes: number }>>> {
+// Exported (Stage 2 Task 2.4) so the /api/cron/tick QStash scheduler route can
+// replicate the SAME dependency wiring the Inngest binding uses (it injects this
+// as runTickOnce's `loadMetaBuc`). Reads meta_buc_usage and reduces each store's
+// worst-case pct + ETA.
+export async function loadMetaBucStateByStore(): Promise<Partial<Record<StoreId, { pct: number; etaMinutes: number }>>> {
   const sb = getSupabaseAdmin();
   const { data } = await sb
     .from('meta_buc_usage')

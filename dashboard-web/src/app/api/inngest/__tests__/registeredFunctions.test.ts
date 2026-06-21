@@ -44,11 +44,10 @@ const OLD_FACTORY_IDS = STORES.flatMap((s) => [
 ]);
 
 // Other functions that MUST remain registered after the cutover.
+// Stage 2 Task 2.4 moved cron-tick-orchestrator + the 3 platform workers off
+// Inngest (see MIGRATED_TO_VERCEL_CRON_IDS); only the operator-button event
+// functions remain Inngest-resident until Stage 3.
 const UNTOUCHED_IDS = [
-  'cron-tick-orchestrator',
-  'meta-worker',
-  'google-worker',
-  'tiktok-worker',
   'event-sync-now',
   'event-backfill',
   // event-whatsapp-send-now (operator button) stays registered until Stage 3.
@@ -73,6 +72,13 @@ const MIGRATED_TO_VERCEL_CRON_IDS = [
   'cron-daily-worker', // → /api/worker/daily-store (Task 2.2)
   'cron-yesterday-refresh-scheduler', // → /api/cron/yesterday (Task 2.3)
   'cron-yesterday-refresh-worker', // → /api/worker/yesterday-store (Task 2.3)
+  // Stage 2 Task 2.4 — tick orchestrator + platform workers now run on Vercel
+  // Cron (/api/cron/tick) + QStash (/api/worker/{meta,google,tiktok}). Their
+  // createFunction exports remain on disk for rollback but are unregistered.
+  'cron-tick-orchestrator', // → /api/cron/tick (Task 2.4)
+  'meta-worker', // → /api/worker/meta (Task 2.4)
+  'google-worker', // → /api/worker/google (Task 2.4)
+  'tiktok-worker', // → /api/worker/tiktok (Task 2.4)
 ];
 
 describe('serve() registered function set — Phase 4b cutover', () => {

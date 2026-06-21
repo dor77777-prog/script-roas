@@ -208,7 +208,7 @@ Inngest מ-serialize את ה-return של כל `step.run` callback דרך JSON. *
 
 `event-whatsapp-send-now` (the operator "send now" button) STAYS on Inngest until Stage 3.
 
-**Stage 2 PART A DONE — heavy pipeline LIVE / DAILY / YESTERDAY legs moved to Vercel Cron + QStash (fan-out).** Each leg is now a thin `/api/cron/*` scheduler (verify `CRON_SECRET` → fan out one QStash job per active store from `loadActiveStoreIds()`) + a `/api/worker/*` route (verify the QStash signature → parse `{ storeId }` → `acquireJobLock` → run the UNCHANGED Inngest handler with an inline step ctx `{ run:(_id,fn)=>fn() }` → release the lock in `finally`; `maxDuration=300`). The handler business logic is byte-identical to the Inngest path; QStash's per-job retry + the writers' `ON CONFLICT` idempotency replace Inngest's durable-step memoization. The scheduler+worker `createFunction` pairs are UNREGISTERED from `inngestFunctions` (kept on disk for rollback). The tick orchestrator + meta/google/tiktok platform workers (Task 2.4) and the operator-button event functions stay on Inngest for now.
+**Stage 2 PART A DONE — heavy pipeline LIVE / DAILY / YESTERDAY legs moved to Vercel Cron + QStash (fan-out).** Each leg is now a thin `/api/cron/*` scheduler (verify `CRON_SECRET` → fan out one QStash job per active store from `loadActiveStoreIds()`) + a `/api/worker/*` route (verify the QStash signature → parse `{ storeId }` → `acquireJobLock` → run the UNCHANGED Inngest handler with an inline step ctx `{ run:(_id,fn)=>fn() }` → release the lock in `finally`; `maxDuration=300`). The handler business logic is byte-identical to the Inngest path; QStash's per-job retry + the writers' `ON CONFLICT` idempotency replace Inngest's durable-step memoization. The scheduler+worker `createFunction` pairs are UNREGISTERED from `inngestFunctions` (kept on disk for rollback). Only the operator-button event functions (`event-sync-now` / `event-backfill` / `event-whatsapp-send-now`) stay on Inngest now (Stage 3).
 
 | Leg (was Inngest pair) | Cron route | Worker route → handler | Vercel Cron schedule (UTC) | IL gate | Lock key |
 |---|---|---|---|---|---|
@@ -216,7 +216,18 @@ Inngest מ-serialize את ה-return של כל `step.run` callback דרך JSON. *
 | `cron-daily-{scheduler,worker}` | `/api/cron/daily` | `/api/worker/daily-store` → `runDailyForStore(storeId, yesterdayJerusalem())` | `5 21 * * *` + `5 22 * * *` (dual-fire) | hour 0 (00:05 IL) | `daily:{storeId}` |
 | `cron-yesterday-refresh-{scheduler,worker}` | `/api/cron/yesterday` | `/api/worker/yesterday-store` → `runDailyForStore(storeId, yesterdayJerusalem())` | `0 */2 * * *` | none (2-hourly cadence is DST-agnostic) | `yesterday:{storeId}` |
 
-Daily/yesterday derive the day-that-just-ended via the now-exported `yesterdayJerusalem()` in `cronDaily.ts` (explicit-arg `new Date(...)` + Intl `Asia/Jerusalem` — safe under the utcDateRatchet `#19/#32` guard). The orchestrator/platform-worker leg (Task 2.4) is the remaining heavy-pipeline cutover.
+Daily/yesterday derive the day-that-just-ended via the now-exported `yesterdayJerusalem()` in `cronDaily.ts` (explicit-arg `new Date(...)` + Intl `Asia/Jerusalem` — safe under the utcDateRatchet `#19/#32` guard).
+
+**Stage 2 PART B DONE — tick orchestrator + meta/google/tiktok platform workers moved to Vercel Cron + QStash (Task 2.4).** The `*/10` tick now runs as `/api/cron/tick` (verify `CRON_SECRET` → call the EXISTING planner `runTickOnce` in `cronTickOrchestrator.ts` with its real deps — `getFreshness` / `loadMetaBucStateByStore` / `insertCronTickSnapshot` / `loadActiveStoreIds` — but inject a `sendEvent` that maps each planned `{META,GOOGLE,TIKTOK}_JOB_REQUESTED` event to `publishJob('/api/worker/'+platform, event.data)` via `platformPathForEventName(name)`). The planning logic (Layer-1/2/3 skip gates in `priorityBuilder.buildEvents`) is unchanged — only the transport differs (QStash publish vs `step.sendEvent`). Each platform worker is `/api/worker/{meta,google,tiktok}` (verify QStash signature → parse the `JobRequestedEvent` payload `{ store_id, scope, … }` → `acquireJobLock('<platform>:'+store_id+':'+scope)` → run the UNCHANGED wired handler → release in `finally`; `maxDuration=300`). The wired handler is `run{Meta,Google,TikTok}WorkerForJob(data)` — the dependency wiring the Inngest binding built inside `step.run`, hoisted to a plain exported async fn so the binding AND the route share byte-identical wiring; the pure cores (`run{Meta,Google,TikTok}WorkerJob`) are untouched. `cron-tick-orchestrator` + `meta-worker` + `google-worker` + `tiktok-worker` `createFunction` exports remain on disk for rollback but are UNREGISTERED from `inngestFunctions`.
+
+| Leg (was Inngest) | Cron route | Worker route → wired handler | Vercel Cron schedule (UTC) | IL gate | Lock key |
+|---|---|---|---|---|---|
+| `cron-tick-orchestrator` | `/api/cron/tick` → `runTickOnce(…sendEvent=QStash publish)` | — (fans out per planned event) | `*/10 * * * *` | none (10-min cadence is DST-agnostic) | — |
+| `meta-worker` | — | `/api/worker/meta` → `runMetaWorkerForJob(data)` | — | — | `meta:{store_id}:{scope}` |
+| `google-worker` | — | `/api/worker/google` → `runGoogleWorkerForJob(data)` | — | — | `google:{store_id}:{scope}` |
+| `tiktok-worker` | — | `/api/worker/tiktok` → `runTikTokWorkerForJob(data)` | — | — | `tiktok:{store_id}:{scope}` |
+
+After Stage 2 Part B, the only Inngest-resident functions are the 3 operator-button event functions (Stage 3).
 
 ---
 

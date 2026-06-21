@@ -117,10 +117,13 @@ import { cronLiveHeavyFunctions } from '@/inngest/functions/cronLiveHeavy';
 // scheduler+worker pair now runs on Vercel Cron (/api/cron/yesterday) + QStash
 // (/api/worker/yesterday-store). cronYesterdayRefreshScheduler/Worker remain on
 // disk in cronYesterdayRefresh.ts for rollback but are NO LONGER imported here.
-import { cronTickOrchestrator } from '@/inngest/functions/cronTickOrchestrator';
-import { metaWorker } from '@/inngest/functions/metaWorker';
-import { googleWorker } from '@/inngest/functions/googleWorker';
-import { tiktokWorker } from '@/inngest/functions/tiktokWorker';
+// Stage 2 Task 2.4 (Inngest → Vercel Cron + QStash migration): the tick
+// orchestrator + meta/google/tiktok platform workers now run on Vercel Cron
+// (/api/cron/tick) + QStash (/api/worker/{meta,google,tiktok}). Their
+// createFunction exports (cronTickOrchestrator / metaWorker / googleWorker /
+// tiktokWorker) remain on disk for rollback but are NO LONGER imported/registered
+// here. The wired runners they shared (run{Meta,Google,TikTok}WorkerForJob +
+// runTickOnce) are imported by the new routes instead.
 import { eventSyncNow } from '@/inngest/functions/eventSyncNow';
 import { eventBackfill } from '@/inngest/functions/eventBackfill';
 // Stage 1 (Inngest → Vercel Cron migration): cronOauthCanary now runs on
@@ -173,10 +176,10 @@ export const inngestFunctions = [
   ...cronLiveHeavyFunctions, // Phase E1 (2026-05-30) — DISABLED (empty array). cron-tick-orchestrator + hot_metrics workers cover today; cron-yesterday-refresh covers yesterday.
   // Stage 2 migration — cronYesterdayRefreshScheduler/Worker moved to
   // /api/cron/yesterday (Vercel Cron) + /api/worker/yesterday-store (QStash).
-  cronTickOrchestrator, // Phase B — 1 function (Inngest tick orchestrator: scheduler + worker fan-out)
-  metaWorker, // Phase B — 1 function (Meta-platform worker invoked by orchestrator); Phase C extended with 'hot_metrics' scope
-  googleWorker, // Phase C — 1 function (Google-platform worker invoked by orchestrator; handles status + hot_metrics scopes)
-  tiktokWorker, // Phase C — 1 function (TikTok-platform worker invoked by orchestrator; handles status + hot_metrics scopes)
+  // Stage 2 Task 2.4 migration — cronTickOrchestrator + metaWorker +
+  // googleWorker + tiktokWorker moved to /api/cron/tick (Vercel Cron) +
+  // /api/worker/{meta,google,tiktok} (QStash). createFunction exports remain on
+  // disk for rollback but are NO LONGER registered here.
   eventSyncNow, // 1 function (operator "Sync now" button)
   eventBackfill, // 1 function (operator backfill range picker)
   // Stage 1 migration — cronOauthCanary moved to /api/cron/oauth-canary (Vercel Cron).
