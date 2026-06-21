@@ -34,6 +34,27 @@ import type { DaySummary, StoreSummary } from './summary';
 import { adDisplayState } from '@/lib/adState';
 import { bandForRoas } from '@/lib/roasBands';
 
+/**
+ * Order store ids by ad SPEND descending (spenders first). The Meta template
+ * has a FIXED 3 store slots, so when there are more stores than slots a
+ * ZERO-spend store is the one dropped — NEVER a store that spent money
+ * (operator rule, 2026-06-21: "stores that spent money must always come
+ * first"). Deterministic tiebreaks (revenue DESC, then storeName) keep each
+ * store's slot position stable across runs — the prior alphabetical sort could
+ * drop a spender (e.g. "Zol Plus" as the 4th name) in favour of a 0-spend store.
+ */
+export function orderStoreIdsBySpend(stores: Record<string, StoreSummary>): string[] {
+  return Object.keys(stores).sort((a, b) => {
+    const sa = stores[a];
+    const sb = stores[b];
+    return (
+      (sb?.totalSpend ?? 0) - (sa?.totalSpend ?? 0) ||
+      (sb?.revenue ?? 0) - (sa?.revenue ?? 0) ||
+      (sa?.storeName ?? a).localeCompare(sb?.storeName ?? b)
+    );
+  });
+}
+
 function formatRoas(roas: number): string {
   if (!Number.isFinite(roas) || roas === 0) return '—';
   return roas.toFixed(2);
@@ -295,13 +316,7 @@ export function buildTemplateParametersV2(
   }
 
   const storeIds =
-    summary && summary.stores
-      ? Object.keys(summary.stores).sort((a, b) =>
-          (summary.stores[a]?.storeName ?? a).localeCompare(
-            summary.stores[b]?.storeName ?? b,
-          ),
-        )
-      : [];
+    summary && summary.stores ? orderStoreIdsBySpend(summary.stores) : [];
   for (let i = 0; i < 3; i++) {
     const sid = storeIds[i];
     if (sid && summary) {
@@ -406,14 +421,12 @@ export function buildTemplateParameters(
   // Monday and {3} on Tuesday. Operator glancing at the WhatsApp message
   // would mis-attribute spend to the wrong store.
   //
-  // Sort by storeName so the position of each store is deterministic and
-  // explainable. localeCompare keeps Hebrew/English mixed names sane.
+  // Order by SPEND descending (orderStoreIdsBySpend) so the position is both
+  // deterministic (the CR-02 goal — stable across runs) AND spenders-first:
+  // with more stores than the template's 3 slots, a 0-spend store drops, never
+  // a store that spent money (operator rule 2026-06-21).
   const storeIds = summary && summary.stores
-    ? Object.keys(summary.stores).sort((a, b) =>
-        (summary.stores[a]?.storeName ?? a).localeCompare(
-          summary.stores[b]?.storeName ?? b,
-        ),
-      )
+    ? orderStoreIdsBySpend(summary.stores)
     : [];
   for (let i = 0; i < 3; i++) {
     const sid = storeIds[i];

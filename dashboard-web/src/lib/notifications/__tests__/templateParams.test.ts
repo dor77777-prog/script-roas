@@ -71,23 +71,36 @@ describe('buildTemplateParameters — locks CR-02 audit fix (2026-05-23)', () =>
     expect(paramsA[3]).toBe(paramsB[3]);
   });
 
-  it('places stores in storeName alphabetical order (locale-aware)', () => {
-    // Names: "360usmile" < "Zol Plus" < "uzoshop" by locale-aware sort.
-    // (Note: localeCompare typically puts digits before letters, and
-    //  case-insensitive sort makes 'Z' and 'u' compare by base letter.)
+  it('orders stores by SPEND descending — spenders first, not alphabetical (operator rule 2026-06-21)', () => {
     const summary = makeDaySummary({
-      s1: makeStore('uzoshop', { totalSpend: 100 }),
-      s2: makeStore('360usmile', { totalSpend: 200 }),
-      s3: makeStore('Zol Plus', { totalSpend: 300 }),
+      s1: makeStore('uzoshop', { totalSpend: 100, revenue: 300 }),
+      s2: makeStore('360usmile', { totalSpend: 200, revenue: 400 }),
+      s3: makeStore('Zol Plus', { totalSpend: 300, revenue: 500 }),
     });
     const params = buildTemplateParameters(summary, 't');
-    // Verify each slot is the right store by looking for its unique spend value.
-    // 360usmile (spend 200) should be in params[1] (first sorted).
-    expect(params[1]).toContain('200');
-    // The remaining order (Zol Plus / uzoshop) depends on locale rules but
-    // is locked: localeCompare puts 'Z' before 'u' (case-insensitive in
-    // most locales). Don't over-specify — just lock that each store has
-    // a fixed position across runs (covered by previous test).
+    // Highest spend first: Zol Plus (300) → slot1, 360usmile (200) → slot2,
+    // uzoshop (100) → slot3. (Alphabetically 360usmile would have been first.)
+    expect(params[1]).toContain('300');
+    expect(params[2]).toContain('200');
+    expect(params[3]).toContain('100');
+  });
+
+  it('with 4 stores + 3 fixed slots, a 0-spend store is dropped — NEVER a spender', () => {
+    // The Meta template has only 3 store slots; with a 4th store the lowest
+    // must drop. Spenders (uzoshop, Zol Plus) must always be shown; among the
+    // 0-spend stores the one with organic revenue outranks the fully-empty one.
+    const summary = makeDaySummary({
+      a: makeStore('uzoshop', { totalSpend: 550, revenue: 1100 }),
+      b: makeStore('Zol Plus', { totalSpend: 53, revenue: 71 }),
+      c: makeStore('pdrn skin', { totalSpend: 0, revenue: 0 }),
+      d: makeStore('360usmile', { totalSpend: 0, revenue: 214 }),
+    });
+    const params = buildTemplateParameters(summary, 't');
+    const blocks = `${params[1]}|${params[2]}|${params[3]}`;
+    expect(blocks).toContain('uzoshop');    // spender — always shown
+    expect(blocks).toContain('Zol Plus');   // spender — always shown (was the bug: got dropped)
+    expect(blocks).toContain('360usmile');  // 0-spend but organic revenue → kept over pdrn
+    expect(blocks).not.toContain('pdrn skin'); // lowest (0 spend, 0 revenue) → dropped
   });
 
   it('pads with "—" when fewer than 3 stores have rows', () => {
