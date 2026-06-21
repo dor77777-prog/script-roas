@@ -4,6 +4,12 @@
     { "path": "/api/cron/oauth-canary", "schedule": "0 21 * * *" },
     { "path": "/api/cron/oauth-canary", "schedule": "0 22 * * *" },
     { "path": "/api/cron/cohort", "schedule": "0 1 * * 1" },
-    { "path": "/api/cron/cohort", "schedule": "0 2 * * 1" }
+    { "path": "/api/cron/cohort", "schedule": "0 2 * * 1" },
+    { "path": "/api/cron/whatsapp?slot=noon", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/whatsapp?slot=noon", "schedule": "0 10 * * *" },
+    { "path": "/api/cron/whatsapp?slot=evening", "schedule": "0 15 * * *" },
+    { "path": "/api/cron/whatsapp?slot=evening", "schedule": "0 16 * * *" },
+    { "path": "/api/cron/whatsapp?slot=eod", "schedule": "30 21 * * *" },
+    { "path": "/api/cron/whatsapp?slot=eod", "schedule": "30 22 * * *" }
   ]
 }

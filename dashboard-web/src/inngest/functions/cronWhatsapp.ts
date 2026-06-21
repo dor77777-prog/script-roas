@@ -35,12 +35,43 @@ import {
   titleEod,
   todayJerusalem,
   yesterdayJerusalem,
+  type SendResult,
 } from '@/lib/notifications/sendDailySummary';
 import { captureStepError } from '@/lib/sentry/capture';
 
 type StepTools = {
   run: <T>(label: string, fn: () => Promise<T>) => Promise<T>;
 };
+
+/** The three daily WhatsApp digest slots. */
+export type WhatsappSlot = 'noon' | 'evening' | 'eod';
+
+/**
+ * Inngest → Vercel Cron migration (Stage 1, Task 1.1). The per-slot send logic
+ * shared by whatsappNoon / whatsappEvening / whatsappEod, lifted into one plain
+ * async function the `/api/cron/whatsapp` route can call inline.
+ *
+ *   noon    → today's snapshot,    titleNoon
+ *   evening → today's snapshot,    titleEvening
+ *   eod     → YESTERDAY full day,  titleEod
+ *
+ * `step` is forwarded when called from the Inngest wrappers (per-recipient
+ * memoization on a function-level retry); the Vercel route omits it. The route
+ * additionally wraps this call in acquireJobLock so a DST-seam double-fire can
+ * never double-send.
+ */
+export async function runWhatsappSlot(
+  slot: WhatsappSlot,
+  ctx?: { step: StepTools },
+): Promise<SendResult> {
+  if (slot === 'eod') {
+    const dateStr = yesterdayJerusalem();
+    return sendDailySummary(dateStr, titleEod(dateStr), ctx);
+  }
+  const dateStr = todayJerusalem();
+  const title = slot === 'evening' ? titleEvening(dateStr) : titleNoon(dateStr);
+  return sendDailySummary(dateStr, title, ctx);
+}
 
 /**
  * 12:00 Asia/Jerusalem — daily ROAS snapshot (today so far).
@@ -59,8 +90,7 @@ export const whatsappNoon = inngest.createFunction(
     // prevents duplicate WhatsApp sends to recipients that already
     // succeeded when a function-level retry kicks in.
     try {
-      const dateStr = todayJerusalem();
-      return await sendDailySummary(dateStr, titleNoon(dateStr), { step });
+      return await runWhatsappSlot('noon', { step });
     } catch (e) {
       captureStepError({ fnId: 'whatsapp-noon', stepName: 'top-level' }, e);
       throw e;
@@ -81,8 +111,7 @@ export const whatsappEvening = inngest.createFunction(
   async ({ step }: { step: StepTools }) => {
     // Phase 13.4 — see whatsappNoon for rationale on removing the outer step.run.
     try {
-      const dateStr = todayJerusalem();
-      return await sendDailySummary(dateStr, titleEvening(dateStr), { step });
+      return await runWhatsappSlot('evening', { step });
     } catch (e) {
       captureStepError({ fnId: 'whatsapp-evening', stepName: 'top-level' }, e);
       throw e;
@@ -119,8 +148,7 @@ export const whatsappEod = inngest.createFunction(
   async ({ step }: { step: StepTools }) => {
     // Phase 13.4 — see whatsappNoon for rationale on removing the outer step.run.
     try {
-      const dateStr = yesterdayJerusalem();
-      return await sendDailySummary(dateStr, titleEod(dateStr), { step });
+      return await runWhatsappSlot('eod', { step });
     } catch (e) {
       captureStepError({ fnId: 'whatsapp-eod', stepName: 'top-level' }, e);
       throw e;

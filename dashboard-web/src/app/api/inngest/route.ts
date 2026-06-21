@@ -126,10 +126,11 @@ import { eventBackfill } from '@/inngest/functions/eventBackfill';
 // Stage 1 (Inngest → Vercel Cron migration): cronOauthCanary now runs on
 // Vercel Cron (/api/cron/oauth-canary). Its createFunction export remains on
 // disk for rollback but is NO LONGER imported/registered here.
-import {
-  whatsappCronFunctions,
-  eventWhatsappSendNow,
-} from '@/inngest/functions/cronWhatsapp';
+// Stage 1 migration — the 3 WhatsApp digest crons now run on Vercel Cron
+// (/api/cron/whatsapp?slot=…). Their createFunction exports remain on disk for
+// rollback but are NO LONGER imported/registered here. eventWhatsappSendNow
+// (operator "send now" button) STAYS registered until Stage 3.
+import { eventWhatsappSendNow } from '@/inngest/functions/cronWhatsapp';
 // Stage 1 migration — cronCohortRefresh now runs on Vercel Cron
 // (/api/cron/cohort). Its createFunction export remains on disk for rollback
 // but is NO LONGER imported/registered here.
@@ -179,8 +180,8 @@ export const inngestFunctions = [
   eventSyncNow, // 1 function (operator "Sync now" button)
   eventBackfill, // 1 function (operator backfill range picker)
   // Stage 1 migration — cronOauthCanary moved to /api/cron/oauth-canary (Vercel Cron).
-  ...whatsappCronFunctions, // 3 functions (12:00, 18:00, 00:30 IL)
-  eventWhatsappSendNow, // 1 function (operator "send WhatsApp now")
+  // Stage 1 migration — whatsappCronFunctions moved to /api/cron/whatsapp (Vercel Cron).
+  eventWhatsappSendNow, // 1 function (operator "send WhatsApp now") — stays until Stage 3
   // Stage 1 migration — cronCohortRefresh moved to /api/cron/cohort (Vercel Cron).
 ];
 

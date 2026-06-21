@@ -62,6 +62,9 @@ const UNTOUCHED_IDS = [
 const MIGRATED_TO_VERCEL_CRON_IDS = [
   'cron-oauth-canary', // → /api/cron/oauth-canary (Task 1.2)
   'cron-cohort-refresh', // → /api/cron/cohort (Task 1.3)
+  'whatsapp-noon', // → /api/cron/whatsapp?slot=noon (Task 1.1)
+  'whatsapp-evening', // → /api/cron/whatsapp?slot=evening (Task 1.1)
+  'whatsapp-eod', // → /api/cron/whatsapp?slot=eod (Task 1.1)
 ];
 
 describe('serve() registered function set — Phase 4b cutover', () => {
