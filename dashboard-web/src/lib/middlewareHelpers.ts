@@ -103,14 +103,9 @@ export function isDashboardAuthAllowlisted(pathname: string): boolean {
   // + origin (cart) at the route level instead.
   if (pathname === '/api/webhooks/shopify') return true;
   if (pathname === '/api/events/cart') return true;
-  // Inngest serve endpoint. Inngest Cloud calls this to (a) SYNC functions on
-  // every Vercel deploy (PUT) and (b) INVOKE them (POST) — it cannot present
-  // the dashboard cookie. It authenticates instead via `X-Inngest-Signature`
-  // (INNGEST_SIGNING_KEY), validated by the serve() SDK at the route level —
-  // the same self-validating model as the HMAC webhook above. Gating it broke
-  // the deploy-time sync (Inngest's PUT got 401'd), silently pinning Inngest to
-  // a pre-gate deployment so new cron code never went live (2026-06-03 incident).
-  if (pathname === '/api/inngest') return true;
+  // (The legacy `/api/inngest` serve endpoint was removed in Stage 4 of the
+  // Inngest → Vercel Cron + QStash migration — nothing runs on Inngest anymore.
+  // The job runtime now lives entirely in /api/cron/* + /api/worker/* below.)
   // P1-28 (2026-06-10 audit) — TikTok OAuth redirect landing page. Its two
   // documented external audiences CANNOT carry the dash_auth cookie: TikTok
   // App reviewers visiting the redirect URL during App approval, and a

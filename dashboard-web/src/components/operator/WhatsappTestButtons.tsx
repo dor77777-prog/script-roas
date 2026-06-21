@@ -9,9 +9,9 @@
 // Vercel env vars + Meta token + template approval before relying on
 // the scheduled crons (12:00 / 18:00 / 00:10 IL).
 //
-// Each click POSTs to /api/operator/notifications/send which fires an
-// Inngest event. The cron's same `eventWhatsappSendNow` worker handles
-// the event, so behaviour-parity with the scheduled crons is guaranteed.
+// Each click POSTs to /api/operator/notifications/send, which calls the SAME
+// runWhatsappSlot(trigger) send helper that the scheduled Vercel-Cron digests
+// (/api/cron/whatsapp) use — so behaviour-parity with the crons is guaranteed.
 //
 // Wave 5 Task 5.12 (P0-17) — double-confirm guard. Sending a WhatsApp
 // dispatches a real message to +972524809540 (and the secondary number
@@ -69,7 +69,7 @@ export function WhatsappTestButtons() {
         throw new Error(errBody.error ?? `HTTP ${res.status}`);
       }
       setMessage(
-        `${TRIGGER_LABELS[trigger]} — האירוע נשלח ל-Inngest. הודעת WhatsApp אמורה להגיע תוך 3-5 שניות לשני המספרים. אם לא הגיעה: בדוק /operator > ריצות אחרונות.`,
+        `${TRIGGER_LABELS[trigger]} — ההודעה נשלחה. הודעת WhatsApp אמורה להגיע תוך 3-5 שניות לשני המספרים. אם לא הגיעה: בדוק /operator > פעילות (סטטוס אירועים).`,
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

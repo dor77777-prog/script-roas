@@ -447,7 +447,7 @@ export function ManualOverridesCrud() {
       )}
 
       <p className="text-ink-secondary text-xs">
-        סה״כ {rows.length} שורות. שינויים נכנסים לתוקף בריצת ה-Inngest הבאה (cron-daily, sync-now, או backfill).
+        סה״כ {rows.length} שורות. שינויים נכנסים לתוקף בריצת ה-cron הבאה (cron-daily, sync-now, או backfill).
       </p>
       {/* TikTok unblock (2026-06-02): meta | google | tiktok are all
           accepted (DB CHECK migration 20260522102151 + server validator).

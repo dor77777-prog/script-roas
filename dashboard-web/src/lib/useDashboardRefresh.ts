@@ -7,9 +7,9 @@ import { useSWRConfig } from 'swr';
  * Phase 05.7.6 — Global "refresh entire dashboard" hook.
  *
  * What it does on trigger:
- *   1. POST /api/operator/sync-now with `{scope:'all'}` to fire 3 Inngest
- *      events (one per store). The eventSyncNow worker runs the full
- *      cronDaily handler for each store + today's date — Shopify + Meta +
+ *   1. POST /api/operator/sync-now with `{scope:'all'}` to publish one QStash
+ *      job per store to /api/worker/daily-store. Each worker runs the full
+ *      runDailyForStore handler for that store + today's date — Shopify + Meta +
  *      Google + Overrides + per-table writes.
  *   2. Set `isRefreshing = true` so consumers (TabHeader) can show a spinner
  *      on the refresh button + a temporary "מתעדכן..." chip on every tab.

@@ -233,11 +233,12 @@ describe('isDashboardAuthAllowlisted — Shopify ingest endpoints (Task 2)', () 
     expect(isDashboardAuthAllowlisted('/api/events/cart')).toBe(true);
   });
 
-  it('allowlists the Inngest serve endpoint (signature-validated; sync+invoke)', () => {
-    // Inngest Cloud cannot present the dashboard cookie; it authenticates via
-    // X-Inngest-Signature at the route level. Gating it 401'd the deploy-time
-    // sync PUT and pinned Inngest to a pre-gate deployment (2026-06-03 incident).
-    expect(isDashboardAuthAllowlisted('/api/inngest')).toBe(true);
+  it('no longer allowlists the removed Inngest serve endpoint', () => {
+    // The /api/inngest serve route was removed in Stage 4 of the Inngest →
+    // Vercel Cron + QStash migration (nothing runs on Inngest anymore). It is
+    // no longer a real route and is no longer in the allowlist; the job runtime
+    // is now /api/cron/* + /api/worker/* (covered by their own guard test).
+    expect(isDashboardAuthAllowlisted('/api/inngest')).toBe(false);
   });
 
   it('allowlists the TikTok OAuth callback landing page (P1-28)', () => {

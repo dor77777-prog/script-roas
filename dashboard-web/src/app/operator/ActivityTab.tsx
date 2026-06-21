@@ -1,12 +1,19 @@
 // dashboard-web/src/app/operator/ActivityTab.tsx
 //
-// Activity sub-tab: status events feed, cron tick snapshots, and recent jobs.
-// All three sections were previously rendered directly in operator/page.tsx;
+// Activity sub-tab: status events feed + cron tick snapshots.
+// These sections were previously rendered directly in operator/page.tsx;
 // they are extracted here as part of the Task 23 /operator 4-sub-tab split.
+//
+// Inngest decommission (Stage 4, 2026-06-21): the legacy "ריצות אחרונות"
+// JobsTable polled /api/operator/jobs, which proxied the Inngest REST API.
+// Nothing runs on Inngest anymore (the whole pipeline is Vercel Cron + QStash),
+// so that data source is gone — the JobsTable + its route were removed. Run
+// observability now lives in StatusEventsFeed (status_events: tick/worker
+// lifecycle, errors, budget_skip) + CronTickSnapshotsViewer (per-tick fan-out
+// snapshots from cron_tick_snapshots), both DB-backed and unaffected.
 
 import { StatusEventsFeed } from '@/components/operator/StatusEventsFeed';
 import { CronTickSnapshotsViewer } from '@/components/operator/CronTickSnapshotsViewer';
-import { JobsTable } from '@/components/operator/JobsTable';
 import { Heading } from '@/components/ui/Typography';
 
 export function ActivityTab() {
@@ -36,14 +43,6 @@ export function ActivityTab() {
           </span>
         </Heading>
         <CronTickSnapshotsViewer />
-      </section>
-
-      <section>
-        <Heading level="hero" className="mb-3">ריצות אחרונות</Heading>
-        {/* Plan 13: JobsTable — SWR polls /api/operator/jobs every 15s (D-D3);
-            the proxy soft-fails to HTTP 200 with { runs: [], error } so the
-            component handles loading / amber / empty states itself. */}
-        <JobsTable />
       </section>
     </div>
   );

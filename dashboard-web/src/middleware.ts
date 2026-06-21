@@ -38,8 +38,7 @@ import { verifyAuthToken, COOKIE_NAME } from '@/lib/auth/dashboardAuth';
 
 const NOINDEX = 'noindex, nofollow';
 
-// Phase 5c — fail-CLOSED boot guard (mirrors the Inngest route's
-// INNGEST_SIGNING_KEY assert in src/app/api/inngest/route.ts). On Vercel
+// Phase 5c — fail-CLOSED boot guard. On Vercel
 // production, a MISSING auth env var must fail the deploy LOUDLY at module load
 // rather than silently degrade either gate to pass-through. All three vars ARE
 // set in prod today, so this is a no-op safety net; it only throws if a future

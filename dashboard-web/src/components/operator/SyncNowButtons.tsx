@@ -8,9 +8,10 @@
 // (uzoshop / zolplus / usmile360). Each click POSTs to
 // /api/operator/sync-now with the matching `{scope: 'all'}` or
 // `{scope: 'store', storeId}` payload. The API route (plan 14) returns
-// 202 + { accepted, eventIds }; the worker (eventSyncNow.ts, plan 10)
-// picks the event(s) up asynchronously, and the operator console's
-// JobsTable section (plan 13) is the observation surface for completion.
+// 202 + { accepted, eventIds }; the QStash worker (/api/worker/daily-store)
+// picks the job(s) up asynchronously, and the operator console's Activity
+// sub-tab (status-events feed + cron-tick snapshots) is the observation
+// surface for completion.
 //
 // === Why 'use client' ===
 //
@@ -106,9 +107,9 @@ export function SyncNowButtons() {
         throw new Error(errBody.error ?? `HTTP ${res.status}`);
       }
       const body = (await res.json()) as SyncResponse;
-      // Hebrew confirmation. JobsTable (plan 13) is the operator's
-      // observation surface for completion. We do NOT poll for status
-      // here — per D-D4, async is the contract.
+      // Hebrew confirmation. The Activity sub-tab (status-events feed) is the
+      // operator's observation surface for completion. We do NOT poll for
+      // status here — per D-D4, async is the contract.
       setMessage(
         `${label} — ${body.accepted} אירועים נשלחו. עקוב אחר ההתקדמות בטבלת הריצות.`,
       );
@@ -171,7 +172,7 @@ export function SyncNowButtons() {
 
       <p className="text-ink-secondary text-xs">
         * &quot;Sync now&quot; מפעיל את אותו handler של ה-cron היומי לתאריך
-        הנוכחי (Asia/Jerusalem). כל לחיצה ≈ 6 ביצועי Inngest לחנות.
+        הנוכחי (Asia/Jerusalem). כל לחיצה מפיצה משימת QStash אחת לכל חנות.
       </p>
     </div>
   );

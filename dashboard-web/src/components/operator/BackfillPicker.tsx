@@ -7,7 +7,7 @@
 // Renders 2 date inputs (from/to) + 3 store checkboxes + a submit button.
 // On submit, POSTs to /api/operator/backfill and surfaces the resulting
 // 202 + eventIds as a "ה-Backfill נוסף לתור" confirmation. The actual job
-// progress is observed in the JobsTable section (plan 13), not here —
+// progress is observed in the Activity sub-tab (status-events feed), not here —
 // async semantics per D-D4 + RESEARCH §Open Question 4.
 //
 // === Why 'use client' ===
@@ -139,9 +139,9 @@ export function BackfillPicker() {
         throw new Error(errBody.error ?? `HTTP ${res.status}`);
       }
       const body = (await res.json()) as SuccessBody;
-      // Hebrew confirmation. JobsTable (plan 13) is the operator's
-      // observation surface for completion. We do NOT poll for status
-      // here — per D-D4, async is the contract.
+      // Hebrew confirmation. The Activity sub-tab (status-events feed) is the
+      // operator's observation surface for completion. We do NOT poll for
+      // status here — per D-D4, async is the contract.
       setMessage(
         `Backfill נוסף לתור (${body.accepted} אירוע). עקוב אחר ההתקדמות בטבלת הריצות.`,
       );
@@ -242,8 +242,7 @@ export function BackfillPicker() {
       )}
 
       <p className="text-ink-secondary text-xs">
-        Backfill מקצה ~6 step.runs לכל יום-חנות. טווח של 21 ימים × 3 חנויות ≈
-        380 ביצועים (פחות מ-1% מתקרת Inngest). תאריך מינימלי:{' '}
+        Backfill מריץ את כל טווח ה-(יום × חנות) כמשימת QStash אחת. תאריך מינימלי:{' '}
         <span dir="ltr">{HISTORY_BOUNDARY}</span> (D-A3 history boundary).
       </p>
     </div>

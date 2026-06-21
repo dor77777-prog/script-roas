@@ -25,7 +25,7 @@ export function DangerTab() {
           </span>
         </Heading>
         <p className="text-ink-secondary text-sm mb-3">
-          הקרון של Inngest שולח דוח ROAS יומי ב-WhatsApp ל-2 מספרים מוגדרים
+          ה-cron (Vercel Cron) שולח דוח ROAS יומי ב-WhatsApp ל-2 מספרים מוגדרים
           (notification_config). הכפתורים למטה מאפשרים לשלוח ידנית את אותה
           הודעה בדיוק — לבדיקה לאחר שינוי env vars (WHATSAPP_*), רוטציית
           טוקן System User, או אישור template חדש ב-Meta WhatsApp Manager.

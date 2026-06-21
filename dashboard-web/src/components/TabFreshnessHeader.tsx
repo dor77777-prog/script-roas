@@ -38,7 +38,7 @@ const REFRESH_DURATION_TEXT = '60-120 שניות';
  *
  * UX during refresh:
  *   - Confirm() dialog before triggering — surfaces the cost (30-60s wait,
- *     fires Inngest sync for ALL 3 stores) so the operator doesn't trigger
+ *     fires a sync-now QStash fan-out for ALL 3 stores) so the operator doesn't trigger
  *     it by accident when an auto-refresh would have caught up anyway.
  *     Phase 05.7.9 — added per operator request 2026-05-22.
  *   - Spinner on the refresh button

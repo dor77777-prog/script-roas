@@ -11,7 +11,7 @@
 //
 //   - בריאות  (Health)   — TokenFailuresTable, TikTok disclaimer, MetaBucPanel, FreshnessPanel
 //   - סנכרון  (Sync)     — SyncNowButtons, BackfillPicker, ManualOverridesCrud
-//   - פעילות  (Activity) — StatusEventsFeed, CronTickSnapshotsViewer, JobsTable
+//   - פעילות  (Activity) — StatusEventsFeed, CronTickSnapshotsViewer
 //   - מסוכן   (Danger)   — WhatsappTestButtons, ResetData
 //   - מצב פרסום (Ads)    — AdStatePanel
 //   - חנויות  (Stores)   — StoreList + AddStoreWizard (credential matrix)
@@ -52,7 +52,7 @@ export default function OperatorPage() {
           </div>
         </div>
         <p className="text-ink-secondary text-sm mt-1">
-          ניהול אוטומציה: ריצות Inngest, backfill, החלפות ידניות, ו-Sync.
+          ניהול אוטומציה: ריצות הצינור, backfill, החלפות ידניות, ו-Sync.
         </p>
       </header>
 
