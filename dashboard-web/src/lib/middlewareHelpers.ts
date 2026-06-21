@@ -119,6 +119,17 @@ export function isDashboardAuthAllowlisted(pathname: string): boolean {
   // URL plus exchange instructions; the App Secret never touches this route.
   // Same silent-401 incident class as the Inngest pinning above.
   if (pathname === '/api/oauth/tiktok/callback') return true;
+  // Inngest→QStash migration (Task 0.6). The new job route families are
+  // self-authenticating and CANNOT carry the dashboard cookie:
+  //   /api/cron/*   — invoked by Vercel Cron; authenticates via the CRON_SECRET
+  //                   bearer header at the route level (verifyCron).
+  //   /api/worker/* — invoked by QStash; authenticates via the QStash request
+  //                   signature at the route level (verifyQstash).
+  // Same self-validating model as the /api/inngest rule above; gating them would
+  // 401 every cron/worker call (the silent-pin incident class). The trailing
+  // slash keeps the rule narrow — bare /api/cron and /api/worker stay gated, and
+  // sensitive families like /api/operator/* are unaffected.
+  if (pathname.startsWith('/api/cron/') || pathname.startsWith('/api/worker/')) return true;
   return false;
 }
 
