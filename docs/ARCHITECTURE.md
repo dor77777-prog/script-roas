@@ -104,8 +104,8 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 | `cron-live-heavy-usmile360` | `*/30 * * * *` IL | אותו דבר ל-usmile360 |
 | `event-sync-now` | event-triggered (`event/sync-now`) | זהה ל-cron-live, ידני מ-`/operator` |
 | `event-backfill` | event-triggered (`event/backfill`) | טווח תאריכים נבחר × חנויות נבחרות |
-| `cron-oauth-canary` | `0 0 * * *` IL | פעם ביום 5 בדיקות פינג מקבילות לטוקנים של פלטפורמות מתחלפות: Google×uzoshop + Meta×3-stores + TikTok×uzoshop. כל בדיקה ב-step.run עצמאי עם try/catch; כשל בודד → `notifyTokenFailure` (throttled WhatsApp 1/6h) + `captureStepError` (Sentry) + ממשיך לסיבלינגים. הפונקציה לעולם לא זורקת — מסתיימת ב-`{ status: ok\|partial, passed, failed[] }`. הורחב מ-Google-בלבד ב-Phase 14 (Phase 13.4 origins). |
-| `cron-cohort-refresh` | `TZ=Asia/Jerusalem 0 4 * * 1` (שני 04:00 IL) | **Wave 2 (2026-06-03).** re-aggregate שבועי מלא של `customer_cohort_monthly` פר חנות (Shopify Bulk → CAD → `aggregateCohortCells` → full-replace DELETE+INSERT). decomposed לפי-חנות (כל חנות סט-steps משלה) + poll דרך `step.sleep` כדי שאף invocation בודד לא יחרוג מ-`maxDuration=60s`; FX memoized per (currency, date). soft-fail פר-חנות + `captureStepError` ל-partial. ראה §4.4. |
+| `cron-oauth-canary` | ~~`0 0 * * *` IL~~ → **Vercel Cron `/api/cron/oauth-canary` (Stage 1, §4.10)** | פעם ביום 5 בדיקות פינג מקבילות לטוקנים של פלטפורמות מתחלפות: Google×uzoshop + Meta×3-stores + TikTok×uzoshop. כל בדיקה ב-step.run עצמאי עם try/catch; כשל בודד → `notifyTokenFailure` (throttled WhatsApp 1/6h) + `captureStepError` (Sentry) + ממשיך לסיבלינגים. הפונקציה לעולם לא זורקת — מסתיימת ב-`{ status: ok\|partial, passed, failed[] }`. הורחב מ-Google-בלבד ב-Phase 14 (Phase 13.4 origins). |
+| `cron-cohort-refresh` | ~~`TZ=Asia/Jerusalem 0 4 * * 1` (שני 04:00 IL)~~ → **Vercel Cron `/api/cron/cohort` (Stage 1, §4.10)** | **Wave 2 (2026-06-03).** re-aggregate שבועי מלא של `customer_cohort_monthly` פר חנות (Shopify Bulk → CAD → `aggregateCohortCells` → full-replace DELETE+INSERT). decomposed לפי-חנות (כל חנות סט-steps משלה) + poll דרך `step.sleep` כדי שאף invocation בודד לא יחרוג מ-`maxDuration=60s`; FX memoized per (currency, date). soft-fail פר-חנות + `captureStepError` ל-partial. ראה §4.4. |
 
 **`cron-live-heavy-{store}`** (Phase 13.9 — 2026-05-27). Cron `TZ=Asia/Jerusalem */30 * * * *`. For each store × each date in [today, yesterday]: fetches Meta adset+ad insights + budgets, Google ad-group+ad insights, TikTok ad insights; calls `persistCampaignsLive()` to UPSERT `campaigns_daily` + `ads_daily`. Co-exists with cron-daily (01:00 nightly full run) and cron-live (10-min light spend + status). All three writers UPSERT the same PKs so `ON CONFLICT DO UPDATE` reconciles per-column; the latest write wins for the columns it touches. Rate-limit (429) and auth failures soft-fail per-platform → throttled WhatsApp alert via `notifyTokenFailure` → next tick retries.
 
@@ -117,11 +117,13 @@ FX-rate correctness (2026-05-28 fix — FX-date artifact / P0-3): each date's `g
 
 ### 4.2 3 פונקציות WhatsApp (Phase 05.7.4)
 
+> **Stage 1 (§4.10): these 3 now run on Vercel Cron** at `/api/cron/whatsapp?slot=noon|evening|eod` (dual-fired UTC + IL-hour gate + `acquireJobLock` double-send guard). UNREGISTERED from Inngest; `createFunction` exports kept for rollback. `event-whatsapp-send-now` stays on Inngest until Stage 3.
+
 | Function ID | תזמון | תוכן |
 |---|---|---|
-| `whatsapp-noon` | `0 12 * * *` IL | סנפשוט "היום עד 12:00" |
-| `whatsapp-evening` | `0 18 * * *` IL | סנפשוט "היום עד 18:00" |
-| `whatsapp-eod` | `10 0 * * *` IL | סיכום של אתמול ליום שלם |
+| `whatsapp-noon` | `0 12 * * *` IL (→ Vercel `?slot=noon`) | סנפשוט "היום עד 12:00" |
+| `whatsapp-evening` | `0 18 * * *` IL (→ Vercel `?slot=evening`) | סנפשוט "היום עד 18:00" |
+| `whatsapp-eod` | `30 0 * * *` IL (→ Vercel `?slot=eod`) | סיכום של אתמול ליום שלם |
 
 ### 4.3 מכסות וצריכה
 - Inngest free tier: 50,000 executions/month.
@@ -195,6 +197,16 @@ Inngest מ-serialize את ה-return של כל `step.run` callback דרך JSON. *
 | `ROAS_BASE_URL` | `src/lib/jobs/qstash.ts` (`workerUrl`) | Absolute base URL of the deployed dashboard (e.g. `https://roas-dashboard-smoky.vercel.app`). QStash needs absolute worker URLs; falls back to `https://$VERCEL_URL` when unset. |
 
 **`INNGEST_*` vars (`INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`) stay** until Stage 4 (Inngest decommission) — the Inngest runtime keeps serving jobs in parallel during the staged cutover. Remove them only when Stage 4 lands and the Inngest plan is cancelled.
+
+**Stage 1 DONE — 3 standalone crons moved to Vercel Cron (no fan-out).** The following crons now run as inline `/api/cron/*` routes (Vercel Cron, UTC dual-fired with an Israel-local hour/day gate so exactly one of the two daily/weekly fires does the work; the off-DST fire is a cheap 200 no-op). They are UNREGISTERED from `inngestFunctions` in `src/app/api/inngest/route.ts` (their `createFunction` exports remain on disk for rollback). The shared gate helper is `israelHour()` / `israelWeekday()` in `src/lib/dateRange.ts`.
+
+| Cron (was Inngest) | New route | Vercel Cron schedule (UTC, dual-fire) | IL gate |
+|---|---|---|---|
+| `cron-oauth-canary` | `/api/cron/oauth-canary` → `runOauthCanary()` | `0 21 * * *` + `0 22 * * *` | hour 0 (00:00 IL) |
+| `cron-cohort-refresh` | `/api/cron/cohort` → `runCohortRefresh()` (inline step, real `sleep`, `maxDuration=300`) | `0 1 * * 1` + `0 2 * * 1` | Monday + hour 4 (04:00 IL) |
+| `whatsapp-noon` / `-evening` / `-eod` | `/api/cron/whatsapp?slot=…` → `runWhatsappSlot(slot)` | noon `0 9`+`0 10`; evening `0 15`+`0 16`; eod `30 21`+`30 22` | hour 12 / 18 / 0; **wrapped in `acquireJobLock('whatsapp:'+slot+':'+IL-day)` so a DST-seam double-fire can never double-send** |
+
+`event-whatsapp-send-now` (the operator "send now" button) STAYS on Inngest until Stage 3. The heavy data pipeline (live/daily/yesterday/tick) stays on Inngest until Stage 2.
 
 ---
 
