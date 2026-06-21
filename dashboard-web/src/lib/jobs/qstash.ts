@@ -14,7 +14,18 @@ export function workerUrl(path: string): string {
 let _client: Client | null = null;
 function client(): Client {
   if (!process.env.QSTASH_TOKEN) throw new Error('QSTASH_TOKEN not set');
-  if (!_client) _client = new Client({ token: process.env.QSTASH_TOKEN });
+  // The operator's QStash project lives in a specific region with a
+  // region-specific publish endpoint (QSTASH_URL). Forward it as the Client
+  // `baseUrl` so publishes hit the right region. The Client ignores an
+  // undefined baseUrl and falls back to its built-in default, so this is safe
+  // when QSTASH_URL is unset. (Receiver/verifyQstash needs no change —
+  // signature verification is URL-agnostic.)
+  if (!_client) {
+    _client = new Client({
+      token: process.env.QSTASH_TOKEN,
+      baseUrl: process.env.QSTASH_URL,
+    });
+  }
   return _client;
 }
 
