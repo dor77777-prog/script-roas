@@ -30,14 +30,17 @@
 └──────┬───────┘  └─────┬─────┘  └─────┬────────┘  └────┬──────┘  └──┬───┘
        └────────────────┴───────────────┴────────────────┴────────────┘
                                   │
-                       ┌──────────▼──────────┐
-                       │   Inngest Cloud     │
-                       │   cron-daily   ×3   │  (00:05 IL — fetch + write)
-                       │   cron-live    ×3   │  (כל 10 דק׳)
-                       │   sync-now (event)  │
-                       │   backfill (event)  │
-                       │   whatsapp ×3       │  (12:00 / 18:00 / 00:10)
-                       └──────────┬──────────┘
+                       ┌──────────────────────────────┐
+                       │ Vercel Cron → /api/cron/*      │  (was Inngest Cloud — §4.10)
+                       │   daily      (00:05 IL)        │  → QStash → /api/worker/daily-store ×N
+                       │   live       (כל 10 דק׳)        │  → QStash → /api/worker/live-store ×N
+                       │   yesterday  (כל שעתיים)         │  → QStash → /api/worker/yesterday-store ×N
+                       │   tick       (כל 10 דק׳)         │  → QStash → /api/worker/{meta,google,tiktok}
+                       │   oauth-canary / cohort         │  (inline)
+                       │   whatsapp   (12:00/18:00/00:30)│  (inline + acquireJobLock)
+                       │ Operator buttons:               │
+                       │   sync-now/backfill → QStash    │  send-now → inline
+                       └──────────┬───────────────────────┘
                                   │
                        ┌──────────▼──────────┐
                        │ Supabase Postgres   │
@@ -87,7 +90,21 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 
 ---
 
-## 4. Inngest Functions
+## 4. Job pipeline (was "Inngest Functions")
+
+> **Stage 4 DONE (2026-06-21) — Inngest fully decommissioned.** The entire job
+> runtime now runs on **Vercel Cron + Upstash QStash** (see §4.10 + the design
+> spec `docs/superpowers/specs/2026-06-21-inngest-to-vercel-qstash-migration-design.md`).
+> The `inngest` npm dependency, the `@/inngest/client` module, the `/api/inngest`
+> serve route, every `createFunction(...)` wrapper, the `inngestFunctions`
+> registry, and the dead `cron-live-heavy` code were all removed. What remains in
+> `dashboard-web/src/inngest/functions/*.ts` is the **plain async handlers**
+> (`runDailyForStore`, `runLiveForStore`, `runOauthCanary`, `runCohortRefresh`,
+> `runTickOnce`, `run{Meta,Google,TikTok}WorkerForJob`, `runWhatsappSlot`,
+> `runEventBackfill`, …) that `/api/cron/*` + `/api/worker/*` import and call.
+> The directory keeps its `inngest/` name for now but no longer touches the
+> Inngest SDK. The tables below describe what each handler does + its schedule;
+> §4.10 is the source of truth for the cron/worker transport that drives them.
 
 ### 4.1 12 פונקציות הליבה (כולל OAuth canary של Phase 13.4 + cron-live-heavy של Phase 13.9)
 
@@ -126,15 +143,13 @@ FX-rate correctness (2026-05-28 fix — FX-date artifact / P0-3): each date's `g
 | `whatsapp-eod` | `30 0 * * *` IL (→ Vercel `?slot=eod`) | סיכום של אתמול ליום שלם |
 
 ### 4.3 מכסות וצריכה
-- Inngest free tier: 50,000 executions/month.
-- צריכה ממוצעת: ~28,000/month (56% מהמכסה). שלושת ה-cron-live × 6 calls/hr × 24 × 30 = 12,960 + cron-daily 3/day × 30 = 90 + WhatsApp 3/day × 30 = 90.
+- **היסטורי (Inngest, עד Stage 4):** free tier 50,000 executions/month, צריכה ~28,000/month. Inngest כבר לא בשימוש — ראה §4.10. החיוב עכשיו הוא Vercel Cron (מספר נתיבי-cron קבוע) + QStash (לפי-מסר).
 
 ### 4.4 רישום הפונקציות
-ב-`dashboard-web/src/app/api/inngest/route.ts`. כל פונקציה רשומה ב-`serve()` של inngest. רישום מתבצע אוטומטית ב-deploy של Vercel דרך marketplace integration; `INNGEST_EVENT_KEY` ו-`INNGEST_SIGNING_KEY` מוזרקים ל-Vercel env.
+**Stage 4 — אין יותר serve()/registry.** ה-`/api/inngest` serve route + מערך `inngestFunctions` הוסרו. ה-handlers הפשוטים מ-`dashboard-web/src/inngest/functions/*.ts` מיובאים ונקראים ישירות ע"י נתיבי `/api/cron/*` (מופעלים ע"י Vercel Cron, מאומתים ב-`CRON_SECRET`) ו-`/api/worker/*` (מסופקים ע"י QStash, מאומתים בחתימת QStash). ראה §4.10 לפירוט מלא של ה-transport.
 
 ### 4.5 צפייה ב-runs
-- Inngest Dashboard: `https://app.inngest.com`.
-- בתוך הדשבורד: `/operator > ריצות אחרונות` → קורא `/api/operator/jobs` שמ-proxy ל-Inngest REST v1 (`/v1/events` + `/v1/events/{id}/runs`).
+- **Stage 4:** Inngest Dashboard ו-`/operator > ריצות אחרונות` (JobsTable + `/api/operator/jobs`, ה-proxy ל-Inngest REST) הוסרו — שום דבר לא רץ על Inngest. תצפית ריצות עכשיו ב-`/operator > פעילות`: **StatusEventsFeed** (`status_events` — מחזור-חיים של tick/worker, שגיאות, budget_skip) + **CronTickSnapshotsViewer** (`cron_tick_snapshots` — fan-out לכל tick). שתיהן מבוססות-DB ולא הושפעו מהמיגרציה.
 
 ### 4.6 Sentry capture per פונקציה (Phase 13.2 + 13.2.2 + 13.2.3)
 כל פונקציית Inngest עוטפת את ה-top-level שלה ב-`captureStepError({fnId, stepName:'top-level', storeId?}, err)` ואז `throw e` — שומרת על Inngest retry/dead-letter, ובמקביל מטעינה ל-Sentry לטריאז'.
@@ -179,11 +194,22 @@ Inngest מ-serialize את ה-return של כל `step.run` callback דרך JSON. *
 
 **CAPI-safe:** read-only מול Shopify; אפס כתיבה לפלטפורמות-מודעות / pixels / CAPI; רק `customer.id` האטום (ללא PII). הליבה הטהורה `runCohortRefreshOnce` (ללא steps) נשמרת לנתיב ה-backfill + unit tests; `runCohortRefreshStepped` הוא ה-orchestrator הפרודקשני המפורק-ל-steps (שניהם unit-tested עם deps מוזרקים).
 
-### 4.10 Vercel-Cron + QStash pipeline — env vars (migration off Inngest, IN PROGRESS)
+### 4.10 Vercel-Cron + QStash pipeline — env vars (migration off Inngest, COMPLETE)
 
-> **Status:** the platform is migrating the entire job runtime off **Inngest Cloud** onto **Vercel Cron + Upstash QStash**. See the plan/spec at `docs/superpowers/plans/2026-06-21-inngest-to-vercel-qstash-migration.md`. Stage 0 (shared primitives in `dashboard-web/src/lib/jobs/{qstash,verifyQstash,verifyCron,lock}.ts` + the `job_locks` migration) is in place; the cutover proceeds in staged waves.
+> **Status — Stage 4 DONE (2026-06-21): Inngest is fully decommissioned.** The
+> entire job runtime runs on **Vercel Cron + Upstash QStash**. Stages 0–3 cut
+> every cron/worker/operator-button over; Stage 4 deleted the Inngest scaffolding
+> (the `inngest` npm dep, `@/inngest/client`, the `/api/inngest` serve route,
+> all `createFunction(...)` wrappers + the `inngestFunctions` registry, the dead
+> `cron-live-heavy` code, the Inngest-backed `/api/operator/jobs` + JobsTable).
+> The plain async handlers are imported directly by `/api/cron/*` + `/api/worker/*`.
+> See the design spec `docs/superpowers/specs/2026-06-21-inngest-to-vercel-qstash-migration-design.md`
+> and the plan `docs/superpowers/plans/2026-06-21-inngest-to-vercel-qstash-migration.md`.
+> Stage 0 primitives live in `dashboard-web/src/lib/jobs/{qstash,verifyQstash,verifyCron,lock}.ts` + the `job_locks` migration.
 
-**Architecture (target):** Vercel Cron hits thin `/api/cron/*` routes on a schedule; those routes fan out work by publishing jobs to QStash, which delivers each job (with retries) as a POST to an absolute `/api/worker/*` URL. Cron routes authenticate via a shared secret; worker routes authenticate via the QStash request signature. Neither family can carry the dashboard cookie, so both `/api/cron/*` and `/api/worker/*` are in `isDashboardAuthAllowlisted` (the password gate skips them — same self-validating model as `/api/inngest`; see §4 / `src/lib/middlewareHelpers.ts`, guard test `jobRoutesAllowlist.guard.test.ts`).
+**Architecture:** Vercel Cron hits thin `/api/cron/*` routes on a schedule; those routes fan out work by publishing jobs to QStash, which delivers each job (with retries) as a POST to an absolute `/api/worker/*` URL. Cron routes authenticate via a shared secret; worker routes authenticate via the QStash request signature. Neither family can carry the dashboard cookie, so both `/api/cron/*` and `/api/worker/*` are in `isDashboardAuthAllowlisted` (the password gate skips them — self-validating at the route level; see `src/lib/middlewareHelpers.ts`, guard test `jobRoutesAllowlist.guard.test.ts`). (The old `/api/inngest` allowlist entry was removed in Stage 4 with the route.)
+
+> **Note on the stage blocks below:** they were written during the staged cutover and say each migrated function's `createFunction` export "remains on disk for rollback" + is "UNREGISTERED from `inngestFunctions` in `src/app/api/inngest/route.ts`." As of **Stage 4** that is no longer true — those wrappers, the registry, and the serve route were all **deleted**; only the plain handlers remain. Read the blocks for the per-leg cron/worker mapping (still accurate); ignore the rollback/registry phrasing.
 
 **New env vars required in Vercel Production** (inject + Redeploy):
 
@@ -196,7 +222,7 @@ Inngest מ-serialize את ה-return של כל `step.run` callback דרך JSON. *
 | `CRON_SECRET` | `src/lib/jobs/verifyCron.ts` | Shared secret for **Vercel-Cron auth**. Cron routes reject any request whose bearer header doesn't match. |
 | `ROAS_BASE_URL` | `src/lib/jobs/qstash.ts` (`workerUrl`) | Absolute base URL of the deployed dashboard (e.g. `https://roas-dashboard-smoky.vercel.app`). QStash needs absolute worker URLs; falls back to `https://$VERCEL_URL` when unset. |
 
-**`INNGEST_*` vars (`INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`) stay** until Stage 4 (Inngest decommission) — the Inngest runtime keeps serving jobs in parallel during the staged cutover. Remove them only when Stage 4 lands and the Inngest plan is cancelled.
+**`INNGEST_*` vars (`INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`) — now unused (Stage 4).** No code reads them anymore (the serve route + the `/api/operator/jobs` proxy were removed). The operator can delete them from Vercel env and cancel the Inngest plan; leaving them set is harmless (dead env).
 
 **Stage 1 DONE — 3 standalone crons moved to Vercel Cron (no fan-out).** The following crons now run as inline `/api/cron/*` routes (Vercel Cron, UTC dual-fired with an Israel-local hour/day gate so exactly one of the two daily/weekly fires does the work; the off-DST fire is a cheap 200 no-op). They are UNREGISTERED from `inngestFunctions` in `src/app/api/inngest/route.ts` (their `createFunction` exports remain on disk for rollback). The shared gate helper is `israelHour()` / `israelWeekday()` in `src/lib/dateRange.ts`.
 
@@ -941,10 +967,10 @@ vitest. ריצה: `cd dashboard-web && npx vitest run`.
 ## 18. Backfill internals
 
 ### 18.1 Endpoint
-`POST /api/operator/backfill` → Inngest `event/backfill`.
+`POST /api/operator/backfill` → מפרסם משימת QStash אחת ל-`/api/worker/backfill` (Stage 4 — היה Inngest `event/backfill`).
 
-### 18.2 Inngest function
-`event-backfill` ב-`dashboard-web/src/inngest/functions/backfill.ts`. Loops על `(date, storeId)` pairs. כל step:
+### 18.2 Worker handler
+`runEventBackfill` ב-`dashboard-web/src/inngest/functions/eventBackfill.ts` (handler פשוט; ה-wrapper של Inngest הוסר ב-Stage 4). נקרא ע"י `/api/worker/backfill` עם inline step ctx. Loops על `(date, storeId)` pairs. כל step:
 - `fetchShopifyForDay(storeId, date)`
 - `fetchMetaForDay(storeId, date)`
 - `fetchGoogleForDay(storeId, date)`
@@ -973,11 +999,8 @@ PROD=https://roas-dashboard-smoky.vercel.app
 # /operator loads
 curl -s "$PROD/operator" | grep -q "ניהול" && echo "OK: /operator"
 
-# Inngest registered
-curl -s "$PROD/api/inngest" | jq '.functions | length'  # expect 8 (+3 whatsapp)
-
-# Jobs proxy shape
-curl -s "$PROD/api/operator/jobs?limit=10" | jq -e '.runs' >/dev/null && echo "OK: /api/operator/jobs"
+# (Stage 4: the /api/inngest serve route + /api/operator/jobs proxy were removed;
+#  nothing runs on Inngest. Job-run observation is /operator > פעילות, DB-backed.)
 
 # Sync-now triggers
 curl -s -X POST "$PROD/api/operator/sync-now" \
@@ -995,8 +1018,6 @@ curl -s -X POST "$PROD/api/operator/backfill" \
 
 # /api/data returns rows
 curl -s "$PROD/api/data" | jq -e '.rows' >/dev/null && echo "OK: /api/data"
-
-# Inngest dashboard manual check: https://app.inngest.com — 8 + 3 functions registered
 ```
 
 לאחר Sheets cutover (Phase 05.7):
@@ -1049,8 +1070,11 @@ curl -s -X POST "$PROD/api/dashboard-state" \
 | `SUPABASE_URL` | Production + Preview | `https://npegxufdupooqovrewyb.supabase.co` |
 | `SUPABASE_ANON_KEY` | Production + Preview | Anon (client-readable) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Production + Preview (Encrypted, server-only) | service_role (DML) |
-| `INNGEST_EVENT_KEY` | אוטומטי דרך marketplace | event ingest |
-| `INNGEST_SIGNING_KEY` | אוטומטי דרך marketplace | webhook verify |
+| `INNGEST_EVENT_KEY` | legacy — לא בשימוש מ-Stage 4 (ניתן למחוק) | event ingest (Inngest decommissioned) |
+| `INNGEST_SIGNING_KEY` | legacy — לא בשימוש מ-Stage 4 (ניתן למחוק) | webhook verify (Inngest decommissioned) |
+| `QSTASH_TOKEN` / `QSTASH_CURRENT_SIGNING_KEY` / `QSTASH_NEXT_SIGNING_KEY` / `QSTASH_URL` | Production | QStash publish + signature verify (job runtime — §4.10) |
+| `CRON_SECRET` | Production | Vercel-Cron auth (§4.10) |
+| `ROAS_BASE_URL` | Production | absolute worker base URL for QStash (§4.10) |
 | `SPREADSHEET_ID` | legacy — לא בשימוש מאז 05.7 | Sheets workbook ID |
 | `GOOGLE_CLIENT_EMAIL` / `GOOGLE_PRIVATE_KEY` | legacy | Service Account (Sheets) |
 | `OPENEXCHANGERATES_APP_ID` | Production | FX provider |
@@ -1080,11 +1104,11 @@ dashboard-web/
 │   │   │   ├── orders-attribution/route.ts — orders + source/utm/click-id
 │   │   │   ├── dashboard-state/route.ts  — cloud sync read/write
 │   │   │   ├── health/route.ts           — supabase ping
-│   │   │   ├── inngest/route.ts          — Inngest serve()
+│   │   │   ├── cron/*                     — Vercel-Cron scheduler routes (§4.10)
+│   │   │   ├── worker/*                   — QStash worker routes (§4.10)
 │   │   │   └── operator/
-│   │   │       ├── sync-now/route.ts
-│   │   │       ├── jobs/route.ts         — Inngest REST proxy
-│   │   │       ├── backfill/route.ts
+│   │   │       ├── sync-now/route.ts      — → QStash fan-out
+│   │   │       ├── backfill/route.ts      — → QStash job
 │   │   │       ├── manual-overrides/route.ts
 │   │   │       ├── reset/route.ts
 │   │   │       └── whatsapp/send-now/route.ts
@@ -1120,13 +1144,16 @@ dashboard-web/
 │   │   ├── campaignProductMap.ts         — allocateProductRevenue (per-platform)
 │   │   ├── campaignsColumnPrefs.ts       — visibility + order helpers
 │   │   └── cloudSync.ts                  — pushCloudKey
-│   └── inngest/
-│       └── functions/
-│           ├── cronDaily.ts              — per-store factory
-│           ├── cronLive.ts               — per-store factory
-│           ├── syncNow.ts
-│           ├── backfill.ts
-│           └── whatsapp.ts               — 3 cron + 1 event
+│   └── inngest/                         — (legacy dir name; no Inngest SDK since Stage 4)
+│       └── functions/                   — plain async handlers imported by /api/cron/* + /api/worker/*
+│           ├── cronDaily.ts             — runDailyForStore (+ yesterday helpers)
+│           ├── cronLive.ts              — runLiveForStore
+│           ├── cronTickOrchestrator.ts  — runTickOnce
+│           ├── cronOauthCanary.ts       — runOauthCanary
+│           ├── cronCohortRefresh.ts     — runCohortRefresh
+│           ├── cronWhatsapp.ts          — runWhatsappSlot
+│           ├── eventBackfill.ts         — runEventBackfill
+│           └── {meta,google,tiktok}Worker.ts — run{Meta,Google,TikTok}WorkerForJob
 ├── supabase/
 │   └── migrations/                       — 20260521*.sql + 20260522*.sql
 └── scripts/
@@ -1419,15 +1446,15 @@ Phase C extends the orchestrator + single-platform worker pair of Phase B to all
 
 All 5 fetchers return `{adsets, ads}` — **no campaign-level rows** (CRIT-B: the `campaigns_daily` table has NOT NULL on `ad_set_id` for these granularities; campaign aggregates are derived via SQL views at read time).
 
-**2 new Inngest workers** (registered in [`src/app/api/inngest/route.ts`](../dashboard-web/src/app/api/inngest/route.ts)):
-- [`google-worker`](../dashboard-web/src/inngest/functions/googleWorker.ts) — handles `scope='status'` and `scope='hot_metrics'`.
-- [`tiktok-worker`](../dashboard-web/src/inngest/functions/tiktokWorker.ts) — handles `scope='status'` and `scope='hot_metrics'`.
+**2 platform workers** (Stage 4: plain handlers run by QStash worker routes `/api/worker/google` + `/api/worker/tiktok`; were Inngest workers pre-Stage-4):
+- [`runGoogleWorkerForJob`](../dashboard-web/src/inngest/functions/googleWorker.ts) — handles `scope='status'` and `scope='hot_metrics'`.
+- [`runTikTokWorkerForJob`](../dashboard-web/src/inngest/functions/tiktokWorker.ts) — handles `scope='status'` and `scope='hot_metrics'`.
 
-Both follow the same flat `step.run` pattern as Phase B's `metaWorker` (no nested step calls — Phase B hotfix lesson).
+Both follow the same flat `step.run` pattern (now an inline step ctx from the worker route) as Phase B's metaWorker (no nested step calls — Phase B hotfix lesson).
 
-**meta-worker extended:** the existing [`meta-worker`](../dashboard-web/src/inngest/functions/metaWorker.ts) now handles `scope='hot_metrics'` in addition to the Phase B `scope='status'`. The hot_metrics branch: BUC pre-flight → resolve hot ids via the hot-set RPCs → `fetchMetaHotMetricsForStore` → upsert `campaigns_daily` (aggregated) + `adsets_daily` + `ads_daily` rows with `source='live_tick'` + `last_live_tick_at = NOW()` → mark `campaign_metrics` freshness success.
+**meta-worker extended:** [`runMetaWorkerForJob`](../dashboard-web/src/inngest/functions/metaWorker.ts) (`/api/worker/meta`) now handles `scope='hot_metrics'` in addition to the Phase B `scope='status'`. The hot_metrics branch: BUC pre-flight → resolve hot ids via the hot-set RPCs → `fetchMetaHotMetricsForStore` → upsert `campaigns_daily` (aggregated) + `adsets_daily` + `ads_daily` rows with `source='live_tick'` + `last_live_tick_at = NOW()` → mark `campaign_metrics` freshness success.
 
-**Orchestrator fan-out:** [`cronTickOrchestrator.ts`](../dashboard-web/src/inngest/functions/cronTickOrchestrator.ts) now emits **up to 6 events per tick** = 3 platforms (meta/google/tiktok) × 2 scopes (status/hot_metrics). Per-(platform, scope) cooldown is tiered.
+**Orchestrator fan-out:** [`runTickOnce` in cronTickOrchestrator.ts](../dashboard-web/src/inngest/functions/cronTickOrchestrator.ts) (run by `/api/cron/tick`) emits **up to 6 jobs per tick** = 3 platforms (meta/google/tiktok) × 2 scopes (status/hot_metrics), each published to its QStash worker route. Per-(platform, scope) cooldown is tiered.
 
 **Dynamic threshold cooldown tiers for `hot_metrics`:**
 - `pct < 30` → 180s cooldown
