@@ -124,7 +124,10 @@ import { cronLiveHeavyFunctions } from '@/inngest/functions/cronLiveHeavy';
 // tiktokWorker) remain on disk for rollback but are NO LONGER imported/registered
 // here. The wired runners they shared (run{Meta,Google,TikTok}WorkerForJob +
 // runTickOnce) are imported by the new routes instead.
-import { eventSyncNow } from '@/inngest/functions/eventSyncNow';
+// Stage 3 Task 3.1 (Inngest → Vercel Cron + QStash migration): eventSyncNow now
+// runs as a QStash fan-out from /api/operator/sync-now → /api/worker/daily-store.
+// Its createFunction export remains on disk in eventSyncNow.ts for rollback but
+// is NO LONGER imported/registered here.
 import { eventBackfill } from '@/inngest/functions/eventBackfill';
 // Stage 1 (Inngest → Vercel Cron migration): cronOauthCanary now runs on
 // Vercel Cron (/api/cron/oauth-canary). Its createFunction export remains on
@@ -180,7 +183,8 @@ export const inngestFunctions = [
   // googleWorker + tiktokWorker moved to /api/cron/tick (Vercel Cron) +
   // /api/worker/{meta,google,tiktok} (QStash). createFunction exports remain on
   // disk for rollback but are NO LONGER registered here.
-  eventSyncNow, // 1 function (operator "Sync now" button)
+  // Stage 3 Task 3.1 migration — eventSyncNow moved to a QStash fan-out
+  // (/api/operator/sync-now → /api/worker/daily-store). Unregistered here.
   eventBackfill, // 1 function (operator backfill range picker)
   // Stage 1 migration — cronOauthCanary moved to /api/cron/oauth-canary (Vercel Cron).
   // Stage 1 migration — whatsappCronFunctions moved to /api/cron/whatsapp (Vercel Cron).

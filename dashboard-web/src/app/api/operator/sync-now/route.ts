@@ -2,10 +2,17 @@
 //
 // Phase 05.6 Plan 14 — operator "Sync now" trigger route.
 //
-// Fires `event/sync-now` for one store (scope: 'store') or all three stores
-// (scope: 'all') and returns 202 Accepted immediately. The Inngest worker
-// (eventSyncNow.ts, plan 10) picks the event(s) up asynchronously; the
-// operator console's JobsTable (plan 13) is where completion is observed.
+// Inngest → Vercel Cron + QStash migration (Stage 3 Task 3.1): this route now
+// publishes one QStash job per (store, date) to /api/worker/daily-store instead
+// of firing `inngest.send('event/sync-now')`. QStash delivers each as an
+// independent HTTP POST to the daily-store worker (own timeout + retry), which
+// runs the SAME runDailyForStore handler the old eventSyncNow function looped
+// over. The exact set of work is preserved:
+//   - scope:'all'   → today + yesterday + day-before, per store (3-day window,
+//                     the Phase E1.5 "Refresh All" semantics);
+//   - scope:'store' → today only (the eventSyncNow single-store default).
+// Returns 202 Accepted immediately; the operator console's JobsTable is where
+// completion is observed.
 //
 // === Why async (return 202, don't await job completion) ===
 //
@@ -22,27 +29,18 @@
 // by /api/operator/manual-overrides/route.ts (lines 13-39), declaring both
 // `force-dynamic` and `revalidate` is a silent conflict where the former
 // wins; we pick the correct single declaration. There is no GET response
-// to cache here regardless — this route exists solely to enqueue an
-// Inngest event.
+// to cache here regardless — this route exists solely to enqueue jobs.
 //
 // === Why storeId allowlist ===
 //
 // Threat T-05.6-14-T3 (Tampering): a misbehaving client could POST
-// `{scope: 'store', storeId: 'evil-payload'}` and reach the Inngest
-// queue with that string. inngest.send itself accepts any JSON
-// payload — the validation lives here. The downstream
-// eventSyncNow handler (eventSyncNow.ts:62) types `storeId: StoreId`
-// for TS but does NOT runtime-validate the network boundary; that's
-// this route's job.
-//
-// === No INNGEST_EVENT_KEY arg ===
-//
-// inngest.client.ts (singleton) reads INNGEST_EVENT_KEY from process.env
-// automatically. We never reference the env var name here — keeps the
-// secret out of grep results and out of any potential bundle leak.
+// `{scope: 'store', storeId: 'evil-payload'}` and reach the job queue with
+// that string. publishJob itself accepts any JSON payload — the validation
+// lives here. The downstream daily-store worker types `storeId` for TS but
+// the network-boundary runtime validation is this route's job.
 
 import { NextResponse } from 'next/server';
-import { inngest } from '@/inngest/client';
+import { publishJob } from '@/lib/jobs/qstash';
 import { userFacingError } from '@/lib/apiErrors';
 import { captureRouteError } from '@/lib/sentry/capture';
 import { loadActiveStoreIds } from '@/lib/getStores';
@@ -78,21 +76,24 @@ export async function POST(req: Request) {
     const activeStoreIds = await loadActiveStoreIds();
     const valid = new Set(activeStoreIds);
 
-    let events: Array<{ name: 'event/sync-now'; data: { storeId: string; dates?: string[] } }>;
+    // Build the (store, date) job list. Each entry becomes one QStash job to the
+    // daily-store worker, which runs runDailyForStore(storeId, date) — exactly
+    // what the old eventSyncNow handler looped over per store.
+    let jobs: Array<{ storeId: string; date: string }>;
     if (body.scope === 'all') {
-      // Phase E1.5 — pass a 3-day window so the eventSyncNow handler
-      // loops runDailyForStore for [today, yesterday, day-before].
+      // Phase E1.5 — 3-day window so "Refresh All" catches cross-day refunds +
+      // attribution shifts: [today, yesterday, day-before] per store.
       const dates = rolling3DaysJerusalem();
-      events = activeStoreIds.map((s) => ({
-        name: 'event/sync-now',
-        data: { storeId: s, dates },
-      }));
+      jobs = activeStoreIds.flatMap((s) =>
+        dates.map((date) => ({ storeId: s, date })),
+      );
     } else if (
       body.scope === 'store' &&
       typeof body.storeId === 'string' &&
       valid.has(body.storeId)
     ) {
-      events = [{ name: 'event/sync-now', data: { storeId: body.storeId } }];
+      // Single-store "Sync now" refreshes TODAY only (the eventSyncNow default).
+      jobs = [{ storeId: body.storeId, date: rolling3DaysJerusalem()[0] }];
     } else {
       return NextResponse.json(
         {
@@ -103,15 +104,14 @@ export async function POST(req: Request) {
       );
     }
 
-    // inngest.send accepts a single event OR an array; returns
-    // `{ ids: string[] }` where each id is the Inngest-assigned event
-    // identifier. We surface those ids back so the client can — in a
-    // future plan — correlate the 202 response to specific rows in the
-    // JobsTable.
-    const result = await inngest.send(events);
+    // Publish one QStash job per (store, date). QStash delivers each as an
+    // independent HTTP POST to the daily-store worker (own timeout + retry).
+    for (const job of jobs) {
+      await publishJob('/api/worker/daily-store', job);
+    }
 
     return NextResponse.json(
-      { accepted: result.ids.length, eventIds: result.ids },
+      { accepted: jobs.length, jobs },
       { status: 202 },
     );
   } catch (err) {

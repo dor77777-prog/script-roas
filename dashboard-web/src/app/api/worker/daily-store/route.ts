@@ -9,8 +9,16 @@
 //
 // DATE: the daily job processes the day that just ended (yesterday in IL) — the
 // same date the old Inngest scheduler computed (yesterdayJerusalem()) and passed
-// in the event payload. We derive it in the worker so the published job stays a
-// plain { storeId } and the handler's date input is byte-identical.
+// in the event payload. We derive it in the worker when the body omits `date`,
+// so the cron fan-out can keep publishing a plain { storeId }.
+//
+// OPTIONAL `date` (Stage 3 Task 3.1): the operator "Sync now" button needs to
+// refresh a SPECIFIC date (today / yesterday / day-before for "Refresh All",
+// today for a single store) — the same set the old eventSyncNow handler ran via
+// its `dates` loop. So this worker honors an optional `date` in the body; when
+// present (a valid YYYY-MM-DD) it processes that date, else it falls back to
+// yesterdayJerusalem(). The cron-daily fan-out (which publishes only { storeId })
+// is unchanged — it still gets yesterday.
 //
 // Inline step ctx / lock semantics / maxDuration / auth: identical rationale to
 // the live-store worker (see /api/worker/live-store/route.ts).
@@ -42,9 +50,14 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   let storeId: string | undefined;
+  let bodyDate: string | undefined;
   try {
-    const body = JSON.parse(v.raw) as { storeId?: unknown };
+    const body = JSON.parse(v.raw) as { storeId?: unknown; date?: unknown };
     if (typeof body.storeId === 'string' && body.storeId) storeId = body.storeId;
+    // YYYY-MM-DD shape check — anything else falls back to yesterday below.
+    if (typeof body.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+      bodyDate = body.date;
+    }
   } catch {
     // fall through to the 400 below
   }
@@ -52,13 +65,18 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ error: 'missing storeId' }, { status: 400 });
   }
 
+  // Lock per store (NOT per date): the old eventSyncNow handler serialized its
+  // [today, yesterday, day-before] loop within ONE per-store invocation (Inngest
+  // concurrency:{key:storeId, limit:1}). A per-store lock preserves that
+  // serialization — released in finally then re-acquired, so all dates still
+  // complete — and keeps the cron-daily fan-out's lock key byte-identical.
   const lockKey = `daily:${storeId}`;
   if (!(await acquireJobLock(lockKey))) {
     return NextResponse.json({ skipped: 'locked', storeId }, { status: 200 });
   }
 
+  const date = bodyDate ?? yesterdayJerusalem();
   try {
-    const date = yesterdayJerusalem();
     const result = await runDailyForStore(
       storeId as Parameters<typeof runDailyForStore>[0],
       date,

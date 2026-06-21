@@ -79,6 +79,22 @@ describe('POST /api/worker/daily-store', () => {
     expect(releaseJobLockMock).toHaveBeenCalledWith('daily:uzoshop');
   });
 
+  it('honors an explicit YYYY-MM-DD date in the body (Stage 3 sync-now fan-out)', async () => {
+    verifyQstashRequestMock.mockResolvedValue({
+      ok: true,
+      raw: JSON.stringify({ storeId: 'uzoshop', date: '2026-06-18' }),
+    });
+
+    const res = await POST(req());
+    expect(res.status).toBe(200);
+    // Lock key stays per-store (byte-identical to the cron fan-out).
+    expect(acquireJobLockMock).toHaveBeenCalledWith('daily:uzoshop');
+    expect(runDailyForStoreMock).toHaveBeenCalledTimes(1);
+    expect(runDailyForStoreMock.mock.calls[0][1]).toBe('2026-06-18');
+    // The yesterday helper is NOT consulted when an explicit date is supplied.
+    expect(yesterdayJerusalemMock).not.toHaveBeenCalled();
+  });
+
   it('returns 200 skipped:locked and does NOT run when the lock is held', async () => {
     verifyQstashRequestMock.mockResolvedValue({
       ok: true,
