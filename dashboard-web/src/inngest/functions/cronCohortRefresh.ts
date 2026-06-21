@@ -400,6 +400,72 @@ async function pollBulkCohortRows(store: string): Promise<BulkCohortRow[] | null
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// Inngest → Vercel Cron migration (Stage 1, Task 1.3).
+// ────────────────────────────────────────────────────────────────────────
+
+/** Parse a short duration string like '15s' / '500ms' / '2m' into ms. */
+function parseSleepMs(time: string): number {
+  const m = /^(\d+)(ms|s|m)?$/.exec(time.trim());
+  if (!m) return 0;
+  const n = Number(m[1]);
+  switch (m[2]) {
+    case 'ms':
+      return n;
+    case 'm':
+      return n * 60_000;
+    case 's':
+    default:
+      return n * 1000;
+  }
+}
+
+/**
+ * The weekly cohort refresh, lifted out of the Inngest handler into a plain
+ * async function the `/api/cron/cohort` route can call inline.
+ *
+ * The Inngest version relied on durable `step.sleep` for the multi-minute
+ * Shopify Bulk poll so no single invocation breached the 60s cap. The Vercel
+ * Cron route runs in ONE invocation with a high `maxDuration`, so here we pass
+ * an inline `step` whose `run` invokes the callback directly and whose `sleep`
+ * is a REAL timed delay. The per-store soft-fail + full-replace idempotency are
+ * unchanged, so a partial failure still surfaces to Sentry without aborting the
+ * other stores. Reuses the exact same `runCohortRefreshStepped` core + prod
+ * deps as the Inngest wrapper (single source of truth).
+ */
+export async function runCohortRefresh(): Promise<CohortRefreshResult> {
+  const inlineStep: CohortStep = {
+    run: (_id, cb) => cb(),
+    sleep: (_id, time) =>
+      new Promise<void>((resolve) => setTimeout(resolve, parseSleepMs(time))),
+  };
+
+  const stores = await loadActiveStoreIds();
+
+  const result = await runCohortRefreshStepped({
+    stores,
+    step: inlineStep,
+    startExport: startBulkCohortExport,
+    pollBulkRows: pollBulkCohortRows,
+    loadFirstOrderMonths,
+    replaceCohortCells,
+    getRate: getFxRate,
+  });
+
+  if (result.failures.length > 0) {
+    captureStepError(
+      { fnId: 'cron-cohort-refresh', stepName: 'refresh-cohorts' },
+      new Error(
+        `cohort refresh partial failure: ${result.failures
+          .map((f) => `${f.store}: ${f.error}`)
+          .join('; ')}`,
+      ),
+    );
+  }
+
+  return result;
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // Inngest weekly cron — Monday 04:00 Israel-local (DST-safe).
 // ────────────────────────────────────────────────────────────────────────
 

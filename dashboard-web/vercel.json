@@ -2,6 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     { "path": "/api/cron/oauth-canary", "schedule": "0 21 * * *" },
-    { "path": "/api/cron/oauth-canary", "schedule": "0 22 * * *" }
+    { "path": "/api/cron/oauth-canary", "schedule": "0 22 * * *" },
+    { "path": "/api/cron/cohort", "schedule": "0 1 * * 1" },
+    { "path": "/api/cron/cohort", "schedule": "0 2 * * 1" }
   ]
 }

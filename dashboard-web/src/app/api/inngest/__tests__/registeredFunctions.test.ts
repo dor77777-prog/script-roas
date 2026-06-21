@@ -61,6 +61,7 @@ const UNTOUCHED_IDS = [
 // Their createFunction exports remain on disk for rollback but are unregistered.
 const MIGRATED_TO_VERCEL_CRON_IDS = [
   'cron-oauth-canary', // → /api/cron/oauth-canary (Task 1.2)
+  'cron-cohort-refresh', // → /api/cron/cohort (Task 1.3)
 ];
 
 describe('serve() registered function set — Phase 4b cutover', () => {

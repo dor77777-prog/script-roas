@@ -130,7 +130,9 @@ import {
   whatsappCronFunctions,
   eventWhatsappSendNow,
 } from '@/inngest/functions/cronWhatsapp';
-import { cronCohortRefreshFunctions } from '@/inngest/functions/cronCohortRefresh';
+// Stage 1 migration — cronCohortRefresh now runs on Vercel Cron
+// (/api/cron/cohort). Its createFunction export remains on disk for rollback
+// but is NO LONGER imported/registered here.
 
 // Vercel route segment config: maxDuration must be a literal number per
 // Next.js's static analyzer (same constraint as the revalidate opt-in —
@@ -179,7 +181,7 @@ export const inngestFunctions = [
   // Stage 1 migration — cronOauthCanary moved to /api/cron/oauth-canary (Vercel Cron).
   ...whatsappCronFunctions, // 3 functions (12:00, 18:00, 00:30 IL)
   eventWhatsappSendNow, // 1 function (operator "send WhatsApp now")
-  ...cronCohortRefreshFunctions, // Wave 2 (2026-06-03) — weekly cohort/LTV re-aggregate (Mon 04:00 IL, Shopify Bulk full replace)
+  // Stage 1 migration — cronCohortRefresh moved to /api/cron/cohort (Vercel Cron).
 ];
 
 export const { GET, POST, PUT } = serve({
