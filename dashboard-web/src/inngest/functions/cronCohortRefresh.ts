@@ -59,7 +59,6 @@
 // READ-ONLY toward Shopify; ZERO writes to ad platforms / pixels / CAPI
 // (CAPI-safe). Only the opaque customer.id is read (no PII).
 
-import { inngest } from '@/inngest/client';
 import {
   aggregateCohortCells,
   type BulkCohortLine,
@@ -464,57 +463,3 @@ export async function runCohortRefresh(): Promise<CohortRefreshResult> {
 
   return result;
 }
-
-// ────────────────────────────────────────────────────────────────────────
-// Inngest weekly cron — Monday 04:00 Israel-local (DST-safe).
-// ────────────────────────────────────────────────────────────────────────
-
-export const cronCohortRefresh = inngest.createFunction(
-  {
-    id: 'cron-cohort-refresh',
-    name: 'Weekly cohort/LTV re-aggregate (Shopify Bulk)',
-    retries: 1,
-    triggers: [{ cron: 'TZ=Asia/Jerusalem 0 4 * * 1' }],
-  },
-  async ({ step }) => {
-    // Phase 4a: enumerate the ACTIVE store list from the DB (loadActiveStoreIds
-    // → DB rows, hardcoded-3 fallback on a DB blip) so a store added later flows
-    // into the cohort refresh without a code change. Resolved in a durable
-    // early step so the read is memoized across the function-level retry. Zero
-    // behavior change for the current 3 stores (the list resolves to the same 3).
-    const stores = await step.run('load-stores', () => loadActiveStoreIds());
-
-    // Per-store step decomposition (NOT one mega-step) so each store's Bulk
-    // export + FX conversion stays under the 60s maxDuration. step.sleep
-    // handles the multi-minute Bulk wait durably; the per-store soft-fail loop
-    // is idempotent (full replace), so a function-level retry resumes via step
-    // memoization rather than restarting completed stores.
-    const result = await runCohortRefreshStepped({
-      stores,
-      step,
-      startExport: startBulkCohortExport,
-      pollBulkRows: pollBulkCohortRows,
-      loadFirstOrderMonths,
-      replaceCohortCells,
-      getRate: getFxRate,
-    });
-
-    // Surface partial failures to Sentry without failing the whole run — the
-    // stores that DID refresh stay fresh; a single store's Bulk outage is
-    // visible but not fatal.
-    if (result.failures.length > 0) {
-      captureStepError(
-        { fnId: 'cron-cohort-refresh', stepName: 'refresh-cohorts' },
-        new Error(
-          `cohort refresh partial failure: ${result.failures
-            .map((f) => `${f.store}: ${f.error}`)
-            .join('; ')}`,
-        ),
-      );
-    }
-
-    return result;
-  },
-);
-
-export const cronCohortRefreshFunctions = [cronCohortRefresh];

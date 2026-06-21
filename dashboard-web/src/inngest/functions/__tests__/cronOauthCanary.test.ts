@@ -39,7 +39,7 @@ vi.mock('@/lib/getStores', () => ({
   loadActiveStoreIds: () => loadActiveStoreIdsMock(),
 }));
 
-import { cronOauthCanary } from '../cronOauthCanary';
+import { runOauthCanary } from '../cronOauthCanary';
 
 type StepStub = {
   run<T>(id: string, fn: () => Promise<T>): Promise<T>;
@@ -81,17 +81,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('cronOauthCanary', () => {
-  it('Test 1: registered with id "cron-oauth-canary" and cron TZ=Asia/Jerusalem 0 0 * * *', () => {
-    const opts = (cronOauthCanary as unknown as { opts: { triggers: Array<{ cron: string }>; id: string } }).opts;
-    expect(opts.id).toBe('cron-oauth-canary');
-    expect(opts.triggers).toEqual([{ cron: 'TZ=Asia/Jerusalem 0 0 * * *' }]);
-  });
-
+// runOauthCanary is the plain handler called inline by /api/cron/oauth-canary
+// (Vercel Cron). The cron schedule lives in vercel.json + the route's IL-hour
+// gate (covered by oauthCanaryRoute.test.ts); these tests cover the probe logic.
+describe('runOauthCanary', () => {
   it('Test 2: happy path — all 5 checks succeed, status ok, correct step names + order', async () => {
     const { step, ids } = makeMockStep();
-    const handler = (cronOauthCanary as unknown as { fn: (ctx: { step: StepStub }) => Promise<unknown> }).fn;
-    const result = await handler({ step });
+    const result = await runOauthCanary(step);
     expect(result).toEqual({ status: 'ok', checks: 5, passed: 5, failed: [] });
     expect(ids).toEqual([
       'check-google-uzoshop',
@@ -114,8 +110,7 @@ describe('cronOauthCanary', () => {
       return Promise.resolve(okMeta);
     });
     const { step } = makeMockStep();
-    const handler = (cronOauthCanary as unknown as { fn: (ctx: { step: StepStub }) => Promise<unknown> }).fn;
-    const result = (await handler({ step })) as { status: string; passed: number; failed: string[] };
+    const result = (await runOauthCanary(step)) as { status: string; passed: number; failed: string[] };
     expect(result.status).toBe('partial');
     expect(result.passed).toBe(4);
     expect(result.failed).toEqual(['meta/zolplus']);
@@ -133,8 +128,7 @@ describe('cronOauthCanary', () => {
     fetchMetaSpendForDayLightMock.mockRejectedValue(new Error('meta dead'));
     fetchTikTokAdvertiserInfoMock.mockRejectedValue(new Error('tiktok dead'));
     const { step } = makeMockStep();
-    const handler = (cronOauthCanary as unknown as { fn: (ctx: { step: StepStub }) => Promise<unknown> }).fn;
-    const result = (await handler({ step })) as { status: string; passed: number; failed: string[] };
+    const result = (await runOauthCanary(step)) as { status: string; passed: number; failed: string[] };
     expect(result.status).toBe('partial');
     expect(result.passed).toBe(0);
     expect(result.failed.sort()).toEqual(
@@ -148,8 +142,7 @@ describe('cronOauthCanary', () => {
     // DB returns a DIFFERENT set than the hardcoded 3 → fail-if-reverted.
     loadActiveStoreIdsMock.mockResolvedValue(['alpha', 'beta']);
     const { step, ids } = makeMockStep();
-    const handler = (cronOauthCanary as unknown as { fn: (ctx: { step: StepStub }) => Promise<unknown> }).fn;
-    const result = (await handler({ step })) as { status: string; checks: number; passed: number };
+    const result = (await runOauthCanary(step)) as { status: string; checks: number; passed: number };
 
     expect(loadActiveStoreIdsMock).toHaveBeenCalledTimes(1);
     // 1 Google + 2 Meta (alpha, beta) + 1 TikTok = 4 checks.

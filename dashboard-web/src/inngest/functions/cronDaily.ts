@@ -39,13 +39,6 @@
 //   verbatim "Triggers belong in the first argument: createFunction({ id,
 //   triggers: { event: '...' } }, handler)".
 
-import { inngest } from '@/inngest/client';
-// Self-serve stores Phase 4b (Task 8) — scheduler→worker fold imports.
-// loadActiveStoreIds enumerates the active store list at runtime so a store
-// added via the DB enters the daily fan-out with no deploy; planStoreJobs is
-// the pure oracle that builds one event per store (right name/id/payload).
-import { loadActiveStoreIds } from '@/lib/getStores';
-import { planStoreJobs } from '@/lib/inngest/planStoreJobs';
 import {
   fetchShopifyDayRows,
   fetchShopifyOrdersAttribution,
@@ -260,8 +253,10 @@ export function ordersAttributionRowKeys(): string[] {
 //
 // COGS rate per Config.gs:20 (COGS_RATE_OF_REVENUE = 0.25 = 25% of revenue).
 // ---------------------------------------------------------------------------
-const STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
-export type StoreId = typeof STORES[number];
+// Canonical store-id union. (Was `typeof STORES[number]` off a runtime const
+// that the removed Inngest per-store factory mapped over; the factory is gone,
+// so the const is no longer needed as a value — only the type remains.)
+export type StoreId = 'uzoshop' | 'zolplus' | 'usmile360';
 
 // Phase 05.7.7 — Per-store TikTok activation flag (currently uzoshop only).
 // Non-TikTok stores short-circuit to zero spend + empty insights without
@@ -1904,118 +1899,3 @@ async function runDailyForStoreInner(
     productCatalogRowCount: shopify.catalog.length,
   };
 }
-
-// ===========================================================================
-// makeCronDaily — factory producing one Inngest function per store.
-//
-// Why a factory: the only per-store variance is the literal `storeId` passed
-// to runDailyForStore. Inngest requires each function to have a unique `id`
-// (used as both the routing key and the Inngest Cloud UI label), so we can't
-// share one function across 3 stores via a payload — each store gets its own
-// scheduled function.
-//
-// SDK call shape (inngest@^4.4.0):
-//   inngest.createFunction({ id, triggers }, handler)
-//   ↑ 2-arg API. The triggers field accepts a single object OR an array;
-//   sanitizeTriggers normalizes to an array internally.
-// ===========================================================================
-function makeCronDaily(storeId: StoreId) {
-  return inngest.createFunction(
-    {
-      id: `cron-daily-${storeId}`,
-      // 'TZ=Asia/Jerusalem 5 0 * * *' = at minute 5 of hour 0, every day,
-      // interpreted in Asia/Jerusalem. This matches the Apps Script trigger
-      // which runs in the project's `Asia/Jerusalem` timezone.
-      triggers: [{ cron: 'TZ=Asia/Jerusalem 5 0 * * *' }],
-    },
-    async ({ step }) => {
-      const date = yesterdayJerusalem();
-      return runDailyForStore(storeId, date, { step });
-    },
-  );
-}
-
-// ---------------------------------------------------------------------------
-// cronDailyFunctions — the array consumed by plan 11's serve() endpoint.
-// Order matches the STORES const above for determinism in tests / UI.
-// ---------------------------------------------------------------------------
-export const cronDailyFunctions = STORES.map(makeCronDaily);
-
-// ===========================================================================
-// Self-serve stores Phase 4b (Task 8) — scheduler→worker FOLD.
-//
-// The per-store factory above (`makeCronDaily` + `cronDailyFunctions`) is KEPT
-// on disk as a revert lever. The pair below replaces it once T9 registers them
-// in serve(); until then these functions are INERT (Inngest only runs what is
-// passed to serve()).
-//
-// Shape: ONE static-trigger scheduler (keeps the factory's EXACT cron) loads
-// the active store list at runtime and emits one `cron/daily.store.requested`
-// event per store; ONE event-driven worker (concurrency-keyed by store) calls
-// the unchanged `runDailyForStore` handler — so a store added via the DB enters
-// the daily cron with no deploy.
-//
-// NOTE: `step.sendEvent` is at the OUTER function level, NEVER inside step.run
-// (Inngest rejects nested steps — that nesting caused a prod 60s timeout in the
-// orchestrator on 2026-05-29). The store-list load + plan build happens inside
-// `step.run` (idempotent + retry-safe); only the emit is outer.
-// ===========================================================================
-
-export const cronDailyScheduler = inngest.createFunction(
-  {
-    id: 'cron-daily-scheduler',
-    // Identical trigger to the factory's `cron-daily-{store}` functions.
-    triggers: [{ cron: 'TZ=Asia/Jerusalem 5 0 * * *' }],
-  },
-  async ({ step }) => {
-    const jobs = await step.run('load-stores', async () => {
-      const stores = await loadActiveStoreIds();
-      return planStoreJobs(stores, { family: 'daily', date: yesterdayJerusalem() });
-    });
-    if (jobs.length > 0) {
-      await step.sendEvent(
-        'fan-out-daily',
-        jobs.map((j) => ({ name: j.eventName, id: j.id, data: j.data })),
-      );
-    }
-    return { enqueued: jobs.length };
-  },
-);
-
-/**
- * Pure worker core — exported so vitest can assert the worker threads
- * `event.data` into the handler without the co-located mock-resolution problem
- * (a `vi.mock` of this module does NOT intercept the binding's in-module call
- * to `runDailyForStore`). Mirrors metaWorker.runMetaWorkerJob's injectable
- * shape: the Inngest binding passes the real `runDailyForStore`; tests pass a
- * `vi.fn()`. `runDailyForStore` itself is UNCHANGED.
- */
-export async function runCronDailyWorker(
-  event: { data: { storeId: string; date?: string } },
-  step: RunDailyStep,
-  handler: typeof runDailyForStore = runDailyForStore,
-): Promise<RunDailyResult> {
-  // Untyped event payload (no EventSchemas on the client) — cast at the
-  // boundary. planStoreJobs always emits `{ storeId, date }` for the daily
-  // family.
-  return handler(event.data.storeId as StoreId, event.data.date as string, { step });
-}
-
-export const cronDailyWorker = inngest.createFunction(
-  {
-    id: 'cron-daily-worker',
-    triggers: [{ event: 'cron/daily.store.requested' }],
-    // Concurrency key matches the planStoreJobs payload field (`data.storeId`).
-    // limit:1 per store preserves the factory's implicit single-flight.
-    concurrency: [{ key: 'event.data.storeId', limit: 1 }],
-    retries: 1,
-  },
-  // The `step` cast narrows Inngest's full step API to the `RunDailyStep` subset
-  // runDailyForStore consumes (Inngest's step.run returns Jsonify<T>; for the
-  // handler's plain-record return Jsonify<T> ≡ T, so the cast is sound).
-  async ({ event, step }) =>
-    runCronDailyWorker(
-      event as unknown as { data: { storeId: string; date?: string } },
-      step as unknown as RunDailyStep,
-    ),
-);

@@ -24,8 +24,6 @@
 // reads env vars only lazily inside the `fetchStatus` call path — the
 // happy-path test injects a vi.fn() resolver and never touches env vars.
 
-import { inngest } from '@/inngest/client';
-import { META_JOB_REQUESTED } from '@/lib/registries/eventNames';
 import { recordFreshness } from '@/lib/inngest/freshness';
 import { isAdsEnabled, type AdStateMap } from '@/lib/adState';
 import { fetchAdStateFromPostgres } from '@/lib/postgresReaders';
@@ -676,21 +674,13 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
 }
 
 // ---------------------------------------------------------------------------
-// Inngest binding — mirrors cronLiveHeavy.ts's `triggers: [...]` style.
-// Concurrency=1 per store prevents overlapping refreshes on the same ad
-// account (the Graph API would BUC-throttle anyway). Throttle 900/h per
-// store gives the worker headroom to keep pace with a 10-min orchestrator
-// without blowing past Meta's per-app limit.
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Wired job runner — Inngest → Vercel Cron + QStash migration (Stage 2 Task
-// 2.4). The full dependency wiring (Supabase client, fetchers, BUC probe,
-// freshness/notify/agg adapters) that the Inngest binding built inside
-// `step.run` is hoisted here so BOTH the Inngest binding AND the
-// `/api/worker/meta` QStash route call the SAME byte-identical wiring. The
-// pure core (`runMetaWorkerJob`) is unchanged; its unit tests drive it
-// directly and stay green.
+// Wired job runner — invoked by the `/api/worker/meta` QStash route. The full
+// dependency wiring (Supabase client, fetchers, BUC probe, freshness/notify/agg
+// adapters) lives here; the pure core (`runMetaWorkerJob`) is unchanged and its
+// unit tests drive it directly. Concurrency/throttle that the old Inngest
+// binding enforced is now provided by the QStash job-lock + per-platform queue.
+// (Inngest binding removed in Stage 4 — the whole pipeline runs on Vercel Cron
+// + QStash. See docs/superpowers/specs/2026-06-21-inngest-to-vercel-qstash-migration-design.md.)
 // ---------------------------------------------------------------------------
 export async function runMetaWorkerForJob(data: JobRequestedEvent): Promise<void> {
   const nowIso = new Date().toISOString();
@@ -847,17 +837,3 @@ export async function runMetaWorkerForJob(data: JobRequestedEvent): Promise<void
         nowIso,
       });
 }
-
-export const metaWorker = inngest.createFunction(
-  {
-    id: 'meta-worker',
-    triggers: [{ event: META_JOB_REQUESTED }],
-    concurrency: [{ key: 'event.data.store_id', limit: 1 }],
-    throttle: { limit: 900, period: '1h', key: 'event.data.store_id' },
-  },
-  async ({ event, step }) => {
-    await step.run('runMetaWorkerJob', async () => {
-      await runMetaWorkerForJob(event.data as unknown as JobRequestedEvent);
-    });
-  },
-);

@@ -89,18 +89,8 @@
  *   - 05.6-CONTEXT.md §D-A3 (history boundary = 2026-05-01)
  */
 
-import { inngest } from '@/inngest/client';
 import { runDailyForStore, type StoreId } from './cronDaily';
 import { captureStepError } from '@/lib/sentry/capture';
-
-// ---------------------------------------------------------------------------
-// Payload type — matches the contract emitted by plan 14's API route.
-// ---------------------------------------------------------------------------
-type BackfillPayload = {
-  from: string; // YYYY-MM-DD inclusive
-  to: string; // YYYY-MM-DD inclusive
-  storeIds: StoreId[];
-};
 
 /**
  * D-A3 history boundary. Phase 05.5-20's importer seeded historical
@@ -202,38 +192,18 @@ type PairResult = {
   error?: string;
 };
 
-export const eventBackfill = inngest.createFunction(
-  {
-    id: 'event-backfill',
-    triggers: [{ event: 'event/backfill' }],
-  },
-  async ({ event, step }) => {
-    const { from, to, storeIds } = event.data as BackfillPayload;
-
-    try {
-      return await runEventBackfill({ from, to, storeIds, step });
-    } catch (e) {
-      // Phase 13.2.2 — top-level wrap. Captures validation throws AND the
-      // systemic-failure throw from the per-pair loop below. Per-pair
-      // transient errors stay in console.warn + results[] (not captured
-      // individually here to avoid spam from the SYSTEMIC_FAILURE_THRESHOLD
-      // logic that already groups them).
-      captureStepError(
-        { fnId: 'event-backfill', stepName: 'top-level' },
-        e,
-        { from, to, storeIds },
-      );
-      throw e;
-    }
-  },
-);
-
 /**
- * Plain backfill handler — the EXACT per-(date × store) loop body the Inngest
- * `eventBackfill` function wraps. Exported (Inngest → Vercel Cron + QStash
- * migration, Stage 3 Task 3.2) so /api/worker/backfill can run it directly off a
- * QStash message with an inline step ctx. Byte-identical logic to the old
- * Inngest path — only the step runtime + trigger transport differ.
+ * Plain backfill handler — the per-(date × store) loop run by the
+ * `/api/worker/backfill` QStash route. (Previously the body of the Inngest
+ * `event-backfill` function, removed in the Inngest → Vercel Cron + QStash
+ * migration — Stage 3 ran it via QStash, Stage 4 deleted the Inngest wrapper.)
+ *
+ * Top-level Sentry capture (Phase 13.2.2 — formerly in the deleted wrapper):
+ * a validation throw or the systemic-failure abort is captured here so QStash
+ * job failures keep their Sentry breadcrumb. Per-pair transient errors stay in
+ * console.warn + results[] (not captured individually to avoid spam from the
+ * SYSTEMIC_FAILURE_THRESHOLD grouping below). QStash retries the whole job on a
+ * non-2xx from the worker route.
  */
 export async function runEventBackfill({
   from,
@@ -246,7 +216,30 @@ export async function runEventBackfill({
   storeIds: StoreId[];
   step: unknown;
 }) {
-    // ---- Validation (throw → Inngest retry-then-deadletter) -----------
+  try {
+    return await runEventBackfillInner({ from, to, storeIds, step });
+  } catch (e) {
+    captureStepError(
+      { fnId: 'event-backfill', stepName: 'top-level' },
+      e,
+      { from, to, storeIds },
+    );
+    throw e;
+  }
+}
+
+async function runEventBackfillInner({
+  from,
+  to,
+  storeIds,
+  step,
+}: {
+  from: string;
+  to: string;
+  storeIds: StoreId[];
+  step: unknown;
+}) {
+    // ---- Validation (throw → QStash retry-then-deadletter) ------------
     if (!storeIds || storeIds.length === 0) {
       throw new Error(
         'event/backfill: storeIds array is required and must be non-empty',

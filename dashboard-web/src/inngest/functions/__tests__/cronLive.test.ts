@@ -168,37 +168,11 @@ afterEach(() => {
 });
 
 // ===========================================================================
-
-describe('cronLive — factory shape', () => {
-  it('Test 1: cronLiveFunctions array has exactly 3 entries (one per store)', async () => {
-    const mod = await import('../cronLive');
-    expect(Array.isArray(mod.cronLiveFunctions)).toBe(true);
-    expect(mod.cronLiveFunctions.length).toBe(3);
-  });
-
-  it('Test 2: each function has a unique id "cron-live-{storeId}"', async () => {
-    const mod = await import('../cronLive');
-    const ids = mod.cronLiveFunctions.map((f) => f.id());
-    expect(ids).toEqual(['cron-live-uzoshop', 'cron-live-zolplus', 'cron-live-usmile360']);
-    expect(new Set(ids).size).toBe(3);
-  });
-
-  it('Test 3: each function uses cron trigger "TZ=Asia/Jerusalem */15 * * * *"', async () => {
-    const mod = await import('../cronLive');
-    for (const fn of mod.cronLiveFunctions) {
-      // fn.opts.triggers is an array of { cron } | { event } objects per Inngest SDK v4.4.
-      const triggers = (fn as unknown as { opts: { triggers: Array<{ cron?: string }> } }).opts
-        .triggers;
-      expect(Array.isArray(triggers)).toBe(true);
-      const cronTrigger = triggers.find((t) => typeof t.cron === 'string');
-      expect(cronTrigger, 'expected at least one cron trigger').toBeDefined();
-      // Phase 05.7.6 cadence change: */15 → */10 so today's spend +
-      // revenue refresh every 10 min instead of 15.
-      expect(cronTrigger!.cron).toBe('TZ=Asia/Jerusalem */10 * * * *');
-    }
-  });
-});
-
+// The old per-store factory (cronLiveFunctions: array length / `cron-live-{store}`
+// ids / `TZ=Asia/Jerusalem */10 * * * *` schedule) was removed in the Inngest →
+// Vercel Cron + QStash migration. cron-live now runs on Vercel Cron at
+// /api/cron/live → QStash → /api/worker/live-store (schedule/gating covered by
+// liveRoute.test.ts). These tests cover the runLiveForStore handler logic.
 // ===========================================================================
 
 describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', () => {

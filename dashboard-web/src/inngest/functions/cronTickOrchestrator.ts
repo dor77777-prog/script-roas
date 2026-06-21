@@ -7,12 +7,11 @@
 // can exercise it with mocked dependencies instead of stubbing the whole
 // Inngest runtime.
 
-import { inngest } from '@/inngest/client';
 import { getFreshness } from '@/lib/inngest/freshness';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { loadActiveStoreIds } from '@/lib/getStores';
 import { buildEvents } from '@/lib/registries/priorityBuilder';
-import { insertCronTickSnapshot, tickIdForNow } from '@/lib/registries/snapshots';
+import { tickIdForNow } from '@/lib/registries/snapshots';
 import type { StoreId } from '@/lib/registries/types';
 
 type SendEventFn = (events: Array<{ name: string; id: string; data: unknown }>) => Promise<{ ids: string[] }>;
@@ -64,56 +63,6 @@ export async function runTickOnce(input: {
 
   return { tickId, fanOutCount: events.length };
 }
-
-export const cronTickOrchestrator = inngest.createFunction(
-  {
-    id: 'cron-tick-orchestrator',
-    triggers: [{ cron: '*/10 * * * *' }],
-  },
-  async ({ step }) => {
-    const nowMs = Date.now();
-    const startedAt = new Date(nowMs).toISOString();
-
-    // Compute fan-out events inside step.run — idempotent + retryable.
-    const { tickId, events } = await step.run('compute-events', async () => {
-      const tickIdInner = tickIdForNow(nowMs);
-      const [statusFreshness, metricsFreshness, metaBucStateByStore, stores] = await Promise.all([
-        getFreshness('campaign_status'),
-        getFreshness('campaign_metrics'),
-        loadMetaBucStateByStore(),
-        loadActiveStoreIds(),
-      ]);
-      const freshness = [...statusFreshness, ...metricsFreshness];
-      const eventsInner = buildEvents({
-        stores,
-        freshness,
-        metaBucStateByStore,
-        googleBucStateByStore: {},   // Phase C MVP — workers self-throttle
-        tiktokBucStateByStore: {},
-        tickId: tickIdInner,
-        nowMs,
-      });
-      return { tickId: tickIdInner, events: eventsInner };
-    });
-
-    // step.sendEvent MUST be at the outer function level, NOT inside step.run.
-    // Inngest rejects nested step calls — that was the source of the 60s
-    // Vercel timeout the orchestrator hit in production on 2026-05-29 night.
-    if (events.length > 0) {
-      await step.sendEvent('fan-out', events.map(e => ({ name: e.name, id: e.id, data: e.data })));
-    }
-
-    // Snapshot is its own idempotent step.run.
-    await step.run('snapshot', async () => {
-      await insertCronTickSnapshot({
-        tick_id: tickId,
-        started_at: startedAt,
-        finished_at: new Date().toISOString(),
-        fan_out_count: events.length,
-      });
-    });
-  },
-);
 
 // Exported (Stage 2 Task 2.4) so the /api/cron/tick QStash scheduler route can
 // replicate the SAME dependency wiring the Inngest binding uses (it injects this

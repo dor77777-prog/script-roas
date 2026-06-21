@@ -497,7 +497,7 @@ vi.mock('@/lib/postgresReaders', async (orig) => ({
 
 // ---- SUT import (after mocks) ----------------------------------------------
 
-import { cronDailyFunctions, runDailyForStore } from '../cronDaily';
+import { runDailyForStore } from '../cronDaily';
 import {
   fetchMetaSpendForDay,
   fetchMetaAdSetInsights,
@@ -532,24 +532,6 @@ function makeMockStep(): { step: { run: (id: string, cb: () => Promise<unknown>)
   return { step, ids };
 }
 
-/**
- * Inngest function objects carry their triggers at `fn.opts.triggers`. The
- * SDK normalizes single-trigger input to an array via `sanitizeTriggers`
- * (see Inngest.cjs:561-565), so this access is uniform whether the producer
- * passed `triggers: { cron: '...' }` or `triggers: [{ cron: '...' }]`.
- */
-function readCronTrigger(fn: unknown): string | undefined {
-  const opts = (fn as { opts?: { triggers?: Array<{ cron?: string }> } }).opts;
-  const triggers = opts?.triggers;
-  if (!triggers || triggers.length === 0) return undefined;
-  return triggers[0]?.cron;
-}
-
-function readFunctionId(fn: unknown): string | undefined {
-  const opts = (fn as { opts?: { id?: string } }).opts;
-  return opts?.id;
-}
-
 // Phase 05.6.1 — capture initial array fixtures so each test starts from a
 // known-good state even after Test 8 (which empties them). Deep-copying via
 // structuredClone preserves nested objects (e.g. lineItems arrays) without the
@@ -578,33 +560,12 @@ beforeEach(() => {
 // Tests
 // ===========================================================================
 
-describe('cronDaily — factory + handler', () => {
-  it('Test 1: exports a `cronDailyFunctions` array with one entry per store (3 stores)', () => {
-    expect(Array.isArray(cronDailyFunctions)).toBe(true);
-    expect(cronDailyFunctions.length).toBe(3);
-  });
-
-  it('Test 2: each function has a unique `cron-daily-{storeId}` id', () => {
-    const ids = cronDailyFunctions.map(readFunctionId);
-    expect(ids).toEqual([
-      'cron-daily-uzoshop',
-      'cron-daily-zolplus',
-      'cron-daily-usmile360',
-    ]);
-    // Sanity: no duplicates.
-    expect(new Set(ids).size).toBe(ids.length);
-  });
-
-  it('Test 3: each function fires on `TZ=Asia/Jerusalem 5 0 * * *` (Israel-local 00:05, NOT UTC)', () => {
-    // Per RESEARCH §Pitfall 1: a raw `5 0 * * *` would fire at 00:05 UTC =
-    // 02:05/03:05 Asia/Jerusalem (depending on DST), 2-3 hours off the
-    // intended Apps Script trigger time. The TZ= prefix is mandatory.
-    for (const fn of cronDailyFunctions) {
-      const cron = readCronTrigger(fn);
-      expect(cron).toBe('TZ=Asia/Jerusalem 5 0 * * *');
-    }
-  });
-
+// The old per-store factory (cronDailyFunctions: array length / `cron-daily-{store}`
+// ids / `TZ=Asia/Jerusalem 5 0 * * *` schedule) was removed in the Inngest →
+// Vercel Cron + QStash migration. cron-daily now runs on Vercel Cron at
+// /api/cron/daily → QStash → /api/worker/daily-store (schedule/gating covered by
+// dailyRoute.test.ts). These tests cover the runDailyForStore handler logic.
+describe('cronDaily — handler', () => {
   it('Test 4: `runDailyForStore` invokes step.run with the expected ordered step IDs', async () => {
     const { step, ids } = makeMockStep();
     await runDailyForStore('uzoshop', '2026-05-20', { step });

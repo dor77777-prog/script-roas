@@ -13,7 +13,6 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import {
-  cronCohortRefreshFunctions,
   runCohortRefreshOnce,
   runCohortRefreshStepped,
   toCadLinesMemoized,
@@ -57,32 +56,11 @@ vi.mock('@/lib/supabaseAdmin', () => ({
   }),
 }));
 
-function readCronTrigger(fn: unknown): string | undefined {
-  const opts = (fn as { opts?: { triggers?: Array<{ cron?: string }> } }).opts;
-  return opts?.triggers?.[0]?.cron;
-}
-function readFunctionId(fn: unknown): string | undefined {
-  return (fn as { opts?: { id?: string } }).opts?.id;
-}
-
-describe('cron-cohort-refresh — fire-time invariants', () => {
-  it('exports exactly one weekly function', () => {
-    expect(cronCohortRefreshFunctions).toHaveLength(1);
-  });
-
-  it('fires weekly Monday 04:00 Israel-local (TZ-prefixed, DST-safe)', () => {
-    const fn = cronCohortRefreshFunctions[0];
-    const cron = readCronTrigger(fn);
-    expect(cron).toContain('0 4 * * 1'); // minute 0, hour 4, Monday
-    expect(cron).toMatch(/^TZ=Asia\/Jerusalem /); // DST-safe, not UTC
-  });
-
-  it('has the expected function id', () => {
-    expect(readFunctionId(cronCohortRefreshFunctions[0])).toBe(
-      'cron-cohort-refresh',
-    );
-  });
-});
+// (The weekly cron schedule + id were previously asserted against the Inngest
+// `cronCohortRefreshFunctions` wrapper. That wrapper was removed in the Inngest
+// → Vercel Cron + QStash migration — cron-cohort-refresh now runs on Vercel
+// Cron at /api/cron/cohort, whose schedule/gating is covered by cohortRoute.test.ts.
+// These tests cover the cohort aggregation logic via the plain handlers.)
 
 describe('runCohortRefreshOnce()', () => {
   // Two stores, each with their own bulk rows + ledger first-order-months.
@@ -352,54 +330,28 @@ describe('runCohortRefreshStepped() — per-store steps (60s-budget fix)', () =>
 });
 
 // ────────────────────────────────────────────────────────────────────────
-// Phase 4a — the cronCohortRefresh wrapper enumerates the store list from the
-// DB (loadActiveStoreIds) instead of a hardcoded const. A store added later
-// flows into the weekly refresh with no code change; a DB blip falls back to
-// the hardcoded 3 (zero behavior change for the current 3 stores).
+// Phase 4a — runCohortRefresh (the plain handler called inline by the Vercel
+// Cron route /api/cron/cohort) enumerates the store list from the DB
+// (loadActiveStoreIds) instead of a hardcoded const. A store added later flows
+// into the weekly refresh with no code change; a DB blip falls back to the
+// hardcoded 3 (zero behavior change for the current 3 stores).
+// (Previously asserted against the deleted Inngest cronCohortRefresh wrapper.)
 // ────────────────────────────────────────────────────────────────────────
-describe('cronCohortRefresh wrapper — store enumeration (Phase 4a)', () => {
-  // Minimal step stub: run executes inline (records ids), sleep is a no-op.
-  function makeWrapperStep(): { step: CohortStep; ids: string[] } {
-    const ids: string[] = [];
-    const step: CohortStep = {
-      run: async (id: string, cb: () => Promise<unknown>) => {
-        ids.push(id);
-        return cb();
-      },
-      sleep: async () => undefined,
-    };
-    return { step, ids };
-  }
-
-  function getHandler() {
-    return (cronCohortRefreshFunctions[0] as unknown as {
-      fn: (ctx: { step: CohortStep }) => Promise<unknown>;
-    }).fn;
-  }
-
+describe('runCohortRefresh — store enumeration (Phase 4a)', () => {
   it('resolves the store list via loadActiveStoreIds and refreshes exactly those stores', async () => {
     loadActiveStoreIdsMock.mockReset();
     startBulkCohortExportMock.mockClear();
     loadActiveStoreIdsMock.mockResolvedValue(['a', 'b']);
 
-    const { step, ids } = makeWrapperStep();
-    const result = (await getHandler()({ step })) as {
-      refreshed: number;
-      failures: unknown[];
-    };
+    const { runCohortRefresh } = await import('../cronCohortRefresh');
+    const result = await runCohortRefresh();
 
-    // The DB list was consulted, resolved in a durable 'load-stores' step.
+    // The DB list was consulted.
     expect(loadActiveStoreIdsMock).toHaveBeenCalledTimes(1);
-    expect(ids).toContain('load-stores');
 
     // The resolved ids — NOT a hardcoded ['uzoshop','zolplus','usmile360'] —
     // flow into the per-store pipeline (fail-if-reverted).
     expect(startBulkCohortExportMock.mock.calls.map((c) => c[0])).toEqual(['a', 'b']);
-    expect(ids).toContain('start-bulk-a');
-    expect(ids).toContain('ingest-cohorts-a');
-    expect(ids).toContain('start-bulk-b');
-    expect(ids).toContain('ingest-cohorts-b');
-    expect(ids).not.toContain('start-bulk-uzoshop');
 
     expect(result.refreshed).toBe(2);
     expect(result.failures).toHaveLength(0);

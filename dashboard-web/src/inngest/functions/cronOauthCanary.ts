@@ -26,7 +26,6 @@
 // (rare). The existing cron-daily already surfaces Shopify auth errors
 // via notifyTokenFailure on the first failed fetch.
 
-import { inngest } from '@/inngest/client';
 import { fetchGoogleAdsSpendForDay } from '@/lib/fetchers/googleAds';
 import { fetchMetaSpendForDayLight } from '@/lib/fetchers/meta';
 import { fetchTikTokAdvertiserInfo } from '@/lib/fetchers/tiktok';
@@ -175,15 +174,3 @@ export async function runOauthCanary(step?: CanaryStep): Promise<OauthCanaryResu
     failed: failed.map((r) => `${r.provider}/${r.storeId}`),
   };
 }
-
-export const cronOauthCanary = inngest.createFunction(
-  {
-    id: 'cron-oauth-canary',
-    triggers: [{ cron: 'TZ=Asia/Jerusalem 0 0 * * *' }],
-  },
-  // Forward the Inngest `step` so each probe keeps its own durable step.run
-  // (per-recipient memoization on a function-level retry). The Vercel Cron
-  // route omits `step` and gets the inline shim. Kept registered until Stage 1
-  // unregisters it; the createFunction export remains for rollback.
-  async ({ step }) => runOauthCanary(step),
-);

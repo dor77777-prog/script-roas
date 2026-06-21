@@ -264,16 +264,6 @@ vi.mock('@/lib/supabaseAdmin', () => ({
   })),
 }));
 
-vi.mock('@/inngest/client', () => ({
-  inngest: {
-    createFunction: vi.fn(
-      (opts: { id: string; triggers: Array<{ cron: string }> }, _handler: unknown) => ({
-        id: opts.id,
-      }),
-    ),
-  },
-}));
-
 vi.mock('@/lib/platformsByStore', () => ({
   STORES_WITH_TIKTOK_IDS: new Set(['uzoshop']),
 }));

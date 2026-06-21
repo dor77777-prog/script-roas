@@ -120,14 +120,6 @@ vi.mock('@/lib/platformsByStore', () => ({
   STORES_WITH_TIKTOK_IDS: new Set([STORE]),
 }));
 
-vi.mock('@/inngest/client', () => ({
-  inngest: {
-    createFunction: vi.fn(
-      (opts: { id: string }, _handler: unknown) => ({ id: opts.id }),
-    ),
-  },
-}));
-
 // ---------------------------------------------------------------------------
 // Supabase mock — records delete + upsert + rpc calls in order
 // ---------------------------------------------------------------------------

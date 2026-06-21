@@ -45,8 +45,6 @@
 // mocked deps; the Inngest binding wraps it in a single `step.run` per
 // Phase B retry-safety convention.
 
-import { inngest } from '@/inngest/client';
-import { TIKTOK_JOB_REQUESTED } from '@/lib/registries/eventNames';
 import { recordFreshness } from '@/lib/inngest/freshness';
 import { tiktokAccountFetchEnabled, type AdStateMap } from '@/lib/adState';
 import { fetchAdStateFromPostgres } from '@/lib/postgresReaders';
@@ -1010,17 +1008,3 @@ export async function runTikTokWorkerForJob(data: JobRequestedEvent): Promise<vo
         nowIso,
       });
 }
-
-export const tiktokWorker = inngest.createFunction(
-  {
-    id: 'tiktok-worker',
-    triggers: [{ event: TIKTOK_JOB_REQUESTED }],
-    concurrency: [{ key: 'event.data.store_id', limit: 1 }],
-    throttle: { limit: 1500, period: '1h', key: 'event.data.store_id' },
-  },
-  async ({ event, step }) => {
-    await step.run('runTikTokWorkerJob', async () => {
-      await runTikTokWorkerForJob(event.data as unknown as JobRequestedEvent);
-    });
-  },
-);

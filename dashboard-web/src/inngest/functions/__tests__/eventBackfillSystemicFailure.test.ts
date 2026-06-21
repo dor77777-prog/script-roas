@@ -57,7 +57,8 @@ vi.mock('../cronDaily', () => ({
 
 // ---- SUT import (after mock) ----------------------------------------------
 
-import { eventBackfill } from '../eventBackfill';
+import { runEventBackfill } from '../eventBackfill';
+import type { StoreId } from '../cronDaily';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -65,7 +66,6 @@ import { eventBackfill } from '../eventBackfill';
 
 /**
  * Minimal step.run stub. Records id, immediately invokes callback.
- * Same shape as events.test.ts:makeMockStep.
  */
 function makeMockStep(): {
   step: { run: (id: string, cb: () => Promise<unknown>) => Promise<unknown> };
@@ -79,15 +79,6 @@ function makeMockStep(): {
     },
   };
   return { step, ids };
-}
-
-type BackfillHandler = (ctx: {
-  event: { data: unknown };
-  step: unknown;
-}) => Promise<unknown>;
-
-function getHandler(): BackfillHandler {
-  return (eventBackfill as unknown as { fn: BackfillHandler }).fn;
 }
 
 beforeEach(() => {
@@ -109,18 +100,13 @@ describe('eventBackfill systemic-failure abort (INN-16)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     const { step } = makeMockStep();
-    const handler = getHandler();
 
     // 5-day × 1-store backfill = 5 pairs. Throw should fire at pair 3.
     await expect(
-      handler({
-        event: {
-          data: {
-            from: '2026-05-15',
-            to: '2026-05-19',
-            storeIds: ['uzoshop'],
-          },
-        },
+      runEventBackfill({
+        from: '2026-05-15',
+        to: '2026-05-19',
+        storeIds: ['uzoshop'] as StoreId[],
         step,
       }),
     ).rejects.toThrow(
@@ -149,18 +135,13 @@ describe('eventBackfill systemic-failure abort (INN-16)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     const { step } = makeMockStep();
-    const handler = getHandler();
 
     // Handler should NOT throw — alternating errors never accumulate 3
     // consecutive identical.
-    const result = (await handler({
-      event: {
-        data: {
-          from: '2026-05-15',
-          to: '2026-05-19',
-          storeIds: ['uzoshop'],
-        },
-      },
+    const result = (await runEventBackfill({
+      from: '2026-05-15',
+      to: '2026-05-19',
+      storeIds: ['uzoshop'] as StoreId[],
       step,
     })) as {
       successCount: number;
@@ -189,16 +170,11 @@ describe('eventBackfill systemic-failure abort (INN-16)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     const { step } = makeMockStep();
-    const handler = getHandler();
 
-    const result = (await handler({
-      event: {
-        data: {
-          from: '2026-05-15',
-          to: '2026-05-17',
-          storeIds: ['uzoshop'],
-        },
-      },
+    const result = (await runEventBackfill({
+      from: '2026-05-15',
+      to: '2026-05-17',
+      storeIds: ['uzoshop'] as StoreId[],
       step,
     })) as {
       successCount: number;

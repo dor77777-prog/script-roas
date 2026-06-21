@@ -33,8 +33,6 @@
 // mocked deps; the Inngest binding wraps it in a single `step.run` per
 // Phase B retry-safety convention.
 
-import { inngest } from '@/inngest/client';
-import { GOOGLE_JOB_REQUESTED } from '@/lib/registries/eventNames';
 import { recordFreshness } from '@/lib/inngest/freshness';
 import { isAdsEnabled, type AdStateMap } from '@/lib/adState';
 import { fetchAdStateFromPostgres } from '@/lib/postgresReaders';
@@ -671,17 +669,3 @@ export async function runGoogleWorkerForJob(data: JobRequestedEvent): Promise<vo
         nowIso,
       });
 }
-
-export const googleWorker = inngest.createFunction(
-  {
-    id: 'google-worker',
-    triggers: [{ event: GOOGLE_JOB_REQUESTED }],
-    concurrency: [{ key: 'event.data.store_id', limit: 1 }],
-    throttle: { limit: 600, period: '1h', key: 'event.data.store_id' },
-  },
-  async ({ event, step }) => {
-    await step.run('runGoogleWorkerJob', async () => {
-      await runGoogleWorkerForJob(event.data as unknown as JobRequestedEvent);
-    });
-  },
-);
