@@ -20,6 +20,7 @@ import { NextResponse } from 'next/server';
 import { verifyCronRequest } from '@/lib/jobs/verifyCron';
 import { israelHour } from '@/lib/dateRange';
 import { runOauthCanary } from '@/inngest/functions/cronOauthCanary';
+import { recordHeartbeat } from '@/lib/jobs/heartbeat';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,10 +32,30 @@ async function handle(req: Request): Promise<Response> {
   }
   if (israelHour() !== TARGET_IL_HOUR) {
     // Off-DST dual-fire — not the IL target hour. No-op so we never double-run.
+    // No heartbeat: this fire did NO real work; the IL-hour-0 fire owns it.
     return NextResponse.json({ skipped: 'off-hour' }, { status: 200 });
   }
-  const result = await runOauthCanary();
-  return NextResponse.json({ ok: true, result }, { status: 200 });
+  try {
+    const result = await runOauthCanary();
+    // A 'partial' result means a token check actually FAILED — surface it as a
+    // transient_error heartbeat so the RunsPanel oauth-canary row goes red
+    // (the dedicated TokenFailuresTable already alerts; this mirrors it for the
+    // runs view). 'ok' = all checks passed → success heartbeat.
+    if (result.status === 'ok') {
+      await recordHeartbeat('oauth_canary', 'success').catch(() => {});
+    } else {
+      await recordHeartbeat(
+        'oauth_canary',
+        'transient_error',
+        `canary failed: ${result.failed.join(', ')}`,
+      ).catch(() => {});
+    }
+    return NextResponse.json({ ok: true, result }, { status: 200 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await recordHeartbeat('oauth_canary', 'transient_error', msg).catch(() => {});
+    return NextResponse.json({ error: 'oauth-canary failed' }, { status: 500 });
+  }
 }
 
 export async function GET(req: Request): Promise<Response> {

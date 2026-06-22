@@ -21,6 +21,12 @@ vi.mock('@/inngest/functions/cronOauthCanary', () => ({
   runOauthCanary: (...args: unknown[]) => runOauthCanaryMock(...args),
 }));
 
+const recordHeartbeatMock =
+  vi.fn<(...args: [string, string, string?]) => Promise<void>>();
+vi.mock('@/lib/jobs/heartbeat', () => ({
+  recordHeartbeat: (...args: [string, string, string?]) => recordHeartbeatMock(...args),
+}));
+
 import { GET, POST } from '../oauth-canary/route';
 
 function req(): Request {
@@ -31,7 +37,9 @@ beforeEach(() => {
   verifyCronRequestMock.mockReset();
   israelHourMock.mockReset();
   runOauthCanaryMock.mockReset();
+  recordHeartbeatMock.mockReset();
   runOauthCanaryMock.mockResolvedValue({ status: 'ok', checks: 5, passed: 5, failed: [] });
+  recordHeartbeatMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -75,5 +83,74 @@ describe('GET/POST /api/cron/oauth-canary', () => {
     const res = await GET(req());
     expect(res.status).toBe(200);
     expect(runOauthCanaryMock).toHaveBeenCalledTimes(1);
+  });
+
+  // --- HEARTBEAT (observability) -------------------------------------------
+
+  it('writes a SUCCESS heartbeat when all canary checks pass', async () => {
+    verifyCronRequestMock.mockReturnValue(true);
+    israelHourMock.mockReturnValue(0);
+    runOauthCanaryMock.mockResolvedValue({ status: 'ok', checks: 5, passed: 5, failed: [] });
+
+    await POST(req());
+    expect(recordHeartbeatMock).toHaveBeenCalledWith('oauth_canary', 'success');
+  });
+
+  it('writes a transient_error heartbeat when a token check FAILS (partial)', async () => {
+    verifyCronRequestMock.mockReturnValue(true);
+    israelHourMock.mockReturnValue(0);
+    runOauthCanaryMock.mockResolvedValue({
+      status: 'partial',
+      checks: 5,
+      passed: 4,
+      failed: ['meta/uzoshop'],
+    });
+
+    const res = await POST(req());
+    expect(res.status).toBe(200); // canary still reports; partial is not a route error
+    expect(recordHeartbeatMock).toHaveBeenCalledWith(
+      'oauth_canary',
+      'transient_error',
+      expect.stringContaining('meta/uzoshop'),
+    );
+  });
+
+  it('does NOT heartbeat on the off-DST skip (no real run happened)', async () => {
+    verifyCronRequestMock.mockReturnValue(true);
+    israelHourMock.mockReturnValue(23);
+
+    await POST(req());
+    expect(recordHeartbeatMock).not.toHaveBeenCalled();
+  });
+
+  it('does NOT heartbeat when unauthorized', async () => {
+    verifyCronRequestMock.mockReturnValue(false);
+    israelHourMock.mockReturnValue(0);
+
+    await POST(req());
+    expect(recordHeartbeatMock).not.toHaveBeenCalled();
+  });
+
+  it('writes a transient_error heartbeat when the canary throws', async () => {
+    verifyCronRequestMock.mockReturnValue(true);
+    israelHourMock.mockReturnValue(0);
+    runOauthCanaryMock.mockRejectedValue(new Error('canary infra boom'));
+
+    const res = await POST(req());
+    expect(res.status).toBe(500);
+    expect(recordHeartbeatMock).toHaveBeenCalledWith(
+      'oauth_canary',
+      'transient_error',
+      expect.stringContaining('canary infra boom'),
+    );
+  });
+
+  it('a heartbeat write failure never breaks the cron (non-fatal)', async () => {
+    verifyCronRequestMock.mockReturnValue(true);
+    israelHourMock.mockReturnValue(0);
+    recordHeartbeatMock.mockRejectedValue(new Error('heartbeat boom'));
+
+    const res = await POST(req());
+    expect(res.status).toBe(200);
   });
 });

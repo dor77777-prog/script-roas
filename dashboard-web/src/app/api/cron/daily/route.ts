@@ -24,6 +24,7 @@ import { verifyCronRequest } from '@/lib/jobs/verifyCron';
 import { israelHour } from '@/lib/dateRange';
 import { publishJob } from '@/lib/jobs/qstash';
 import { loadActiveStoreIds } from '@/lib/getStores';
+import { recordHeartbeat } from '@/lib/jobs/heartbeat';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,13 +36,23 @@ async function handle(req: Request): Promise<Response> {
   }
   if (israelHour() !== TARGET_IL_HOUR) {
     // Off-DST dual-fire — not the IL target hour. No-op (no jobs published).
+    // No heartbeat: this fire did NO real work, so writing 'success' here would
+    // mask a dead working-hour fire. The IL-hour-0 fire owns the heartbeat.
     return NextResponse.json({ skipped: 'off-hour' }, { status: 200 });
   }
-  const stores = await loadActiveStoreIds();
-  for (const storeId of stores) {
-    await publishJob('/api/worker/daily-store', { storeId });
+  try {
+    const stores = await loadActiveStoreIds();
+    for (const storeId of stores) {
+      await publishJob('/api/worker/daily-store', { storeId });
+    }
+    // Best-effort observability heartbeat (RunsPanel). Never let it throw.
+    await recordHeartbeat('cron_daily', 'success').catch(() => {});
+    return NextResponse.json({ published: stores.length }, { status: 200 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await recordHeartbeat('cron_daily', 'transient_error', msg).catch(() => {});
+    return NextResponse.json({ error: 'cron-daily failed' }, { status: 500 });
   }
-  return NextResponse.json({ published: stores.length }, { status: 200 });
 }
 
 export async function GET(req: Request): Promise<Response> {

@@ -35,6 +35,12 @@ vi.mock('@/inngest/functions/cronWhatsapp', () => ({
   runWhatsappSlot: (...args: unknown[]) => runWhatsappSlotMock(...args),
 }));
 
+const recordHeartbeatMock =
+  vi.fn<(...args: [string, string, string?]) => Promise<void>>();
+vi.mock('@/lib/jobs/heartbeat', () => ({
+  recordHeartbeat: (...args: [string, string, string?]) => recordHeartbeatMock(...args),
+}));
+
 import { GET, POST } from '../whatsapp/route';
 
 function req(slot?: string): Request {
@@ -50,9 +56,11 @@ beforeEach(() => {
   acquireJobLockMock.mockReset();
   releaseJobLockMock.mockReset();
   runWhatsappSlotMock.mockReset();
+  recordHeartbeatMock.mockReset();
   acquireJobLockMock.mockResolvedValue(true);
   releaseJobLockMock.mockResolvedValue(undefined);
   runWhatsappSlotMock.mockResolvedValue({ skipped: false, recipientsSucceeded: ['x'] });
+  recordHeartbeatMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -131,5 +139,66 @@ describe('GET/POST /api/cron/whatsapp', () => {
     const res = await GET(req('evening'));
     expect(res.status).toBe(200);
     expect(runWhatsappSlotMock).toHaveBeenCalledWith('evening');
+  });
+
+  // --- HEARTBEAT (observability) -------------------------------------------
+
+  it('writes a SUCCESS heartbeat after a slot sends', async () => {
+    verifyCronRequestMock.mockReturnValue(true);
+    israelHourMock.mockReturnValue(12);
+
+    await POST(req('noon'));
+    expect(recordHeartbeatMock).toHaveBeenCalledWith('whatsapp', 'success');
+  });
+
+  it('does NOT heartbeat on the off-hour skip (no send happened)', async () => {
+    verifyCronRequestMock.mockReturnValue(true);
+    israelHourMock.mockReturnValue(13);
+
+    await POST(req('noon'));
+    expect(recordHeartbeatMock).not.toHaveBeenCalled();
+  });
+
+  it('does NOT heartbeat when the lock is already held (no send happened)', async () => {
+    verifyCronRequestMock.mockReturnValue(true);
+    israelHourMock.mockReturnValue(12);
+    acquireJobLockMock.mockResolvedValue(false);
+
+    await POST(req('noon'));
+    expect(recordHeartbeatMock).not.toHaveBeenCalled();
+  });
+
+  it('does NOT heartbeat when unauthorized or on an unknown slot', async () => {
+    verifyCronRequestMock.mockReturnValue(false);
+    israelHourMock.mockReturnValue(12);
+    await POST(req('noon'));
+    expect(recordHeartbeatMock).not.toHaveBeenCalled();
+
+    verifyCronRequestMock.mockReturnValue(true);
+    await POST(req('lunch'));
+    expect(recordHeartbeatMock).not.toHaveBeenCalled();
+  });
+
+  it('writes a transient_error heartbeat when the send throws', async () => {
+    verifyCronRequestMock.mockReturnValue(true);
+    israelHourMock.mockReturnValue(12);
+    runWhatsappSlotMock.mockRejectedValue(new Error('whatsapp api 500'));
+
+    const res = await POST(req('noon'));
+    expect(res.status).toBe(500);
+    expect(recordHeartbeatMock).toHaveBeenCalledWith(
+      'whatsapp',
+      'transient_error',
+      expect.stringContaining('whatsapp api 500'),
+    );
+  });
+
+  it('a heartbeat write failure never breaks the cron (non-fatal)', async () => {
+    verifyCronRequestMock.mockReturnValue(true);
+    israelHourMock.mockReturnValue(12);
+    recordHeartbeatMock.mockRejectedValue(new Error('heartbeat boom'));
+
+    const res = await POST(req('noon'));
+    expect(res.status).toBe(200);
   });
 });

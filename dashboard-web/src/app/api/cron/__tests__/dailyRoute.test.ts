@@ -29,6 +29,12 @@ vi.mock('@/lib/getStores', () => ({
   loadActiveStoreIds: () => loadActiveStoreIdsMock(),
 }));
 
+const recordHeartbeatMock =
+  vi.fn<(...args: [string, string, string?]) => Promise<void>>();
+vi.mock('@/lib/jobs/heartbeat', () => ({
+  recordHeartbeat: (...args: [string, string, string?]) => recordHeartbeatMock(...args),
+}));
+
 import { GET, POST } from '../daily/route';
 
 function req(): Request {
@@ -40,8 +46,10 @@ beforeEach(() => {
   israelHourMock.mockReset();
   publishJobMock.mockReset();
   loadActiveStoreIdsMock.mockReset();
+  recordHeartbeatMock.mockReset();
   publishJobMock.mockResolvedValue(undefined);
   loadActiveStoreIdsMock.mockResolvedValue(['uzoshop', 'zolplus', 'usmile360']);
+  recordHeartbeatMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -90,5 +98,54 @@ describe('GET/POST /api/cron/daily', () => {
     const res = await GET(req());
     expect(res.status).toBe(200);
     expect(publishJobMock).toHaveBeenCalledTimes(3);
+  });
+
+  // --- HEARTBEAT (observability) -------------------------------------------
+
+  it('writes a SUCCESS heartbeat after the IL-hour-0 fan-out', async () => {
+    verifyCronRequestMock.mockReturnValue(true);
+    israelHourMock.mockReturnValue(0);
+
+    await POST(req());
+    expect(recordHeartbeatMock).toHaveBeenCalledWith('cron_daily', 'success');
+  });
+
+  it('does NOT heartbeat on the off-DST skip (no real run happened)', async () => {
+    verifyCronRequestMock.mockReturnValue(true);
+    israelHourMock.mockReturnValue(23);
+
+    await POST(req());
+    expect(recordHeartbeatMock).not.toHaveBeenCalled();
+  });
+
+  it('does NOT heartbeat when unauthorized', async () => {
+    verifyCronRequestMock.mockReturnValue(false);
+    israelHourMock.mockReturnValue(0);
+
+    await POST(req());
+    expect(recordHeartbeatMock).not.toHaveBeenCalled();
+  });
+
+  it('writes a transient_error heartbeat when the fan-out throws', async () => {
+    verifyCronRequestMock.mockReturnValue(true);
+    israelHourMock.mockReturnValue(0);
+    publishJobMock.mockRejectedValue(new Error('qstash down'));
+
+    const res = await POST(req());
+    expect(res.status).toBe(500);
+    expect(recordHeartbeatMock).toHaveBeenCalledWith(
+      'cron_daily',
+      'transient_error',
+      expect.stringContaining('qstash down'),
+    );
+  });
+
+  it('a heartbeat write failure never breaks the cron (non-fatal)', async () => {
+    verifyCronRequestMock.mockReturnValue(true);
+    israelHourMock.mockReturnValue(0);
+    recordHeartbeatMock.mockRejectedValue(new Error('heartbeat boom'));
+
+    const res = await POST(req());
+    expect(res.status).toBe(200);
   });
 });

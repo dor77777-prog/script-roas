@@ -25,6 +25,7 @@ import { NextResponse } from 'next/server';
 import { verifyCronRequest } from '@/lib/jobs/verifyCron';
 import { publishJob } from '@/lib/jobs/qstash';
 import { loadActiveStoreIds } from '@/lib/getStores';
+import { recordHeartbeat } from '@/lib/jobs/heartbeat';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,11 +33,19 @@ async function handle(req: Request): Promise<Response> {
   if (!verifyCronRequest(req)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
-  const stores = await loadActiveStoreIds();
-  for (const storeId of stores) {
-    await publishJob('/api/worker/yesterday-store', { storeId });
+  try {
+    const stores = await loadActiveStoreIds();
+    for (const storeId of stores) {
+      await publishJob('/api/worker/yesterday-store', { storeId });
+    }
+    // Best-effort observability heartbeat (RunsPanel). Never let it throw.
+    await recordHeartbeat('cron_yesterday', 'success').catch(() => {});
+    return NextResponse.json({ published: stores.length }, { status: 200 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await recordHeartbeat('cron_yesterday', 'transient_error', msg).catch(() => {});
+    return NextResponse.json({ error: 'cron-yesterday failed' }, { status: 500 });
   }
-  return NextResponse.json({ published: stores.length }, { status: 200 });
 }
 
 export async function GET(req: Request): Promise<Response> {

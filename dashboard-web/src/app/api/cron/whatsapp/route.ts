@@ -26,6 +26,7 @@ import { verifyCronRequest } from '@/lib/jobs/verifyCron';
 import { israelHour, getTodayInIsraelTz } from '@/lib/dateRange';
 import { acquireJobLock } from '@/lib/jobs/lock';
 import { runWhatsappSlot, type WhatsappSlot } from '@/inngest/functions/cronWhatsapp';
+import { recordHeartbeat } from '@/lib/jobs/heartbeat';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,11 +65,21 @@ async function handle(req: Request): Promise<Response> {
   const lockKey = `whatsapp:${slot}:${getTodayInIsraelTz()}`;
   const acquired = await acquireJobLock(lockKey, LOCK_TTL_SEC);
   if (!acquired) {
+    // A locked / off-hour / 400 fire did NO send → no heartbeat (a 'success'
+    // here would mask a slot whose real send never ran).
     return NextResponse.json({ skipped: 'locked', slot }, { status: 200 });
   }
 
-  const result = await runWhatsappSlot(slot);
-  return NextResponse.json({ ok: true, slot, result }, { status: 200 });
+  try {
+    const result = await runWhatsappSlot(slot);
+    // Best-effort observability heartbeat (RunsPanel). Never let it throw.
+    await recordHeartbeat('whatsapp', 'success').catch(() => {});
+    return NextResponse.json({ ok: true, slot, result }, { status: 200 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await recordHeartbeat('whatsapp', 'transient_error', msg).catch(() => {});
+    return NextResponse.json({ error: 'whatsapp send failed', slot }, { status: 500 });
+  }
 }
 
 export async function GET(req: Request): Promise<Response> {
