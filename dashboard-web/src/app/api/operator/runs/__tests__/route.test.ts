@@ -65,12 +65,20 @@ beforeEach(() => {
 
 describe('GET /api/operator/runs', () => {
   it('returns the full job roster with verdicts derived from DB sources', async () => {
-    state.freshness = [freshness({ platform: 'meta' })];
+    // The route uses real Date.now() internally, so freshness + tick fixtures
+    // must be clock-RELATIVE (a few minutes ago) to deterministically read as
+    // fresh under both the freshness age-gate (60-min SLA) and the new
+    // cron-tick age-gate (30-min SLA) — a fixed past ISO would flip to stale
+    // once wall-clock drifts past the SLA.
+    const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+    state.freshness = [
+      freshness({ platform: 'meta', last_attempt_at: fiveMinAgo, last_success_at: fiveMinAgo }),
+    ];
     state.ticks = [
       {
         tick_id: 'tick_1',
-        started_at: '2026-06-22T09:50:00.000Z',
-        finished_at: '2026-06-22T09:50:05.000Z',
+        started_at: fiveMinAgo,
+        finished_at: fiveMinAgo,
         fan_out_count: 18,
         events_completed_count: 18,
         events_skipped_count: 0,
