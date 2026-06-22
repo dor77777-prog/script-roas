@@ -198,4 +198,52 @@ describe('FreshnessPanel', () => {
     const dashes = screen.getAllByText('—');
     expect(dashes.length).toBeGreaterThan(0);
   });
+
+  // The 'system' heartbeat lane (recordHeartbeat) is RunsPanel-only telemetry,
+  // NOT a per-(store, platform) data source. Its cadence SLA (daily / ~11.5 h /
+  // every-2h) far exceeds the matrix's 60-min scope default, so without the
+  // exclusion those rows would render as perpetually-red 'system / cron_daily…'
+  // rows for most of the day. The panel must drop them entirely.
+  it('EXCLUDES system heartbeat rows from the lag matrix (RunsPanel-only telemetry)', () => {
+    const eightHoursAgo = new Date(Date.now() - 8 * 60 * 60_000).toISOString();
+    setSwrResult({
+      data: freshnessResp([
+        makeRow({ store_id: 'uzoshop', platform: 'meta', scope: 'campaign_status' }),
+        // heartbeat rows on the 'system' lane — must NOT render.
+        makeRow({
+          store_id: '__system__',
+          platform: 'system',
+          scope: 'cron_daily',
+          table_name: 'heartbeat',
+          last_success_at: eightHoursAgo,
+        }),
+        makeRow({
+          store_id: '__system__',
+          platform: 'system',
+          scope: 'whatsapp',
+          table_name: 'heartbeat',
+          last_success_at: eightHoursAgo,
+        }),
+      ]),
+      isLoading: false,
+    });
+    const { container } = render(<FreshnessPanel />);
+    // Only the single real data row renders.
+    expect(container.querySelectorAll('tbody tr').length).toBe(1);
+    expect(screen.queryByText('system')).toBeNull();
+    expect(screen.queryByText('cron_daily')).toBeNull();
+    expect(screen.queryByText('__system__')).toBeNull();
+    expect(screen.getByText('uzoshop')).toBeDefined();
+  });
+
+  it('falls back to the empty state when the ONLY rows are system heartbeats', () => {
+    setSwrResult({
+      data: freshnessResp([
+        makeRow({ store_id: '__system__', platform: 'system', scope: 'cron_live', table_name: 'heartbeat' }),
+      ]),
+      isLoading: false,
+    });
+    render(<FreshnessPanel />);
+    expect(screen.getByText(/אין רשומות freshness עדיין/)).toBeDefined();
+  });
 });

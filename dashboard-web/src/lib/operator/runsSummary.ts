@@ -18,7 +18,7 @@
 // testable in the node suite, mirroring lib/freshness/sourceStatus.ts.
 
 import type { FreshnessRow } from '@/lib/inngest/freshness';
-import { isAgeStale } from '@/lib/freshness/sourceStatus';
+import { isAgeStale, HEARTBEAT_SCOPE_SLA_MINUTES } from '@/lib/freshness/sourceStatus';
 import type { CronTickSnapshotRow } from '@/lib/operator/registriesReaders';
 
 // ---------------------------------------------------------------------------
@@ -126,29 +126,27 @@ const JOB_BY_HEARTBEAT_SCOPE: Record<string, JobId> = {
 
 /**
  * Per-job heartbeat staleness SLA, in MINUTES — the age past which a
- * success-but-not-beating job is SYNTHETIC stale (the cron stopped firing). Set
- * from the REAL cadence in vercel.json, each loose enough to absorb a missed
- * cycle + clock/DST skew without false-alarming:
+ * success-but-not-beating job is SYNTHETIC stale (the cron stopped firing).
  *
- *   - cron-live      every ~10 min      → 30 min   (3× cadence; one missed tick)
- *   - cron-yesterday every 2 h          → 300 min  (5 h; ~2 missed cycles)
- *   - cron-daily     once/day (00:05 IL)→ 1500 min (25 h; one missed day + skew)
- *   - oauth-canary   once/day (00:00 IL)→ 1500 min (25 h; one missed day + skew)
- *   - whatsapp       3×/day             → 840 min  (14 h; clears the ~11.5 h
- *                                          eod→next-noon overnight gap)
+ * SINGLE-SOURCED: this is NOT an independent table. It is re-keyed (scope→job)
+ * from `HEARTBEAT_SCOPE_SLA_MINUTES` in lib/freshness/sourceStatus.ts — the ONE
+ * place per-scope/per-cadence SLAs live. Centralizing it there (so
+ * `scopeSlaMinutes()` knows every heartbeat scope) is what stops a heartbeat
+ * scope being SLA-known to the RunsPanel but SLA-unknown (silently 60-min
+ * defaulted) to health-summary / the FreshnessPanel — the exact divergence that
+ * dragged freshness_pct and red-flagged the operator lag matrix. A future
+ * cadence change updates every surface at once.
  *
- * NOTE: cron-yesterday is the every-2h reconcile cron in vercel.json
- * (the "0 every-2h" UTC schedule). The observability brief grouped it loosely
- * under "~daily", but we age-gate on the REAL every-2h cadence so a genuinely
- * dead yesterday-cron surfaces within hours, not a full day.
+ * The cadence rationale (cron-live 30 / cron-yesterday 300 / cron-daily +
+ * oauth-canary 1500 / whatsapp 840) is documented on
+ * HEARTBEAT_SCOPE_SLA_MINUTES.
  */
-const HEARTBEAT_SLA_MINUTES: Partial<Record<JobId, number>> = {
-  'cron-live': 30,
-  'cron-yesterday': 300,
-  'cron-daily': 1500,
-  'oauth-canary': 1500,
-  'whatsapp': 840,
-};
+const HEARTBEAT_SLA_MINUTES: Partial<Record<JobId, number>> = Object.fromEntries(
+  Object.entries(JOB_BY_HEARTBEAT_SCOPE).map(([scope, job]) => [
+    job,
+    HEARTBEAT_SCOPE_SLA_MINUTES[scope],
+  ]),
+) as Partial<Record<JobId, number>>;
 
 /** Fallback SLA for any heartbeat job not in the map (defensive; ~10-min job). */
 const DEFAULT_HEARTBEAT_SLA_MINUTES = 30;

@@ -71,7 +71,18 @@ export async function GET() {
     const sb = getSupabaseAdmin();
 
     // freshness: same reader the FreshnessPanel uses.
-    const rows = await getFreshness();
+    const allRows = await getFreshness();
+    // EXCLUDE the 'system' heartbeat lane from freshness_pct. recordHeartbeat
+    // writes one ('__system__', 'system', <cron>, 'heartbeat') row per
+    // schedule-cadence cron purely as RunsPanel telemetry. Those rows do NOT
+    // represent a per-(store, platform) DATA SOURCE; their cadence SLA (daily /
+    // ~11.5 h overnight / every-2h) far exceeds the 60-min scope default, so
+    // counting them here would drag freshness_pct below the 0.95 GREEN
+    // threshold for most of the day and flip the operator StatusPill
+    // GREEN→YELLOW even when every cron is perfectly healthy. Cron health is the
+    // RunsPanel's job (buildRunsSummary, with the per-cadence heartbeat SLA);
+    // this mirrors the same 'system' exclusion in sourceStatusRollup.
+    const rows = allRows.filter((r) => r.platform !== 'system');
     const total = rows.length;
     // FIX #5: a row counts as "fresh" only if its status is 'success' AND its
     // last_success_at is within the per-scope SLA. A dead worker keeps writing

@@ -64,8 +64,12 @@ function severityOf(status: string): number {
  * worker keeps its 'success' forever and, without this gate, sorts as the
  * freshest source while the pipeline is dead.
  *
- * This is the ONE source of truth for the SLA — health-summary and the
- * read-time live-lag helpers import it from here.
+ * This is the ONE source of truth for the SLA — health-summary, the read-time
+ * live-lag helpers, AND runsSummary (which re-imports HEARTBEAT_SCOPE_SLA below)
+ * all key off this single table, so a scope/cadence change updates every
+ * surface at once. A heartbeat scope can never be SLA-known to one surface and
+ * SLA-unknown (silently 60-min-defaulted) to another — the divergence that
+ * dragged health-summary's freshness_pct + flagged the FreshnessPanel matrix.
  *
  *   - status / metric scopes (campaign_metrics, campaign_status, ad_metrics,
  *     adset_metrics, hot_metrics, status, kpi_daily, read_orders) → 60 min.
@@ -73,7 +77,45 @@ function severityOf(status: string): number {
  *     hour means something is wrong.
  *   - cohort_monthly → 7 days. The cohort/LTV refresh is intentionally
  *     infrequent, so an hour-scale SLA would false-alarm every day.
+ *   - heartbeat scopes (cron_live / cron_daily / cron_yesterday / whatsapp /
+ *     oauth_canary) → the REAL schedule cadence from vercel.json, each loose
+ *     enough to absorb a missed cycle + clock/DST skew (see
+ *     HEARTBEAT_SCOPE_SLA_MINUTES below for the per-cadence rationale). These
+ *     live HERE — not only in runsSummary — so the per-cadence SLA is honored
+ *     by every freshness-reading surface, not just the RunsPanel. (The
+ *     'system'-platform heartbeat rows are additionally EXCLUDED from the home
+ *     SourceHealthChip rollup and the operator freshness_pct / lag matrix —
+ *     cron health is the RunsPanel's job — but they get the correct cadence SLA
+ *     here regardless, belt-and-suspenders, so no surface can ever 60-min-stale
+ *     a perfectly-healthy daily cron.)
  */
+
+/**
+ * Per-HEARTBEAT-scope cadence SLA, in MINUTES — the single source of truth the
+ * RunsPanel (runsSummary.ts) re-imports rather than duplicating. Set from the
+ * REAL cadence in vercel.json, each loose enough to absorb a missed cycle +
+ * clock/DST skew without false-alarming:
+ *
+ *   - cron_live      every ~10 min      → 30 min   (3× cadence; one missed tick)
+ *   - cron_yesterday every 2 h          → 300 min  (5 h; ~2 missed cycles)
+ *   - cron_daily     once/day (00:05 IL)→ 1500 min (25 h; one missed day + skew)
+ *   - oauth_canary   once/day (00:00 IL)→ 1500 min (25 h; one missed day + skew)
+ *   - whatsapp       3×/day             → 840 min  (14 h; clears the ~11.5 h
+ *                                          eod→next-noon overnight gap)
+ *
+ * NOTE: cron_yesterday is the every-2h reconcile cron in vercel.json (the
+ * "0 every-2h" UTC schedule). The observability brief grouped it loosely under
+ * "~daily", but we age-gate on the REAL every-2h cadence so a genuinely dead
+ * yesterday-cron surfaces within hours, not a full day.
+ */
+export const HEARTBEAT_SCOPE_SLA_MINUTES: Record<string, number> = {
+  cron_live: 30,
+  cron_yesterday: 300,
+  cron_daily: 1500,
+  oauth_canary: 1500,
+  whatsapp: 840,
+};
+
 const SCOPE_SLA_MINUTES: Record<string, number> = {
   campaign_metrics: 60,
   campaign_status: 60,
@@ -84,6 +126,9 @@ const SCOPE_SLA_MINUTES: Record<string, number> = {
   kpi_daily: 60,
   read_orders: 60,
   cohort_monthly: 7 * 24 * 60,
+  // Heartbeat scopes inherit their per-cadence SLA so scopeSlaMinutes() never
+  // 60-min-defaults a slow-cadence cron heartbeat on any surface.
+  ...HEARTBEAT_SCOPE_SLA_MINUTES,
 };
 
 /** Default SLA for any unrecognized scope — treat as a 60-min status scope. */

@@ -5,7 +5,12 @@
 
 import { describe, it, expect } from 'vitest';
 import type { FreshnessRow } from '@/lib/inngest/freshness';
-import { sourceStatusRollup, scopeSlaMinutes, isAgeStale } from '../sourceStatus';
+import {
+  sourceStatusRollup,
+  scopeSlaMinutes,
+  isAgeStale,
+  HEARTBEAT_SCOPE_SLA_MINUTES,
+} from '../sourceStatus';
 
 const NOW = Date.parse('2026-06-04T12:00:00.000Z');
 function isoMinutesAgo(min: number): string {
@@ -366,6 +371,33 @@ describe('scopeSlaMinutes / isAgeStale (#5)', () => {
 
   it('cohort_monthly → 7 days', () => {
     expect(scopeSlaMinutes('cohort_monthly')).toBe(7 * 24 * 60);
+  });
+
+  // SINGLE-SOURCED SLA guard: scopeSlaMinutes() must KNOW every heartbeat scope
+  // and return its per-cadence SLA — NOT silently fall back to the 60-min
+  // DEFAULT_SLA. A 60-min default on these slow-cadence scopes is exactly what
+  // dragged health-summary's freshness_pct + red-flagged the FreshnessPanel
+  // matrix. runsSummary re-imports HEARTBEAT_SCOPE_SLA_MINUTES from here, so
+  // these two assertions also pin that the RunsPanel + the freshness surfaces
+  // can never diverge on a heartbeat scope's SLA.
+  it('every heartbeat scope is SLA-known (per-cadence, never 60-min defaulted)', () => {
+    expect(scopeSlaMinutes('cron_live')).toBe(30);
+    expect(scopeSlaMinutes('cron_yesterday')).toBe(300);
+    expect(scopeSlaMinutes('cron_daily')).toBe(1500);
+    expect(scopeSlaMinutes('oauth_canary')).toBe(1500);
+    expect(scopeSlaMinutes('whatsapp')).toBe(840);
+    // None silently 60-min-defaulted.
+    for (const [scope, sla] of Object.entries(HEARTBEAT_SCOPE_SLA_MINUTES)) {
+      expect(scopeSlaMinutes(scope)).toBe(sla);
+      expect(scopeSlaMinutes(scope)).not.toBe(60);
+    }
+  });
+
+  it('a daily heartbeat scope is NOT age-stale at 8 h (honors the 25-h cadence SLA, not 60 min)', () => {
+    const eightHoursAgo = new Date(NOW - 8 * 60 * 60_000).toISOString();
+    expect(isAgeStale(eightHoursAgo, 'cron_daily', NOW)).toBe(false);
+    // …but a like-aged 60-min worker scope IS stale.
+    expect(isAgeStale(eightHoursAgo, 'campaign_metrics', NOW)).toBe(true);
   });
 
   it('isAgeStale: null last_success_at is always stale', () => {

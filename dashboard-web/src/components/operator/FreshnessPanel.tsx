@@ -130,7 +130,16 @@ export function FreshnessPanel() {
     return <p className="text-ink-secondary text-sm">טוען טריות נתונים…</p>;
   }
 
-  const rows = data?.rows ?? [];
+  // EXCLUDE the 'system' heartbeat lane from the lag matrix. recordHeartbeat
+  // writes one ('__system__', 'system', <cron>, 'heartbeat') row per
+  // schedule-cadence cron purely as RunsPanel telemetry — it is NOT a
+  // per-(store, platform) data source, and its cadence SLA (daily / ~11.5 h /
+  // every-2h) far exceeds this matrix's 60-min scope default, so those rows
+  // would otherwise read as 4 perpetually-red 'system / cron_daily|…' rows for
+  // most of the day even when every cron is healthy. Cron health lives on the
+  // RunsPanel (RunsPanel.tsx, with the per-cadence heartbeat SLA); this mirrors
+  // the same 'system' exclusion in sourceStatusRollup + health-summary.
+  const rows = (data?.rows ?? []).filter((r) => r.platform !== 'system');
 
   if (!rows.length) {
     return (
