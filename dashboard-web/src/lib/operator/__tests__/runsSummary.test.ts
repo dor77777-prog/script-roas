@@ -98,6 +98,123 @@ describe('buildRunsSummary — worker-meta', () => {
     expect(meta.status).toBe('stale');
     expect(meta.lastError).toBeNull();
   });
+
+  // ---- ORPHANED / LEGACY scope must NOT poison the worker verdict ----------
+  // The live metaWorker writes ONLY these scopes: campaign_status, adset_status,
+  // ad_status (status branch) + campaign_metrics, ad_metrics (hot_metrics
+  // branch). `kpi_daily` + `adset_metrics` are written by cron-daily on a
+  // DIFFERENT cadence/table (data_daily), NOT by the worker. A stale/errored
+  // kpi_daily row that the worker no longer touches must be ignored — it is the
+  // wrong job's telemetry, and counting it shows a false worker-meta=error.
+  it('IGNORES an orphaned legacy kpi_daily error while the live worker scopes are fresh+success (the bug)', () => {
+    // Concrete reproduction: uzoshop has a dead meta/kpi_daily row (8h-old
+    // transient_error, never succeeded) alongside fresh successful live scopes.
+    const rows = buildRunsSummary({
+      freshness: [
+        freshness({ platform: 'meta', scope: 'campaign_metrics' }),
+        freshness({ platform: 'meta', scope: 'ad_metrics', table_name: 'ads_daily' }),
+        freshness({ platform: 'meta', scope: 'campaign_status', table_name: 'campaign_registry' }),
+        freshness({ platform: 'meta', scope: 'adset_status', table_name: 'adset_registry' }),
+        freshness({ platform: 'meta', scope: 'ad_status', table_name: 'ad_registry' }),
+        // ORPHAN: legacy cron-daily scope the worker no longer writes.
+        freshness({
+          platform: 'meta',
+          scope: 'kpi_daily',
+          table_name: 'data_daily',
+          status: 'transient_error',
+          error_code: 'META_FETCH_FAILED',
+          error_message: 'request failed 8h ago',
+          last_success_at: null,
+          last_attempt_at: '2026-06-22T02:00:00.000Z',
+        }),
+      ],
+      ticks: [],
+      now: NOW,
+    });
+    const meta = rows.find((r) => r.job === 'worker-meta')!;
+    // The dead kpi_daily row is the wrong job's telemetry → excluded.
+    expect(meta.status).toBe('success');
+    expect(meta.lastError).toBeNull();
+    // Verdict is driven by the live worker scopes (newest success surfaced).
+    expect(meta.lastSuccessAt).toBe('2026-06-22T09:59:00.000Z');
+  });
+
+  it('GENUINE OUTAGE: ALL live worker scopes stale → worker-meta = stale (not green, not error)', () => {
+    // Every live scope last succeeded 3h ago (SLA 60 min) but stored status is
+    // still "success" — the worker stopped firing entirely. A lone fresh
+    // orphan kpi_daily must NOT rescue the verdict to green either.
+    const staleAt = '2026-06-22T07:00:00.000Z';
+    const rows = buildRunsSummary({
+      freshness: [
+        freshness({ platform: 'meta', scope: 'campaign_metrics', last_success_at: staleAt, last_attempt_at: staleAt }),
+        freshness({ platform: 'meta', scope: 'ad_metrics', table_name: 'ads_daily', last_success_at: staleAt, last_attempt_at: staleAt }),
+        freshness({ platform: 'meta', scope: 'campaign_status', table_name: 'campaign_registry', last_success_at: staleAt, last_attempt_at: staleAt }),
+        freshness({ platform: 'meta', scope: 'adset_status', table_name: 'adset_registry', last_success_at: staleAt, last_attempt_at: staleAt }),
+        freshness({ platform: 'meta', scope: 'ad_status', table_name: 'ad_registry', last_success_at: staleAt, last_attempt_at: staleAt }),
+        // A fresh orphan must NOT count toward (or rescue) the worker verdict.
+        freshness({ platform: 'meta', scope: 'kpi_daily', table_name: 'data_daily' }),
+      ],
+      ticks: [],
+      now: NOW,
+    });
+    const meta = rows.find((r) => r.job === 'worker-meta')!;
+    expect(meta.status).toBe('stale');
+    expect(meta.lastError).toBeNull();
+  });
+
+  it('LIVE FAILURE still flags error: a recent error on a live worker scope → worker-meta = error', () => {
+    // Even with the allowlist, a real recent failure on an ACTIVE worker scope
+    // must still escalate — we are filtering out orphans, not muting failures.
+    const rows = buildRunsSummary({
+      freshness: [
+        freshness({ platform: 'meta', scope: 'campaign_metrics' }),
+        freshness({
+          platform: 'meta',
+          scope: 'ad_status',
+          table_name: 'ad_registry',
+          status: 'transient_error',
+          error_code: '429',
+          error_message: 'rate limited',
+          last_attempt_at: '2026-06-22T09:58:00.000Z',
+          last_success_at: '2026-06-22T08:00:00.000Z',
+        }),
+      ],
+      ticks: [],
+      now: NOW,
+    });
+    const meta = rows.find((r) => r.job === 'worker-meta')!;
+    expect(meta.status).toBe('error');
+    expect(meta.lastError).toEqual({ code: '429', message: 'rate limited' });
+  });
+
+  it('worker-meta is unknown (not success) when ONLY orphaned/legacy scopes exist (no live telemetry)', () => {
+    // If the only meta rows are non-worker scopes (kpi_daily / adset_metrics),
+    // the worker has NO observable live telemetry → must degrade to unknown,
+    // never fabricate a green light from another job's rows.
+    const rows = buildRunsSummary({
+      freshness: [
+        freshness({ platform: 'meta', scope: 'kpi_daily', table_name: 'data_daily' }),
+        freshness({ platform: 'meta', scope: 'adset_metrics', table_name: 'adsets_daily' }),
+      ],
+      ticks: [],
+      now: NOW,
+    });
+    const meta = rows.find((r) => r.job === 'worker-meta')!;
+    expect(meta.status).toBe('unknown');
+    expect(meta.source).toBe('none');
+    expect(meta.lastSuccessAt).toBeNull();
+  });
+
+  it('single-scope job: one fresh successful live scope → worker-meta = success', () => {
+    const rows = buildRunsSummary({
+      freshness: [freshness({ platform: 'meta', scope: 'campaign_status', table_name: 'campaign_registry' })],
+      ticks: [],
+      now: NOW,
+    });
+    const meta = rows.find((r) => r.job === 'worker-meta')!;
+    expect(meta.status).toBe('success');
+    expect(meta.source).toBe('data_freshness');
+  });
 });
 
 describe('buildRunsSummary — cron-tick', () => {

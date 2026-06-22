@@ -74,6 +74,37 @@ const WORKER_BY_PLATFORM: Record<string, JobId> = {
 };
 
 /**
+ * ACTIVE worker-scope allowlist — the EXACT set of `data_freshness` scopes the
+ * current platform workers (metaWorker / googleWorker / tiktokWorker) write,
+ * and the ONLY scopes that count toward a worker-* job's verdict.
+ *
+ *   - status branch  → campaign_status, adset_status, ad_status
+ *   - hot_metrics    → campaign_metrics, ad_metrics
+ *
+ * WHY an allowlist (the false-alarm fix): `data_freshness` is keyed by
+ * (store, platform, scope, table) and is APPEND/UPSERT-only — a scope a worker
+ * stops writing is never deleted, so a stale/errored ORPHAN row lingers under
+ * the same platform forever. Concretely `kpi_daily` + `adset_metrics` are
+ * written by CRON-DAILY (on `data_daily` / the adsets table), NOT by the
+ * per-10-min worker; a dead `meta/kpi_daily` transient_error from cron-daily
+ * was being lumped into worker-meta and dragging an otherwise-fresh+success
+ * worker to "error". Filtering to the worker's OWN scopes makes the verdict
+ * robust to legacy/orphaned/foreign-job scopes by construction (no tuning, no
+ * threshold) — the freshest live scopes alone decide the verdict, and the
+ * existing age-gate still surfaces a genuine all-scopes-stale outage as
+ * `stale`. Any scope OUTSIDE this set is ignored for the worker verdict; if a
+ * worker has NO live-scope rows at all, it degrades to the honest `unknown`
+ * placeholder rather than borrowing another job's green light.
+ */
+const ACTIVE_WORKER_SCOPES = new Set<string>([
+  'campaign_status',
+  'adset_status',
+  'ad_status',
+  'campaign_metrics',
+  'ad_metrics',
+]);
+
+/**
  * Stable display order for the panel. ALL jobs are always rendered (even with
  * no telemetry) so the operator sees the full roster at a glance — a job that
  * silently vanishes is exactly the blind spot the panel exists to avoid.
@@ -209,12 +240,16 @@ export function buildRunsSummary(input: BuildRunsInput): RunRow[] {
     derived.set('cron-tick', rollupTick(ticks));
   }
 
-  // Platform-keyed worker jobs: derive from each platform's STATUS/METRIC
-  // freshness rows. cohort_monthly is excluded — it is its own job, not part of
-  // a platform worker's status/metric scope set.
+  // Platform-keyed worker jobs: derive ONLY from the scopes the live worker
+  // actually writes (ACTIVE_WORKER_SCOPES). Foreign/legacy/orphaned scopes
+  // under the same platform — e.g. cron-daily's `kpi_daily` / `adset_metrics`,
+  // or the shopify-platform `cohort_monthly` — are excluded so a dead orphan
+  // row cannot drag a fresh+success worker to a false "error" (the false-alarm
+  // this fixes). A worker with no live-scope rows falls through to the honest
+  // `unknown` roster placeholder below — it never borrows another job's verdict.
   for (const [platform, job] of Object.entries(WORKER_BY_PLATFORM)) {
     const owned = freshness.filter(
-      (r) => r.platform === platform && r.scope !== 'cohort_monthly',
+      (r) => r.platform === platform && ACTIVE_WORKER_SCOPES.has(r.scope),
     );
     if (owned.length > 0) derived.set(job, freshnessRow(job, owned, now));
   }
