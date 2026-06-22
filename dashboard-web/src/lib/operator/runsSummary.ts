@@ -104,6 +104,68 @@ const ACTIVE_WORKER_SCOPES = new Set<string>([
   'ad_metrics',
 ]);
 
+// ---------------------------------------------------------------------------
+// Heartbeat-derived schedule-cadence jobs (cron-live / cron-daily /
+// cron-yesterday / whatsapp / oauth-canary)
+// ---------------------------------------------------------------------------
+
+/**
+ * Map a 'system'-platform heartbeat scope (written by recordHeartbeat at the
+ * successful end of each schedule-cadence cron) → its panel job id. These crons
+ * have NO per-store/platform run-telemetry; the heartbeat is their ONLY signal,
+ * so each scope maps 1:1 to a job. A job with no heartbeat yet still falls
+ * through to the honest `unknown` roster placeholder below.
+ */
+const JOB_BY_HEARTBEAT_SCOPE: Record<string, JobId> = {
+  cron_live: 'cron-live',
+  cron_daily: 'cron-daily',
+  cron_yesterday: 'cron-yesterday',
+  whatsapp: 'whatsapp',
+  oauth_canary: 'oauth-canary',
+};
+
+/**
+ * Per-job heartbeat staleness SLA, in MINUTES — the age past which a
+ * success-but-not-beating job is SYNTHETIC stale (the cron stopped firing). Set
+ * from the REAL cadence in vercel.json, each loose enough to absorb a missed
+ * cycle + clock/DST skew without false-alarming:
+ *
+ *   - cron-live      every ~10 min      → 30 min   (3× cadence; one missed tick)
+ *   - cron-yesterday every 2 h          → 300 min  (5 h; ~2 missed cycles)
+ *   - cron-daily     once/day (00:05 IL)→ 1500 min (25 h; one missed day + skew)
+ *   - oauth-canary   once/day (00:00 IL)→ 1500 min (25 h; one missed day + skew)
+ *   - whatsapp       3×/day             → 840 min  (14 h; clears the ~11.5 h
+ *                                          eod→next-noon overnight gap)
+ *
+ * NOTE: cron-yesterday is the every-2h reconcile cron in vercel.json
+ * (the "0 every-2h" UTC schedule). The observability brief grouped it loosely
+ * under "~daily", but we age-gate on the REAL every-2h cadence so a genuinely
+ * dead yesterday-cron surfaces within hours, not a full day.
+ */
+const HEARTBEAT_SLA_MINUTES: Partial<Record<JobId, number>> = {
+  'cron-live': 30,
+  'cron-yesterday': 300,
+  'cron-daily': 1500,
+  'oauth-canary': 1500,
+  'whatsapp': 840,
+};
+
+/** Fallback SLA for any heartbeat job not in the map (defensive; ~10-min job). */
+const DEFAULT_HEARTBEAT_SLA_MINUTES = 30;
+
+/**
+ * True when a heartbeat job's last_success_at is older than its per-job SLA (or
+ * is null/unparseable — never-beat is never fresh). `now` injected for purity,
+ * mirroring isAgeStale / isTickStale.
+ */
+function isHeartbeatStale(job: JobId, lastSuccessAt: string | null, now: number): boolean {
+  if (lastSuccessAt == null) return true;
+  const parsed = Date.parse(lastSuccessAt);
+  if (Number.isNaN(parsed)) return true;
+  const sla = HEARTBEAT_SLA_MINUTES[job] ?? DEFAULT_HEARTBEAT_SLA_MINUTES;
+  return (now - parsed) / 60_000 > sla;
+}
+
 /**
  * Stable display order for the panel. ALL jobs are always rendered (even with
  * no telemetry) so the operator sees the full roster at a glance — a job that
@@ -122,14 +184,15 @@ const JOB_ORDER: JobId[] = [
   'oauth-canary',
 ];
 
-// NOTE on sourceless jobs (cron-live / cron-daily / cron-yesterday / whatsapp /
-// oauth-canary): these write NO separately-attributable DB run-telemetry, so
-// the roster fallback below renders them with an `unknown` verdict + a known
-// schedule caption in the UI. Honest by design — the panel never fabricates a
-// green light for a job it cannot observe. (cron-live/daily/yesterday write the
-// SAME platform scopes the workers do, so they are not distinguishable from the
-// worker rows in data_freshness; whatsapp writes nothing; oauth-canary's signal
-// is the dedicated TokenFailuresTable in the בריאות tab.)
+// NOTE on schedule-cadence jobs (cron-live / cron-daily / cron-yesterday /
+// whatsapp / oauth-canary): these have no per-store/platform run-telemetry, but
+// each now writes a lightweight 'system'-platform HEARTBEAT row at the
+// successful end of its work (recordHeartbeat → data_freshness). The
+// heartbeat-derivation below maps each heartbeat scope → its job with a per-job
+// cadence SLA, so the panel lights it up success / stale / error + last-run. A
+// job that has NEVER beat (no heartbeat row yet) still falls through to the
+// honest `unknown` roster placeholder — the panel never fabricates a green
+// light for a job it cannot observe.
 
 /** Statuses that count as healthy in data_freshness (mirrors sourceStatus). */
 const HEALTHY_STATUSES = new Set<string>(['success', 'budget_skip']);
@@ -271,6 +334,39 @@ function freshnessRow(job: JobId, owned: FreshnessRow[], now: number): RunRow {
   };
 }
 
+/**
+ * Build a RunRow for a heartbeat-derived schedule-cadence job from its single
+ * 'system'-platform heartbeat row. Verdict precedence mirrors rollupFreshness /
+ * rollupTick: a real error wins (`error`, surfacing the message); otherwise a
+ * success-but-aged-past-its-cadence heartbeat is SYNTHETIC `stale` (the cron
+ * stopped firing); otherwise `success`. The error branch is age-INDEPENDENT —
+ * a recorded failure is always surfaced, never muted by age.
+ */
+function heartbeatRunRow(job: JobId, row: FreshnessRow, now: number): RunRow {
+  let status: RunStatus;
+  let lastError: { code: string | null; message: string | null } | null = null;
+
+  if (!HEALTHY_STATUSES.has(row.status)) {
+    status = 'error';
+    if (row.error_message || row.error_code) {
+      lastError = { code: row.error_code, message: row.error_message };
+    }
+  } else if (isHeartbeatStale(job, row.last_success_at, now)) {
+    status = 'stale';
+  } else {
+    status = 'success';
+  }
+
+  return {
+    job,
+    lastSuccessAt: row.last_success_at,
+    lastAttemptAt: row.last_attempt_at,
+    status,
+    lastError,
+    source: 'data_freshness',
+  };
+}
+
 /** Placeholder row for a job with no dedicated DB run-telemetry source. */
 function unknownRow(job: JobId): RunRow {
   return {
@@ -309,6 +405,20 @@ export function buildRunsSummary(input: BuildRunsInput): RunRow[] {
   // cohort: cohort_monthly scope (platform shopify), with its 7-day SLA.
   const cohortRows = freshness.filter((r) => r.scope === 'cohort_monthly');
   if (cohortRows.length > 0) derived.set('cohort', freshnessRow('cohort', cohortRows, now));
+
+  // Schedule-cadence crons: derive from their 'system'-platform HEARTBEAT row.
+  // One row per scope (PK store '__system__'); if duplicates ever exist we pick
+  // the newest by last_attempt_at so the verdict is row-order-independent.
+  for (const [scope, job] of Object.entries(JOB_BY_HEARTBEAT_SCOPE)) {
+    const beats = freshness.filter(
+      (r) => r.platform === 'system' && r.scope === scope,
+    );
+    if (beats.length === 0) continue;
+    const newest = beats.reduce((a, b) =>
+      (b.last_attempt_at ?? '') > (a.last_attempt_at ?? '') ? b : a,
+    );
+    derived.set(job, heartbeatRunRow(job, newest, now));
+  }
 
   // Emit the FULL roster in stable order. A job with no derived row falls back
   // to an unknown placeholder so the operator always sees every job (no silent

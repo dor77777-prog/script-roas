@@ -396,10 +396,206 @@ describe('buildRunsSummary — full roster', () => {
       'whatsapp',
       'oauth-canary',
     ]);
-    // Jobs with no dedicated DB telemetry degrade to unknown / source none.
+    // Jobs with NO heartbeat yet still degrade to unknown / source none.
     const live = rows.find((r) => r.job === 'cron-live')!;
     expect(live.status).toBe('unknown');
     expect(live.source).toBe('none');
     expect(live.lastSuccessAt).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// HEARTBEAT-DERIVED schedule-cadence jobs. The 5 crons that have no per-store /
+// platform run-telemetry (cron-live, cron-daily, cron-yesterday, whatsapp,
+// oauth-canary) now write a 'system'-platform heartbeat row per successful run
+// (or transient_error on a caught failure). buildRunsSummary maps each
+// heartbeat scope → its job with a per-job SLA reflecting the REAL cadence
+// (vercel.json): cron-live ~10 min, cron-yesterday every 2 h, cron-daily +
+// oauth-canary ~daily, whatsapp ~3×/day.
+// ---------------------------------------------------------------------------
+
+// A heartbeat row uses platform 'system', store '__system__', table 'heartbeat'
+// and the job key as scope.
+function heartbeat(scope: string, overrides: Partial<FreshnessRow> = {}): FreshnessRow {
+  return freshness({
+    store_id: '__system__',
+    platform: 'system',
+    scope,
+    table_name: 'heartbeat',
+    ...overrides,
+  });
+}
+
+describe('buildRunsSummary — heartbeat-derived crons', () => {
+  it('lights up a fresh cron-live heartbeat as success', () => {
+    const rows = buildRunsSummary({
+      freshness: [heartbeat('cron_live', { last_success_at: '2026-06-22T09:55:00.000Z' })],
+      ticks: [],
+      now: NOW,
+    });
+    const live = rows.find((r) => r.job === 'cron-live')!;
+    expect(live.status).toBe('success');
+    expect(live.source).toBe('data_freshness');
+    expect(live.lastSuccessAt).toBe('2026-06-22T09:55:00.000Z');
+  });
+
+  it('marks cron-live STALE when its heartbeat aged past the ~10-min cadence SLA', () => {
+    // cron-live fires every ~10 min; a heartbeat 45 min old means it stopped.
+    const rows = buildRunsSummary({
+      freshness: [
+        heartbeat('cron_live', {
+          status: 'success',
+          last_success_at: '2026-06-22T09:15:00.000Z', // 45 min ago
+          last_attempt_at: '2026-06-22T09:15:00.000Z',
+        }),
+      ],
+      ticks: [],
+      now: NOW,
+    });
+    expect(rows.find((r) => r.job === 'cron-live')!.status).toBe('stale');
+  });
+
+  it('marks cron-live ERROR (surfacing the message) on a transient_error heartbeat', () => {
+    const rows = buildRunsSummary({
+      freshness: [
+        heartbeat('cron_live', {
+          status: 'transient_error',
+          error_code: null,
+          error_message: 'qstash down',
+          last_attempt_at: '2026-06-22T09:58:00.000Z',
+          last_success_at: '2026-06-22T08:00:00.000Z',
+        }),
+      ],
+      ticks: [],
+      now: NOW,
+    });
+    const live = rows.find((r) => r.job === 'cron-live')!;
+    expect(live.status).toBe('error');
+    expect(live.lastError).toEqual({ code: null, message: 'qstash down' });
+  });
+
+  it('a daily-cadence heartbeat 8 h old is STILL success (daily SLA, not the 60-min worker SLA)', () => {
+    // The false-alarm shape inverted: a daily job at 8h must NOT read stale.
+    const rows = buildRunsSummary({
+      freshness: [
+        heartbeat('cron_daily', {
+          status: 'success',
+          last_success_at: '2026-06-22T02:00:00.000Z', // 8 h ago
+          last_attempt_at: '2026-06-22T02:00:00.000Z',
+        }),
+      ],
+      ticks: [],
+      now: NOW,
+    });
+    expect(rows.find((r) => r.job === 'cron-daily')!.status).toBe('success');
+  });
+
+  it('a daily heartbeat older than ~a day reads STALE (the daily job stopped)', () => {
+    const rows = buildRunsSummary({
+      freshness: [
+        heartbeat('cron_daily', {
+          status: 'success',
+          last_success_at: '2026-06-20T09:00:00.000Z', // ~49 h ago
+          last_attempt_at: '2026-06-20T09:00:00.000Z',
+        }),
+      ],
+      ticks: [],
+      now: NOW,
+    });
+    expect(rows.find((r) => r.job === 'cron-daily')!.status).toBe('stale');
+  });
+
+  it('oauth-canary heartbeat: fresh success at 6 h stays success; old at 2 days is stale', () => {
+    const fresh = buildRunsSummary({
+      freshness: [heartbeat('oauth_canary', { last_success_at: '2026-06-22T04:00:00.000Z' })],
+      ticks: [],
+      now: NOW,
+    });
+    expect(fresh.find((r) => r.job === 'oauth-canary')!.status).toBe('success');
+
+    const stale = buildRunsSummary({
+      freshness: [heartbeat('oauth_canary', { last_success_at: '2026-06-20T09:00:00.000Z' })],
+      ticks: [],
+      now: NOW,
+    });
+    expect(stale.find((r) => r.job === 'oauth-canary')!.status).toBe('stale');
+  });
+
+  it('whatsapp heartbeat tolerates the overnight gap: 11 h old stays success', () => {
+    // eod 00:30 IL → next noon 12:00 IL ≈ 11.5 h apart; the SLA must not
+    // false-alarm across that gap.
+    const rows = buildRunsSummary({
+      freshness: [
+        heartbeat('whatsapp', {
+          status: 'success',
+          last_success_at: '2026-06-21T23:00:00.000Z', // 11 h ago
+          last_attempt_at: '2026-06-21T23:00:00.000Z',
+        }),
+      ],
+      ticks: [],
+      now: NOW,
+    });
+    expect(rows.find((r) => r.job === 'whatsapp')!.status).toBe('success');
+  });
+
+  it('whatsapp heartbeat 20 h old reads STALE (well past 3×/day cadence)', () => {
+    const rows = buildRunsSummary({
+      freshness: [
+        heartbeat('whatsapp', {
+          status: 'success',
+          last_success_at: '2026-06-21T14:00:00.000Z', // 20 h ago
+          last_attempt_at: '2026-06-21T14:00:00.000Z',
+        }),
+      ],
+      ticks: [],
+      now: NOW,
+    });
+    expect(rows.find((r) => r.job === 'whatsapp')!.status).toBe('stale');
+  });
+
+  it('cron-yesterday every-2h cadence: 3 h old stays success, 6 h old is stale', () => {
+    const fresh = buildRunsSummary({
+      freshness: [heartbeat('cron_yesterday', { last_success_at: '2026-06-22T07:00:00.000Z' })],
+      ticks: [],
+      now: NOW,
+    });
+    expect(fresh.find((r) => r.job === 'cron-yesterday')!.status).toBe('success');
+
+    const stale = buildRunsSummary({
+      freshness: [heartbeat('cron_yesterday', { last_success_at: '2026-06-22T04:00:00.000Z' })],
+      ticks: [],
+      now: NOW,
+    });
+    expect(stale.find((r) => r.job === 'cron-yesterday')!.status).toBe('stale');
+  });
+
+  it('a job with NO heartbeat row still falls back to the honest unknown placeholder', () => {
+    const rows = buildRunsSummary({
+      freshness: [heartbeat('cron_live')], // only cron-live beat
+      ticks: [],
+      now: NOW,
+    });
+    expect(rows.find((r) => r.job === 'cron-live')!.status).toBe('success');
+    // whatsapp + oauth-canary + cron-daily + cron-yesterday have no heartbeat.
+    expect(rows.find((r) => r.job === 'whatsapp')!.status).toBe('unknown');
+    expect(rows.find((r) => r.job === 'whatsapp')!.source).toBe('none');
+    expect(rows.find((r) => r.job === 'oauth-canary')!.status).toBe('unknown');
+    expect(rows.find((r) => r.job === 'cron-daily')!.status).toBe('unknown');
+  });
+
+  it('heartbeat rows do NOT leak into worker-* or cohort verdicts', () => {
+    const rows = buildRunsSummary({
+      freshness: [
+        heartbeat('cron_live'),
+        heartbeat('cron_daily'),
+        heartbeat('whatsapp'),
+      ],
+      ticks: [],
+      now: NOW,
+    });
+    // platform 'system' is not a worker platform and the heartbeat scopes are
+    // not worker scopes → workers stay unknown.
+    expect(rows.find((r) => r.job === 'worker-meta')!.status).toBe('unknown');
+    expect(rows.find((r) => r.job === 'cohort')!.status).toBe('unknown');
   });
 });
