@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Swiss · ביצועי חנויות</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Swiss International: neutral canvas, structural rules, ONE neutral system.
+       The ONLY chromatic color in the whole screen is the ROAS band on the cards. */
+    --bg:#0c0c0d; --fg:#ededed; --fg-dim:#9a9a9d; --line:rgba(255,255,255,.16); --line-strong:rgba(255,255,255,.42);
+    --card-on:#ffffff;                 /* on-band text: always white */
+    --card-line:rgba(255,255,255,.30); /* hairline rules inside a band card */
+    --card-dim:rgba(255,255,255,.78);  /* secondary on-band text */
+    /* ROAS bands — flat, saturated, white-text-safe blocks (Swiss color blocks) */
+    --band-blue:#2f6bff; --band-green:#0c8f5f; --band-orange:#ef9331; --band-red:#d6334f; --band-gray:#6b7295; --band-alarm:#ec1840;
+    --space:24px;
+  }
+  [data-theme="light"]{ --bg:#ffffff; --fg:#0a0a0a; --fg-dim:#5a5a5e; --line:rgba(0,0,0,.16); --line-strong:rgba(0,0,0,.5); }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--fg);font-family:"Heebo",sans-serif;-webkit-font-smoothing:antialiased}
+  body{padding:clamp(20px,4vw,56px) clamp(16px,4vw,56px);max-width:1320px;margin-inline:auto}
+
+  /* ---- Swiss header: dramatic scale, structural rule, uppercase tracked meta ---- */
+  .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--fg-dim)}
+  h1{font-size:clamp(34px,6vw,64px);font-weight:900;letter-spacing:-.02em;line-height:.95;margin-top:6px}
+  .scope{margin-top:12px;font-size:13px;color:var(--fg-dim);font-weight:500}
+  .scope b{color:var(--fg);font-weight:700}
+  .toggle{appearance:none;background:none;border:1px solid var(--line-strong);color:var(--fg);font-family:inherit;
+    font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:9px 14px;cursor:pointer}
+  .toggle:hover{background:var(--fg);color:var(--bg)}
+  .rule{height:2px;background:var(--fg);margin:22px 0 4px}
+  .sectionlabel{display:flex;justify-content:space-between;align-items:baseline;margin:34px 0 14px}
+  .sectionlabel h2{font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase}
+  .sectionlabel span{font-size:12px;color:var(--fg-dim);font-weight:500}
+
+  /* ---- The store-card grid: a rigid Swiss module ---- */
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:var(--line);border:1px solid var(--line)}
+  @media(max-width:1080px){.grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.grid{grid-template-columns:1fr}}
+
+  /* ---- ONE identical store card. Full band fill, white text. Only --band changes. ---- */
+  .store{background:var(--band);color:var(--card-on);padding:20px 20px 16px;display:flex;flex-direction:column;min-height:300px}
+  .store .head{display:flex;justify-content:space-between;align-items:flex-start}
+  .store .name{font-size:19px;font-weight:800;letter-spacing:-.01em}
+  .store .tag{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+    border:1px solid var(--card-line);padding:4px 8px;color:var(--card-on)}
+  .store .roaslabel{margin-top:20px;font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--card-dim)}
+  .store .roas{font-size:clamp(48px,5.5vw,62px);font-weight:900;letter-spacing:-.03em;line-height:.9;margin-top:4px;
+    font-variant-numeric:tabular-nums}
+  .store .roas .x{font-size:.42em;font-weight:700;margin-inline-start:2px;vertical-align:.28em}
+  .store .spark{margin-top:14px;width:100%;height:30px;display:block}
+  .store hr{border:0;border-top:1px solid var(--card-line);margin:16px 0}
+  .store .metrics{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}
+  .store .metrics .ml{display:block;font-size:9.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--card-dim)}
+  .store .metrics .mv{display:block;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .store .foot{margin-top:auto;display:flex;justify-content:space-between;align-items:center;padding-top:14px;
+    font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--card-dim);font-variant-numeric:tabular-nums}
+  .note{margin-top:28px;font-size:12px;color:var(--fg-dim);line-height:1.6;max-width:60ch}
+  .note b{color:var(--fg)}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div>
+      <div class="eyebrow">ROAS · סקירה כללית</div>
+      <h1>ביצועי חנויות</h1>
+      <div class="scope"><b>4 חנויות</b> · 30 ימים אחרונים · CAD · עודכן לפני 4 דק׳</div>
+    </div>
+    <button class="toggle" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">בהיר / כהה</button>
+  </div>
+  <div class="rule"></div>
+
+  <div class="sectionlabel">
+    <h2>לפי חנות · לפי הוצאה יורד</h2>
+    <span>כרטיס זהה · הצבע = באנד ה-ROAS</span>
+  </div>
+
+  <div class="grid">
+    <!-- uzoshop · blue -->
+    <article class="store" style="--band:var(--band-blue)">
+      <div class="head"><span class="tag">מעולה</span><span class="name">uzoshop</span></div>
+      <div class="roaslabel">ROAS · 30 ימים</div>
+      <div class="roas">3.41<span class="x">x</span></div>
+      <svg class="spark" viewBox="0 0 200 30" preserveAspectRatio="none"><polyline fill="none" stroke="#fff" stroke-width="1.5" points="0,22 25,20 50,21 75,16 100,17 125,12 150,13 175,9 200,8"/></svg>
+      <hr>
+      <div class="metrics">
+        <div><span class="ml">הכנסה</span><span class="mv">C$3,312</span></div>
+        <div><span class="ml">הוצאה</span><span class="mv">C$971</span></div>
+        <div><span class="ml">הזמנות</span><span class="mv">88</span></div>
+        <div><span class="ml">AOV</span><span class="mv">C$37.6</span></div>
+      </div>
+      <div class="foot"><span>CPM&nbsp;C$13.8</span><span>Meta · Google</span></div>
+    </article>
+
+    <!-- 360usmile · green -->
+    <article class="store" style="--band:var(--band-green)">
+      <div class="head"><span class="tag">טוב</span><span class="name">360usmile</span></div>
+      <div class="roaslabel">ROAS · 30 ימים</div>
+      <div class="roas">2.85<span class="x">x</span></div>
+      <svg class="spark" viewBox="0 0 200 30" preserveAspectRatio="none"><polyline fill="none" stroke="#fff" stroke-width="1.5" points="0,18 25,20 50,15 75,17 100,13 125,16 150,12 175,14 200,11"/></svg>
+      <hr>
+      <div class="metrics">
+        <div><span class="ml">הכנסה</span><span class="mv">C$698</span></div>
+        <div><span class="ml">הוצאה</span><span class="mv">C$245</span></div>
+        <div><span class="ml">הזמנות</span><span class="mv">26</span></div>
+        <div><span class="ml">AOV</span><span class="mv">C$26.8</span></div>
+      </div>
+      <div class="foot"><span>CPM&nbsp;C$15.1</span><span>Meta · TikTok</span></div>
+    </article>
+
+    <!-- Zol Plus · orange -->
+    <article class="store" style="--band:var(--band-orange)">
+      <div class="head"><span class="tag">סביר</span><span class="name">Zol Plus</span></div>
+      <div class="roaslabel">ROAS · 30 ימים</div>
+      <div class="roas">2.10<span class="x">x</span></div>
+      <svg class="spark" viewBox="0 0 200 30" preserveAspectRatio="none"><polyline fill="none" stroke="#fff" stroke-width="1.5" points="0,14 25,16 50,13 75,18 100,15 125,19 150,16 175,20 200,18"/></svg>
+      <hr>
+      <div class="metrics">
+        <div><span class="ml">הכנסה</span><span class="mv">C$195</span></div>
+        <div><span class="ml">הוצאה</span><span class="mv">C$93</span></div>
+        <div><span class="ml">הזמנות</span><span class="mv">18</span></div>
+        <div><span class="ml">AOV</span><span class="mv">C$10.8</span></div>
+      </div>
+      <div class="foot"><span>CPM&nbsp;C$12.4</span><span>TikTok</span></div>
+    </article>
+
+    <!-- pdrn skin · red -->
+    <article class="store" style="--band:var(--band-red)">
+      <div class="head"><span class="tag">דורש בחינה</span><span class="name">pdrn skin</span></div>
+      <div class="roaslabel">ROAS · 30 ימים</div>
+      <div class="roas">1.60<span class="x">x</span></div>
+      <svg class="spark" viewBox="0 0 200 30" preserveAspectRatio="none"><polyline fill="none" stroke="#fff" stroke-width="1.5" points="0,12 25,15 50,13 75,17 100,16 125,20 150,19 175,23 200,22"/></svg>
+      <hr>
+      <div class="metrics">
+        <div><span class="ml">הכנסה</span><span class="mv">C$64</span></div>
+        <div><span class="ml">הוצאה</span><span class="mv">C$40</span></div>
+        <div><span class="ml">הזמנות</span><span class="mv">5</span></div>
+        <div><span class="ml">AOV</span><span class="mv">C$12.8</span></div>
+      </div>
+      <div class="foot"><span>CPM&nbsp;C$16.0</span><span>Google</span></div>
+    </article>
+  </div>
+
+  <p class="note"><b>הכיוון לאימות:</b> כרטיס-חנות אחד זהה לחלוטין — מילוי באנד-ROAS מלא + טקסט לבן — ורק <b>הצבע</b> משתנה בין החנויות (כחול=מעולה / ירוק=טוב / כתום=סביר / אדום=דורש בחינה). השפה Swiss: גריד נוקשה, קווי-הפרדה מבניים, סקאלת-טיפוגרפיה דרמטית, micro-labels ב-uppercase מרווח, שטוח לגמרי. הרקע נשאר ניטרלי — הצבע היחיד הוא הדאטה. תחליף בהיר/כהה למעלה-שמאל.</p>
+</body>
+</html>

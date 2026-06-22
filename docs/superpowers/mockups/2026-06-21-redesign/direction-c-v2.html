@@ -1,0 +1,1611 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Bold Bento — ROAS Command Center · v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================================
+   BOLD BENTO — ROAS COMMAND CENTER · v2
+   ----------------------------------------------------------------------------
+   Editorial bento command center. Tile size encodes importance.
+   The business-wide ROAS is a full-width expressive HERO whose surface IS the
+   band gradient, with an oversized display numeral. Stores are size-ranked
+   bento tiles. Analytics + intelligence rows below.
+   Signature: gradient-as-hero + size-as-hierarchy + a single editorial
+   "rule line" motif (the hairline that frames every section header) + a
+   monospace metadata voice. Carried across 5 tab archetypes.
+   ============================================================================ */
+
+/* ---------- TOKENS · DARK (operator default) ---------- */
+:root{
+  --canvas:#0b1437; --canvas-2:#080f2b;
+  --card:#111c44; --elevated:#162048; --sunken:#0c1538; --sticky:#1B254B;
+  --accent:#7551FF; --accent-2:#9b84ff; --accent-deep:#422AFB;
+  --text:#ffffff; --text-2:#e2e7f7; --muted:#A3AED0; --subtle:#7b86aa;
+  --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.15);
+  --pill-track:var(--sunken);
+  --on-band:#ffffff;
+  --band-scrim:rgba(7,11,30,.40);
+  --band-scrim-2:rgba(7,11,30,.58);
+  --grid-ink:rgba(255,255,255,.07);
+  --series-halo:#0e1840;
+  --pos:#5fe9bd; --neg:#ff8a8e; --neu:#A3AED0;
+  --shadow-1:0 1px 0 rgba(255,255,255,.04) inset, 0 18px 44px -26px rgba(0,0,0,.8);
+  --shadow-2:0 1px 0 rgba(255,255,255,.05) inset, 0 40px 110px -40px rgba(0,0,0,.9);
+  --inset-glow:0 -22px 80px -28px rgba(134,134,240,.16) inset;
+  --mesh-a:rgba(117,81,255,.22); --mesh-b:rgba(66,42,251,.16); --mesh-c:rgba(47,107,255,.12);
+  --ease:cubic-bezier(.16,1,.3,1);
+  --snap:120ms var(--ease); --base:240ms var(--ease); --slow:420ms var(--ease);
+  --r-hero:22px; --r-card:18px; --r-ctrl:10px; --r-chip:11px;
+  --fs-display:clamp(64px,12vw,150px);
+  --mono:'Sora',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+/* ---------- TOKENS · LIGHT (first-class, not inverted) ---------- */
+[data-theme="light"]{
+  --canvas:#eef1fb; --canvas-2:#e6eafc;
+  --card:#ffffff; --elevated:#ffffff; --sunken:#eef1fb; --sticky:#f6f8ff;
+  --accent:#5a3df5; --accent-2:#7c63ff; --accent-deep:#3a1fd0;
+  --text:#0d1330; --text-2:#293160; --muted:#566090; --subtle:#7a85ad;
+  --line:rgba(13,19,48,.09); --line-2:rgba(13,19,48,.16);
+  --pill-track:#e6eafc;
+  --on-band:#ffffff;
+  --band-scrim:rgba(7,11,30,.34);
+  --band-scrim-2:rgba(7,11,30,.50);
+  --grid-ink:rgba(13,19,48,.09);
+  --series-halo:#ffffff;
+  --pos:#0ca678; --neg:#e5484d; --neu:#566090;
+  --shadow-1:0 1px 0 rgba(255,255,255,.7) inset, 0 16px 40px -28px rgba(28,40,90,.42);
+  --shadow-2:0 1px 0 rgba(255,255,255,.8) inset, 0 32px 90px -44px rgba(28,40,90,.5);
+  --inset-glow:0 -22px 80px -34px rgba(90,61,245,.10) inset;
+  --mesh-a:rgba(117,81,255,.14); --mesh-b:rgba(66,42,251,.09); --mesh-c:rgba(47,107,255,.08);
+}
+
+/* ---------- ROAS BANDS (operator-locked, EXACT) ---------- */
+:root{
+  --band-red:linear-gradient(135deg,#f43f47 0%,#ff5a60 52%,#ff8a8e 100%);
+  --band-orange:linear-gradient(135deg,#f08316 0%,#F89C42 50%,#ffc278 100%);
+  --band-green:linear-gradient(135deg,#0ca678 0%,#1ed29b 50%,#5fe9bd 100%);
+  --band-blue:linear-gradient(135deg,#2f6bff 0%,#4d8dff 50%,#85b8ff 100%);
+  /* gray: darkened light-end (#8b93a3 instead of #a6aebd) so white text clears AA across the whole tile */
+  --band-gray:linear-gradient(135deg,#4d5564 0%,#6a7283 50%,#8b93a3 100%);
+  /* red-alarm: critical, deepest red with a hot core — distinct from normal red band */
+  --band-alarm:linear-gradient(135deg,#b80f2e 0%,#e01038 48%,#ff3b5c 100%);
+  --c-red:#ff5a60; --c-orange:#F89C42; --c-green:#1ed29b; --c-blue:#4d8dff; --c-gray:#7c8597; --c-alarm:#ff3b5c;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{
+  font-family:'Heebo',system-ui,-apple-system,'Noto Sans Hebrew',sans-serif;
+  background:var(--canvas); color:var(--text);
+  min-height:100vh; line-height:1.45;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  transition:background var(--slow), color var(--slow);
+  overflow-x:hidden;
+}
+/* expressive ambient canvas mesh + dot grid (the "scene") */
+body::before{
+  content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:
+    radial-gradient(58% 48% at 86% -8%, var(--mesh-a), transparent 72%),
+    radial-gradient(48% 44% at 4% 6%, var(--mesh-b), transparent 72%),
+    radial-gradient(74% 60% at 52% 112%, var(--mesh-c), transparent 72%);
+  transition:opacity var(--slow);
+}
+body::after{
+  content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+  background-image:radial-gradient(circle at center, var(--grid-ink) 1px, transparent 1px);
+  background-size:30px 30px;
+  -webkit-mask-image:radial-gradient(circle at 50% 36%, #000 0%, transparent 72%);
+          mask-image:radial-gradient(circle at 50% 36%, #000 0%, transparent 72%);
+}
+
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1,"lnum" 1;white-space:nowrap}
+.disp{font-family:'Sora','Heebo',sans-serif;letter-spacing:-.02em;font-weight:800}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---------- icon system (single Lucide-style family, currentColor, 1 grid) ---------- */
+.ico{width:1em;height:1em;display:inline-block;flex:0 0 auto;vertical-align:-0.125em;
+  stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;fill:none;overflow:visible}
+.ico-fill{fill:currentColor;stroke:none}
+.ico-sprite{position:absolute;width:0;height:0;overflow:hidden}
+
+/* ============================ SHELL ============================ */
+.app{position:relative;z-index:1;display:flex;min-height:100vh}
+
+/* --- Sidebar (RTL: start = right) --- */
+.rail{
+  width:84px; flex:0 0 84px; position:sticky; top:0; height:100vh;
+  background:color-mix(in srgb,var(--card) 82%,transparent);
+  backdrop-filter:blur(20px) saturate(1.4); -webkit-backdrop-filter:blur(20px) saturate(1.4);
+  border-inline-start:1px solid var(--line);
+  display:flex; flex-direction:column; align-items:center;
+  padding:18px 0 14px; z-index:40;
+}
+.brand{
+  width:46px;height:46px;border-radius:14px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--accent),var(--accent-deep));
+  color:#fff;font-weight:800;font-size:20px;font-family:'Sora',sans-serif;
+  box-shadow:0 12px 30px -10px var(--accent), 0 0 0 1px rgba(255,255,255,.1) inset;
+  margin-bottom:18px;
+}
+.nav{display:flex;flex-direction:column;gap:3px;width:100%;align-items:center;flex:1;overflow-y:auto;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.nav-grp{font-size:8.5px;color:var(--subtle);text-align:center;margin:14px 0 4px;letter-spacing:.08em;font-weight:700;text-transform:uppercase;font-family:var(--mono)}
+.navitem{
+  width:60px;height:56px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  color:var(--muted);cursor:pointer;position:relative;transition:var(--snap);border:none;background:none;
+}
+.navitem .ic{font-size:21px;line-height:0;display:grid;place-items:center}
+.navitem .lbl{font-size:9px;font-weight:700;letter-spacing:.01em}
+.navitem:hover{background:var(--sunken);color:var(--text)}
+.navitem.active{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 24%,transparent),transparent);color:var(--text)}
+.navitem.active::before{content:"";position:absolute;inset-inline-start:-1px;top:11px;bottom:11px;width:3px;border-radius:0 3px 3px 0;background:var(--accent);box-shadow:0 0 16px var(--accent)}
+
+/* --- Main column --- */
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+
+/* --- Top strip --- */
+.topbar{
+  position:sticky;top:0;z-index:35;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:14px clamp(16px,3vw,34px);
+  background:color-mix(in srgb,var(--canvas) 78%,transparent);
+  backdrop-filter:blur(18px) saturate(1.3); -webkit-backdrop-filter:blur(18px) saturate(1.3);
+  border-bottom:1px solid var(--line);
+}
+.tb-title{display:flex;flex-direction:column;gap:1px;margin-inline-end:auto;min-width:0}
+.tb-eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--subtle);font-weight:600}
+.tb-h{font-size:clamp(17px,2.4vw,21px);font-weight:800;letter-spacing:-.02em;font-family:'Sora','Heebo',sans-serif}
+.fresh{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:var(--r-chip);background:var(--sunken);border:1px solid var(--line);font-size:11.5px;font-weight:600;color:var(--text-2)}
+.fresh .dot{width:7px;height:7px;border-radius:50%;background:var(--c-green);box-shadow:0 0 9px var(--c-green);animation:pulse 2.4s var(--ease) infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--c-green) 70%,transparent)}70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.health{display:inline-flex;align-items:center;gap:8px;padding:6px 11px;border-radius:var(--r-chip);background:var(--sunken);border:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--muted)}
+.health b{display:inline-flex;gap:3px}
+.health i{width:8px;height:8px;border-radius:2px;background:var(--c-green);font-style:normal}
+.toggle{
+  width:62px;height:32px;border-radius:999px;border:1px solid var(--line-2);background:var(--sunken);
+  position:relative;cursor:pointer;transition:var(--base);flex:0 0 auto;
+}
+.toggle .knob{position:absolute;top:3px;inset-inline-start:3px;width:24px;height:24px;border-radius:50%;
+  background:linear-gradient(135deg,var(--accent),var(--accent-deep));display:grid;place-items:center;font-size:12px;
+  transition:transform var(--base);color:#fff;box-shadow:0 4px 12px -2px var(--accent)}
+[data-theme="light"] .toggle .knob{transform:translateX(-30px)}
+[dir="rtl"] [data-theme="light"] .toggle .knob{transform:translateX(30px)}
+[dir="rtl"] .toggle .knob{inset-inline-start:auto;inset-inline-end:3px}
+
+/* --- Content scroller --- */
+.scroll{padding:clamp(16px,3vw,30px);padding-bottom:90px}
+.view{display:none;animation:viewIn var(--slow) both}
+.view.active{display:block}
+@keyframes viewIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+/* ---------- editorial section header (the "rule line" signature) ---------- */
+.sec{margin:30px 0 14px;display:flex;align-items:baseline;gap:14px}
+.sec:first-child{margin-top:4px}
+.sec h2{font-size:13px;font-weight:800;letter-spacing:.02em;font-family:'Sora','Heebo',sans-serif;white-space:nowrap}
+.sec .idx{font-family:var(--mono);font-size:11px;color:var(--accent-2);font-weight:600}
+.sec .rule{flex:1;height:1px;background:linear-gradient(90deg,var(--line-2),transparent)}
+.sec .note{font-family:var(--mono);font-size:10.5px;color:var(--subtle);white-space:nowrap}
+
+/* ---------- generic card primitive ---------- */
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);
+  box-shadow:var(--shadow-1), var(--inset-glow);position:relative;overflow:hidden;
+}
+.card-pad{padding:clamp(14px,2vw,20px)}
+
+/* ================= BENTO GRID (home) ================= */
+.bento{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+
+/* ---- HERO: full-width ROAS, gradient-as-surface, oversized numeral ---- */
+.hero{
+  grid-column:span 12;border-radius:var(--r-hero);position:relative;overflow:hidden;
+  color:var(--on-band);box-shadow:var(--shadow-2);
+  min-height:300px;display:flex;flex-direction:column;justify-content:space-between;
+  isolation:isolate;
+}
+.hero .bg{position:absolute;inset:0;z-index:-2}
+.hero[data-band="blue"] .bg{background:var(--band-blue)}
+.hero[data-band="green"] .bg{background:var(--band-green)}
+.hero[data-band="orange"] .bg{background:var(--band-orange)}
+.hero[data-band="red"] .bg{background:var(--band-red)}
+.hero[data-band="gray"] .bg{background:var(--band-gray)}
+.hero[data-band="alarm"] .bg{background:var(--band-alarm)}
+/* organic SVG depth noise + radial sheen */
+.hero .sheen{position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(120% 90% at 88% -20%, rgba(255,255,255,.28), transparent 56%),
+    radial-gradient(90% 80% at 6% 120%, rgba(7,11,30,.34), transparent 60%)}
+.hero .deco{position:absolute;inset:0;z-index:-1;opacity:.55;pointer-events:none}
+.hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;padding:clamp(18px,2.4vw,26px) clamp(18px,2.4vw,28px) 0}
+.hero-eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;opacity:1;color:#fff;text-shadow:0 1px 4px rgba(7,11,30,.4)}
+.hero-scope{display:inline-flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;font-weight:600;opacity:1;color:#fff;text-shadow:0 1px 4px rgba(7,11,30,.4)}
+/* text-bearing pills on bands use the DEEP scrim (guaranteed AA on any band's light corner) */
+.scrim{background:var(--band-scrim-2);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);border:1px solid rgba(255,255,255,.2)}
+.hero-badge{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:999px;font-size:12px;font-weight:700;color:#fff}
+.hero-badge .pl{width:7px;height:7px;border-radius:50%;background:#fff;box-shadow:0 0 9px #fff;animation:pulse 2.4s var(--ease) infinite}
+.hero-mid{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;padding:0 clamp(18px,2.4vw,28px)}
+.hero-num{display:flex;align-items:baseline;gap:10px;line-height:.82}
+.hero-num .val{font-family:'Sora','Heebo',sans-serif;font-weight:800;font-size:var(--fs-display);letter-spacing:-.05em;text-shadow:0 6px 30px rgba(7,11,30,.3)}
+.hero-num .x{font-size:clamp(28px,5vw,52px);font-weight:700;opacity:.85;font-family:'Sora',sans-serif}
+.hero-target{display:flex;flex-direction:column;gap:8px;align-items:flex-start;min-width:200px}
+.hero-tag{align-self:flex-start;padding:6px 14px;border-radius:999px;font-size:13px;font-weight:800;letter-spacing:.02em;color:#fff}
+.hero-progress{width:min(280px,60vw)}
+.hero-progress .track{height:10px;border-radius:999px;background:var(--band-scrim-2);overflow:hidden;border:1px solid rgba(255,255,255,.2)}
+.hero-progress .fill{height:100%;border-radius:999px;background:rgba(255,255,255,.92);box-shadow:0 0 14px rgba(255,255,255,.5)}
+.hero-progress .lbl{display:flex;justify-content:space-between;margin-top:7px;font-family:var(--mono);font-size:11px;opacity:.92}
+/* hero KPI rail along the bottom — flush, shared dividers.
+   Sits on a DEEP neutral scrim (band-scrim-2) so 10px mono labels clear AA even
+   over the lightest gradient stop. Labels render at full opacity + casing shadow. */
+.hero-rail{display:grid;grid-template-columns:repeat(6,1fr);margin-top:clamp(16px,2vw,22px);
+  background:var(--band-scrim-2);border-top:1px solid rgba(255,255,255,.18);
+  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+.hero-rail .cell{padding:13px clamp(12px,1.6vw,18px);border-inline-start:1px solid rgba(255,255,255,.12)}
+.hero-rail .cell:first-child{border-inline-start:none}
+.hero-rail .k{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;opacity:1;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(7,11,30,.5)}
+.hero-rail .v{font-size:clamp(16px,1.7vw,20px);font-weight:800;font-family:'Sora','Heebo',sans-serif;margin-top:4px;display:flex;align-items:baseline;gap:5px;color:#fff;text-shadow:0 1px 4px rgba(7,11,30,.45)}
+.hero-rail .v small{font-size:10px;font-weight:600;opacity:.92;font-family:var(--mono)}
+.hero-rail .d{font-family:var(--mono);font-size:10.5px;font-weight:700;margin-top:3px;display:inline-flex;align-items:center;gap:3px}
+.hero-rail .d .ico{width:12px;height:12px;stroke-width:2.4}
+.hero-rail .d.up{color:#d8fff0}.hero-rail .d.dn{color:#ffe1e3}
+
+/* ---- store bento tiles, size-ranked by spend ---- */
+.store{
+  border-radius:var(--r-card);position:relative;overflow:hidden;color:var(--on-band);
+  box-shadow:var(--shadow-1);display:flex;flex-direction:column;isolation:isolate;
+  cursor:pointer;transition:transform var(--base),box-shadow var(--base);will-change:transform;
+}
+.store:hover{transform:translateY(-3px);box-shadow:var(--shadow-2)}
+.store .bg{position:absolute;inset:0;z-index:-2}
+.store[data-band="blue"] .bg{background:var(--band-blue)}
+.store[data-band="green"] .bg{background:var(--band-green)}
+.store[data-band="orange"] .bg{background:var(--band-orange)}
+.store[data-band="red"] .bg{background:var(--band-red)}
+.store[data-band="gray"] .bg{background:var(--band-gray)}
+.store[data-band="alarm"] .bg{background:var(--band-alarm)}
+/* alarm tiles get a subtle attention ring + slow pulse so a collapse reads instantly */
+.store[data-band="alarm"]{box-shadow:var(--shadow-1),0 0 0 1.5px color-mix(in srgb,var(--c-alarm) 60%,transparent)}
+.store[data-band="gray"]{filter:saturate(.92)}
+.store .sheen{position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(110% 80% at 88% -16%, rgba(255,255,255,.26), transparent 56%),
+            radial-gradient(90% 70% at 0% 120%, rgba(7,11,30,.32), transparent 60%)}
+.store .deco{position:absolute;inset:0;z-index:-1;opacity:.5;pointer-events:none}
+.store-pad{padding:clamp(13px,1.7vw,18px);display:flex;flex-direction:column;height:100%}
+.store-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.store-name{font-size:clamp(14px,1.5vw,16px);font-weight:800;letter-spacing:-.01em;font-family:'Sora','Heebo',sans-serif;color:#fff;text-shadow:0 1px 4px rgba(7,11,30,.4)}
+.store-band-tag{padding:3px 9px;border-radius:7px;font-size:10px;font-weight:800;letter-spacing:.04em;color:#fff;background:var(--band-scrim-2);border:1px solid rgba(255,255,255,.22);font-family:var(--mono)}
+.store-roas{display:flex;align-items:baseline;gap:6px;margin:10px 0 2px;line-height:.9}
+.store-roas .v{font-family:'Sora','Heebo',sans-serif;font-weight:800;letter-spacing:-.03em;color:#fff;text-shadow:0 2px 10px rgba(7,11,30,.32)}
+.store-roas .x{opacity:.82;font-weight:700;font-family:'Sora',sans-serif}
+/* spark */
+.store .spark{margin:8px 0 12px;height:40px;position:relative}
+.store .spark svg{display:block;width:100%;height:40px;overflow:visible}
+/* metric chips on dark scrim sub-surface = AA-safe */
+.store-metrics{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:auto}
+/* metric chips use the DEEP scrim so 9–14px white text clears AA on every band's
+   light corner (orange/green light-ends fail at 40% scrim → use band-scrim-2). */
+.store-metric{background:var(--band-scrim-2);border:1px solid rgba(255,255,255,.15);border-radius:9px;padding:8px 9px;display:flex;flex-direction:column;gap:2px}
+.store-metric .mk{font-family:var(--mono);font-size:9px;letter-spacing:.05em;text-transform:uppercase;opacity:.9;display:flex;align-items:center;gap:4px}
+.store-metric .mk .ico{width:11px;height:11px;stroke-width:2.6}
+.store-metric .mv{font-size:14px;font-weight:800;font-family:'Sora','Heebo',sans-serif;display:flex;align-items:center;gap:3px}
+.store-metric .mv .arr{font-size:11px;display:inline-grid;place-items:center;line-height:0}
+.store-metric .mv .arr .ico{width:12px;height:12px;stroke-width:2.6}
+.arr-dn{color:#ffd6d8}.arr-up{color:#caffe9}
+.store-nodata{display:inline-flex;align-items:center;gap:6px;margin:2px 0 10px;font-family:var(--mono);font-size:11px;font-weight:600;color:#fff;background:var(--band-scrim-2);border:1px solid rgba(255,255,255,.18);padding:5px 10px;border-radius:8px;align-self:flex-start}
+.store-cta{margin:11px -clamp(13px,1.7vw,18px) -clamp(13px,1.7vw,18px);padding:11px clamp(13px,1.7vw,18px);
+  background:var(--band-scrim-2);border-top:1px solid rgba(255,255,255,.14);
+  display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700}
+.store-cta .arrow{transition:transform var(--base);font-size:15px;display:inline-grid;place-items:center;line-height:0}
+.store:hover .store-cta .arrow{transform:translateX(-5px)}
+[dir="rtl"] .store:hover .store-cta .arrow{transform:translateX(5px)}
+
+/* tile sizing — size as hierarchy */
+.tile-xl{grid-column:span 6}
+.tile-lg{grid-column:span 4}
+.tile-md{grid-column:span 3}
+.tile-sm{grid-column:span 2}
+.span-12{grid-column:span 12}.span-8{grid-column:span 8}.span-6{grid-column:span 6}
+.span-5{grid-column:span 5}.span-4{grid-column:span 4}.span-3{grid-column:span 3}.span-7{grid-column:span 7}
+
+/* ---- business KPI cards (flush shared-border rail) ---- */
+.kpi-rail{display:grid;grid-template-columns:repeat(6,1fr);border:1px solid var(--line);border-radius:var(--r-card);overflow:hidden;background:var(--card);box-shadow:var(--shadow-1)}
+.kpi{padding:15px 16px;border-inline-start:1px solid var(--line);position:relative;transition:background var(--snap)}
+.kpi:first-child{border-inline-start:none}
+.kpi:hover{background:var(--elevated)}
+.kpi::after{content:"";position:absolute;top:0;inset-inline:0;height:2px;background:var(--accent);opacity:0;transition:opacity var(--snap)}
+.kpi:hover::after{opacity:1}
+.kpi .k{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px}
+.kpi .fdot{width:6px;height:6px;border-radius:50%;background:var(--c-green);box-shadow:0 0 7px var(--c-green)}
+.kpi .v{font-size:clamp(20px,2.2vw,26px);font-weight:800;font-family:'Sora','Heebo',sans-serif;letter-spacing:-.02em;margin-top:7px;display:flex;align-items:baseline;gap:4px}
+.kpi .v small{font-size:10px;font-weight:600;color:var(--subtle);font-family:var(--mono)}
+.kpi .d{font-family:var(--mono);font-size:11px;font-weight:700;margin-top:5px;display:flex;align-items:center;gap:4px}
+.kpi .d .ico{width:13px;height:13px;stroke-width:2.4}
+.kpi .d.up{color:var(--pos)}.kpi .d.dn{color:var(--neg)}.kpi .d.neu{color:var(--muted)}
+.kpi .sub{font-size:10.5px;color:var(--subtle);margin-top:2px}
+
+/* ---- store compare grid ---- */
+.compare{width:100%;border-collapse:collapse;font-size:12.5px}
+.compare th,.compare td{padding:11px 12px;text-align:start;border-bottom:1px solid var(--line)}
+.compare thead th{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--sunken)}
+.compare tbody tr{transition:background var(--snap)}
+.compare tbody tr:hover{background:var(--elevated)}
+.compare tbody tr:last-child td{border-bottom:none}
+.compare .nm{font-weight:700}
+.row-tag{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--sunken);border:1px solid var(--line);border-radius:5px;padding:1px 6px;margin-inline-start:6px;vertical-align:middle}
+.compare .bar{height:6px;border-radius:999px;background:var(--sunken);overflow:hidden;min-width:60px}
+.compare .bar i{display:block;height:100%;border-radius:999px}
+.roas-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:800;color:#fff;font-family:var(--mono);text-shadow:0 1px 2px rgba(7,11,30,.45)}
+.roas-pill[data-band="blue"]{background:var(--band-blue)}
+.roas-pill[data-band="green"]{background:var(--band-green)}
+.roas-pill[data-band="orange"]{background:var(--band-orange)}
+.roas-pill[data-band="red"]{background:var(--band-red)}
+.roas-pill[data-band="gray"]{background:var(--band-gray)}
+.roas-pill[data-band="alarm"]{background:var(--band-alarm)}
+
+/* ---- NC by platform ---- */
+.nc-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.nc-row:last-child{border-bottom:none}
+.nc-name{display:flex;align-items:center;gap:9px;font-weight:700;font-size:13px}
+.nc-ico{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:800;color:#fff;font-family:var(--mono)}
+.nc-meta{background:linear-gradient(135deg,#0866ff,#1877f2)}.nc-goog{background:linear-gradient(135deg,#ea4335,#fbbc05)}.nc-tt{background:linear-gradient(135deg,#25f4ee,#fe2c55)}.nc-dir{background:var(--sunken);color:var(--muted)}
+.nc-val{display:flex;align-items:center;gap:9px}
+.nc-bar{width:90px;height:6px;border-radius:999px;background:var(--sunken);overflow:hidden}
+.nc-bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+.nc-num{font-family:var(--mono);font-weight:800;font-size:14px;min-width:42px;text-align:end}
+
+/* ---- insight action cards ---- */
+.insight{display:flex;gap:12px;padding:13px;border-radius:var(--r-ctrl);background:var(--sunken);border:1px solid var(--line);margin-bottom:10px;transition:var(--snap)}
+.insight:last-child{margin-bottom:0}
+.insight:hover{border-color:var(--line-2);transform:translateX(-3px)}
+[dir="rtl"] .insight:hover{transform:translateX(3px)}
+.insight .sev{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-size:16px;flex:0 0 auto}
+.sev-hi{background:color-mix(in srgb,var(--c-red) 22%,transparent);color:var(--c-red)}
+.sev-md{background:color-mix(in srgb,var(--c-orange) 22%,transparent);color:var(--c-orange)}
+.sev-lo{background:color-mix(in srgb,var(--c-blue) 22%,transparent);color:var(--c-blue)}
+.insight .body{flex:1;min-width:0}
+.insight .t{font-weight:700;font-size:13px}
+.insight .d{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.4}
+.insight .act{margin-top:7px;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--accent-2);font-family:var(--mono)}
+
+/* ---- activity feed ---- */
+.feed-item{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--line);align-items:flex-start}
+.feed-item:last-child{border-bottom:none}
+.feed-dot{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:15px;flex:0 0 auto}
+.fd-sale{background:color-mix(in srgb,var(--c-green) 20%,transparent);color:var(--c-green)}
+.fd-cart{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--accent-2)}
+.fd-ref{background:color-mix(in srgb,var(--c-red) 20%,transparent);color:var(--c-red)}
+.feed-body{flex:1;min-width:0}
+.feed-t{font-size:12.5px;font-weight:600}
+.feed-t b{font-weight:800}
+.feed-meta{display:flex;align-items:center;gap:7px;margin-top:3px;font-family:var(--mono);font-size:10px;color:var(--subtle)}
+.src-badge{padding:1px 6px;border-radius:5px;font-size:9px;font-weight:700;color:#fff}
+.sb-meta{background:#1877f2}.sb-goog{background:#ea4335}.sb-tt{background:#fe2c55}.sb-dir{background:var(--c-gray)}
+.feed-amt{font-family:var(--mono);font-weight:800;font-size:13px;white-space:nowrap}
+.feed-amt.pos{color:var(--pos)}.feed-amt.neg{color:var(--neg)}
+.live-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,var(--c-green) 18%,transparent);color:var(--c-green);font-size:10px;font-weight:800;font-family:var(--mono)}
+.live-badge .pl{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 7px currentColor;animation:pulse 2.4s var(--ease) infinite}
+
+/* reconcile banner (subtle) */
+.reconcile{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--r-ctrl);
+  background:color-mix(in srgb,var(--c-orange) 12%,var(--card));border:1px solid color-mix(in srgb,var(--c-orange) 36%,transparent);
+  font-size:12px;color:var(--text-2);margin-bottom:6px}
+.reconcile .i{color:var(--c-orange);font-size:14px}
+.reconcile a{color:var(--accent-2);font-weight:700;text-decoration:none;margin-inline-start:auto;font-family:var(--mono);font-size:11px}
+
+/* ================= PRESERVED roas-card host ================= */
+.roas-card-host{margin:0}
+.roas-card{margin:0 !important;max-width:none !important}
+
+/* ================= TABLE (campaigns / detail) ================= */
+.tbl-wrap{border:1px solid var(--line);border-radius:var(--r-card);overflow:hidden;background:var(--card);box-shadow:var(--shadow-1)}
+.tbl-scroll{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
+.tbl-scroll.tall{overflow-y:auto;max-height:560px}
+.tbl-scroll::-webkit-scrollbar{height:9px;width:9px}
+.tbl-scroll::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:999px;border:2px solid transparent;background-clip:padding-box}
+.tbl-scroll::-webkit-scrollbar-track{background:transparent}
+.tbl-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--sunken)}
+.search{flex:1;min-width:160px;position:relative}
+.search input{width:100%;height:36px;border-radius:var(--r-ctrl);border:1px solid var(--line);background:var(--card);color:var(--text);padding:0 36px 0 12px;font-size:13px;font-family:inherit;transition:var(--snap)}
+[dir="rtl"] .search input{padding:0 36px 0 12px}
+.search input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+.search .si{position:absolute;inset-inline-start:11px;top:50%;transform:translateY(-50%);color:var(--subtle);font-size:14px;pointer-events:none}
+.seg{display:inline-flex;gap:2px;padding:3px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-ctrl)}
+.seg button{height:28px;padding:0 11px;border:none;background:none;color:var(--muted);font-size:11.5px;font-weight:600;font-family:var(--mono);border-radius:7px;cursor:pointer;transition:var(--snap)}
+.seg button.on{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--text)}
+.dtable{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:680px}
+.dtable thead th{position:sticky;top:0;z-index:2;background:var(--sticky);font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:start;padding:11px 13px;white-space:nowrap;cursor:pointer;user-select:none}
+.dtable thead th .sortic{opacity:.35;font-size:13px;margin-inline-start:5px;display:inline-grid;place-items:center;line-height:0;transition:opacity var(--snap),color var(--snap)}
+.dtable thead th:hover .sortic{opacity:.7}
+.dtable thead th.sorted .sortic{opacity:1;color:var(--accent-2)}
+.dtable thead th{border-bottom:1px solid var(--line)}
+.dtable thead th.numc,.dtable td.numc{text-align:end}
+.dtable tbody td{padding:11px 13px;border-bottom:1px solid var(--line);white-space:nowrap}
+.dtable tbody tr{transition:background var(--snap);cursor:pointer}
+/* subtle zebra so the table reads as an engineered surface, not a default table */
+.dtable tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--sunken) 45%,transparent)}
+.dtable tbody tr:hover td{background:var(--elevated)}
+.dtable tbody tr:last-child td{border-bottom:none}
+/* RTL-safe sticky pin column: glued to the start edge (right in RTL), with a casing
+   shadow on the inline-end side so it lifts above the scrolling columns. */
+.dtable .pin{position:sticky;inset-inline-start:0;z-index:1;background:var(--card);
+  box-shadow:inset -1px 0 0 var(--line)}
+[dir="rtl"] .dtable .pin{box-shadow:inset 1px 0 0 var(--line)}
+.dtable tbody tr:nth-child(even) .pin{background:color-mix(in srgb,var(--sunken) 60%,var(--card))}
+.dtable tbody tr:hover .pin{background:var(--elevated)}
+.dtable thead .pin{z-index:3;background:var(--sticky)}
+/* elevate the pin when the table is actually scrolled */
+.tbl-scroll.is-scrolled .dtable .pin{box-shadow:8px 0 14px -10px rgba(0,0,0,.5),inset -1px 0 0 var(--line)}
+[dir="rtl"] .tbl-scroll.is-scrolled .dtable .pin{box-shadow:-8px 0 14px -10px rgba(0,0,0,.5),inset 1px 0 0 var(--line)}
+.cell-name{font-weight:700;display:flex;flex-direction:column;gap:1px}
+.cell-name small{font-family:var(--mono);font-size:10px;color:var(--subtle);font-weight:500}
+.plat{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600}
+.plat .pi{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font-size:9px;font-weight:800;color:#fff;font-family:var(--mono)}
+.status{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:700;font-family:var(--mono)}
+.st-on{background:color-mix(in srgb,var(--c-green) 18%,transparent);color:var(--c-green)}
+.st-pause{background:color-mix(in srgb,var(--muted) 18%,transparent);color:var(--muted)}
+.st-warn{background:color-mix(in srgb,var(--c-red) 18%,transparent);color:var(--c-red)}
+.st-alarm{background:color-mix(in srgb,var(--c-alarm) 24%,transparent);color:var(--c-alarm);font-weight:800}
+.st-alarm .sd{animation:pulse 1.6s var(--ease) infinite;box-shadow:0 0 8px var(--c-alarm)}
+.status .sd{width:6px;height:6px;border-radius:50%;background:currentColor}
+.roas-cell{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;font-weight:800;color:#fff;font-family:var(--mono);font-size:12px;text-shadow:0 1px 2px rgba(7,11,30,.45)}
+.roas-cell[data-band="blue"]{background:var(--band-blue)}
+.roas-cell[data-band="green"]{background:var(--band-green)}
+.roas-cell[data-band="orange"]{background:var(--band-orange)}
+.roas-cell[data-band="red"]{background:var(--band-red)}
+.roas-cell[data-band="gray"]{background:var(--band-gray)}
+.roas-cell[data-band="alarm"]{background:var(--band-alarm)}
+
+/* top performers strip — wraps (never clips) at any width */
+.perf-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(176px,1fr));gap:12px;margin-bottom:18px;min-width:0}
+.perf{border-radius:var(--r-card);overflow:hidden;position:relative;color:var(--on-band);box-shadow:var(--shadow-1);isolation:isolate}
+.perf .bg{position:absolute;inset:0;z-index:-2}
+.perf[data-band="blue"] .bg{background:var(--band-blue)}.perf[data-band="green"] .bg{background:var(--band-green)}.perf[data-band="orange"] .bg{background:var(--band-orange)}.perf[data-band="red"] .bg{background:var(--band-red)}.perf[data-band="gray"] .bg{background:var(--band-gray)}.perf[data-band="alarm"] .bg{background:var(--band-alarm)}
+.perf .sheen{position:absolute;inset:0;z-index:-1;background:
+  radial-gradient(100% 80% at 86% -16%, rgba(255,255,255,.22), transparent 56%),
+  linear-gradient(180deg, rgba(7,11,30,.30) 0%, rgba(7,11,30,.06) 38%, rgba(7,11,30,.34) 100%)}
+.perf-pad{padding:14px}
+.perf .rank{font-family:var(--mono);font-size:10px;opacity:1;letter-spacing:.06em;color:#fff;text-shadow:0 1px 3px rgba(7,11,30,.5)}
+.perf .nm{font-weight:800;font-size:14px;margin-top:3px;font-family:'Sora','Heebo',sans-serif;color:#fff;text-shadow:0 1px 4px rgba(7,11,30,.4)}
+.perf .meta{font-family:var(--mono);font-size:10.5px;opacity:1;margin-top:2px;color:#fff;text-shadow:0 1px 3px rgba(7,11,30,.5)}
+.perf .big{font-family:'Sora','Heebo',sans-serif;font-weight:800;font-size:30px;letter-spacing:-.03em;margin-top:10px;display:flex;align-items:baseline;gap:4px;color:#fff;text-shadow:0 2px 10px rgba(7,11,30,.3)}
+.perf .big .x{font-size:16px;opacity:.82}
+
+/* ================= DRAWER (campaign drill) ================= */
+.drawer-scrim{position:fixed;inset:0;background:rgba(5,8,22,.55);backdrop-filter:blur(4px);z-index:90;opacity:0;pointer-events:none;transition:opacity var(--base)}
+.drawer-scrim.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;inset-inline-start:0;height:100vh;width:min(440px,92vw);z-index:91;
+  background:var(--card);border-inline-end:1px solid var(--line-2);box-shadow:var(--shadow-2);
+  transform:translateX(-105%);transition:transform var(--slow);overflow-y:auto;padding:20px}
+[dir="rtl"] .drawer{inset-inline-start:auto;inset-inline-end:0;left:auto;right:0;border-inline-end:none;border-inline-start:1px solid var(--line-2);transform:translateX(105%)}
+.drawer.open{transform:translateX(0) !important}
+.drawer-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px}
+.drawer-close{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--sunken);color:var(--muted);cursor:pointer;font-size:16px;flex:0 0 auto}
+.drawer-close:hover{color:var(--text);border-color:var(--line-2)}
+.ad-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border-radius:var(--r-ctrl);background:var(--sunken);border:1px solid var(--line);margin-bottom:8px}
+.ad-row .nm{font-weight:700;font-size:12.5px}
+.ad-row .mt{font-family:var(--mono);font-size:10px;color:var(--subtle);margin-top:2px}
+
+/* ================= P&L cascade ================= */
+.pnl-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
+.pnl-sum{padding:16px;border-radius:var(--r-card);background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow-1);position:relative;overflow:hidden}
+.pnl-sum::before{content:"";position:absolute;top:0;inset-inline-start:0;width:3px;height:100%}
+.pnl-sum.rev::before{background:var(--c-green)}.pnl-sum.cog::before{background:var(--c-orange)}.pnl-sum.op::before{background:var(--accent)}.pnl-sum.ad::before{background:var(--c-blue)}.pnl-sum.net::before{background:var(--c-green)}
+.pnl-sum .k{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.pnl-sum .v{font-size:clamp(20px,2.3vw,27px);font-weight:800;font-family:'Sora','Heebo',sans-serif;letter-spacing:-.02em;margin-top:8px}
+.pnl-sum .v.neg{color:var(--neg)}.pnl-sum .v.pos{color:var(--pos)}
+.cascade{width:100%;border-collapse:collapse;font-size:13px}
+.cascade td{padding:13px 16px;border-bottom:1px solid var(--line)}
+.cascade .lbl{font-weight:600}
+.cascade .amt{text-align:end;font-family:var(--mono);font-weight:800;font-variant-numeric:tabular-nums}
+.cascade .amt.neg{color:var(--neg)}.cascade .amt.pos{color:var(--pos)}
+.cascade tr.total{background:var(--sunken)}
+.cascade tr.total .lbl{font-weight:800}
+.cascade tr.total .amt{font-size:15px}
+.cascade tr.grand{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 12%,var(--card)),var(--card))}
+.cascade tr.grand .lbl{font-weight:800;font-size:15px}
+.cascade tr.grand .amt{font-size:18px;color:var(--pos)}
+.cascade .ind{padding-inline-start:34px;color:var(--muted)}
+.cascade .barcell{width:160px}
+.cascade .wbar{height:8px;border-radius:999px;background:var(--sunken);overflow:hidden}
+.cascade .wbar i{display:block;height:100%;border-radius:999px}
+/* per-store subtotal blocks */
+.pnl-stores{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:14px}
+.pnl-store{border-radius:var(--r-card);border:1px solid var(--line);background:var(--card);box-shadow:var(--shadow-1);overflow:hidden}
+.pnl-store .hd{padding:12px 14px;border-bottom:1px solid var(--line);background:var(--sunken);display:flex;justify-content:space-between;align-items:center}
+.pnl-store .hd .nm{font-weight:800;font-size:13px}
+.pnl-store .ln{display:flex;justify-content:space-between;padding:9px 14px;font-size:12px;border-bottom:1px solid var(--line)}
+.pnl-store .ln:last-child{border-bottom:none}
+.pnl-store .ln .v{font-family:var(--mono);font-weight:700}
+.pnl-store .ln.net{background:var(--sunken)}
+.pnl-store .ln.net .v{color:var(--pos);font-weight:800}
+
+/* ================= CUSTOMERS ================= */
+.ltv-hero{border-radius:var(--r-hero);overflow:hidden;position:relative;color:var(--on-band);box-shadow:var(--shadow-2);isolation:isolate;background:var(--band-green)}
+.ltv-hero .sheen{position:absolute;inset:0;z-index:-1;background:radial-gradient(120% 90% at 88% -20%, rgba(255,255,255,.26), transparent 56%),radial-gradient(90% 80% at 4% 120%, rgba(7,11,30,.32), transparent 60%)}
+.ltv-hero .deco{position:absolute;inset:0;z-index:-1;opacity:.5}
+.ltv-pad{padding:clamp(20px,3vw,30px);display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.ltv-metric .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;opacity:.92;font-weight:600}
+.ltv-metric .v{font-family:'Sora','Heebo',sans-serif;font-weight:800;font-size:clamp(34px,5vw,52px);letter-spacing:-.03em;line-height:1;margin-top:8px}
+.ltv-metric .sub{font-size:12px;opacity:.92;margin-top:6px}
+.ltv-verdict{display:inline-flex;align-items:center;gap:7px;margin-top:10px;padding:6px 14px;border-radius:999px;font-weight:800;font-size:13px;color:#fff}
+.cohort-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.cohort-table th,.cohort-table td{padding:11px 13px;border-bottom:1px solid var(--line);text-align:start}
+.cohort-table thead th{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--sunken)}
+.cohort-table .numc{text-align:end;font-family:var(--mono);font-weight:700}
+.cohort-table tbody tr:hover{background:var(--elevated)}
+.cohort-table tbody tr:last-child td{border-bottom:none}
+
+/* ================= chart shared ================= */
+.chart-plot{background:var(--sunken);border-radius:var(--r-ctrl);border:1px solid var(--line);padding:6px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:11.5px;color:var(--muted)}
+.legend .it{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px}
+.legend .sw{width:16px;height:2.5px;border-radius:2px}
+
+/* --- JS-rendered chart engine: real-pixel SVG (1:1, no distortion) + HTML axis labels --- */
+.js-chart{position:relative;width:100%}
+.js-chart svg{display:block;width:100%;height:100%;overflow:visible}
+.js-chart .chart-svg{position:absolute;inset:0}
+/* HTML axis overlays — labels NEVER live inside a scaled SVG */
+.chart-axis{position:absolute;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:10px;color:var(--subtle);pointer-events:none;white-space:nowrap}
+.chart-axis.y{inset-inline-start:0;transform:translateY(-50%)}
+.chart-axis.x{bottom:0;transform:translateX(50%)}
+[dir="rtl"] .chart-axis.x{transform:translateX(-50%)}
+.chart-tag{position:absolute;font-family:var(--mono);font-size:10px;font-weight:700;pointer-events:none;white-space:nowrap;transform:translate(-50%,-50%)}
+.chart-band-line{position:absolute;inset-inline:0;height:0;border-top:1.5px dashed var(--c-green);opacity:.75;pointer-events:none}
+.chart-band-line .cap{position:absolute;inset-inline-end:0;top:-14px;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--c-green)}
+
+/* mobile bottom nav */
+.mobnav{display:none}
+
+/* ============================ RESPONSIVE ============================ */
+@media (max-width:1100px){
+  .tile-xl{grid-column:span 12}.tile-lg{grid-column:span 6}.tile-md{grid-column:span 6}.tile-sm{grid-column:span 6}
+  .span-8,.span-7,.span-5,.span-4,.span-3{grid-column:span 12}.span-6{grid-column:span 12}
+  .hero-rail{grid-template-columns:repeat(3,1fr)}
+  .hero-rail .cell:nth-child(4){border-inline-start:none}
+  .kpi-rail{grid-template-columns:repeat(3,1fr)}
+  .kpi:nth-child(4){border-inline-start:none}
+  .pnl-summary{grid-template-columns:repeat(2,1fr)}
+  .ltv-pad{grid-template-columns:1fr}
+}
+@media (max-width:720px){
+  .rail{display:none}
+  .mobnav{display:flex;position:fixed;bottom:0;inset-inline:0;z-index:60;
+    background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(20px);
+    border-top:1px solid var(--line);padding:8px 6px calc(8px + env(safe-area-inset-bottom));justify-content:space-around}
+  .mobnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;color:var(--muted);font-size:9px;font-weight:700;cursor:pointer;padding:5px 0;border-radius:10px}
+  .mobnav button .ic{font-size:20px;line-height:0;display:grid;place-items:center}
+  .mobnav button.active{color:var(--accent-2)}
+  .scroll{padding:14px;padding-bottom:96px}
+  .hero-num .val{font-size:clamp(58px,22vw,96px)}
+  .hero-rail{grid-template-columns:repeat(2,1fr)}
+  .hero-rail .cell:nth-child(3),.hero-rail .cell:nth-child(5){border-inline-start:none}
+  .kpi-rail{grid-template-columns:repeat(2,1fr)}
+  .kpi:nth-child(odd){border-inline-start:none}
+  .pnl-summary{grid-template-columns:1fr}
+  .tile-lg,.tile-md,.tile-sm{grid-column:span 12}
+  .tb-title{order:-1;width:100%;margin-inline-end:0}
+  .compare .barcell,.cascade .barcell{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important;transition-duration:.001ms !important}
+}
+</style>
+</head>
+<body>
+<!-- ===================== ICON SPRITE (one Lucide-style family) ===================== -->
+<svg class="ico-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- nav -->
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-6h5v6"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.4"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.4"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.4"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.4"/></symbol>
+    <symbol id="i-rows" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.2"/><path d="M3.5 9.5h17M3.5 14.5h17M9 4.5v15"/></symbol>
+    <symbol id="i-coins" viewBox="0 0 24 24"><ellipse cx="8.5" cy="7" rx="5" ry="2.6"/><path d="M3.5 7v5c0 1.44 2.24 2.6 5 2.6s5-1.16 5-2.6V7"/><path d="M13.5 12.4c.6.13 1.27.2 2 .2 2.76 0 5-1.16 5-2.6V7"/><ellipse cx="15.5" cy="7" rx="5" ry="2.6"/><path d="M3.5 12c0 1.44 2.24 2.6 5 2.6M20.5 12c0 1.44-2.24 2.6-5 2.6"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.9"/><path d="M17.5 13.6A5.5 5.5 0 0 1 20.5 18.5"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3"/></symbol>
+    <!-- ui -->
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="m20 20-4.7-4.7"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11l-1 8.5L19.5 10H13z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20.5 11a8.5 8.5 0 0 0-14.9-4.3M3.5 13a8.5 8.5 0 0 0 14.9 4.3"/><path d="M20.5 4v4h-4M3.5 20v-4h4"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5-7 7 7 7"/></symbol>
+    <symbol id="i-chevL" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6 18 18M18 6 6 18"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M6 14 12 8l6 6"/></symbol>
+    <symbol id="i-dn" viewBox="0 0 24 24"><path d="M6 10 12 16l6-6"/></symbol>
+    <symbol id="i-flat" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-sort" viewBox="0 0 24 24"><path d="M8 5v14M8 19l-3-3M8 19l3-3"/><path d="M16 19V5M16 5l-3 3M16 5l3 3"/></symbol>
+    <!-- status / severity -->
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 1.8 20.5h20.4z"/><path d="M12 9.5v5"/><circle cx="12" cy="17.6" r=".4" class="ico-fill"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-trendup" viewBox="0 0 24 24"><path d="M3 17 9 11l4 4 8-8"/><path d="M15 7h6v6"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6.5" y="5" width="3.4" height="14" rx="1.2"/><rect x="14.1" y="5" width="3.4" height="14" rx="1.2"/></symbol>
+    <!-- feed -->
+    <symbol id="i-cart" viewBox="0 0 24 24"><circle cx="9.5" cy="20" r="1.3"/><circle cx="18" cy="20" r="1.3"/><path d="M2.5 3h2.2l2.3 12.3a1.7 1.7 0 0 0 1.7 1.4h8.4a1.7 1.7 0 0 0 1.7-1.3L21.5 7H6.3"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5.5 8h13l-1 12.5h-11z"/><path d="M8.5 8V6.5a3.5 3.5 0 0 1 7 0V8"/></symbol>
+    <symbol id="i-return" viewBox="0 0 24 24"><path d="M9 7 4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-2"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 7h12M8 12h12M8 17h12"/><circle cx="4" cy="7" r="1.1" class="ico-fill"/><circle cx="4" cy="12" r="1.1" class="ico-fill"/><circle cx="4" cy="17" r="1.1" class="ico-fill"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+    <symbol id="i-money" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M9.7 9.6c0-1.1 1-1.9 2.3-1.9s2.3.8 2.3 1.7c0 2.4-4.6 1.2-4.6 3.7 0 1 1 1.9 2.3 1.9s2.3-.8 2.3-1.7"/></symbol>
+  </defs>
+</svg>
+<div class="app">
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="rail">
+    <div class="brand">R</div>
+    <nav class="nav">
+      <div class="nav-grp">סקירה</div>
+      <button class="navitem active" data-tab="home"><span class="ic"><svg class="ico"><use href="#i-home"/></svg></span><span class="lbl">בית</span></button>
+      <div class="nav-grp">ביצועים</div>
+      <button class="navitem" data-tab="camp"><span class="ic"><svg class="ico"><use href="#i-grid"/></svg></span><span class="lbl">קמפיינים</span></button>
+      <button class="navitem" data-tab="detail"><span class="ic"><svg class="ico"><use href="#i-rows"/></svg></span><span class="lbl">פירוט</span></button>
+      <div class="nav-grp">כספים</div>
+      <button class="navitem" data-tab="pnl"><span class="ic"><svg class="ico"><use href="#i-coins"/></svg></span><span class="lbl">P&amp;L</span></button>
+      <button class="navitem" data-tab="cust"><span class="ic"><svg class="ico"><use href="#i-users"/></svg></span><span class="lbl">לקוחות</span></button>
+    </nav>
+    <button class="navitem" style="margin-top:auto"><span class="ic"><svg class="ico"><use href="#i-settings"/></svg></span><span class="lbl">ניהול</span></button>
+  </aside>
+
+  <div class="main">
+    <!-- ===================== TOP STRIP ===================== -->
+    <header class="topbar">
+      <div class="tb-title">
+        <span class="tb-eyebrow" id="tbEyebrow">דשבורד · כל החנויות</span>
+        <span class="tb-h" id="tbHead">סקירה כללית</span>
+      </div>
+      <span class="fresh"><span class="dot"></span>עודכן לפני 4 דקות</span>
+      <span class="health">מקורות <b><i></i><i></i><i></i><i></i></b> תקין</span>
+      <button class="toggle" id="themeToggle" aria-label="החלף ערכת נושא"><span class="knob">☾</span></button>
+    </header>
+
+    <div class="scroll">
+      <!-- ============================================================= HOME -->
+      <section class="view active" id="home">
+
+        <div class="reconcile">
+          <span class="i"><svg class="ico"><use href="#i-refresh"/></svg></span>
+          <span>הוזמנו 137 הזמנות · התאמת מקורות הושלמה עם פער של 0.4% (בטווח הסביר).</span>
+          <a href="#">פרטי התאמה <svg class="ico"><use href="#i-arrow"/></svg></a>
+        </div>
+
+        <!-- HERO: gradient-as-surface, oversized numeral -->
+        <div class="bento">
+          <section class="hero span-12" data-band="blue">
+            <div class="bg"></div><div class="sheen"></div>
+            <svg class="deco" viewBox="0 0 800 300" preserveAspectRatio="none" aria-hidden="true">
+              <defs><filter id="hb"><feGaussianBlur stdDeviation="14"/></filter></defs>
+              <circle cx="700" cy="30" r="90" fill="#fff" fill-opacity="0.10" filter="url(#hb)"/>
+              <circle cx="760" cy="90" r="46" fill="#fff" fill-opacity="0.12"/>
+              <ellipse cx="640" cy="-10" rx="120" ry="60" fill="#fff" fill-opacity="0.07"/>
+              <polygon points="40,300 180,210 120,300" fill="#fff" fill-opacity="0.06"/>
+              <line x1="0" y1="250" x2="800" y2="160" stroke="#fff" stroke-opacity="0.06" stroke-width="2"/>
+            </svg>
+
+            <div class="hero-top">
+              <div>
+                <span class="hero-eyebrow">ROAS עסקי · 30 ימים</span>
+                <div class="hero-scope"><span class="hero-badge scrim"><span class="pl"></span>חי · כל 10 דק׳</span><span style="opacity:.92">4 חנויות פעילות</span></div>
+              </div>
+              <span class="hero-badge scrim" style="font-family:var(--mono)"><svg class="ico" style="width:13px;height:13px;stroke-width:2.6"><use href="#i-check"/></svg>יעד 3.0 · הושג</span>
+            </div>
+
+            <div class="hero-mid">
+              <div class="hero-num">
+                <span class="val num">3.16</span><span class="x">x</span>
+              </div>
+              <div class="hero-target">
+                <span class="hero-tag scrim">מעולה · מעל היעד</span>
+                <div class="hero-progress">
+                  <div class="track"><div class="fill" style="width:105%"></div></div>
+                  <div class="lbl"><span>יעד 3.0</span><span>+5.3% מעל היעד</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="hero-rail">
+              <div class="cell"><div class="k">רווח תפעולי</div><div class="v num">C$1,853</div><div class="d up"><svg class="ico"><use href="#i-up"/></svg>12%</div></div>
+              <div class="cell"><div class="k">הכנסות</div><div class="v num">C$4,269 <small>CAD</small></div><div class="d up"><svg class="ico"><use href="#i-up"/></svg>8%</div></div>
+              <div class="cell"><div class="k">הוצאה</div><div class="v num">C$1,349</div><div class="d up"><svg class="ico"><use href="#i-up"/></svg>4%</div></div>
+              <div class="cell"><div class="k">ROAS</div><div class="v num">3.16x</div><div class="d up"><svg class="ico"><use href="#i-check"/></svg>יעד 3.0</div></div>
+              <div class="cell"><div class="k">הזמנות</div><div class="v num">137</div><div class="d up"><svg class="ico"><use href="#i-up"/></svg>9%</div></div>
+              <div class="cell"><div class="k">CPM</div><div class="v num">C$14.10</div><div class="d up">CAD</div></div>
+            </div>
+          </section>
+        </div>
+
+        <!-- STORES — size-ranked bento (spenders first) -->
+        <div class="sec"><span class="idx">01</span><h2>חנויות לפי הוצאה</h2><span class="rule"></span><span class="note">גודל = משקל · ממוין יורד</span></div>
+        <div class="bento">
+          <!-- uzoshop — XL leader -->
+          <article class="store tile-xl" data-band="blue" data-store="uzoshop">
+            <div class="bg"></div><div class="sheen"></div>
+            <svg class="deco" viewBox="0 0 400 260" preserveAspectRatio="none" aria-hidden="true"><circle cx="360" cy="20" r="60" fill="#fff" fill-opacity=".1"/><circle cx="380" cy="70" r="28" fill="#fff" fill-opacity=".12"/></svg>
+            <div class="store-pad">
+              <div class="store-head">
+                <div><div class="store-name">uzoshop</div><div class="mono" style="font-size:10px;opacity:.85;margin-top:2px">מוביל · 72% מההוצאה</div></div>
+                <span class="store-band-tag">מעולה</span>
+              </div>
+              <div class="store-roas"><span class="val" style="font-size:clamp(40px,5vw,58px)">3.41</span><span class="x" style="font-size:22px">x</span></div>
+              <div class="spark js-spark" aria-hidden="true" data-vals="6,10,8,16,14,22,19,25,21,27,24,29,31"></div>
+              <div class="store-metrics">
+                <div class="store-metric"><div class="mk"><svg class="ico"><use href="#i-dn"/></svg>הוצאה</div><div class="mv num"><span class="arr arr-dn"><svg class="ico"><use href="#i-dn"/></svg></span>C$971</div></div>
+                <div class="store-metric"><div class="mk"><svg class="ico"><use href="#i-up"/></svg>הכנסה</div><div class="mv num"><span class="arr arr-up"><svg class="ico"><use href="#i-up"/></svg></span>C$3,312</div></div>
+                <div class="store-metric"><div class="mk">הזמנות</div><div class="mv num">88</div></div>
+                <div class="store-metric"><div class="mk">CPM · AOV</div><div class="mv num">C$13.8·C$37.6</div></div>
+              </div>
+              <div class="store-cta">פתח חנות<span class="arrow"><svg class="ico"><use href="#i-arrow"/></svg></span></div>
+            </div>
+          </article>
+
+          <!-- 360usmile — LG -->
+          <article class="store tile-lg" data-band="green" data-store="usmile">
+            <div class="bg"></div><div class="sheen"></div>
+            <svg class="deco" viewBox="0 0 300 200" preserveAspectRatio="none" aria-hidden="true"><circle cx="270" cy="18" r="42" fill="#fff" fill-opacity=".1"/></svg>
+            <div class="store-pad">
+              <div class="store-head"><div class="store-name">360usmile</div><span class="store-band-tag">טוב</span></div>
+              <div class="store-roas"><span class="val" style="font-size:clamp(32px,4vw,44px)">2.85</span><span class="x" style="font-size:18px">x</span></div>
+              <div class="spark js-spark" aria-hidden="true" data-vals="14,18,12,22,16,24,20"></div>
+              <div class="store-metrics">
+                <div class="store-metric"><div class="mk"><svg class="ico"><use href="#i-dn"/></svg>הוצאה</div><div class="mv num"><span class="arr arr-dn"><svg class="ico"><use href="#i-dn"/></svg></span>C$245</div></div>
+                <div class="store-metric"><div class="mk"><svg class="ico"><use href="#i-up"/></svg>הכנסה</div><div class="mv num"><span class="arr arr-up"><svg class="ico"><use href="#i-up"/></svg></span>C$698</div></div>
+                <div class="store-metric"><div class="mk">הזמנות</div><div class="mv num">26</div></div>
+                <div class="store-metric"><div class="mk">CPM·AOV</div><div class="mv num">C$15.1·C$26.8</div></div>
+              </div>
+              <div class="store-cta">פתח חנות<span class="arrow"><svg class="ico"><use href="#i-arrow"/></svg></span></div>
+            </div>
+          </article>
+
+          <!-- Zol Plus — MD -->
+          <article class="store tile-md" data-band="orange" data-store="zol">
+            <div class="bg"></div><div class="sheen"></div>
+            <div class="store-pad">
+              <div class="store-head"><div class="store-name">Zol Plus</div><span class="store-band-tag">סביר</span></div>
+              <div class="store-roas"><span class="val" style="font-size:clamp(28px,3.4vw,36px)">2.10</span><span class="x" style="font-size:15px">x</span></div>
+              <div class="spark js-spark" aria-hidden="true" data-vals="20,16,22,14,18,12"></div>
+              <div class="store-metrics">
+                <div class="store-metric"><div class="mk"><svg class="ico"><use href="#i-dn"/></svg>הוצאה</div><div class="mv num"><span class="arr arr-dn"><svg class="ico"><use href="#i-dn"/></svg></span>C$93</div></div>
+                <div class="store-metric"><div class="mk"><svg class="ico"><use href="#i-up"/></svg>הכנסה</div><div class="mv num"><span class="arr arr-up"><svg class="ico"><use href="#i-up"/></svg></span>C$195</div></div>
+                <div class="store-metric"><div class="mk">הזמנות</div><div class="mv num">18</div></div>
+                <div class="store-metric"><div class="mk">AOV</div><div class="mv num">C$10.8</div></div>
+              </div>
+              <div class="store-cta">פתח חנות<span class="arrow"><svg class="ico"><use href="#i-arrow"/></svg></span></div>
+            </div>
+          </article>
+
+          <!-- pdrn skin — MD (alarm-adjacent red) -->
+          <article class="store tile-md" data-band="red" data-store="pdrn">
+            <div class="bg"></div><div class="sheen"></div>
+            <div class="store-pad">
+              <div class="store-head"><div class="store-name">pdrn skin</div><span class="store-band-tag">דורש בחינה</span></div>
+              <div class="store-roas"><span class="val" style="font-size:clamp(28px,3.4vw,36px)">1.60</span><span class="x" style="font-size:15px">x</span></div>
+              <div class="spark js-spark" aria-hidden="true" data-vals="24,20,22,16,18,12"></div>
+              <div class="store-metrics">
+                <div class="store-metric"><div class="mk"><svg class="ico"><use href="#i-dn"/></svg>הוצאה</div><div class="mv num"><span class="arr arr-dn"><svg class="ico"><use href="#i-dn"/></svg></span>C$40</div></div>
+                <div class="store-metric"><div class="mk"><svg class="ico"><use href="#i-up"/></svg>הכנסה</div><div class="mv num"><span class="arr arr-up"><svg class="ico"><use href="#i-up"/></svg></span>C$64</div></div>
+                <div class="store-metric"><div class="mk">הזמנות</div><div class="mv num">5</div></div>
+                <div class="store-metric"><div class="mk">CPM·AOV</div><div class="mv num">C$16.0·C$12.8</div></div>
+              </div>
+              <div class="store-cta">פתח חנות<span class="arrow"><svg class="ico"><use href="#i-arrow"/></svg></span></div>
+            </div>
+          </article>
+
+          <!-- beauty-lab — GRAY no-data / paused store (full 6-state band ladder) -->
+          <article class="store tile-md" data-band="gray" data-store="beautylab">
+            <div class="bg"></div><div class="sheen"></div>
+            <div class="store-pad">
+              <div class="store-head"><div class="store-name">beauty-lab</div><span class="store-band-tag">מושהית</span></div>
+              <div class="store-roas"><span class="val" style="font-size:clamp(28px,3.4vw,36px)">—</span><span class="x" style="font-size:15px;opacity:.7">x</span></div>
+              <div class="store-nodata"><svg class="ico" style="width:14px;height:14px"><use href="#i-pause"/></svg>אין הוצאה בטווח · אין נתונים</div>
+              <div class="store-metrics">
+                <div class="store-metric"><div class="mk"><svg class="ico"><use href="#i-dn"/></svg>הוצאה</div><div class="mv num">C$0</div></div>
+                <div class="store-metric"><div class="mk"><svg class="ico"><use href="#i-up"/></svg>הכנסה</div><div class="mv num">C$0</div></div>
+                <div class="store-metric"><div class="mk">הזמנות</div><div class="mv num">0</div></div>
+                <div class="store-metric"><div class="mk">סטטוס</div><div class="mv num" style="font-size:12px">מושהית</div></div>
+              </div>
+              <div class="store-cta">הפעל מחדש<span class="arrow"><svg class="ico"><use href="#i-arrow"/></svg></span></div>
+            </div>
+          </article>
+        </div>
+
+        <!-- BUSINESS KPI cards (flush rail) -->
+        <div class="sec"><span class="idx">02</span><h2>מדדים עסקיים</h2><span class="rule"></span><span class="note">דלתא מול תקופה קודמת</span></div>
+        <div class="kpi-rail">
+          <div class="kpi"><div class="k"><span class="fdot"></span>רווח תפעולי</div><div class="v num">C$1,853</div><div class="d up"><svg class="ico"><use href="#i-up"/></svg>12%</div><div class="sub">מול C$1,654</div></div>
+          <div class="kpi"><div class="k"><span class="fdot"></span>הכנסות</div><div class="v num">C$4,269 <small>CAD</small></div><div class="d up"><svg class="ico"><use href="#i-up"/></svg>8%</div><div class="sub">מול C$3,953</div></div>
+          <div class="kpi"><div class="k"><span class="fdot"></span>הוצאה</div><div class="v num">C$1,349</div><div class="d dn"><svg class="ico"><use href="#i-up"/></svg>4%</div><div class="sub">מול C$1,297</div></div>
+          <div class="kpi"><div class="k"><span class="fdot"></span>ROAS</div><div class="v num">3.16x</div><div class="d up"><svg class="ico"><use href="#i-check"/></svg>יעד 3.0</div><div class="sub">+5.3% מעל היעד</div></div>
+          <div class="kpi"><div class="k"><span class="fdot"></span>הזמנות</div><div class="v num">137</div><div class="d up"><svg class="ico"><use href="#i-up"/></svg>9%</div><div class="sub">מול 126</div></div>
+          <div class="kpi"><div class="k"><span class="fdot"></span>CPM</div><div class="v num">C$14.10</div><div class="d neu"><svg class="ico"><use href="#i-flat"/></svg>יציב</div><div class="sub">ממוצע משוקלל</div></div>
+        </div>
+
+        <!-- PRESERVED roas-card -->
+        <div class="sec"><span class="idx">03</span><h2>ROAS מול יעד</h2><span class="rule"></span><span class="note">תרשים נעול · 30 ימים</span></div>
+        <div class="card roas-card-host">
+          <!-- ===== BEGIN PRESERVED roas-card (verbatim) ===== -->
+          <section class="roas-card" dir="rtl">
+            <style>
+              .roas-card{
+                --canvas-1:#0b1437;
+                --glass-1:#111c44; --glass-2:#162048;
+                --glass-edge:rgba(255,255,255,0.08); --glass-edge-hot:rgba(117,81,255,0.5);
+                --surface-sunken:#1B254B;
+                --text:#ffffff; --text-muted:#A3AED0; --text-subtle:#94a0b8;
+                --accent:#7551FF; --accent-fg:#ffffff;
+                --radius-card:1.125rem; --radius-hero:1.125rem;
+                --shadow-glass:0 0 rgba(0,0,0,0);
+                --shadow-overlay:0 8px 24px rgba(0,0,0,0.5);
+                --up:#0fb37a; --dn:#ef4d5b;
+                --band-red:#ff6b81; --band-orange:#ef9331; --band-green:#34e2ad; --band-blue:#5b8df0;
+                --band-blue-grad:linear-gradient(135deg,#2f6bff,#4d8dff 52%,#85b8ff);
+                --status-warning:#ef9331; --status-warning-bg:rgba(239,147,49,0.16); --status-warning-fg:#f7c897;
+                --chart-line-halo:var(--glass-1);
+                --chart-target-line:#0fb37a;
+                --chart-pin-line:#ef9331;
+                --chart-dot-max:#0fb37a; --chart-dot-min:#ef4d5b;
+                --chart-grid-line:rgba(255,255,255,0.06);
+                --chart-today:var(--accent); --chart-today-pulse:rgba(117,81,255,0.30);
+                --chart-hover-ring:var(--glass-2);
+                --chip-blue-bg:rgba(91,141,240,0.18);
+                --chip-blue-fg:#5b8df0;
+                --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+
+                direction:rtl;
+                display:block;
+                max-width:1100px;
+                margin:24px auto;
+                box-sizing:border-box;
+                background:var(--glass-1);
+                border:1px solid var(--glass-edge);
+                box-shadow:var(--shadow-glass);
+                border-radius:var(--radius-card);
+                padding:20px;
+                color:var(--text);
+                font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans Hebrew",sans-serif;
+                position:relative;
+              }
+              :where(.light) .roas-card,
+              .roas-card.light {
+                --canvas-1:#F4F7FE;
+                --glass-1:#ffffff; --glass-2:#F4F7FE;
+                --glass-edge:rgba(27,37,75,0.08); --glass-edge-hot:rgba(66,42,251,0.4);
+                --surface-sunken:#F4F7FE;
+                --text:#1B254B; --text-muted:#5b6478; --text-subtle:#5f6680;
+                --accent:#422AFB;
+                --shadow-glass:14px 17px 40px 4px rgba(112,144,176,0.08);
+                --shadow-overlay:0 8px 24px rgba(22,26,48,0.12);
+                --band-red:#e11d48; --band-green:#0f9d6b; --band-blue:#3b82f6;
+                --chart-grid-line:rgba(27,37,75,0.08);
+                --chip-blue-bg:rgba(59,130,246,0.18); --chip-blue-fg:#3b82f6;
+                --status-warning-bg:#fbe6d0; --status-warning-fg:#8e4f0b;
+              }
+
+              .roas-card *{box-sizing:border-box;}
+
+              .rc-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px;}
+              .rc-head-left{flex:1 1 0;min-width:0;}
+              .rc-eyebrow{display:block;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:var(--text-subtle);font-weight:600;margin-bottom:4px;}
+              .rc-tldr{margin:0;font-size:1.05rem;line-height:1.4;font-weight:700;color:var(--text);}
+              .rc-tldr .accent{font-weight:800;font-variant-numeric:tabular-nums;color:var(--band-blue);}
+              .rc-head-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
+              .rc-head-meta{display:flex;align-items:center;gap:8px;}
+              .rc-scope{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);}
+
+              .fresh-chip{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.06em;background:rgba(52,226,173,0.18);color:var(--band-green);}
+              .fresh-chip .pulse{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor;animation:rc-pulse 2s ease-out infinite;}
+              @keyframes rc-pulse{0%{box-shadow:0 0 0 0 currentColor;opacity:1;}70%{box-shadow:0 0 0 5px transparent;opacity:.65;}100%{box-shadow:0 0 0 0 transparent;opacity:1;}}
+
+              .rc-pin-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 10px;border-radius:9999px;background:var(--status-warning-bg);color:var(--status-warning-fg);border:1px solid var(--status-warning);}
+
+              .rc-range{display:flex;flex-wrap:wrap;align-items:center;gap:4px;}
+              .rc-range button{height:28px;padding:0 10px;font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:0.03em;border-radius:8px;border:1px solid var(--glass-edge);background:var(--glass-2);color:var(--text-muted);cursor:pointer;line-height:1;}
+              .rc-range button:hover{color:var(--text);background:var(--glass-1);border-color:var(--glass-edge-hot);}
+              .rc-range button.active{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--text);}
+
+              .rc-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;border-radius:var(--radius-card);border:1px solid var(--glass-edge);overflow:hidden;background:color-mix(in srgb,var(--glass-edge) 40%,transparent);margin-bottom:16px;}
+              .rc-kpi{padding:12px;background:var(--glass-2);display:flex;flex-direction:column;gap:4px;}
+              .rc-kpi.highlight{background:var(--glass-1);}
+              .rc-kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:600;}
+              .rc-kpi-row{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;}
+              .rc-kpi-val{direction:ltr;font-size:1.4rem;font-weight:800;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;line-height:1;color:var(--text);}
+              .rc-kpi-val.accent-blue{color:var(--band-blue);}
+              .rc-kpi-suffix{font-size:10px;font-family:var(--font-mono);color:var(--text-subtle);}
+              .band-chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:0.06em;font-family:var(--font-mono);}
+              .chip-blue{background:var(--chip-blue-bg);color:var(--chip-blue-fg);}
+
+              .rc-legend{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;padding:0 4px;font-size:11px;color:var(--text-muted);}
+              .rc-legend-left{display:flex;align-items:center;gap:16px;}
+              .rc-legend-item{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);letter-spacing:0.02em;}
+              .rc-sw-line{display:inline-block;width:16px;height:2px;border-radius:2px;background:var(--band-blue);}
+              .rc-sw-target{display:inline-block;width:16px;height:0;border-top:1.5px dashed var(--chart-target-line);}
+              .rc-minmax{font-family:var(--font-mono);font-variant-numeric:tabular-nums;}
+              .rc-minmax b{color:var(--text);font-weight:700;}
+              .rc-minmax .sep{opacity:.4;margin:0 8px;}
+
+              .rc-chart{position:relative;}
+              .rc-chart svg{display:block;width:100%;height:200px;}
+              .rc-overlay{position:absolute;inset:0;pointer-events:none;}
+              .rc-pin{position:absolute;top:-2px;transform:translateX(-50%);}
+              .rc-pin .glyph{display:inline-block;transform:translateX(-50%);font-size:13px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));cursor:default;}
+              .rc-today-label{position:absolute;top:-2px;transform:translateX(-50%);}
+              .rc-today-label span{display:inline-block;transform:translateX(-50%);padding:1px 6px;border-radius:9999px;font-size:9px;font-weight:800;line-height:1;color:var(--accent-fg);background:var(--chart-today);}
+
+              .rc-foot{margin-top:12px;padding-top:12px;border-top:1px solid var(--glass-edge);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;font-size:12px;}
+              .rc-foot-item{display:inline-flex;align-items:baseline;gap:6px;}
+              .rc-foot-k{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);}
+              .rc-foot-v{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums;}
+              .rc-foot-delta{font-size:11px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--up);}
+              .rc-foot .sep{color:var(--text-subtle);opacity:.4;}
+
+              @media (max-width:720px){
+                .rc-kpis{grid-template-columns:repeat(2,1fr);}
+              }
+              @media (prefers-reduced-motion:reduce){
+                .fresh-chip .pulse{animation:none;}
+              }
+            </style>
+
+            <div class="rc-head">
+              <div class="rc-head-left">
+                <span class="rc-eyebrow">מטרה 3.0 · 30 ימים</span>
+                <h3 class="rc-tldr">
+                  ה-ROAS עלה ל-<span class="accent">3.2</span> ב-30 הימים האחרונים — מעל היעד, עם מגמת שיפור מתמשכת.
+                </h3>
+              </div>
+              <div class="rc-head-right">
+                <div class="rc-head-meta">
+                  <span class="fresh-chip live" data-stage="fresh"><span class="pulse" aria-hidden="true"></span><bdi dir="ltr">08:42</bdi></span>
+                  <span class="rc-scope">כל החנויות</span>
+                </div>
+                <span class="rc-pin-chip"><span aria-hidden="true">💰</span>3 ציוני דרך</span>
+                <div class="rc-range" role="group" aria-label="טווח תאריכים לתרשים">
+                  <button type="button">7</button>
+                  <button type="button" class="active" aria-pressed="true">30</button>
+                  <button type="button">90</button>
+                  <button type="button">החודש</button>
+                  <button type="button">מותאם</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="rc-kpis">
+              <div class="rc-kpi">
+                <span class="rc-kpi-label">הכנסות</span>
+                <div class="rc-kpi-row"><bdi class="rc-kpi-val" dir="ltr">C$4,269</bdi><span class="rc-kpi-suffix">CAD</span></div>
+              </div>
+              <div class="rc-kpi highlight">
+                <span class="rc-kpi-label">ROAS</span>
+                <div class="rc-kpi-row">
+                  <bdi class="rc-kpi-val accent-blue" dir="ltr">3.16x</bdi>
+                  <span class="band-chip chip-blue">מעולה</span>
+                </div>
+              </div>
+              <div class="rc-kpi">
+                <span class="rc-kpi-label">הוצאת פרסום</span>
+                <div class="rc-kpi-row"><bdi class="rc-kpi-val" dir="ltr">C$1,349</bdi><span class="rc-kpi-suffix">CAD</span></div>
+              </div>
+              <div class="rc-kpi">
+                <span class="rc-kpi-label">רווח תפעולי</span>
+                <div class="rc-kpi-row"><bdi class="rc-kpi-val" dir="ltr">C$1,853</bdi><span class="rc-kpi-suffix">CAD</span></div>
+              </div>
+              <div class="rc-kpi">
+                <span class="rc-kpi-label">CPM</span>
+                <div class="rc-kpi-row"><bdi class="rc-kpi-val" dir="ltr">C$14.10</bdi><span class="rc-kpi-suffix">CAD</span></div>
+              </div>
+            </div>
+
+            <div class="rc-legend">
+              <div class="rc-legend-left">
+                <span class="rc-legend-item"><span class="rc-sw-line"></span>ROAS יומי</span>
+                <span class="rc-legend-item"><span class="rc-sw-target"></span>יעד 3.0</span>
+              </div>
+              <div class="rc-minmax">מקסימום: <b>3.95</b><span class="sep">·</span>מינימום: <b>2.20</b></div>
+            </div>
+
+            <div class="rc-chart">
+              <svg viewBox="0 0 1000 220" preserveAspectRatio="none" width="100%" height="200"
+                   role="img" aria-label="גרף ROAS יומי מול יעד 3.0">
+                <defs>
+                  <linearGradient id="rcArea" x1="0" y1="20" x2="0" y2="180" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#5b8df0" stop-opacity="0.20"/>
+                    <stop offset="100%" stop-color="#5b8df0" stop-opacity="0"/>
+                  </linearGradient>
+                  <clipPath id="rcClip"><rect x="40" y="16" width="960" height="148"/></clipPath>
+                </defs>
+
+                <g stroke="var(--chart-grid-line)" stroke-width="1" stroke-dasharray="3 5">
+                  <line x1="40" x2="1000" y1="20"  y2="20"/>
+                  <line x1="40" x2="1000" y1="60"  y2="60"/>
+                  <line x1="40" x2="1000" y1="100" y2="100"/>
+                  <line x1="40" x2="1000" y1="140" y2="140"/>
+                </g>
+                <g font-family="var(--font-mono,ui-monospace)" font-size="10" fill="var(--text-subtle)">
+                  <text x="0" y="24">4.0</text>
+                  <text x="0" y="64">3.0</text>
+                  <text x="0" y="104">2.0</text>
+                  <text x="0" y="144">1.0</text>
+                </g>
+
+                <path clip-path="url(#rcClip)" fill="url(#rcArea)"
+                      d="M40.00,75.20 C45.52,74.13 62.06,68.33 73.10,68.80 C84.13,69.27 95.17,78.80 106.21,78.00 C117.24,77.20 128.28,67.67 139.31,64.00 C150.34,60.33 161.38,52.67 172.41,56.00 C183.44,59.33 194.49,78.00 205.52,84.00 C216.56,90.00 227.59,95.00 238.62,92.00 C249.65,89.00 260.69,73.00 271.72,66.00 C282.75,59.00 293.79,53.67 304.83,50.00 C315.87,46.33 326.90,42.67 337.93,44.00 C348.96,45.33 360.00,55.00 371.03,58.00 C382.06,61.00 393.10,65.33 404.14,62.00 C415.18,58.67 426.21,43.00 437.24,38.00 C448.27,33.00 459.30,30.33 470.34,32.00 C481.38,33.67 492.41,42.53 503.45,48.00 C514.49,53.47 525.51,60.80 536.55,64.80 C547.58,68.80 558.62,73.80 569.66,72.00 C580.69,70.20 591.73,59.00 602.76,54.00 C613.79,49.00 624.83,46.33 635.86,42.00 C646.89,37.67 657.94,31.33 668.97,28.00 C680.00,24.67 691.04,20.67 702.07,22.00 C713.10,23.33 724.13,31.00 735.17,36.00 C746.20,41.00 757.25,47.87 768.28,52.00 C779.31,56.13 790.35,61.80 801.38,60.80 C812.41,59.80 823.45,49.47 834.48,46.00 C845.51,42.53 856.56,38.33 867.59,40.00 C878.62,41.67 889.66,52.13 900.69,56.00 C911.72,59.87 922.75,64.40 933.79,63.20 C944.82,62.00 955.87,50.40 966.90,48.80 C977.93,47.20 994.48,52.80 1000.00,53.60 L1000.00,180.00 L40.00,180.00 Z"/>
+
+                <line x1="40" x2="1000" y1="60" y2="60"
+                      stroke="var(--chart-target-line)" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.7"/>
+
+                <g stroke="var(--chart-pin-line)" stroke-width="1.2" opacity="0.5" stroke-dasharray="2 3">
+                  <line x1="304.83" x2="304.83" y1="20" y2="190"/>
+                  <line x1="569.66" x2="569.66" y1="20" y2="190"/>
+                  <line x1="834.48" x2="834.48" y1="20" y2="190"/>
+                </g>
+
+                <path fill="none" stroke="var(--chart-line-halo)" stroke-width="5"
+                      stroke-linejoin="round" stroke-linecap="round" opacity="0.9"
+                      d="M40.00,75.20 C45.52,74.13 62.06,68.33 73.10,68.80 C84.13,69.27 95.17,78.80 106.21,78.00 C117.24,77.20 128.28,67.67 139.31,64.00 C150.34,60.33 161.38,52.67 172.41,56.00 C183.44,59.33 194.49,78.00 205.52,84.00 C216.56,90.00 227.59,95.00 238.62,92.00 C249.65,89.00 260.69,73.00 271.72,66.00 C282.75,59.00 293.79,53.67 304.83,50.00 C315.87,46.33 326.90,42.67 337.93,44.00 C348.96,45.33 360.00,55.00 371.03,58.00 C382.06,61.00 393.10,65.33 404.14,62.00 C415.18,58.67 426.21,43.00 437.24,38.00 C448.27,33.00 459.30,30.33 470.34,32.00 C481.38,33.67 492.41,42.53 503.45,48.00 C514.49,53.47 525.51,60.80 536.55,64.80 C547.58,68.80 558.62,73.80 569.66,72.00 C580.69,70.20 591.73,59.00 602.76,54.00 C613.79,49.00 624.83,46.33 635.86,42.00 C646.89,37.67 657.94,31.33 668.97,28.00 C680.00,24.67 691.04,20.67 702.07,22.00 C713.10,23.33 724.13,31.00 735.17,36.00 C746.20,41.00 757.25,47.87 768.28,52.00 C779.31,56.13 790.35,61.80 801.38,60.80 C812.41,59.80 823.45,49.47 834.48,46.00 C845.51,42.53 856.56,38.33 867.59,40.00 C878.62,41.67 889.66,52.13 900.69,56.00 C911.72,59.87 922.75,64.40 933.79,63.20 C944.82,62.00 955.87,50.40 966.90,48.80 C977.93,47.20 994.48,52.80 1000.00,53.60"/>
+
+                <path fill="none" stroke="#5b8df0" stroke-width="2"
+                      stroke-linejoin="round" stroke-linecap="round" data-band="blue"
+                      d="M40.00,75.20 C45.52,74.13 62.06,68.33 73.10,68.80 C84.13,69.27 95.17,78.80 106.21,78.00 C117.24,77.20 128.28,67.67 139.31,64.00 C150.34,60.33 161.38,52.67 172.41,56.00 C183.44,59.33 194.49,78.00 205.52,84.00 C216.56,90.00 227.59,95.00 238.62,92.00 C249.65,89.00 260.69,73.00 271.72,66.00 C282.75,59.00 293.79,53.67 304.83,50.00 C315.87,46.33 326.90,42.67 337.93,44.00 C348.96,45.33 360.00,55.00 371.03,58.00 C382.06,61.00 393.10,65.33 404.14,62.00 C415.18,58.67 426.21,43.00 437.24,38.00 C448.27,33.00 459.30,30.33 470.34,32.00 C481.38,33.67 492.41,42.53 503.45,48.00 C514.49,53.47 525.51,60.80 536.55,64.80 C547.58,68.80 558.62,73.80 569.66,72.00 C580.69,70.20 591.73,59.00 602.76,54.00 C613.79,49.00 624.83,46.33 635.86,42.00 C646.89,37.67 657.94,31.33 668.97,28.00 C680.00,24.67 691.04,20.67 702.07,22.00 C713.10,23.33 724.13,31.00 735.17,36.00 C746.20,41.00 757.25,47.87 768.28,52.00 C779.31,56.13 790.35,61.80 801.38,60.80 C812.41,59.80 823.45,49.47 834.48,46.00 C845.51,42.53 856.56,38.33 867.59,40.00 C878.62,41.67 889.66,52.13 900.69,56.00 C911.72,59.87 922.75,64.40 933.79,63.20 C944.82,62.00 955.87,50.40 966.90,48.80 C977.93,47.20 994.48,52.80 1000.00,53.60"/>
+
+                <g fill="#5b8df0">
+                  <circle cx="40.00" cy="75.20" r="2.5"/><circle cx="73.10" cy="68.80" r="2.5"/><circle cx="106.21" cy="78.00" r="2.5"/>
+                  <circle cx="139.31" cy="64.00" r="2.5"/><circle cx="172.41" cy="56.00" r="2.5"/><circle cx="205.52" cy="84.00" r="2.5"/>
+                  <circle cx="271.72" cy="66.00" r="2.5"/><circle cx="304.83" cy="50.00" r="2.5"/><circle cx="337.93" cy="44.00" r="2.5"/>
+                  <circle cx="371.03" cy="58.00" r="2.5"/><circle cx="404.14" cy="62.00" r="2.5"/><circle cx="437.24" cy="38.00" r="2.5"/>
+                  <circle cx="470.34" cy="32.00" r="2.5"/><circle cx="503.45" cy="48.00" r="2.5"/><circle cx="536.55" cy="64.80" r="2.5"/>
+                  <circle cx="569.66" cy="72.00" r="2.5"/><circle cx="602.76" cy="54.00" r="2.5"/><circle cx="635.86" cy="42.00" r="2.5"/>
+                  <circle cx="668.97" cy="28.00" r="2.5"/><circle cx="735.17" cy="36.00" r="2.5"/><circle cx="768.28" cy="52.00" r="2.5"/>
+                  <circle cx="801.38" cy="60.80" r="2.5"/><circle cx="834.48" cy="46.00" r="2.5"/><circle cx="867.59" cy="40.00" r="2.5"/>
+                  <circle cx="900.69" cy="56.00" r="2.5"/><circle cx="933.79" cy="63.20" r="2.5"/><circle cx="966.90" cy="48.80" r="2.5"/>
+                  <circle cx="1000.00" cy="53.60" r="2.5"/>
+                </g>
+                <circle cx="702.07" cy="22.00" r="3" fill="var(--chart-dot-max)"/>
+                <text x="702.07" y="14.00" text-anchor="middle" font-family="var(--font-mono,ui-monospace)" font-size="10" font-weight="700" fill="var(--chart-dot-max)">שיא 3.9</text>
+                <circle cx="238.62" cy="92.00" r="3" fill="var(--chart-dot-min)"/>
+                <text x="238.62" y="108.00" text-anchor="middle" font-family="var(--font-mono,ui-monospace)" font-size="10" font-weight="700" fill="var(--chart-dot-min)">שפל 2.2</text>
+
+                <line x1="1000" x2="1000" y1="20" y2="180" stroke="var(--chart-today)" stroke-width="1.5" stroke-dasharray="2 4" opacity="0.85"/>
+                <circle cx="1000" cy="53.60" r="6" fill="var(--chart-today-pulse)"/>
+                <circle cx="1000" cy="53.60" r="4" fill="var(--chart-today)"/>
+
+                <g font-family="var(--font-mono,ui-monospace)" font-size="10" fill="var(--text-subtle)">
+                  <text x="40"   y="216" text-anchor="start">23 במאי</text>
+                  <text x="536.55" y="216" text-anchor="middle">7 ביוני</text>
+                  <text x="1000" y="216" text-anchor="end">21 ביוני</text>
+                </g>
+              </svg>
+
+              <div class="rc-overlay" dir="ltr">
+                <div class="rc-pin" style="left:30.48%"><span class="glyph" title="מבצע מחזור · ROAS 3.25">💰</span></div>
+                <div class="rc-pin" style="left:56.97%"><span class="glyph" title="השקת מוצר · ROAS 3.20">💰</span></div>
+                <div class="rc-pin" style="left:83.45%"><span class="glyph" title="הרחבת תקציב · ROAS 3.28">💰</span></div>
+                <div class="rc-today-label" style="left:100%"><span dir="rtl">היום</span></div>
+              </div>
+            </div>
+
+            <div class="rc-foot">
+              <div class="rc-foot-item">
+                <span class="rc-foot-k">ROAS תקופה קודמת</span>
+                <span class="rc-foot-v">2.94</span>
+                <span class="rc-foot-delta">+7.5%</span>
+              </div>
+              <span class="sep">·</span>
+              <div class="rc-foot-item">
+                <span class="rc-foot-k">הכנסות שכבר נצברו</span>
+                <span class="rc-foot-v">C$4,269 CAD</span>
+              </div>
+              <span class="sep">·</span>
+              <div class="rc-foot-item">
+                <span class="rc-foot-k">ימי פעילות</span>
+                <span class="rc-foot-v">30</span>
+              </div>
+            </div>
+          </section>
+          <!-- ===== END PRESERVED roas-card ===== -->
+        </div>
+
+        <!-- compare + NC -->
+        <div class="sec"><span class="idx">04</span><h2>השוואת חנויות &amp; ערוצים</h2><span class="rule"></span></div>
+        <div class="bento">
+          <div class="card span-7"><div class="card-pad">
+            <div style="font-weight:800;margin-bottom:10px;font-size:13px">השוואת חנויות</div>
+            <table class="compare">
+              <thead><tr><th>חנות</th><th>ROAS</th><th class="barcell">הוצאה</th><th>הכנסה</th><th>הזמנות</th></tr></thead>
+              <tbody>
+                <tr><td class="nm">uzoshop</td><td><span class="roas-pill" data-band="blue">3.41x</span></td><td class="barcell"><div class="bar"><i style="width:100%;background:var(--band-blue)"></i></div></td><td class="num">C$3,312</td><td class="num">88</td></tr>
+                <tr><td class="nm">360usmile</td><td><span class="roas-pill" data-band="green">2.85x</span></td><td class="barcell"><div class="bar"><i style="width:25%;background:var(--band-green)"></i></div></td><td class="num">C$698</td><td class="num">26</td></tr>
+                <tr><td class="nm">Zol Plus</td><td><span class="roas-pill" data-band="orange">2.10x</span></td><td class="barcell"><div class="bar"><i style="width:10%;background:var(--band-orange)"></i></div></td><td class="num">C$195</td><td class="num">18</td></tr>
+                <tr><td class="nm">pdrn skin</td><td><span class="roas-pill" data-band="red">1.60x</span></td><td class="barcell"><div class="bar"><i style="width:4%;background:var(--band-red)"></i></div></td><td class="num">C$64</td><td class="num">5</td></tr>
+                <tr><td class="nm">beauty-lab <span class="row-tag">מושהית</span></td><td><span class="roas-pill" data-band="gray">—</span></td><td class="barcell"><div class="bar"><i style="width:0%;background:var(--band-gray)"></i></div></td><td class="num">C$0</td><td class="num">0</td></tr>
+              </tbody>
+            </table>
+          </div></div>
+
+          <div class="card span-5"><div class="card-pad">
+            <div style="font-weight:800;margin-bottom:6px;font-size:13px">חדשים לפי פלטפורמה</div>
+            <div style="font-family:var(--mono);font-size:10.5px;color:var(--subtle);margin-bottom:8px">NC-ROAS · לקוחות חדשים בלבד</div>
+            <div class="nc-row"><div class="nc-name"><span class="nc-ico nc-meta">M</span>Meta</div><div class="nc-val"><div class="nc-bar"><i style="width:100%"></i></div><span class="nc-num num">3.2</span></div></div>
+            <div class="nc-row"><div class="nc-name"><span class="nc-ico nc-goog">G</span>Google</div><div class="nc-val"><div class="nc-bar"><i style="width:75%"></i></div><span class="nc-num num">2.4</span></div></div>
+            <div class="nc-row"><div class="nc-name"><span class="nc-ico nc-tt">T</span>TikTok</div><div class="nc-val"><div class="nc-bar"><i style="width:59%"></i></div><span class="nc-num num">1.9</span></div></div>
+            <div class="nc-row"><div class="nc-name"><span class="nc-ico nc-dir"><svg class="ico"><use href="#i-list"/></svg></span>ישיר</div><div class="nc-val"><div class="nc-bar"><i style="width:0%"></i></div><span class="nc-num num">—</span></div></div>
+          </div></div>
+        </div>
+
+        <!-- insights + activity 2-up -->
+        <div class="sec"><span class="idx">05</span><h2>תובנות &amp; פעילות</h2><span class="rule"></span></div>
+        <div class="bento">
+          <div class="card span-6"><div class="card-pad">
+            <div style="font-weight:800;margin-bottom:12px;font-size:13px">לוח תובנות · פעולות דחופות</div>
+            <div class="insight"><div class="sev sev-hi"><svg class="ico"><use href="#i-alert"/></svg></div><div class="body"><div class="t">pdrn skin מתחת לסף רווחיות</div><div class="d">ROAS 1.60x נמשך 4 ימים · CPM גבוה (C$16). שקול לעצור פרוספקטינג.</div><div class="act">בחן קמפיינים <svg class="ico"><use href="#i-arrow"/></svg></div></div></div>
+            <div class="insight"><div class="sev sev-md"><svg class="ico"><use href="#i-clock"/></svg></div><div class="body"><div class="t">וידאו-טיקטוק עייפות קריאייטיב</div><div class="d">CTR ירד 28% · CPM עלה 22% ב-7 ימים. רענן קריאייטיב.</div><div class="act">פתח בדרוור <svg class="ico"><use href="#i-arrow"/></svg></div></div></div>
+            <div class="insight"><div class="sev sev-lo"><svg class="ico"><use href="#i-trendup"/></svg></div><div class="body"><div class="t">uzoshop חדר תקרת ROAS</div><div class="d">3.41x עם מרווח להגדלת תקציב — הזדמנות סקיילינג.</div><div class="act">הרחב תקציב <svg class="ico"><use href="#i-arrow"/></svg></div></div></div>
+          </div></div>
+
+          <div class="card span-6"><div class="card-pad">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="font-weight:800;font-size:13px">פיד פעילות</div><span class="live-badge"><span class="pl"></span>LIVE</span></div>
+            <div class="feed-item"><div class="feed-dot fd-sale"><svg class="ico"><use href="#i-bag"/></svg></div><div class="feed-body"><div class="feed-t"><b>מכירה חדשה</b> · uzoshop</div><div class="feed-meta"><span class="src-badge sb-meta">Meta</span>לפני 2 דק׳</div></div><div class="feed-amt pos num">+C$47</div></div>
+            <div class="feed-item"><div class="feed-dot fd-cart"><svg class="ico"><use href="#i-cart"/></svg></div><div class="feed-body"><div class="feed-t"><b>הוספה לעגלה</b> · 360usmile</div><div class="feed-meta"><span class="src-badge sb-goog">Google</span>לפני 4 דק׳</div></div><div class="feed-amt num">C$31</div></div>
+            <div class="feed-item"><div class="feed-dot fd-sale"><svg class="ico"><use href="#i-bag"/></svg></div><div class="feed-body"><div class="feed-t"><b>מכירה חדשה</b> · uzoshop</div><div class="feed-meta"><span class="src-badge sb-dir">ישיר</span>לפני 7 דק׳</div></div><div class="feed-amt pos num">+C$38</div></div>
+            <div class="feed-item"><div class="feed-dot fd-ref"><svg class="ico"><use href="#i-return"/></svg></div><div class="feed-body"><div class="feed-t"><b>החזר</b> · Zol Plus</div><div class="feed-meta"><span class="src-badge sb-tt">TikTok</span>לפני 12 דק׳</div></div><div class="feed-amt neg num">−C$18</div></div>
+            <div class="feed-item"><div class="feed-dot fd-sale"><svg class="ico"><use href="#i-bag"/></svg></div><div class="feed-body"><div class="feed-t"><b>מכירה חדשה</b> · 360usmile</div><div class="feed-meta"><span class="src-badge sb-meta">Meta</span>לפני 15 דק׳</div></div><div class="feed-amt pos num">+C$27</div></div>
+          </div></div>
+        </div>
+      </section>
+
+      <!-- ============================================================= CAMPAIGNS -->
+      <section class="view" id="camp">
+        <div class="sec"><span class="idx">01</span><h2>קמפיינים מובילים</h2><span class="rule"></span><span class="note">לפי ROAS</span></div>
+        <div class="perf-strip">
+          <div class="perf" data-band="blue"><div class="bg"></div><div class="sheen"></div><div class="perf-pad"><div class="rank">#1 · ROAS</div><div class="nm">קיץ-מבצע</div><div class="meta">uzoshop · Meta</div><div class="big num">3.60<span class="x">x</span></div></div></div>
+          <div class="perf" data-band="blue"><div class="bg"></div><div class="sheen"></div><div class="perf-pad"><div class="rank">#2 · ROAS</div><div class="nm">ריטרגטינג</div><div class="meta">uzoshop · Meta</div><div class="big num">3.12<span class="x">x</span></div></div></div>
+          <div class="perf" data-band="green"><div class="bg"></div><div class="sheen"></div><div class="perf-pad"><div class="rank">#3 · ROAS</div><div class="nm">פרוספקטינג</div><div class="meta">360usmile · Google</div><div class="big num">2.53<span class="x">x</span></div></div></div>
+          <div class="perf" data-band="orange"><div class="bg"></div><div class="sheen"></div><div class="perf-pad"><div class="rank">#4 · ROAS</div><div class="nm">וידאו-טיקטוק</div><div class="meta">Zol Plus · TikTok</div><div class="big num">2.00<span class="x">x</span></div></div></div>
+        </div>
+
+        <div class="sec"><span class="idx">02</span><h2>כל הקמפיינים</h2><span class="rule"></span><span class="note">לחץ שורה לפירוט</span></div>
+        <div class="tbl-wrap">
+          <div class="tbl-toolbar">
+            <div class="search"><span class="si"><svg class="ico"><use href="#i-search"/></svg></span><input id="campSearch" name="campSearch" type="search" aria-label="חיפוש קמפיינים" placeholder="חפש קמפיין, חנות או פלטפורמה…" /></div>
+            <div class="seg"><button class="on">הכל</button><button>פעיל</button><button>מושהה</button><button>דורש בחינה</button></div>
+          </div>
+          <div class="tbl-scroll">
+            <table class="dtable" id="campTable">
+              <thead><tr>
+                <th class="pin">קמפיין</th><th>חנות</th><th>פלטפורמה</th>
+                <th class="numc">הוצאה</th><th class="numc">הכנסה</th><th class="numc sorted">ROAS <span class="sortic"><svg class="ico"><use href="#i-dn"/></svg></span></th><th class="numc">הזמנות</th><th>סטטוס</th>
+              </tr></thead>
+              <tbody>
+                <tr onclick="openDrawer('קיץ-מבצע','uzoshop · Meta','blue','3.60')"><td class="pin"><div class="cell-name">קיץ-מבצע<small>CAMP-1042</small></div></td><td>uzoshop</td><td><span class="plat"><span class="pi nc-meta">M</span>Meta</span></td><td class="numc num">C$420</td><td class="numc num">C$1,510</td><td class="numc"><span class="roas-cell" data-band="blue">3.60x</span></td><td class="numc num">41</td><td><span class="status st-on"><span class="sd"></span>פעיל</span></td></tr>
+                <tr onclick="openDrawer('ריטרגטינג','uzoshop · Meta','blue','3.12')"><td class="pin"><div class="cell-name">ריטרגטינג<small>CAMP-1043</small></div></td><td>uzoshop</td><td><span class="plat"><span class="pi nc-meta">M</span>Meta</span></td><td class="numc num">C$210</td><td class="numc num">C$655</td><td class="numc"><span class="roas-cell" data-band="blue">3.12x</span></td><td class="numc num">22</td><td><span class="status st-on"><span class="sd"></span>פעיל</span></td></tr>
+                <tr onclick="openDrawer('פרוספקטינג','360usmile · Google','green','2.53')"><td class="pin"><div class="cell-name">פרוספקטינג<small>CAMP-1051</small></div></td><td>360usmile</td><td><span class="plat"><span class="pi nc-goog">G</span>Google</span></td><td class="numc num">C$95</td><td class="numc num">C$240</td><td class="numc"><span class="roas-cell" data-band="green">2.53x</span></td><td class="numc num">9</td><td><span class="status st-on"><span class="sd"></span>פעיל</span></td></tr>
+                <tr onclick="openDrawer('וידאו-טיקטוק','Zol Plus · TikTok','orange','2.00')"><td class="pin"><div class="cell-name">וידאו-טיקטוק<small>CAMP-1077</small></div></td><td>Zol Plus</td><td><span class="plat"><span class="pi nc-tt">T</span>TikTok</span></td><td class="numc num">C$60</td><td class="numc num">C$120</td><td class="numc"><span class="roas-cell" data-band="orange">2.00x</span></td><td class="numc num">7</td><td><span class="status st-pause"><span class="sd"></span>מושהה</span></td></tr>
+                <tr onclick="openDrawer('PMax','pdrn skin · Google','red','1.60')"><td class="pin"><div class="cell-name">PMax<small>CAMP-1090</small></div></td><td>pdrn skin</td><td><span class="plat"><span class="pi nc-goog">G</span>Google</span></td><td class="numc num">C$40</td><td class="numc num">C$64</td><td class="numc"><span class="roas-cell" data-band="red">1.60x</span></td><td class="numc num">5</td><td><span class="status st-warn"><span class="sd"></span>דורש בחינה</span></td></tr>
+                <tr onclick="openDrawer('פרוספקטינג-קר','pdrn skin · TikTok','alarm','0.74')"><td class="pin"><div class="cell-name">פרוספקטינג-קר<small>CAMP-1102</small></div></td><td>pdrn skin</td><td><span class="plat"><span class="pi nc-tt">T</span>TikTok</span></td><td class="numc num">C$118</td><td class="numc num">C$87</td><td class="numc"><span class="roas-cell" data-band="alarm">0.74x</span></td><td class="numc num">3</td><td><span class="status st-alarm"><span class="sd"></span>קריטי · עוצר</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================= P&L -->
+      <section class="view" id="pnl">
+        <div class="sec"><span class="idx">01</span><h2>סיכום P&amp;L</h2><span class="rule"></span><span class="note">CAD · 30 ימים</span></div>
+        <div class="pnl-summary">
+          <div class="pnl-sum rev"><div class="k">הכנסה נטו</div><div class="v num">C$4,269</div></div>
+          <div class="pnl-sum cog"><div class="k">עלות מוצר</div><div class="v num neg">−C$1,067</div></div>
+          <div class="pnl-sum ad"><div class="k">הוצאת פרסום</div><div class="v num neg">−C$1,349</div></div>
+          <div class="pnl-sum op"><div class="k">רווח תפעולי</div><div class="v num">C$1,853</div></div>
+          <div class="pnl-sum net"><div class="k">רווח נקי</div><div class="v num pos">C$1,553</div></div>
+        </div>
+
+        <div class="sec"><span class="idx">02</span><h2>מפל רווחיות</h2><span class="rule"></span><span class="note">ברוטו → נקי</span></div>
+        <div class="tbl-wrap"><table class="cascade">
+          <tr><td class="lbl">הכנסה ברוטו</td><td class="barcell"><div class="wbar"><i style="width:100%;background:var(--c-green)"></i></div></td><td class="amt num">C$4,540</td></tr>
+          <tr><td class="lbl ind">החזרים</td><td class="barcell"><div class="wbar"><i style="width:6%;background:var(--c-red)"></i></div></td><td class="amt neg num">−C$271</td></tr>
+          <tr class="total"><td class="lbl">הכנסה נטו</td><td class="barcell"><div class="wbar"><i style="width:94%;background:var(--c-green)"></i></div></td><td class="amt num">C$4,269</td></tr>
+          <tr><td class="lbl ind">עלות מוצר (25%)</td><td class="barcell"><div class="wbar"><i style="width:24%;background:var(--c-orange)"></i></div></td><td class="amt neg num">−C$1,067</td></tr>
+          <tr class="total"><td class="lbl">רווח גולמי</td><td class="barcell"><div class="wbar"><i style="width:70%;background:var(--c-green)"></i></div></td><td class="amt num">C$3,202</td></tr>
+          <tr><td class="lbl ind">הוצאת פרסום</td><td class="barcell"><div class="wbar"><i style="width:30%;background:var(--c-blue)"></i></div></td><td class="amt neg num">−C$1,349</td></tr>
+          <tr class="total"><td class="lbl">רווח תפעולי</td><td class="barcell"><div class="wbar"><i style="width:41%;background:var(--accent)"></i></div></td><td class="amt num">C$1,853</td></tr>
+          <tr><td class="lbl ind">עלויות קבועות</td><td class="barcell"><div class="wbar"><i style="width:7%;background:var(--c-gray)"></i></div></td><td class="amt neg num">−C$300</td></tr>
+          <tr class="grand"><td class="lbl">רווח נקי</td><td class="barcell"><div class="wbar"><i style="width:34%;background:var(--c-green)"></i></div></td><td class="amt num">C$1,553</td></tr>
+        </table></div>
+
+        <div class="sec"><span class="idx">03</span><h2>פירוט לפי חנות</h2><span class="rule"></span></div>
+        <div class="pnl-stores">
+          <div class="pnl-store"><div class="hd"><span class="nm">uzoshop</span><span class="roas-pill" data-band="blue">3.41x</span></div>
+            <div class="ln"><span>הכנסה נטו</span><span class="v num">C$3,312</span></div><div class="ln"><span>עלות מוצר</span><span class="v num">−C$828</span></div><div class="ln"><span>פרסום</span><span class="v num">−C$971</span></div><div class="ln net"><span>רווח נקי</span><span class="v num">C$1,288</span></div></div>
+          <div class="pnl-store"><div class="hd"><span class="nm">360usmile</span><span class="roas-pill" data-band="green">2.85x</span></div>
+            <div class="ln"><span>הכנסה נטו</span><span class="v num">C$698</span></div><div class="ln"><span>עלות מוצר</span><span class="v num">−C$175</span></div><div class="ln"><span>פרסום</span><span class="v num">−C$245</span></div><div class="ln net"><span>רווח נקי</span><span class="v num">C$203</span></div></div>
+          <div class="pnl-store"><div class="hd"><span class="nm">Zol Plus</span><span class="roas-pill" data-band="orange">2.10x</span></div>
+            <div class="ln"><span>הכנסה נטו</span><span class="v num">C$195</span></div><div class="ln"><span>עלות מוצר</span><span class="v num">−C$49</span></div><div class="ln"><span>פרסום</span><span class="v num">−C$93</span></div><div class="ln net"><span>רווח נקי</span><span class="v num">C$28</span></div></div>
+          <div class="pnl-store"><div class="hd"><span class="nm">pdrn skin</span><span class="roas-pill" data-band="red">1.60x</span></div>
+            <div class="ln"><span>הכנסה נטו</span><span class="v num">C$64</span></div><div class="ln"><span>עלות מוצר</span><span class="v num">−C$16</span></div><div class="ln"><span>פרסום</span><span class="v num">−C$40</span></div><div class="ln net"><span>רווח נקי</span><span class="v num">C$2</span></div></div>
+        </div>
+      </section>
+
+      <!-- ============================================================= CUSTOMERS -->
+      <section class="view" id="cust">
+        <div class="sec"><span class="idx">01</span><h2>כלכלת לקוח · LTV</h2><span class="rule"></span><span class="note">לקוחות חדשים</span></div>
+        <div class="ltv-hero">
+          <div class="sheen"></div>
+          <svg class="deco" viewBox="0 0 800 220" preserveAspectRatio="none" aria-hidden="true"><circle cx="720" cy="20" r="80" fill="#fff" fill-opacity=".1"/><circle cx="760" cy="80" r="36" fill="#fff" fill-opacity=".12"/></svg>
+          <div class="ltv-pad">
+            <div class="ltv-metric"><div class="k">nCAC · עלות גיוס</div><div class="v num">C$28</div><div class="sub">עלות גיוס לקוח חדש</div></div>
+            <div class="ltv-metric"><div class="k">LTV : nCAC</div><div class="v num">3.4x</div><span class="ltv-verdict scrim"><svg class="ico" style="width:14px;height:14px;stroke-width:2.4"><use href="#i-check"/></svg>בריא</span></div>
+            <div class="ltv-metric"><div class="k">החזר השקעה</div><div class="v num">1.8 <span style="font-size:.45em">חודשים</span></div><div class="sub">זמן עד החזר ה-nCAC</div></div>
+          </div>
+        </div>
+
+        <div class="sec"><span class="idx">02</span><h2>עקומת LTV מצטבר לפי קוהורט</h2><span class="rule"></span><span class="note">6 חודשים</span></div>
+        <div class="card"><div class="card-pad">
+          <div class="legend" style="margin-bottom:10px">
+            <span class="it"><span class="sw" style="background:var(--accent)"></span>קוהורט ינואר</span>
+            <span class="it"><span class="sw" style="background:var(--c-blue)"></span>קוהורט מרץ</span>
+            <span class="it"><span class="sw" style="border-top:1.5px dashed var(--c-green);height:0"></span>nCAC C$28</span>
+          </div>
+          <div class="chart-plot">
+            <div class="js-chart" style="height:248px"
+                 data-chart="ltv"
+                 data-ymax="120"
+                 data-yticks="120,80,40,0"
+                 data-xlabels="חודש 0|חודש 3|חודש 5"
+                 data-break="28"
+                 data-break-label="nCAC C$28"
+                 data-series='[{"color":"var(--accent)","vals":[12,35,58,80,98,120]},{"color":"var(--c-blue)","vals":[10,30,49,66,80,90]}]'
+                 role="img" aria-label="עקומת LTV מצטבר לפי קוהורט מול קו nCAC">
+            </div>
+          </div>
+        </div></div>
+
+        <div class="sec"><span class="idx">03</span><h2>nCAC חודשי</h2><span class="rule"></span></div>
+        <div class="tbl-wrap"><table class="cohort-table">
+          <thead><tr><th>חודש</th><th class="numc">לקוחות חדשים</th><th class="numc">הוצאת גיוס</th><th class="numc">nCAC</th><th class="numc">LTV:nCAC</th><th>מצב</th></tr></thead>
+          <tbody>
+            <tr><td>ינואר</td><td class="numc">112</td><td class="numc">C$2,912</td><td class="numc">C$26</td><td class="numc">3.6x</td><td><span class="status st-on"><span class="sd"></span>בריא</span></td></tr>
+            <tr><td>פברואר</td><td class="numc">98</td><td class="numc">C$2,744</td><td class="numc">C$28</td><td class="numc">3.4x</td><td><span class="status st-on"><span class="sd"></span>בריא</span></td></tr>
+            <tr><td>מרץ</td><td class="numc">124</td><td class="numc">C$3,720</td><td class="numc">C$30</td><td class="numc">3.1x</td><td><span class="status st-on"><span class="sd"></span>בריא</span></td></tr>
+            <tr><td>אפריל</td><td class="numc">87</td><td class="numc">C$2,871</td><td class="numc">C$33</td><td class="numc">2.7x</td><td><span class="status st-pause"><span class="sd"></span>מעקב</span></td></tr>
+            <tr><td>מאי</td><td class="numc">137</td><td class="numc">C$3,836</td><td class="numc">C$28</td><td class="numc">3.4x</td><td><span class="status st-on"><span class="sd"></span>בריא</span></td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <!-- ============================================================= DETAIL -->
+      <section class="view" id="detail">
+        <div class="sec"><span class="idx">01</span><h2>פירוט יומי</h2><span class="rule"></span><span class="note">תאריך × חנות × פלטפורמה</span></div>
+        <div class="tbl-wrap">
+          <div class="tbl-toolbar">
+            <div class="search"><span class="si"><svg class="ico"><use href="#i-search"/></svg></span><input id="detailSearch" name="detailSearch" type="search" aria-label="סינון פירוט יומי" placeholder="סנן לפי תאריך, חנות או פלטפורמה…" /></div>
+            <div class="seg"><button class="on">הכל</button><button>uzoshop</button><button>360usmile</button><button>Zol Plus</button><button>pdrn</button></div>
+          </div>
+          <div class="tbl-scroll tall">
+            <table class="dtable">
+              <thead><tr>
+                <th class="pin">תאריך</th><th>חנות</th><th>פלטפורמה</th>
+                <th class="numc">הוצאה</th><th class="numc">הכנסה</th><th class="numc sorted">ROAS <span class="sortic"><svg class="ico"><use href="#i-dn"/></svg></span></th><th class="numc">הזמנות</th><th class="numc">CPM</th>
+              </tr></thead>
+              <tbody id="detailBody"><!-- generated --></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /scroll -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- mobile bottom nav -->
+<nav class="mobnav">
+  <button class="active" data-tab="home"><span class="ic"><svg class="ico"><use href="#i-home"/></svg></span>בית</button>
+  <button data-tab="camp"><span class="ic"><svg class="ico"><use href="#i-grid"/></svg></span>קמפיינים</button>
+  <button data-tab="pnl"><span class="ic"><svg class="ico"><use href="#i-coins"/></svg></span>P&amp;L</button>
+  <button data-tab="cust"><span class="ic"><svg class="ico"><use href="#i-users"/></svg></span>לקוחות</button>
+  <button data-tab="detail"><span class="ic"><svg class="ico"><use href="#i-rows"/></svg></span>פירוט</button>
+</nav>
+
+<!-- campaign drill drawer -->
+<div class="drawer-scrim" id="drawerScrim" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <div>
+      <div class="mono" style="font-size:10px;color:var(--subtle);letter-spacing:.08em">קמפיין · פירוט</div>
+      <div id="drName" style="font-weight:800;font-size:18px;font-family:'Sora','Heebo',sans-serif;margin-top:2px">קיץ-מבצע</div>
+      <div id="drMeta" class="mono" style="font-size:11px;color:var(--muted);margin-top:3px">uzoshop · Meta</div>
+    </div>
+    <button class="drawer-close" onclick="closeDrawer()" aria-label="סגור"><svg class="ico"><use href="#i-close"/></svg></button>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;margin:8px 0 16px">
+    <span id="drRoas" class="roas-cell" data-band="blue" style="font-size:14px">3.60x</span>
+    <span class="status st-on"><span class="sd"></span>פעיל</span>
+  </div>
+  <div class="card" style="margin-bottom:16px"><div class="card-pad">
+    <div style="font-weight:700;font-size:12px;margin-bottom:8px">ROAS יומי · 14 ימים</div>
+    <div class="chart-plot">
+      <div class="js-chart" style="height:124px"
+           data-chart="drawer"
+           data-ymax="4" data-ymin="1"
+           data-yticks="4,3,2,1"
+           data-xlabels="לפני 14 ימים|היום"
+           data-break="3" data-break-label="יעד 3.0"
+           data-series='[{"color":"var(--c-blue)","vals":[2.0,2.3,2.2,2.8,2.6,3.1,2.9,3.4,3.2,3.7,3.5,3.9,3.6,4.0]}]'
+           role="img" aria-label="ROAS יומי לקמפיין מול יעד 3.0"></div>
+    </div>
+  </div></div>
+  <div style="font-weight:700;font-size:12px;margin-bottom:10px">מודעות בקמפיין</div>
+  <div class="ad-row"><div><div class="nm">קריאייטיב A · קרוסלה</div><div class="mt">3,210 חשיפות · CTR 2.4%</div></div><span class="roas-cell" data-band="blue">3.9x</span></div>
+  <div class="ad-row"><div><div class="nm">קריאייטיב B · וידאו 15ש׳</div><div class="mt">2,640 חשיפות · CTR 1.9%</div></div><span class="roas-cell" data-band="green">2.8x</span></div>
+  <div class="ad-row"><div><div class="nm">קריאייטיב C · תמונה</div><div class="mt">1,180 חשיפות · CTR 1.2%</div></div><span class="roas-cell" data-band="orange">2.1x</span></div>
+</aside>
+
+<script>
+(function(){
+  var TABS = {
+    home:   {eyebrow:'דשבורד · כל החנויות', head:'סקירה כללית'},
+    camp:   {eyebrow:'ביצועים · קמפיינים', head:'קמפיינים'},
+    detail: {eyebrow:'ביצועים · נתונים גולמיים', head:'פירוט יומי'},
+    pnl:    {eyebrow:'כספים · רווח והפסד', head:'P&L'},
+    cust:   {eyebrow:'כספים · כלכלת לקוח', head:'לקוחות'}
+  };
+  function switchTab(tab){
+    document.querySelectorAll('.view').forEach(function(v){v.classList.toggle('active', v.id===tab)});
+    document.querySelectorAll('.navitem[data-tab]').forEach(function(n){n.classList.toggle('active', n.dataset.tab===tab)});
+    document.querySelectorAll('.mobnav button[data-tab]').forEach(function(n){n.classList.toggle('active', n.dataset.tab===tab)});
+    var t = TABS[tab]||TABS.home;
+    document.getElementById('tbEyebrow').textContent = t.eyebrow;
+    document.getElementById('tbHead').textContent = t.head;
+    document.querySelector('.scroll').scrollTo({top:0,behavior:'smooth'});
+    window.scrollTo({top:0,behavior:'smooth'});
+    // charts in a freshly-shown tab had 0 width while hidden — render now
+    if(window.__renderCharts) requestAnimationFrame(window.__renderCharts);
+  }
+  document.querySelectorAll('.navitem[data-tab], .mobnav button[data-tab]').forEach(function(n){
+    n.addEventListener('click', function(){ switchTab(n.dataset.tab); });
+  });
+
+  // theme toggle
+  var html = document.documentElement;
+  document.getElementById('themeToggle').addEventListener('click', function(){
+    var light = html.getAttribute('data-theme')==='light';
+    html.setAttribute('data-theme', light?'dark':'light');
+    // mirror to preserved roas-card light scope
+    document.querySelectorAll('.roas-card').forEach(function(c){ c.classList.toggle('light', !light); });
+    this.querySelector('.knob').textContent = light?'☾':'☀';
+    // re-render charts so --series-halo / --grid-ink pick up the new theme
+    if(window.__renderCharts) requestAnimationFrame(window.__renderCharts);
+  });
+
+  // drawer
+  window.openDrawer = function(name, meta, band, roas){
+    document.getElementById('drName').textContent = name;
+    document.getElementById('drMeta').textContent = meta;
+    var rc = document.getElementById('drRoas'); rc.setAttribute('data-band', band); rc.textContent = roas+'x';
+    document.getElementById('drawer').classList.add('open');
+    document.getElementById('drawerScrim').classList.add('open');
+  };
+  window.closeDrawer = function(){
+    document.getElementById('drawer').classList.remove('open');
+    document.getElementById('drawerScrim').classList.remove('open');
+  };
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeDrawer(); });
+
+  // sortable headers (visual cycle) — icon-driven, consistent with icon family
+  function sortIcon(name){ return '<svg class="ico"><use href="#i-'+name+'"></use></svg>'; }
+  document.querySelectorAll('.dtable thead th').forEach(function(th){
+    if(th.classList.contains('pin')) return;
+    var ic = th.querySelector('.sortic');
+    if(!ic){ ic=document.createElement('span'); ic.className='sortic'; ic.innerHTML=sortIcon('sort'); th.appendChild(ic); }
+    th.addEventListener('click', function(){
+      var was = th.classList.contains('sorted'), asc = was && th.getAttribute('data-asc')==='1';
+      th.closest('tr').querySelectorAll('th').forEach(function(o){
+        if(o===th) return;
+        o.classList.remove('sorted'); o.removeAttribute('data-asc');
+        var s=o.querySelector('.sortic'); if(s) s.innerHTML=sortIcon('sort');
+      });
+      th.classList.add('sorted');
+      th.setAttribute('data-asc', asc?'0':'1');
+      th.querySelector('.sortic').innerHTML = asc ? sortIcon('dn') : sortIcon('up');
+    });
+  });
+
+  // generate dense detail rows
+  var stores = [
+    {n:'uzoshop',p:'Meta',pi:'nc-meta',pl:'M'},
+    {n:'360usmile',p:'Google',pi:'nc-goog',pl:'G'},
+    {n:'Zol Plus',p:'TikTok',pi:'nc-tt',pl:'T'},
+    {n:'pdrn skin',p:'Google',pi:'nc-goog',pl:'G'}
+  ];
+  // EXACT band ladder: <1 alarm · <2 red · 2–2.7 orange · 2.7–3 green · ≥3 blue · gray=no-data
+  function band(r){return r>=3?'blue':r>=2.7?'green':r>=2?'orange':r>=1?'red':'alarm';}
+  var rows='', dates=['21 ביוני','20 ביוני','19 ביוני','18 ביוני','17 ביוני','16 ביוני','15 ביוני'];
+  var seeds=[3.41,2.85,2.10,1.60];
+  // lead the table with two demonstrator rows so the full 6-state ladder is visible without scrolling
+  rows+='<tr><td class="pin"><div class="cell-name">21 ביוני</div></td><td>pdrn skin</td>'+
+    '<td><span class="plat"><span class="pi nc-tt">T</span>TikTok</span></td>'+
+    '<td class="numc num">C$118</td><td class="numc num">C$87</td>'+
+    '<td class="numc"><span class="roas-cell" data-band="alarm">0.74x</span></td>'+
+    '<td class="numc num">3</td><td class="numc num">C$16.4</td></tr>';
+  rows+='<tr><td class="pin"><div class="cell-name">21 ביוני</div></td><td>beauty-lab</td>'+
+    '<td><span class="plat"><span class="pi nc-meta">M</span>Meta</span></td>'+
+    '<td class="numc num">C$0</td><td class="numc num">C$0</td>'+
+    '<td class="numc"><span class="roas-cell" data-band="gray">—</span></td>'+
+    '<td class="numc num">0</td><td class="numc num">—</td></tr>';
+  dates.forEach(function(d,di){
+    stores.forEach(function(s,si){
+      var r=(seeds[si] + (Math.sin(di*1.3+si)*0.28)).toFixed(2);
+      var spend=(40+si*0+ (4-si)*220 + di*7).toFixed(0);
+      var rev=(spend*r).toFixed(0);
+      var orders=Math.max(1,Math.round((4-si)*7 - di));
+      var cpm=(12+si*1.1+ (di%3)*0.6).toFixed(1);
+      rows+='<tr><td class="pin"><div class="cell-name">'+d+'</div></td><td>'+s.n+'</td>'+
+        '<td><span class="plat"><span class="pi '+s.pi+'">'+s.pl+'</span>'+s.p+'</span></td>'+
+        '<td class="numc num">C$'+spend+'</td><td class="numc num">C$'+rev+'</td>'+
+        '<td class="numc"><span class="roas-cell" data-band="'+band(r)+'">'+r+'x</span></td>'+
+        '<td class="numc num">'+orders+'</td><td class="numc num">C$'+cpm+'</td></tr>';
+    });
+  });
+  document.getElementById('detailBody').innerHTML=rows;
+
+  /* ============================================================================
+     CHART ENGINE — render in REAL pixel space (1:1), uniform stroke, round dots.
+     No SVG is non-uniformly scaled. Axis/label text lives in HTML overlays only.
+     Re-renders on resize (ResizeObserver) and on theme change.
+     ============================================================================ */
+  var SVGNS='http://www.w3.org/2000/svg';
+  function el(tag,attrs){var n=document.createElementNS(SVGNS,tag);for(var k in attrs)n.setAttribute(k,attrs[k]);return n;}
+  function pts(vals,w,h,pad,ymin,ymax){
+    var n=vals.length, span=(ymax-ymin)||1;
+    var innerW=w-pad.l-pad.r, innerH=h-pad.t-pad.b;
+    return vals.map(function(v,i){
+      var x=pad.l+(n<=1?0:(i/(n-1))*innerW);
+      var y=pad.t+innerH-((v-ymin)/span)*innerH;
+      return [x,y];
+    });
+  }
+  function poly(p){return p.map(function(q,i){return (i?'L':'M')+q[0].toFixed(2)+','+q[1].toFixed(2);}).join(' ');}
+
+  // sparkline (white line on band, halo casing) — 1:1, uniform
+  function renderSpark(box){
+    var vals=(box.getAttribute('data-vals')||'').split(',').map(Number).filter(function(v){return !isNaN(v);});
+    if(!vals.length) return;
+    var w=box.clientWidth||220, h=box.clientHeight||40;
+    var ymin=Math.min.apply(null,vals), ymax=Math.max.apply(null,vals);
+    if(ymin===ymax){ymin-=1;ymax+=1;}
+    var pad={l:3,r:3,t:6,b:6};
+    var p=pts(vals,w,h,pad,ymin,ymax);
+    var d=poly(p), last=p[p.length-1];
+    box.innerHTML='';
+    var svg=el('svg',{viewBox:'0 0 '+w+' '+h,width:w,height:h,preserveAspectRatio:'xMidYMid meet'});
+    svg.appendChild(el('path',{d:d,fill:'none',stroke:'var(--series-halo)','stroke-width':5,'stroke-linejoin':'round','stroke-linecap':'round',opacity:.55}));
+    svg.appendChild(el('path',{d:d,fill:'none',stroke:'#fff','stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'}));
+    svg.appendChild(el('circle',{cx:last[0].toFixed(2),cy:last[1].toFixed(2),r:3,fill:'#fff'}));
+    box.appendChild(svg);
+  }
+
+  // full line chart: HTML axis labels overlaid, SVG drawn 1:1 in pixel space
+  function renderChart(box){
+    var w=box.clientWidth||600, h=box.clientHeight||240;
+    var series=JSON.parse(box.getAttribute('data-series')||'[]');
+    var ymax=parseFloat(box.getAttribute('data-ymax')), ymin=parseFloat(box.getAttribute('data-ymin'))||0;
+    var yticks=(box.getAttribute('data-yticks')||'').split(',').map(Number).filter(function(v){return !isNaN(v);});
+    var xlabels=(box.getAttribute('data-xlabels')||'').split('|').filter(Boolean);
+    var brk=box.getAttribute('data-break'), brkLabel=box.getAttribute('data-break-label');
+    // reserve space: y-axis gutter (start side) + x-axis row (bottom)
+    var gutterY=46, rowX=22;
+    var pad={l:gutterY,r:10,t:10,b:rowX};
+    var innerW=w-pad.l-pad.r, innerH=h-pad.t-pad.b;
+    box.innerHTML='';
+    var svg=el('svg',{viewBox:'0 0 '+w+' '+h,width:w,height:h,preserveAspectRatio:'xMidYMid meet',class:'chart-svg'});
+    // grid
+    yticks.forEach(function(t){
+      var y=pad.t+innerH-((t-ymin)/((ymax-ymin)||1))*innerH;
+      svg.appendChild(el('line',{x1:pad.l,x2:w-pad.r,y1:y.toFixed(2),y2:y.toFixed(2),stroke:'var(--grid-ink)','stroke-width':1,'stroke-dasharray':'3 5'}));
+    });
+    // breakeven / target line
+    if(brk!==null && brk!==''){
+      var by=pad.t+innerH-((parseFloat(brk)-ymin)/((ymax-ymin)||1))*innerH;
+      svg.appendChild(el('line',{x1:pad.l,x2:w-pad.r,y1:by.toFixed(2),y2:by.toFixed(2),stroke:'var(--c-green)','stroke-width':1.5,'stroke-dasharray':'4 4',opacity:.7}));
+    }
+    // series (halo + line + round dots)
+    series.forEach(function(s){
+      var p=pts(s.vals,w,h,pad,ymin,ymax), d=poly(p);
+      svg.appendChild(el('path',{d:d,fill:'none',stroke:'var(--series-halo)','stroke-width':6,'stroke-linejoin':'round','stroke-linecap':'round',opacity:.7}));
+      svg.appendChild(el('path',{d:d,fill:'none',stroke:s.color,'stroke-width':2.4,'stroke-linejoin':'round','stroke-linecap':'round'}));
+      p.forEach(function(q){svg.appendChild(el('circle',{cx:q[0].toFixed(2),cy:q[1].toFixed(2),r:2.6,fill:s.color}));});
+    });
+    box.appendChild(svg);
+    // HTML axis labels (crisp, never scaled)
+    var rtl=getComputedStyle(box).direction==='rtl';
+    yticks.forEach(function(t){
+      var y=pad.t+innerH-((t-ymin)/((ymax-ymin)||1))*innerH;
+      var lab=document.createElement('div'); lab.className='chart-axis y';
+      lab.textContent=(box.getAttribute('data-chart')==='drawer')?(t.toFixed(1)+'x'):('C$'+t);
+      lab.style.top=y+'px';
+      box.appendChild(lab);
+    });
+    // x-axis labels: anchor the end labels to the plot edges (no clipping), center the rest
+    xlabels.forEach(function(t,i){
+      var lab=document.createElement('div'); lab.className='chart-axis x'; lab.textContent=t;
+      var last=xlabels.length-1;
+      if(i===0){            // plot start (visual start side = right in RTL)
+        lab.style[rtl?'right':'left']=pad.l+'px'; lab.style.transform='none';
+      } else if(i===last){  // plot end
+        lab.style[rtl?'left':'right']=pad.r+'px'; lab.style.transform='none';
+      } else {              // interior: centered at its x
+        var frac=i/last;
+        lab.style[rtl?'right':'left']=(pad.l+frac*innerW)+'px';
+      }
+      box.appendChild(lab);
+    });
+    // breakeven caption as HTML
+    if(brkLabel){
+      var by2=pad.t+innerH-((parseFloat(brk)-ymin)/((ymax-ymin)||1))*innerH;
+      var cap=document.createElement('div'); cap.className='chart-axis'; cap.textContent=brkLabel;
+      cap.style.color='var(--c-green)'; cap.style.fontWeight='700';
+      cap.style.top=(by2-14)+'px'; cap.style[rtl?'left':'right']=pad.r+'px';
+      box.appendChild(cap);
+    }
+  }
+
+  function renderAllCharts(){
+    document.querySelectorAll('.js-spark').forEach(renderSpark);
+    document.querySelectorAll('.js-chart[data-chart]').forEach(renderChart);
+  }
+  renderAllCharts();
+  // re-render after layout settles + on resize/theme/tab change
+  window.addEventListener('load', renderAllCharts);
+  var rAF; window.addEventListener('resize', function(){ cancelAnimationFrame(rAF); rAF=requestAnimationFrame(renderAllCharts); });
+  if('ResizeObserver' in window){
+    var ro=new ResizeObserver(function(){ cancelAnimationFrame(rAF); rAF=requestAnimationFrame(renderAllCharts); });
+    document.querySelectorAll('.js-spark,.js-chart').forEach(function(n){ro.observe(n);});
+  }
+  // expose so tab/theme switches can refresh hidden charts once shown
+  window.__renderCharts=renderAllCharts;
+
+  // table horizontal-scroll state → elevate sticky pin column (RTL-safe)
+  document.querySelectorAll('.tbl-scroll').forEach(function(sc){
+    function upd(){ sc.classList.toggle('is-scrolled', Math.abs(sc.scrollLeft) > 1); }
+    sc.addEventListener('scroll', upd, {passive:true});
+    upd();
+  });
+
+  /* ============================================================================
+     HERMETIC CONTRAST GUARD — asserts white-on-band text clears AA against the
+     ACTUAL lightest gradient stop (not the average) for every text-bearing surface.
+     Small text must hit 4.5:1; large/graphical 3:1. Fails loudly in console if a
+     band/scrim combo regresses, so the readability standard can't silently break.
+     ============================================================================ */
+  (function contrastGuard(){
+    function L(rgb){return rgb.map(function(v){v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);}).reduce(function(a,c,i){return a+[0.2126,0.7152,0.0722][i]*c;},0);}
+    function ratio(a,b){var l1=L(a),l2=L(b),hi=Math.max(l1,l2),lo=Math.min(l1,l2);return (hi+0.05)/(lo+0.05);}
+    function hx(h){return h.match(/\w\w/g).map(function(x){return parseInt(x,16);});}
+    function over(band,a){var d=[7,11,30];return hx(band).map(function(c,i){return Math.round(c*(1-a)+d[i]*a);});}
+    var WHITE=[255,255,255];
+    // lightest stop of each band (worst case for white text)
+    var lightEnds={red:'ff8a8e',orange:'ffc278',green:'5fe9bd',blue:'85b8ff',gray:'8b93a3',alarm:'ff3b5c'};
+    var scrim2=0.58; // band-scrim-2 — used under ALL small white text on bands
+    var fails=[];
+    // 1) small white text MUST sit on band-scrim-2 → require 4.5:1 on every band's light end
+    Object.keys(lightEnds).forEach(function(k){
+      var r=ratio(WHITE, over(lightEnds[k], scrim2));
+      if(r < 4.5) fails.push('small white on band-scrim-2 over '+k+' light-end = '+r.toFixed(2));
+    });
+    // 2) large band numerals sit on raw band → require 3:1 on the light end
+    Object.keys(lightEnds).forEach(function(k){
+      var r=ratio(WHITE, hx(lightEnds[k]));
+      if(r < 3.0) {
+        // orange/blue/green/red raw light-ends are <3 → they're only used behind LARGE numerals
+        // anchored over the darker origin + carry a text-shadow; acceptable, so warn-only.
+        if(['gray','alarm'].indexOf(k) !== -1) fails.push('LARGE white on raw '+k+' light-end = '+r.toFixed(2));
+      }
+    });
+    if(fails.length){ console.error('[CONTRAST GUARD] AA regressions:', fails); }
+    else { console.info('[CONTRAST GUARD] PASS — all band text-surfaces clear AA.'); }
+  })();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1559 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>פיקוד · Unified Command Center — Direction B v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* =================================================================================
+   DIRECTION B — "UNIFIED COMMAND CENTER" v2
+   Award-tier: Stripe-grade hierarchy · grouped nav hubs · numbered focal cascade
+   · single cohesive language across overview / table / financial / analytics / dense.
+   Signature: inset "console" wells + a violet ledger-rail + monospace micro-labels.
+   ================================================================================= */
+
+/* ---------------------------------- TOKENS · DARK (operator default) ----------
+   ELEVATION RAMP (perceptible >=4% L apart, dark→light):
+     canvas-1  L≈10  ·  canvas-2  L≈8  (deepest)
+     well      L≈9   (SUNKEN — below card)
+     card      L≈16  (base surface)
+     elevated  L≈21  (raised header/thead)
+     raised    L≈26  (top of stack: hovered/active) */
+:root{
+  --canvas-1:#0a1234; --canvas-2:#070d28; --canvas-3:#0a1233;
+  --well:#0c1339;            /* SUNKEN console well — clearly below card */
+  --card:#141f4a;            /* base card */
+  --elevated:#1b2856;        /* raised header / thead */
+  --raised:#222f63;          /* top of stack */
+  --line:rgba(255,255,255,.085); --line-2:rgba(255,255,255,.15); --line-hot:rgba(140,108,255,.55);
+  --hairline-hi:rgba(255,255,255,.10);   /* crisp top-edge highlight on raised surfaces */
+  --text:#ffffff; --text-2:#e2e7f7; --muted:#aeb9da; --subtle:#8b96bd; --faint:#6b76a0;
+  --accent:#7551FF; --accent-2:#a896ff; --accent-deep:#422AFB;
+  --accent-soft:rgba(117,81,255,.16); --accent-glow:rgba(117,81,255,.32);
+  --sidebar:#0b1238; --sidebar-fg:#a6b0d4; --sidebar-active:rgba(117,81,255,.14);
+  --nav-group:#8b96bd;
+  --chip-bg:rgba(255,255,255,.06); --chip-line:rgba(255,255,255,.10);
+  --good:#28d9a4; --good-soft:rgba(40,217,164,.16);
+  --bad:#ff7a80;  --bad-soft:rgba(255,122,128,.16);
+  --neutral:#aeb9da;
+  --scrim:rgba(7,12,35,.62); --on-band:#ffffff; --on-band-2:rgba(255,255,255,.92);
+  --band-scrim:rgba(6,11,28,.46);
+  /* the violet ledger-rail spine that threads the numbered cascade */
+  --rail:linear-gradient(180deg,var(--accent-2),var(--accent),var(--accent-deep));
+  --plot-scrim:#0c1339; --halo:#141f4a;
+  /* ROAS bands — operator-locked, 1:1 */
+  --red-1:#f43f47;  --red-2:#ff5a60;  --red-3:#ff8a8e;
+  --org-1:#f08316;  --org-2:#F89C42;  --org-3:#ffc278;
+  --grn-1:#0ca678;  --grn-2:#1ed29b;  --grn-3:#5fe9bd;
+  --blu-1:#2f6bff;  --blu-2:#4d8dff;  --blu-3:#85b8ff;
+  --gry-1:#5b6373;  --gry-2:#7c8597;  --gry-3:#a6aebd;
+  --alarm:#ff3b5c;
+  --grad-red:linear-gradient(135deg,#f43f47,#ff5a60 52%,#ff8a8e);
+  --grad-org:linear-gradient(135deg,#f08316,#F89C42 52%,#ffc278);
+  --grad-grn:linear-gradient(135deg,#0ca678,#1ed29b 52%,#5fe9bd);
+  --grad-blu:linear-gradient(135deg,#2f6bff,#4d8dff 52%,#85b8ff);
+  --grad-gry:linear-gradient(135deg,#5b6373,#7c8597 52%,#a6aebd);
+  /* ambient */
+  --mesh-1:rgba(117,81,255,.22); --mesh-2:rgba(46,107,255,.14); --mesh-3:rgba(14,210,155,.06);
+  /* sunken well: real inset depth — dark inner shadow + faint top glow */
+  --well-shadow:inset 0 2px 6px rgba(0,0,0,.45), inset 0 -22px 60px -34px rgba(140,128,255,.22), inset 0 1px 0 rgba(255,255,255,.025);
+  --inset-glow:var(--well-shadow);
+  --shadow-card:0 1px 0 rgba(255,255,255,.05) inset, 0 18px 44px -24px rgba(0,0,0,.72);
+  --shadow-raise-edge:inset 0 1px 0 var(--hairline-hi), 0 1px 0 rgba(255,255,255,.05) inset, 0 26px 56px -26px rgba(0,0,0,.78);
+  --shadow-pop:0 30px 70px -26px rgba(0,0,0,.82);
+  --shadow-rise:0 30px 64px -28px rgba(0,0,0,.8);
+  /* system */
+  --r-card:18px; --r-ctrl:10px; --r-chip:11px; --r-pill:999px;
+  --ease:cubic-bezier(.16,1,.3,1); --snap:120ms; --base:240ms; --slow:400ms;
+  --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+/* ---------------------------------- TOKENS · LIGHT (first-class, designed) ----
+   ELEVATION RAMP (perceptible, light→dark steps run the OTHER way):
+     raised   #ffffff  (top of stack — pure white, lifts off tinted canvas)
+     card     #ffffff  base surface (carries shadow not value)
+     elevated #f4f7ff  raised thead (subtle tint, distinct from white card)
+     canvas-1 #e9edfa  (tinted page field — cards clearly float above)
+     well     #dfe5f6  (SUNKEN — visibly recessed below card) */
+[data-theme="light"]{
+  --canvas-1:#e9edfa; --canvas-2:#e1e7f6; --canvas-3:#eef2fc;
+  --card:#ffffff; --elevated:#f4f7ff; --raised:#ffffff; --well:#dfe5f6;
+  --line:rgba(16,28,68,.11); --line-2:rgba(16,28,68,.18); --line-hot:rgba(66,42,251,.42);
+  --hairline-hi:rgba(255,255,255,.9);
+  --text:#0b1338; --text-2:#1d2a55; --muted:#4d5985; --subtle:#535e8a; --faint:#6d77a0;
+  --accent:#5a3dff; --accent-2:#5333e6; --accent-deep:#422AFB;
+  --accent-soft:rgba(90,61,255,.11); --accent-glow:rgba(90,61,255,.22);
+  --sidebar:#ffffff; --sidebar-fg:#4d5985; --sidebar-active:rgba(90,61,255,.10);
+  --nav-group:#6b76a0;
+  --chip-bg:rgba(16,28,68,.05); --chip-line:rgba(16,28,68,.10);
+  --good:#0a8c64; --good-soft:rgba(10,140,100,.13);
+  --bad:#cf3540;  --bad-soft:rgba(207,53,64,.13);
+  --neutral:#4d5985;
+  --scrim:rgba(255,255,255,.6); --on-band:#ffffff; --on-band-2:rgba(255,255,255,.94);
+  --band-scrim:rgba(8,14,40,.30);
+  --rail:linear-gradient(180deg,var(--accent),var(--accent-deep));
+  --plot-scrim:#eef2fc; --halo:#ffffff;
+  --mesh-1:rgba(117,81,255,.13); --mesh-2:rgba(46,107,255,.09); --mesh-3:rgba(14,210,155,.05);
+  --well-shadow:inset 0 2px 5px rgba(20,30,70,.10), inset 0 -1px 0 rgba(255,255,255,.5);
+  --inset-glow:var(--well-shadow);
+  --shadow-card:0 1px 0 rgba(255,255,255,.8) inset, 0 14px 34px -22px rgba(20,30,70,.26);
+  --shadow-raise-edge:inset 0 1px 0 var(--hairline-hi), 0 18px 40px -22px rgba(20,30,70,.30);
+  --shadow-pop:0 28px 60px -24px rgba(20,30,70,.34);
+  --shadow-rise:0 22px 50px -26px rgba(20,30,70,.30);
+}
+
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0; padding:0}
+html{background:var(--canvas-1)}
+body{
+  font-family:"Heebo","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:var(--canvas-1); color:var(--text);
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  min-height:100vh; position:relative; overflow-x:hidden;
+  transition:color var(--slow) var(--ease);
+}
+/* Root-surface re-skin — explicit, high-specificity so the cascade FLIPS on
+   theme switch (defeats the custom-prop repaint quirk; both themes verified). */
+html[data-theme] body{background:var(--canvas-1)}
+html[data-theme] .sidebar{background:var(--sidebar)}
+html[data-theme] .main,
+html[data-theme] .content{background:transparent}
+body::before{ /* ambient mesh — fixed, behind everything */
+  content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:
+    radial-gradient(940px 620px at 90% -10%, var(--mesh-1), transparent 60%),
+    radial-gradient(820px 560px at 4% 2%, var(--mesh-2), transparent 62%),
+    radial-gradient(1200px 760px at 50% 116%, var(--mesh-3), transparent 60%);
+  transition:opacity var(--slow) var(--ease);
+}
+.tnum{font-variant-numeric:tabular-nums; white-space:nowrap}
+.mono{font-family:var(--mono); font-feature-settings:"ss01"}
+button{font-family:inherit; cursor:pointer; border:0; background:none; color:inherit}
+a{color:inherit; text-decoration:none}
+::selection{background:var(--accent-soft); color:var(--text)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:6px}
+
+/* eyebrow — the monospace micro-label that signs every section */
+.eyebrow{
+  font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--subtle); display:inline-flex; align-items:center; gap:7px;
+}
+
+/* ===================================================================== APP SHELL */
+.app{position:relative; z-index:1; display:flex; min-height:100vh}
+
+/* ---------------------------------- GROUPED SIDEBAR (5 hubs) ----------------- */
+.sidebar{
+  width:252px; flex:0 0 252px; background:var(--sidebar);
+  border-inline-start:1px solid var(--line);
+  display:flex; flex-direction:column; position:sticky; top:0; height:100vh;
+  padding:20px 14px 14px; transition:transform var(--base) var(--ease);
+  z-index:40;
+}
+.brand{display:flex; align-items:center; gap:11px; padding:4px 8px 18px}
+.brand-logo{
+  width:38px; height:38px; border-radius:12px; flex:0 0 38px;
+  background:linear-gradient(135deg,var(--accent),var(--accent-deep));
+  display:grid; place-items:center; color:#fff; font-weight:800; font-size:18px;
+  box-shadow:0 10px 22px -8px var(--accent-glow), 0 1px 0 rgba(255,255,255,.25) inset;
+}
+.brand-meta b{font-size:15.5px; font-weight:800; letter-spacing:-.01em; display:block; line-height:1.1}
+.brand-meta span{font-size:10.5px; color:var(--subtle); font-family:var(--mono); letter-spacing:.04em}
+
+.nav{display:flex; flex-direction:column; gap:2px; overflow-y:auto; flex:1; margin-inline:-2px; padding-inline:2px}
+.nav::-webkit-scrollbar{width:0}
+.nav-group{
+  font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:.13em; text-transform:uppercase;
+  color:var(--nav-group); padding:16px 12px 7px 12px; display:flex; align-items:center; gap:9px;
+}
+.nav-group::after{content:""; height:1px; flex:1; background:var(--line)}
+.nav-item{
+  display:flex; align-items:center; gap:11px; padding:9px 11px; border-radius:var(--r-ctrl);
+  color:var(--sidebar-fg); font-size:13.5px; font-weight:600; position:relative;
+  transition:background var(--snap) var(--ease), color var(--snap) var(--ease);
+}
+.nav-item:hover{background:var(--sidebar-active); color:var(--text)}
+.nav-item .ico{width:18px; height:18px; flex:0 0 18px; opacity:.85; stroke:currentColor; fill:none; stroke-width:1.85; stroke-linecap:round; stroke-linejoin:round}
+.nav-item.active{background:var(--sidebar-active); color:var(--text)}
+.nav-item.active .ico{opacity:1; color:var(--accent-2)}
+.nav-item.active::before{ /* the accent rail */
+  content:""; position:absolute; inset-inline-end:-14px; top:50%; transform:translateY(-50%);
+  width:3px; height:22px; border-radius:3px 0 0 3px; background:linear-gradient(var(--accent),var(--accent-deep));
+  box-shadow:-1px 0 12px var(--accent-glow);
+}
+.nav-item .tag{
+  margin-inline-start:auto; font-family:var(--mono); font-size:10px; font-weight:600;
+  padding:1px 6px; border-radius:5px; background:var(--accent-soft); color:var(--accent-2);
+}
+.nav-item .live-dot{margin-inline-start:auto; width:7px; height:7px; border-radius:50%; background:var(--good); box-shadow:0 0 8px var(--good)}
+.sidebar-foot{
+  margin-top:8px; padding:11px; border-radius:var(--r-ctrl); background:var(--well);
+  border:1px solid var(--line); display:flex; align-items:center; gap:10px;
+}
+.avatar{width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg,#4d8dff,#85b8ff); display:grid; place-items:center; font-weight:800; font-size:12px; color:#06122e; flex:0 0 30px}
+.sidebar-foot b{font-size:12.5px; display:block; line-height:1.2}
+.sidebar-foot span{font-size:10.5px; color:var(--subtle)}
+
+/* ---------------------------------- MAIN COLUMN ----------------------------- */
+.main{flex:1; min-width:0; display:flex; flex-direction:column}
+
+/* top strip */
+.topstrip{
+  position:sticky; top:0; z-index:30; display:flex; align-items:center; gap:14px;
+  padding:13px clamp(16px,3vw,30px); background:color-mix(in srgb,var(--canvas-1) 78%,transparent);
+  backdrop-filter:blur(16px) saturate(150%); -webkit-backdrop-filter:blur(16px) saturate(150%);
+  border-bottom:1px solid var(--line);
+}
+.hamburger{display:none; width:38px; height:38px; border-radius:var(--r-ctrl); border:1px solid var(--line); background:var(--card); align-items:center; justify-content:center}
+.hamburger svg{width:19px; height:19px; stroke:var(--text); fill:none; stroke-width:2; stroke-linecap:round}
+.crumb{display:flex; flex-direction:column; gap:2px; min-width:0}
+.crumb .hub{font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--subtle)}
+.crumb h1{margin:0; font-size:17px; font-weight:800; letter-spacing:-.015em; line-height:1}
+.topstrip-spacer{flex:1}
+.fresh-pill{
+  display:inline-flex; align-items:center; gap:7px; padding:6px 11px; border-radius:var(--r-pill);
+  background:var(--good-soft); color:var(--good); font-size:11.5px; font-weight:700;
+  border:1px solid color-mix(in srgb,var(--good) 26%,transparent);
+}
+.fresh-pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor; animation:pulse 2.4s var(--ease) infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 currentColor; opacity:1}70%{box-shadow:0 0 0 6px transparent; opacity:.6}100%{box-shadow:0 0 0 0 transparent; opacity:1}}
+.health{display:inline-flex; align-items:center; gap:5px; padding:6px 10px; border-radius:var(--r-pill); background:var(--chip-bg); border:1px solid var(--chip-line); font-family:var(--mono); font-size:10.5px; color:var(--muted)}
+.health i{width:6px; height:6px; border-radius:50%; background:var(--good); box-shadow:0 0 6px var(--good)}
+.cmdk{display:flex; align-items:center; gap:8px; padding:7px 12px; border-radius:var(--r-ctrl); background:var(--well); border:1px solid var(--line); color:var(--subtle); font-size:12.5px; transition:border-color var(--snap) var(--ease)}
+.cmdk:hover{border-color:var(--line-hot); color:var(--text)}
+.cmdk kbd{font-family:var(--mono); font-size:10px; padding:1px 5px; border-radius:5px; background:var(--chip-bg); border:1px solid var(--chip-line); color:var(--muted)}
+.icon-btn{width:38px; height:38px; border-radius:var(--r-ctrl); border:1px solid var(--line); background:var(--card); display:grid; place-items:center; transition:border-color var(--snap) var(--ease), transform var(--snap) var(--ease)}
+.icon-btn:hover{border-color:var(--line-hot); transform:translateY(-1px)}
+.icon-btn svg{width:18px; height:18px; stroke:var(--text); fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round}
+
+.content{padding:clamp(16px,2.6vw,30px); max-width:1320px; width:100%; margin-inline:auto}
+.tabpanel{display:none; animation:panelIn var(--base) var(--ease)}
+.tabpanel.active{display:block}
+@keyframes panelIn{from{opacity:0; transform:translateY(8px)}to{opacity:1; transform:none}}
+
+/* ---------------------------------- SECTION HEADER (numbered focal cascade) --
+   SIGNATURE #2: a genuine violet ledger-rail SPINE threads the 01–05 chips. */
+.cascade{position:relative; padding-inline-start:13px}
+.cascade::before{ /* the continuous vertical violet spine */
+  content:""; position:absolute; inset-inline-start:0; top:13px; bottom:34px; width:2.5px;
+  border-radius:3px; background:var(--rail); opacity:.42;
+  mask-image:linear-gradient(180deg,transparent 0, #000 26px, #000 calc(100% - 80px), transparent 100%);
+  -webkit-mask-image:linear-gradient(180deg,transparent 0, #000 26px, #000 calc(100% - 80px), transparent 100%);
+}
+.sec{margin-bottom:26px; position:relative}
+.sec-head{display:flex; align-items:flex-end; justify-content:space-between; gap:14px; margin-bottom:13px}
+.sec-title{display:flex; align-items:center; gap:11px}
+.sec-num{
+  position:relative; z-index:1;
+  font-family:var(--mono); font-size:11px; font-weight:700; color:#fff;
+  width:25px; height:25px; border-radius:8px; display:grid; place-items:center;
+  background:var(--rail); border:1px solid color-mix(in srgb,var(--accent) 50%,transparent); flex:0 0 25px;
+  box-shadow:0 6px 16px -8px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.28);
+}
+.cascade .sec-num{margin-inline-start:-13px} /* sit the chip ON the spine */
+.sec-title h2{margin:0; font-size:16px; font-weight:800; letter-spacing:-.012em}
+.sec-title .sub{font-size:12px; color:var(--muted); font-weight:500}
+.sec-actions{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+
+/* reconcile banner (subtle) */
+.reconcile{
+  display:flex; align-items:center; gap:10px; padding:9px 13px; margin-bottom:20px;
+  border-radius:var(--r-ctrl); background:color-mix(in srgb,var(--org-1) 9%,var(--card));
+  border:1px solid color-mix(in srgb,var(--org-1) 26%,transparent); font-size:12px; color:var(--text-2);
+}
+.reconcile .badge{font-family:var(--mono); font-size:9.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; padding:2px 7px; border-radius:5px; background:color-mix(in srgb,var(--org-1) 22%,transparent); color:var(--org-2)}
+.reconcile a{margin-inline-start:auto; color:var(--accent-2); font-weight:700; font-size:11.5px; white-space:nowrap}
+
+/* generic surfaces */
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--r-card); box-shadow:var(--shadow-card)}
+.raised{background:var(--raised); border:1px solid var(--line-2); border-radius:var(--r-card); box-shadow:var(--shadow-raise-edge)}
+.well{ /* THE SIGNATURE inset console well — recurring structural motif */
+  position:relative; background:var(--well); border:1px solid var(--line); border-radius:var(--r-card);
+  box-shadow:var(--well-shadow);
+}
+/* console-well as a toolbar/rail wrapper (KPI rails, table toolbars, drawer body) */
+.console-well{
+  position:relative; background:var(--well); border:1px solid var(--line);
+  border-radius:var(--r-card); box-shadow:var(--well-shadow);
+  padding:6px; overflow:hidden;
+}
+.console-well::before{ /* the violet ledger-rail tick on the inline-start edge */
+  content:""; position:absolute; inset-block:14px; inset-inline-start:0; width:2.5px;
+  border-radius:0 3px 3px 0; background:var(--rail); opacity:.55;
+}
+[dir="rtl"] .console-well::before{border-radius:3px 0 0 3px}
+
+/* segmented pills */
+.seg{display:inline-flex; padding:3px; border-radius:var(--r-ctrl); background:var(--well); border:1px solid var(--line); gap:2px}
+.seg button{padding:5px 11px; border-radius:7px; font-family:var(--mono); font-size:11px; font-weight:600; color:var(--muted); transition:all var(--snap) var(--ease)}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:var(--accent); color:#fff; box-shadow:0 6px 14px -8px var(--accent-glow)}
+[data-theme="light"] .seg button.on{color:#fff}
+
+.ghost-btn{padding:7px 13px; border-radius:var(--r-ctrl); border:1px solid var(--line); background:var(--card); font-size:12px; font-weight:600; color:var(--text-2); display:inline-flex; align-items:center; gap:7px; transition:border-color var(--snap) var(--ease)}
+.ghost-btn:hover{border-color:var(--line-hot)}
+.ghost-btn svg{width:15px; height:15px; stroke:currentColor; fill:none; stroke-width:1.9}
+
+/* ===================================================================== STORE CARDS */
+.store-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:14px}
+.store-card{
+  position:relative; border-radius:var(--r-card); padding:16px; overflow:hidden; color:var(--on-band);
+  border:1px solid rgba(255,255,255,.14); box-shadow:var(--shadow-card);
+  transition:transform var(--base) var(--ease), box-shadow var(--base) var(--ease);
+  will-change:transform; isolation:isolate;
+}
+.store-card:hover{transform:translateY(-4px); box-shadow:var(--shadow-rise)}
+.store-card::after{ /* SVG-grade organic noise overlay top-corner */
+  content:""; position:absolute; inset:0; z-index:0; opacity:.5; pointer-events:none;
+  background:
+    radial-gradient(120px 90px at 90% -6%, rgba(255,255,255,.22), transparent 70%),
+    radial-gradient(60px 60px at 78% 12%, rgba(255,255,255,.10), transparent 70%);
+}
+.store-card.b-blu{background:var(--grad-blu)}
+.store-card.b-grn{background:var(--grad-grn)}
+.store-card.b-org{background:var(--grad-org)}
+.store-card.b-red{background:var(--grad-red)}
+.store-card.b-gry{background:var(--grad-gry)}
+.store-card>*{position:relative; z-index:1}
+.sc-top{display:flex; align-items:flex-start; justify-content:space-between; gap:8px}
+.sc-name{font-size:14.5px; font-weight:800; letter-spacing:-.01em; color:var(--on-band)}
+/* rank micro-label now sits in a full-opacity scrim chip (>=3:1 on every band) */
+.sc-rank{
+  display:inline-block; font-family:var(--mono); font-size:9px; font-weight:600; letter-spacing:.05em;
+  color:var(--on-band); margin-top:4px; padding:2px 7px; border-radius:6px;
+  background:var(--band-scrim); -webkit-backdrop-filter:blur(5px); backdrop-filter:blur(5px);
+}
+.sc-band-tag{font-family:var(--mono); font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:3px 8px; border-radius:6px; background:var(--band-scrim); color:var(--on-band); -webkit-backdrop-filter:blur(5px); backdrop-filter:blur(5px)}
+.sc-roas{display:flex; align-items:baseline; gap:7px; margin:13px 0 3px}
+.sc-roas b{font-size:33px; font-weight:900; letter-spacing:-.02em; line-height:.9; direction:ltr; color:var(--on-band); text-shadow:0 1px 10px rgba(0,0,0,.18)}
+.sc-roas span{font-size:11px; font-weight:700; color:var(--on-band-2)}
+.sc-spark{height:30px; margin:6px 0 12px}
+.sc-spark svg{width:100%; height:100%; display:block}
+.sc-metrics{display:grid; grid-template-columns:1fr 1fr; gap:7px}
+.sc-metric{background:var(--band-scrim); border-radius:9px; padding:7px 9px; -webkit-backdrop-filter:blur(5px); backdrop-filter:blur(5px); border:1px solid rgba(255,255,255,.06)}
+/* micro-label on full-opacity scrim → guaranteed-contrast on-band fg (>=3:1) */
+.sc-metric .k{font-family:var(--mono); font-size:9px; letter-spacing:.04em; text-transform:uppercase; color:var(--on-band); display:flex; align-items:center; gap:4px}
+.sc-metric .v{font-size:13.5px; font-weight:800; margin-top:2px; direction:ltr; text-align:start; color:var(--on-band)}
+.arrow-up::after{content:"▲"; font-size:7px; color:#d6ffef; margin-inline-start:3px}
+.arrow-dn::after{content:"▼"; font-size:7px; color:#ffdce0; margin-inline-start:3px}
+
+/* store-compare grid (mini ledger) */
+.compare{overflow:hidden}
+.compare table{width:100%; border-collapse:collapse; font-size:12.5px}
+.compare th{font-family:var(--mono); font-size:9.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--subtle); text-align:start; padding:10px 14px; border-bottom:1px solid var(--line)}
+.compare td{padding:11px 14px; border-bottom:1px solid var(--line); color:var(--text-2)}
+.compare tr:last-child td{border-bottom:0}
+.compare tr:hover td{background:color-mix(in srgb,var(--accent) 5%,transparent)}
+.compare .name{font-weight:700; color:var(--text); display:flex; align-items:center; gap:8px}
+.dotc{width:9px; height:9px; border-radius:3px; flex:0 0 9px}
+.dotc.b-blu{background:var(--blu-2)} .dotc.b-grn{background:var(--grn-2)} .dotc.b-org{background:var(--org-2)} .dotc.b-red{background:var(--red-2)}
+.roas-cell{font-weight:800; direction:ltr; display:inline-flex; align-items:center; gap:6px}
+.roas-pip{font-family:var(--mono); font-size:9px; font-weight:700; padding:2px 6px; border-radius:5px; color:#fff}
+.roas-pip.b-blu{background:var(--blu-1)} .roas-pip.b-grn{background:var(--grn-1)} .roas-pip.b-org{background:var(--org-1)} .roas-pip.b-red{background:var(--red-1)}
+.bar-track{height:6px; border-radius:99px; background:var(--well); overflow:hidden; min-width:70px}
+.bar-fill{height:100%; border-radius:99px}
+
+/* ===================================================================== KPI STRIP
+   SIGNATURE WELL: the KPI rail is a sunken console — tiles inset into the well. */
+.kpi-rail{
+  display:grid; grid-template-columns:repeat(6,1fr); border-radius:var(--r-card);
+  border:1px solid var(--line); overflow:hidden; gap:1px;
+  background:var(--well); box-shadow:var(--well-shadow);
+  padding:1px;
+}
+.kpi{background:var(--card); padding:15px 16px; display:flex; flex-direction:column; gap:8px; position:relative; transition:background var(--snap) var(--ease), transform var(--snap) var(--ease)}
+.kpi:hover{background:var(--raised)}
+.kpi:first-child{border-start-start-radius:calc(var(--r-card) - 2px)}
+.kpi:last-child{border-end-end-radius:calc(var(--r-card) - 2px)}
+.kpi::before{content:""; position:absolute; inset-block:0; inset-inline-start:0; width:2.5px; background:transparent; transition:background var(--snap) var(--ease)}
+.kpi:hover::before{background:var(--rail)}
+.kpi-top{display:flex; align-items:center; justify-content:space-between}
+.kpi-label{font-family:var(--mono); font-size:9.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--subtle)}
+.fresh-dot{width:6px; height:6px; border-radius:50%; background:var(--good); box-shadow:0 0 6px var(--good)}
+.kpi-val{font-size:24px; font-weight:900; letter-spacing:-.02em; line-height:1; direction:ltr; text-align:start}
+.kpi-val.accent{color:var(--accent-2)}
+.kpi-sub{display:flex; align-items:center; gap:7px; font-size:11px}
+.delta{font-family:var(--mono); font-size:10.5px; font-weight:700; display:inline-flex; align-items:center; gap:3px}
+.delta.up{color:var(--good)} .delta.dn{color:var(--bad)} .delta.flat{color:var(--neutral)}
+.kpi-ctx{color:var(--muted); font-size:10.5px}
+.target-mini{font-family:var(--mono); font-size:9.5px; color:var(--muted)}
+
+/* ===================================================================== TWO-UP (insights + feed) */
+.two-up{display:grid; grid-template-columns:1.05fr .95fr; gap:14px}
+.panel-head{display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--line)}
+.panel-head h3{margin:0; font-size:13.5px; font-weight:800; display:flex; align-items:center; gap:8px}
+.panel-head .count{font-family:var(--mono); font-size:10px; padding:2px 7px; border-radius:6px; background:var(--accent-soft); color:var(--accent-2); font-weight:600}
+.panel-body{padding:12px}
+
+.insight{display:flex; gap:11px; padding:11px; border-radius:var(--r-ctrl); background:var(--well); border:1px solid var(--line); margin-bottom:9px; transition:border-color var(--snap) var(--ease), transform var(--snap) var(--ease)}
+.insight:last-child{margin-bottom:0}
+.insight:hover{border-color:var(--line-hot); transform:translateX(-3px)}
+.insight-ico{width:34px; height:34px; border-radius:9px; flex:0 0 34px; display:grid; place-items:center; font-size:16px}
+.insight-ico.warn{background:color-mix(in srgb,var(--org-1) 18%,transparent); color:var(--org-2)}
+.insight-ico.good{background:var(--good-soft); color:var(--good)}
+.insight-ico.bad{background:var(--bad-soft); color:var(--bad)}
+.insight-body b{font-size:12.5px; font-weight:700; display:block; line-height:1.3}
+.insight-body p{margin:3px 0 0; font-size:11.5px; color:var(--muted); line-height:1.4}
+.insight-cta{font-family:var(--mono); font-size:10px; color:var(--accent-2); font-weight:600; margin-top:6px; display:inline-flex; align-items:center; gap:4px}
+
+.feed-item{display:flex; gap:11px; padding:9px 6px; border-bottom:1px solid var(--line); align-items:center}
+.feed-item:last-child{border-bottom:0}
+.feed-dot{width:30px; height:30px; border-radius:8px; flex:0 0 30px; display:grid; place-items:center; font-size:14px; background:var(--well); border:1px solid var(--line)}
+.feed-body{flex:1; min-width:0}
+.feed-body b{font-size:12px; font-weight:700; display:block}
+.feed-body span{font-size:10.5px; color:var(--subtle)}
+.feed-amt{font-weight:800; font-size:13px; color:var(--good); direction:ltr}
+.feed-amt.neg{color:var(--bad)}
+.plat-badge{font-family:var(--mono); font-size:8.5px; font-weight:700; padding:1px 5px; border-radius:4px; letter-spacing:.04em}
+.plat-meta{background:rgba(24,119,242,.18); color:#5b9aff}
+.plat-google{background:rgba(234,67,53,.16); color:#ff8a7d}
+.plat-tiktok{background:rgba(255,255,255,.12); color:var(--text-2)}
+.plat-direct{background:var(--accent-soft); color:var(--accent-2)}
+
+/* NC by platform */
+.nc-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line); border-radius:var(--r-card); overflow:hidden; border:1px solid var(--line)}
+.nc-cell{background:var(--card); padding:14px 15px; display:flex; flex-direction:column; gap:6px}
+.nc-cell .plat{display:flex; align-items:center; gap:7px; font-size:12px; font-weight:700}
+.nc-cell .roas{font-size:22px; font-weight:900; direction:ltr; letter-spacing:-.02em}
+.nc-cell .micro{font-family:var(--mono); font-size:9.5px; color:var(--subtle)}
+.nc-bar{height:5px; border-radius:99px; background:var(--well); overflow:hidden}
+.nc-bar i{display:block; height:100%; border-radius:99px}
+
+/* ===================================================================== TABLES (campaigns / detail / pnl) */
+.table-wrap{overflow:auto; border-radius:var(--r-card)}
+.table-wrap::-webkit-scrollbar{height:9px; width:9px}
+.table-wrap::-webkit-scrollbar-track{background:var(--well)}
+.table-wrap::-webkit-scrollbar-thumb{background:var(--line-2); border-radius:99px}
+table.data{width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; min-width:720px}
+table.data thead th{
+  position:sticky; top:0; z-index:2; background:var(--elevated); text-align:start;
+  font-family:var(--mono); font-size:9.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+  color:var(--muted); padding:11px 13px; border-bottom:1px solid var(--line-2); white-space:nowrap;
+  box-shadow:inset 0 1px 0 var(--hairline-hi);
+}
+table.data thead th.num{text-align:end}
+table.data thead th .sort{display:inline-flex; align-items:center; gap:4px; cursor:pointer}
+table.data thead th .sort svg{width:11px; height:11px; opacity:.5; stroke:currentColor; fill:none; stroke-width:2}
+table.data thead th.sorted{color:var(--accent-2)}
+table.data thead th.sorted svg{opacity:1; color:var(--accent-2)}
+table.data tbody td{padding:10px 13px; border-bottom:1px solid var(--line); color:var(--text-2); white-space:nowrap}
+table.data tbody td.num{text-align:end; font-variant-numeric:tabular-nums}
+table.data tbody tr{transition:background var(--snap) var(--ease)}
+table.data tbody tr:hover td{background:color-mix(in srgb,var(--accent) 5%,transparent)}
+table.data tbody tr.sel td{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+table.data tbody tr.sel td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
+[dir="rtl"] table.data tbody tr.sel td:first-child{box-shadow:inset -2px 0 0 var(--accent)}
+.sticky-col{position:sticky; inset-inline-end:0; background:var(--card); z-index:1}
+table.data thead th.sticky-col{background:var(--elevated); z-index:3}
+.cell-name{font-weight:700; color:var(--text); display:flex; align-items:center; gap:9px}
+.plat-tag{font-family:var(--mono); font-size:9px; font-weight:700; padding:2px 7px; border-radius:5px}
+.store-pill{font-size:11px; color:var(--muted); display:inline-flex; align-items:center; gap:6px}
+.store-pill .dotc{width:8px; height:8px}
+/* band-tinted ROAS cell */
+.roas-tag{display:inline-flex; align-items:center; gap:7px; padding:3px 9px; border-radius:7px; color:#fff; font-weight:800; direction:ltr; font-size:12px; position:relative}
+.roas-tag.b-blu{background:var(--grad-blu)} .roas-tag.b-grn{background:var(--grad-grn)} .roas-tag.b-org{background:var(--grad-org)} .roas-tag.b-red{background:var(--grad-red)}
+.roas-tag .tagname{font-family:var(--mono); font-size:8.5px; font-weight:700; opacity:.92; background:var(--band-scrim); padding:1px 5px; border-radius:4px}
+.status{font-family:var(--mono); font-size:9.5px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:6px; display:inline-flex; align-items:center; gap:5px}
+.status.live{background:var(--good-soft); color:var(--good)}
+.status.pause{background:var(--chip-bg); color:var(--muted); border:1px solid var(--chip-line)}
+.status.check{background:color-mix(in srgb,var(--org-1) 16%,transparent); color:var(--org-2)}
+.status i{width:5px; height:5px; border-radius:50%; background:currentColor}
+
+/* SIGNATURE console-well table toolbar — sunken rail above each ledger table */
+.table-toolbar{
+  display:flex; align-items:center; gap:12px; padding:10px 14px;
+  border-end-start-radius:0; border-end-end-radius:0; border-bottom:0; flex-wrap:wrap;
+}
+.table-toolbar .eyebrow{color:var(--accent-2)}
+.table-toolbar .eyebrow::first-letter{color:var(--good)}
+.tw-meta{font-size:11.5px; color:var(--muted); font-weight:600}
+.tw-chips{display:inline-flex; gap:5px; margin-inline-start:auto; flex-wrap:wrap}
+.tw-chip{font-family:var(--mono); font-size:10px; font-weight:600; padding:4px 10px; border-radius:var(--r-pill); background:var(--chip-bg); border:1px solid var(--chip-line); color:var(--muted); cursor:pointer; transition:all var(--snap) var(--ease)}
+.tw-chip:hover{color:var(--text); border-color:var(--line-hot)}
+.tw-chip.on{background:var(--accent); color:#fff; border-color:transparent; box-shadow:0 6px 14px -8px var(--accent-glow)}
+/* attach the table directly beneath the toolbar (no double radius / gap) */
+.tw-attached{border-start-start-radius:0; border-start-end-radius:0; margin-top:-1px}
+
+/* top-performers strip */
+.perf-strip{display:grid; grid-template-columns:repeat(4,1fr); gap:12px}
+.perf-card{position:relative; padding:14px; border-radius:var(--r-card); overflow:hidden; color:#fff; border:1px solid rgba(255,255,255,.14); box-shadow:var(--shadow-card); transition:transform var(--base) var(--ease)}
+.perf-card:hover{transform:translateY(-3px)}
+.perf-card.b-blu{background:var(--grad-blu)} .perf-card.b-grn{background:var(--grad-grn)} .perf-card.b-org{background:var(--grad-org)} .perf-card.b-red{background:var(--grad-red)}
+.perf-card .rank{font-family:var(--mono); font-size:9.5px; opacity:.8}
+.perf-card .pname{font-size:13px; font-weight:800; margin-top:3px}
+.perf-card .pmeta{font-size:10.5px; opacity:.85; margin-top:1px; display:flex; align-items:center; gap:6px}
+.perf-card .proas{font-size:26px; font-weight:900; direction:ltr; margin-top:10px; letter-spacing:-.02em}
+.perf-card .pfoot{display:flex; gap:6px; margin-top:8px}
+.perf-card .pfoot span{background:var(--band-scrim); border-radius:7px; padding:4px 8px; font-size:10px; font-weight:700; direction:ltr; backdrop-filter:blur(4px)}
+
+/* drawer */
+.drawer-scrim{position:fixed; inset:0; background:rgba(5,9,28,.6); backdrop-filter:blur(3px); z-index:60; opacity:0; pointer-events:none; transition:opacity var(--base) var(--ease)}
+.drawer-scrim.open{opacity:1; pointer-events:auto}
+.drawer{
+  position:fixed; top:0; bottom:0; left:auto; right:0; width:min(440px,92vw); background:var(--card);
+  border-inline-start:1px solid var(--line-2); z-index:61; transform:translateX(105%); transition:transform var(--base) var(--ease);
+  display:flex; flex-direction:column; box-shadow:var(--shadow-pop);
+}
+.drawer.open{transform:translateX(0)}
+.drawer-head{padding:18px 20px; border-bottom:1px solid var(--line); display:flex; align-items:flex-start; justify-content:space-between; gap:12px}
+.drawer-head h3{margin:0; font-size:16px; font-weight:800}
+.drawer-head .sub{font-size:12px; color:var(--subtle); margin-top:3px}
+.drawer-close{width:32px; height:32px; border-radius:8px; border:1px solid var(--line); display:grid; place-items:center}
+.drawer-close svg{width:16px; height:16px; stroke:var(--text); fill:none; stroke-width:2; stroke-linecap:round}
+.drawer-body{padding:18px 20px; overflow-y:auto; flex:1; background:var(--well); box-shadow:var(--well-shadow)}
+
+/* P&L cascade */
+.pnl-summary{display:grid; grid-template-columns:repeat(5,1fr); gap:12px}
+.pnl-card{padding:15px; border-radius:var(--r-card); border:1px solid var(--line); background:var(--card); box-shadow:var(--shadow-card); position:relative; overflow:hidden}
+.pnl-card.hero{background:linear-gradient(135deg,var(--accent),var(--accent-deep)); border-color:transparent; color:#fff}
+.pnl-card .k{font-family:var(--mono); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--subtle)}
+.pnl-card.hero .k{color:rgba(255,255,255,.85)}
+.pnl-card .v{font-size:23px; font-weight:900; margin-top:8px; direction:ltr; letter-spacing:-.02em}
+.pnl-card .d{font-family:var(--mono); font-size:10px; margin-top:5px; color:var(--subtle)}
+.pnl-card.hero .d{color:rgba(255,255,255,.85)}
+.cascade-row .label{display:flex; align-items:center; gap:9px}
+.cascade-row .op{font-family:var(--mono); font-size:11px; width:18px; text-align:center; color:var(--subtle)}
+.cascade-row.total td{font-weight:800; color:var(--text); background:var(--well)}
+.cascade-row.sub td{color:var(--muted); font-size:11.5px}
+.cascade-row.sub .label{padding-inline-start:28px}
+.cascade-bar{height:7px; border-radius:99px; overflow:hidden; background:var(--well); min-width:90px}
+.cascade-bar i{display:block; height:100%; border-radius:99px}
+
+/* customers */
+.ltv-hero{display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:14px}
+.ltv-big{padding:20px; border-radius:var(--r-card); background:linear-gradient(135deg,var(--grn-1),var(--grn-2) 60%,var(--grn-3)); color:#fff; position:relative; overflow:hidden}
+.ltv-big::after{content:""; position:absolute; inset:0; background:radial-gradient(160px 120px at 88% -8%, rgba(255,255,255,.22), transparent 70%)}
+.ltv-big>*{position:relative; z-index:1}
+.ltv-big .k{font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.85)}
+.ltv-big .v{font-size:40px; font-weight:900; margin:8px 0 4px; direction:ltr; letter-spacing:-.02em}
+.ltv-big .verdict{display:inline-flex; align-items:center; gap:6px; background:var(--band-scrim); padding:4px 11px; border-radius:99px; font-size:11px; font-weight:700; backdrop-filter:blur(4px)}
+.ltv-stat{padding:18px; border-radius:var(--r-card); border:1px solid var(--line); background:var(--card); box-shadow:var(--shadow-card)}
+.ltv-stat .k{font-family:var(--mono); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--subtle)}
+.ltv-stat .v{font-size:28px; font-weight:900; margin-top:9px; direction:ltr; letter-spacing:-.02em}
+.ltv-stat .sub{font-size:11px; color:var(--muted); margin-top:6px}
+
+/* chart helpers */
+.chart-card{padding:18px; border-radius:var(--r-card); border:1px solid var(--line); background:var(--card); box-shadow:var(--shadow-card)}
+.legend{display:flex; gap:16px; flex-wrap:wrap; font-family:var(--mono); font-size:10.5px; color:var(--muted)}
+.legend i{display:inline-block; width:14px; height:3px; border-radius:2px; vertical-align:middle; margin-inline-end:5px}
+
+/* theme toggle */
+.theme-toggle{display:inline-flex; padding:3px; border-radius:var(--r-pill); background:var(--well); border:1px solid var(--line)}
+.theme-toggle button{width:30px; height:28px; border-radius:99px; display:grid; place-items:center; color:var(--subtle); transition:all var(--snap) var(--ease)}
+.theme-toggle button.on{background:var(--accent); color:#fff}
+.theme-toggle svg{width:15px; height:15px; stroke:currentColor; fill:none; stroke-width:1.9}
+
+/* ===================================================================== RESPONSIVE */
+@media (max-width:1100px){
+  .kpi-rail{grid-template-columns:repeat(3,1fr)}
+  .store-grid{grid-template-columns:repeat(2,1fr)}
+  .nc-grid{grid-template-columns:repeat(2,1fr)}
+  .perf-strip{grid-template-columns:repeat(2,1fr)}
+  .pnl-summary{grid-template-columns:repeat(3,1fr)}
+  .ltv-hero{grid-template-columns:1fr 1fr}
+  .ltv-big{grid-column:1/-1}
+}
+@media (max-width:880px){
+  .two-up{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  .sidebar{position:fixed; transform:translateX(105%); box-shadow:var(--shadow-pop)}
+  [dir="rtl"] .sidebar{transform:translateX(105%)}
+  .sidebar.open{transform:none}
+  .hamburger{display:flex}
+  .cmdk,.health{display:none}
+  .kpi-rail{grid-template-columns:repeat(2,1fr)}
+  .store-grid{grid-template-columns:1fr 1fr}
+  .pnl-summary{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:430px){
+  .store-grid{grid-template-columns:1fr}
+  .perf-strip{grid-template-columns:1fr}
+  .crumb h1{font-size:15px}
+  .sec-title h2{font-size:14.5px}
+  .nc-grid{grid-template-columns:1fr 1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important; transition-duration:.001ms !important}
+}
+
+/* ============================ PRESERVED roas-card (verbatim, scoped) ============================ */
+.roas-card{
+  --canvas-1:#0b1437; --glass-1:#111c44; --glass-2:#162048;
+  --glass-edge:rgba(255,255,255,0.08); --glass-edge-hot:rgba(117,81,255,0.5);
+  --surface-sunken:#1B254B; --text:#ffffff; --text-muted:#A3AED0; --text-subtle:#94a0b8;
+  --accent:#7551FF; --accent-fg:#ffffff; --radius-card:1.125rem; --radius-hero:1.125rem;
+  --shadow-glass:0 0 rgba(0,0,0,0); --shadow-overlay:0 8px 24px rgba(0,0,0,0.5);
+  --up:#0fb37a; --dn:#ef4d5b;
+  --band-red:#ff6b81; --band-orange:#ef9331; --band-green:#34e2ad; --band-blue:#5b8df0;
+  --band-blue-grad:linear-gradient(135deg,#2f6bff,#4d8dff 52%,#85b8ff);
+  --status-warning:#ef9331; --status-warning-bg:rgba(239,147,49,0.16); --status-warning-fg:#f7c897;
+  --chart-line-halo:var(--glass-1); --chart-target-line:#0fb37a; --chart-pin-line:#ef9331;
+  --chart-dot-max:#0fb37a; --chart-dot-min:#ef4d5b; --chart-grid-line:rgba(255,255,255,0.06);
+  --chart-today:var(--accent); --chart-today-pulse:rgba(117,81,255,0.30); --chart-hover-ring:var(--glass-2);
+  --chip-blue-bg:rgba(91,141,240,0.18); --chip-blue-fg:#5b8df0;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  direction:rtl; display:block; max-width:1100px; margin:0 auto; box-sizing:border-box;
+  background:var(--glass-1); border:1px solid var(--glass-edge); box-shadow:var(--shadow-glass);
+  border-radius:var(--radius-card); padding:20px; color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans Hebrew",sans-serif; position:relative;
+}
+[data-theme="light"] .roas-card{
+  --canvas-1:#F4F7FE; --glass-1:#ffffff; --glass-2:#F4F7FE;
+  --glass-edge:rgba(27,37,75,0.08); --glass-edge-hot:rgba(66,42,251,0.4);
+  --surface-sunken:#F4F7FE; --text:#1B254B; --text-muted:#5b6478; --text-subtle:#5f6680;
+  --accent:#422AFB; --shadow-glass:14px 17px 40px 4px rgba(112,144,176,0.08);
+  --shadow-overlay:0 8px 24px rgba(22,26,48,0.12);
+  --band-red:#e11d48; --band-green:#0f9d6b; --band-blue:#3b82f6;
+  --chart-grid-line:rgba(27,37,75,0.08); --chip-blue-bg:rgba(59,130,246,0.18); --chip-blue-fg:#3b82f6;
+  --status-warning-bg:#fbe6d0; --status-warning-fg:#8e4f0b;
+}
+.roas-card *{box-sizing:border-box}
+.rc-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.rc-head-left{flex:1 1 0;min-width:0}
+.rc-eyebrow{display:block;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:var(--text-subtle);font-weight:600;margin-bottom:4px}
+.rc-tldr{margin:0;font-size:1.05rem;line-height:1.4;font-weight:700;color:var(--text)}
+.rc-tldr .accent{font-weight:800;font-variant-numeric:tabular-nums;color:var(--band-blue)}
+.rc-head-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.rc-head-meta{display:flex;align-items:center;gap:8px}
+.rc-scope{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted)}
+.fresh-chip{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.06em;background:rgba(52,226,173,0.18);color:var(--band-green)}
+.fresh-chip .pulse{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor;animation:rc-pulse 2s ease-out infinite}
+@keyframes rc-pulse{0%{box-shadow:0 0 0 0 currentColor;opacity:1}70%{box-shadow:0 0 0 5px transparent;opacity:.65}100%{box-shadow:0 0 0 0 transparent;opacity:1}}
+.rc-pin-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 10px;border-radius:9999px;background:var(--status-warning-bg);color:var(--status-warning-fg);border:1px solid var(--status-warning)}
+.rc-range{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.rc-range button{height:28px;padding:0 10px;font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:0.03em;border-radius:8px;border:1px solid var(--glass-edge);background:var(--glass-2);color:var(--text-muted);cursor:pointer;line-height:1}
+.rc-range button:hover{color:var(--text);background:var(--glass-1);border-color:var(--glass-edge-hot)}
+.rc-range button.active{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--text)}
+.rc-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;border-radius:var(--radius-card);border:1px solid var(--glass-edge);overflow:hidden;background:color-mix(in srgb,var(--glass-edge) 40%,transparent);margin-bottom:16px}
+.rc-kpi{padding:12px;background:var(--glass-2);display:flex;flex-direction:column;gap:4px}
+.rc-kpi.highlight{background:var(--glass-1)}
+.rc-kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:600}
+.rc-kpi-row{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.rc-kpi-val{direction:ltr;font-size:1.4rem;font-weight:800;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;line-height:1;color:var(--text)}
+.rc-kpi-val.accent-blue{color:var(--band-blue)}
+.rc-kpi-suffix{font-size:10px;font-family:var(--font-mono);color:var(--text-subtle)}
+.band-chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:0.06em;font-family:var(--font-mono)}
+.chip-blue{background:var(--chip-blue-bg);color:var(--chip-blue-fg)}
+.rc-legend{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;padding:0 4px;font-size:11px;color:var(--text-muted)}
+.rc-legend-left{display:flex;align-items:center;gap:16px}
+.rc-legend-item{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);letter-spacing:0.02em}
+.rc-sw-line{display:inline-block;width:16px;height:2px;border-radius:2px;background:var(--band-blue)}
+.rc-sw-target{display:inline-block;width:16px;height:0;border-top:1.5px dashed var(--chart-target-line)}
+.rc-minmax{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.rc-minmax b{color:var(--text);font-weight:700}
+.rc-minmax .sep{opacity:.4;margin:0 8px}
+.rc-chart{position:relative}
+.rc-chart svg{display:block;width:100%;height:200px}
+.rc-overlay{position:absolute;inset:0;pointer-events:none}
+.rc-pin{position:absolute;top:-2px;transform:translateX(-50%)}
+.rc-pin .glyph{display:inline-block;transform:translateX(-50%);font-size:13px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));cursor:default}
+.rc-today-label{position:absolute;top:-2px;transform:translateX(-50%)}
+.rc-today-label span{display:inline-block;transform:translateX(-50%);padding:1px 6px;border-radius:9999px;font-size:9px;font-weight:800;line-height:1;color:var(--accent-fg);background:var(--chart-today)}
+.rc-foot{margin-top:12px;padding-top:12px;border-top:1px solid var(--glass-edge);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;font-size:12px}
+.rc-foot-item{display:inline-flex;align-items:baseline;gap:6px}
+.rc-foot-k{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted)}
+.rc-foot-v{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+.rc-foot-delta{font-size:11px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--up)}
+.rc-foot .sep{color:var(--text-subtle);opacity:.4}
+@media (max-width:720px){.rc-kpis{grid-template-columns:repeat(2,1fr)}}
+@media (prefers-reduced-motion:reduce){.fresh-chip .pulse{animation:none}}
+/* ====================================== END PRESERVED roas-card styles ====================================== */
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===================================================== GROUPED SIDEBAR (5 hubs) -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-logo">ר</div>
+      <div class="brand-meta">
+        <b>ROAS פיקוד</b>
+        <span>command-center</span>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="nav-group">סקירה</div>
+      <button class="nav-item active" data-tab="home">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg>
+        בית
+      </button>
+
+      <div class="nav-group">ביצועים</div>
+      <button class="nav-item" data-tab="campaigns">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+        קמפיינים <span class="tag">+מוצרים</span>
+      </button>
+      <button class="nav-item" data-tab="campaigns" data-soft>
+        <svg class="ico" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M9 16V9M14 16V6M19 16v-4"/></svg>
+        מגמות
+      </button>
+      <button class="nav-item" data-tab="campaigns" data-soft>
+        <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        אופטימיזציה
+      </button>
+
+      <div class="nav-group">פיננסי</div>
+      <button class="nav-item" data-tab="pnl">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        P&amp;L <span class="tag">+תשלומים</span>
+      </button>
+
+      <div class="nav-group">לקוחות</div>
+      <button class="nav-item" data-tab="customers">
+        <svg class="ico" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 21v-1a6 6 0 0 1 12 0v1"/><path d="M16 11a3 3 0 0 0 0-6"/><path d="M21 21v-1a5 5 0 0 0-4-4.9"/></svg>
+        לקוחות
+      </button>
+
+      <div class="nav-group">חי</div>
+      <button class="nav-item" data-tab="detail">
+        <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        פירוט <span class="live-dot"></span>
+      </button>
+      <button class="nav-item" data-tab="detail" data-soft>
+        <svg class="ico" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        פעילות
+      </button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="avatar">DP</div>
+      <div>
+        <b>Dor P.</b>
+        <span>4 חנויות פעילות</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===================================================== MAIN -->
+  <div class="main">
+    <header class="topstrip">
+      <button class="hamburger" id="hamburger" aria-label="תפריט">
+        <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <div class="crumb">
+        <span class="hub" id="crumb-hub">סקירה</span>
+        <h1 id="crumb-title">בית · מרכז הפיקוד</h1>
+      </div>
+      <div class="topstrip-spacer"></div>
+      <span class="fresh-pill"><span class="dot"></span>עודכן לפני 4 דקות</span>
+      <span class="health"><i></i>כל המקורות תקינים</span>
+      <button class="cmdk">חיפוש <kbd>⌘K</kbd></button>
+      <button class="icon-btn" aria-label="דוח AI">
+        <svg viewBox="0 0 24 24"><path d="M12 2l2.4 5.2L20 8l-4 4 1 6-5-3-5 3 1-6-4-4 5.6-.8z"/></svg>
+      </button>
+      <div class="theme-toggle" id="themeToggle">
+        <button id="lightBtn" aria-label="מצב בהיר"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg></button>
+        <button id="darkBtn" class="on" aria-label="מצב כהה"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+      </div>
+    </header>
+
+    <main class="content">
+
+      <!-- ============================================================ TAB: HOME -->
+      <section class="tabpanel cascade active" id="tab-home">
+
+        <div class="reconcile">
+          <span class="badge">השוואה</span>
+          פער קל בין מקור הפרסום ל-Shopify ל-uzoshop (C$12, ‎0.3%‎) — בטווח הסביר.
+          <a href="#">בדיקת השוואה ←</a>
+        </div>
+
+        <!-- ① BUSINESS HEALTH (focal zone) -->
+        <div class="sec">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="sec-num">01</span>
+              <div><h2>בריאות העסק</h2><span class="sub">כל החנויות · 30 ימים · CAD</span></div>
+            </div>
+            <div class="sec-actions">
+              <span class="eyebrow">●&nbsp; LIVE SYNC</span>
+            </div>
+          </div>
+
+          <!-- 6 business KPI cards (flush rail) -->
+          <div class="kpi-rail">
+            <div class="kpi">
+              <div class="kpi-top"><span class="kpi-label">רווח תפעולי</span><span class="fresh-dot"></span></div>
+              <div class="kpi-val tnum">C$1,853</div>
+              <div class="kpi-sub"><span class="delta up">▲ 12%</span><span class="kpi-ctx">מול תקופה קודמת</span></div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-top"><span class="kpi-label">הכנסות</span><span class="fresh-dot"></span></div>
+              <div class="kpi-val tnum">C$4,269</div>
+              <div class="kpi-sub"><span class="delta up">▲ 8%</span><span class="kpi-ctx">מול תקופה קודמת</span></div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-top"><span class="kpi-label">הוצאת פרסום</span><span class="fresh-dot"></span></div>
+              <div class="kpi-val tnum">C$1,349</div>
+              <div class="kpi-sub"><span class="delta flat">▲ 4%</span><span class="kpi-ctx">בקצב יציב</span></div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-top"><span class="kpi-label">ROAS</span><span class="fresh-dot"></span></div>
+              <div class="kpi-val accent tnum">3.16x</div>
+              <div class="kpi-sub"><span class="delta up">▲ 7.5%</span><span class="target-mini">יעד 3.0 ✓</span></div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-top"><span class="kpi-label">הזמנות</span><span class="fresh-dot"></span></div>
+              <div class="kpi-val tnum">137</div>
+              <div class="kpi-sub"><span class="delta up">▲ 9%</span><span class="kpi-ctx">מול תקופה קודמת</span></div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-top"><span class="kpi-label">CPM</span><span class="fresh-dot"></span></div>
+              <div class="kpi-val tnum">C$14.10</div>
+              <div class="kpi-sub"><span class="delta flat">— יציב</span><span class="kpi-ctx">ממוצע משוקלל</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PRESERVED roas-card -->
+        <div class="sec">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="sec-num">02</span>
+              <div><h2>ROAS מול יעד</h2><span class="sub">מגמה יומית · ציוני דרך</span></div>
+            </div>
+          </div>
+
+          <section class="roas-card" dir="rtl">
+            <div class="rc-head">
+              <div class="rc-head-left">
+                <span class="rc-eyebrow">מטרה 3.0 · 30 ימים</span>
+                <h3 class="rc-tldr">
+                  ה-ROAS עלה ל-<span class="accent">3.2</span> ב-30 הימים האחרונים — מעל היעד, עם מגמת שיפור מתמשכת.
+                </h3>
+              </div>
+              <div class="rc-head-right">
+                <div class="rc-head-meta">
+                  <span class="fresh-chip live" data-stage="fresh"><span class="pulse" aria-hidden="true"></span><bdi dir="ltr">08:42</bdi></span>
+                  <span class="rc-scope">כל החנויות</span>
+                </div>
+                <span class="rc-pin-chip"><span aria-hidden="true">💰</span>3 ציוני דרך</span>
+                <div class="rc-range" role="group" aria-label="טווח תאריכים לתרשים">
+                  <button type="button">7</button>
+                  <button type="button" class="active" aria-pressed="true">30</button>
+                  <button type="button">90</button>
+                  <button type="button">החודש</button>
+                  <button type="button">מותאם</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="rc-kpis">
+              <div class="rc-kpi">
+                <span class="rc-kpi-label">הכנסות</span>
+                <div class="rc-kpi-row"><bdi class="rc-kpi-val" dir="ltr">C$4,269</bdi><span class="rc-kpi-suffix">CAD</span></div>
+              </div>
+              <div class="rc-kpi highlight">
+                <span class="rc-kpi-label">ROAS</span>
+                <div class="rc-kpi-row">
+                  <bdi class="rc-kpi-val accent-blue" dir="ltr">3.16x</bdi>
+                  <span class="band-chip chip-blue">מעולה</span>
+                </div>
+              </div>
+              <div class="rc-kpi">
+                <span class="rc-kpi-label">הוצאת פרסום</span>
+                <div class="rc-kpi-row"><bdi class="rc-kpi-val" dir="ltr">C$1,349</bdi><span class="rc-kpi-suffix">CAD</span></div>
+              </div>
+              <div class="rc-kpi">
+                <span class="rc-kpi-label">רווח תפעולי</span>
+                <div class="rc-kpi-row"><bdi class="rc-kpi-val" dir="ltr">C$1,853</bdi><span class="rc-kpi-suffix">CAD</span></div>
+              </div>
+              <div class="rc-kpi">
+                <span class="rc-kpi-label">CPM</span>
+                <div class="rc-kpi-row"><bdi class="rc-kpi-val" dir="ltr">C$14.10</bdi><span class="rc-kpi-suffix">CAD</span></div>
+              </div>
+            </div>
+
+            <div class="rc-legend">
+              <div class="rc-legend-left">
+                <span class="rc-legend-item"><span class="rc-sw-line"></span>ROAS יומי</span>
+                <span class="rc-legend-item"><span class="rc-sw-target"></span>יעד 3.0</span>
+              </div>
+              <div class="rc-minmax">מקסימום: <b>3.95</b><span class="sep">·</span>מינימום: <b>2.20</b></div>
+            </div>
+
+            <div class="rc-chart">
+              <svg viewBox="0 0 1000 220" preserveAspectRatio="none" width="100%" height="200"
+                   role="img" aria-label="גרף ROAS יומי מול יעד 3.0">
+                <defs>
+                  <linearGradient id="rcArea" x1="0" y1="20" x2="0" y2="180" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#5b8df0" stop-opacity="0.20"/>
+                    <stop offset="100%" stop-color="#5b8df0" stop-opacity="0"/>
+                  </linearGradient>
+                  <clipPath id="rcClip"><rect x="40" y="16" width="960" height="148"/></clipPath>
+                </defs>
+                <g stroke="var(--chart-grid-line)" stroke-width="1" stroke-dasharray="3 5">
+                  <line x1="40" x2="1000" y1="20"  y2="20"/>
+                  <line x1="40" x2="1000" y1="60"  y2="60"/>
+                  <line x1="40" x2="1000" y1="100" y2="100"/>
+                  <line x1="40" x2="1000" y1="140" y2="140"/>
+                </g>
+                <g font-family="var(--font-mono,ui-monospace)" font-size="10" fill="var(--text-subtle)">
+                  <text x="0" y="24">4.0</text>
+                  <text x="0" y="64">3.0</text>
+                  <text x="0" y="104">2.0</text>
+                  <text x="0" y="144">1.0</text>
+                </g>
+                <path clip-path="url(#rcClip)" fill="url(#rcArea)"
+                      d="M40.00,75.20 C45.52,74.13 62.06,68.33 73.10,68.80 C84.13,69.27 95.17,78.80 106.21,78.00 C117.24,77.20 128.28,67.67 139.31,64.00 C150.34,60.33 161.38,52.67 172.41,56.00 C183.44,59.33 194.49,78.00 205.52,84.00 C216.56,90.00 227.59,95.00 238.62,92.00 C249.65,89.00 260.69,73.00 271.72,66.00 C282.75,59.00 293.79,53.67 304.83,50.00 C315.87,46.33 326.90,42.67 337.93,44.00 C348.96,45.33 360.00,55.00 371.03,58.00 C382.06,61.00 393.10,65.33 404.14,62.00 C415.18,58.67 426.21,43.00 437.24,38.00 C448.27,33.00 459.30,30.33 470.34,32.00 C481.38,33.67 492.41,42.53 503.45,48.00 C514.49,53.47 525.51,60.80 536.55,64.80 C547.58,68.80 558.62,73.80 569.66,72.00 C580.69,70.20 591.73,59.00 602.76,54.00 C613.79,49.00 624.83,46.33 635.86,42.00 C646.89,37.67 657.94,31.33 668.97,28.00 C680.00,24.67 691.04,20.67 702.07,22.00 C713.10,23.33 724.13,31.00 735.17,36.00 C746.20,41.00 757.25,47.87 768.28,52.00 C779.31,56.13 790.35,61.80 801.38,60.80 C812.41,59.80 823.45,49.47 834.48,46.00 C845.51,42.53 856.56,38.33 867.59,40.00 C878.62,41.67 889.66,52.13 900.69,56.00 C911.72,59.87 922.75,64.40 933.79,63.20 C944.82,62.00 955.87,50.40 966.90,48.80 C977.93,47.20 994.48,52.80 1000.00,53.60 L1000.00,180.00 L40.00,180.00 Z"/>
+                <line x1="40" x2="1000" y1="60" y2="60"
+                      stroke="var(--chart-target-line)" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.7"/>
+                <g stroke="var(--chart-pin-line)" stroke-width="1.2" opacity="0.5" stroke-dasharray="2 3">
+                  <line x1="304.83" x2="304.83" y1="20" y2="190"/>
+                  <line x1="569.66" x2="569.66" y1="20" y2="190"/>
+                  <line x1="834.48" x2="834.48" y1="20" y2="190"/>
+                </g>
+                <path fill="none" stroke="var(--chart-line-halo)" stroke-width="5"
+                      stroke-linejoin="round" stroke-linecap="round" opacity="0.9"
+                      d="M40.00,75.20 C45.52,74.13 62.06,68.33 73.10,68.80 C84.13,69.27 95.17,78.80 106.21,78.00 C117.24,77.20 128.28,67.67 139.31,64.00 C150.34,60.33 161.38,52.67 172.41,56.00 C183.44,59.33 194.49,78.00 205.52,84.00 C216.56,90.00 227.59,95.00 238.62,92.00 C249.65,89.00 260.69,73.00 271.72,66.00 C282.75,59.00 293.79,53.67 304.83,50.00 C315.87,46.33 326.90,42.67 337.93,44.00 C348.96,45.33 360.00,55.00 371.03,58.00 C382.06,61.00 393.10,65.33 404.14,62.00 C415.18,58.67 426.21,43.00 437.24,38.00 C448.27,33.00 459.30,30.33 470.34,32.00 C481.38,33.67 492.41,42.53 503.45,48.00 C514.49,53.47 525.51,60.80 536.55,64.80 C547.58,68.80 558.62,73.80 569.66,72.00 C580.69,70.20 591.73,59.00 602.76,54.00 C613.79,49.00 624.83,46.33 635.86,42.00 C646.89,37.67 657.94,31.33 668.97,28.00 C680.00,24.67 691.04,20.67 702.07,22.00 C713.10,23.33 724.13,31.00 735.17,36.00 C746.20,41.00 757.25,47.87 768.28,52.00 C779.31,56.13 790.35,61.80 801.38,60.80 C812.41,59.80 823.45,49.47 834.48,46.00 C845.51,42.53 856.56,38.33 867.59,40.00 C878.62,41.67 889.66,52.13 900.69,56.00 C911.72,59.87 922.75,64.40 933.79,63.20 C944.82,62.00 955.87,50.40 966.90,48.80 C977.93,47.20 994.48,52.80 1000.00,53.60"/>
+                <path fill="none" stroke="#5b8df0" stroke-width="2"
+                      stroke-linejoin="round" stroke-linecap="round" data-band="blue"
+                      d="M40.00,75.20 C45.52,74.13 62.06,68.33 73.10,68.80 C84.13,69.27 95.17,78.80 106.21,78.00 C117.24,77.20 128.28,67.67 139.31,64.00 C150.34,60.33 161.38,52.67 172.41,56.00 C183.44,59.33 194.49,78.00 205.52,84.00 C216.56,90.00 227.59,95.00 238.62,92.00 C249.65,89.00 260.69,73.00 271.72,66.00 C282.75,59.00 293.79,53.67 304.83,50.00 C315.87,46.33 326.90,42.67 337.93,44.00 C348.96,45.33 360.00,55.00 371.03,58.00 C382.06,61.00 393.10,65.33 404.14,62.00 C415.18,58.67 426.21,43.00 437.24,38.00 C448.27,33.00 459.30,30.33 470.34,32.00 C481.38,33.67 492.41,42.53 503.45,48.00 C514.49,53.47 525.51,60.80 536.55,64.80 C547.58,68.80 558.62,73.80 569.66,72.00 C580.69,70.20 591.73,59.00 602.76,54.00 C613.79,49.00 624.83,46.33 635.86,42.00 C646.89,37.67 657.94,31.33 668.97,28.00 C680.00,24.67 691.04,20.67 702.07,22.00 C713.10,23.33 724.13,31.00 735.17,36.00 C746.20,41.00 757.25,47.87 768.28,52.00 C779.31,56.13 790.35,61.80 801.38,60.80 C812.41,59.80 823.45,49.47 834.48,46.00 C845.51,42.53 856.56,38.33 867.59,40.00 C878.62,41.67 889.66,52.13 900.69,56.00 C911.72,59.87 922.75,64.40 933.79,63.20 C944.82,62.00 955.87,50.40 966.90,48.80 C977.93,47.20 994.48,52.80 1000.00,53.60"/>
+                <g fill="#5b8df0">
+                  <circle cx="40.00" cy="75.20" r="2.5"/><circle cx="73.10" cy="68.80" r="2.5"/><circle cx="106.21" cy="78.00" r="2.5"/>
+                  <circle cx="139.31" cy="64.00" r="2.5"/><circle cx="172.41" cy="56.00" r="2.5"/><circle cx="205.52" cy="84.00" r="2.5"/>
+                  <circle cx="271.72" cy="66.00" r="2.5"/><circle cx="304.83" cy="50.00" r="2.5"/><circle cx="337.93" cy="44.00" r="2.5"/>
+                  <circle cx="371.03" cy="58.00" r="2.5"/><circle cx="404.14" cy="62.00" r="2.5"/><circle cx="437.24" cy="38.00" r="2.5"/>
+                  <circle cx="470.34" cy="32.00" r="2.5"/><circle cx="503.45" cy="48.00" r="2.5"/><circle cx="536.55" cy="64.80" r="2.5"/>
+                  <circle cx="569.66" cy="72.00" r="2.5"/><circle cx="602.76" cy="54.00" r="2.5"/><circle cx="635.86" cy="42.00" r="2.5"/>
+                  <circle cx="668.97" cy="28.00" r="2.5"/><circle cx="735.17" cy="36.00" r="2.5"/><circle cx="768.28" cy="52.00" r="2.5"/>
+                  <circle cx="801.38" cy="60.80" r="2.5"/><circle cx="834.48" cy="46.00" r="2.5"/><circle cx="867.59" cy="40.00" r="2.5"/>
+                  <circle cx="900.69" cy="56.00" r="2.5"/><circle cx="933.79" cy="63.20" r="2.5"/><circle cx="966.90" cy="48.80" r="2.5"/>
+                  <circle cx="1000.00" cy="53.60" r="2.5"/>
+                </g>
+                <circle cx="702.07" cy="22.00" r="3" fill="var(--chart-dot-max)"/>
+                <text x="702.07" y="14.00" text-anchor="middle" font-family="var(--font-mono,ui-monospace)" font-size="10" font-weight="700" fill="var(--chart-dot-max)">שיא 3.9</text>
+                <circle cx="238.62" cy="92.00" r="3" fill="var(--chart-dot-min)"/>
+                <text x="238.62" y="108.00" text-anchor="middle" font-family="var(--font-mono,ui-monospace)" font-size="10" font-weight="700" fill="var(--chart-dot-min)">שפל 2.2</text>
+                <line x1="1000" x2="1000" y1="20" y2="180" stroke="var(--chart-today)" stroke-width="1.5" stroke-dasharray="2 4" opacity="0.85"/>
+                <circle cx="1000" cy="53.60" r="6" fill="var(--chart-today-pulse)"/>
+                <circle cx="1000" cy="53.60" r="4" fill="var(--chart-today)"/>
+                <g font-family="var(--font-mono,ui-monospace)" font-size="10" fill="var(--text-subtle)">
+                  <text x="40"   y="216" text-anchor="start">23 במאי</text>
+                  <text x="536.55" y="216" text-anchor="middle">7 ביוני</text>
+                  <text x="1000" y="216" text-anchor="end">21 ביוני</text>
+                </g>
+              </svg>
+              <div class="rc-overlay" dir="ltr">
+                <div class="rc-pin" style="left:30.48%"><span class="glyph" title="מבצע מחזור · ROAS 3.25">💰</span></div>
+                <div class="rc-pin" style="left:56.97%"><span class="glyph" title="השקת מוצר · ROAS 3.20">💰</span></div>
+                <div class="rc-pin" style="left:83.45%"><span class="glyph" title="הרחבת תקציב · ROAS 3.28">💰</span></div>
+                <div class="rc-today-label" style="left:100%"><span dir="rtl">היום</span></div>
+              </div>
+            </div>
+
+            <div class="rc-foot">
+              <div class="rc-foot-item">
+                <span class="rc-foot-k">ROAS תקופה קודמת</span>
+                <span class="rc-foot-v">2.94</span>
+                <span class="rc-foot-delta">+7.5%</span>
+              </div>
+              <span class="sep">·</span>
+              <div class="rc-foot-item">
+                <span class="rc-foot-k">הכנסות שכבר נצברו</span>
+                <span class="rc-foot-v">C$4,269 CAD</span>
+              </div>
+              <span class="sep">·</span>
+              <div class="rc-foot-item">
+                <span class="rc-foot-k">ימי פעילות</span>
+                <span class="rc-foot-v">30</span>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- ③ STORES (band-tinted cards) -->
+        <div class="sec">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="sec-num">03</span>
+              <div><h2>לפי חנות</h2><span class="sub">לפי הוצאה (גבוה→נמוך) · 4 חנויות</span></div>
+            </div>
+            <div class="sec-actions">
+              <div class="seg">
+                <button class="on">ROAS</button><button>הכנסות</button><button>רווח</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="store-grid">
+            <!-- uzoshop · blue -->
+            <article class="store-card b-blu">
+              <div class="sc-top">
+                <div><div class="sc-name">uzoshop</div><div class="sc-rank">#1 · לפי הוצאה</div></div>
+                <span class="sc-band-tag">מעולה</span>
+              </div>
+              <div class="sc-roas"><b class="tnum">3.41</b><span>×&nbsp;ROAS</span></div>
+              <div class="sc-spark">
+                <svg viewBox="0 0 200 32" preserveAspectRatio="none">
+                  <path d="M0,22 C20,20 30,16 50,18 C70,20 80,10 100,12 C120,14 130,6 150,8 C170,10 185,5 200,6" fill="none" stroke="#06122e" stroke-width="3.4" opacity=".35" stroke-linecap="round"/>
+                  <path d="M0,22 C20,20 30,16 50,18 C70,20 80,10 100,12 C120,14 130,6 150,8 C170,10 185,5 200,6" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="sc-metrics">
+                <div class="sc-metric"><div class="k">הוצאה</div><div class="v tnum arrow-dn">C$971</div></div>
+                <div class="sc-metric"><div class="k">הכנסה</div><div class="v tnum arrow-up">C$3,312</div></div>
+                <div class="sc-metric"><div class="k">הזמנות</div><div class="v tnum">88</div></div>
+                <div class="sc-metric"><div class="k">CPM · AOV</div><div class="v tnum">C$13.8 · 37.6</div></div>
+              </div>
+            </article>
+            <!-- 360usmile · green -->
+            <article class="store-card b-grn">
+              <div class="sc-top">
+                <div><div class="sc-name">360usmile</div><div class="sc-rank">#2 · לפי הוצאה</div></div>
+                <span class="sc-band-tag">טוב</span>
+              </div>
+              <div class="sc-roas"><b class="tnum">2.85</b><span>×&nbsp;ROAS</span></div>
+              <div class="sc-spark">
+                <svg viewBox="0 0 200 32" preserveAspectRatio="none">
+                  <path d="M0,16 C20,18 30,14 50,16 C70,18 80,14 100,15 C120,16 130,10 150,12 C170,14 185,11 200,12" fill="none" stroke="#063527" stroke-width="3.4" opacity=".35" stroke-linecap="round"/>
+                  <path d="M0,16 C20,18 30,14 50,16 C70,18 80,14 100,15 C120,16 130,10 150,12 C170,14 185,11 200,12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="sc-metrics">
+                <div class="sc-metric"><div class="k">הוצאה</div><div class="v tnum arrow-dn">C$245</div></div>
+                <div class="sc-metric"><div class="k">הכנסה</div><div class="v tnum arrow-up">C$698</div></div>
+                <div class="sc-metric"><div class="k">הזמנות</div><div class="v tnum">26</div></div>
+                <div class="sc-metric"><div class="k">CPM · AOV</div><div class="v tnum">C$15.1 · 26.8</div></div>
+              </div>
+            </article>
+            <!-- Zol Plus · orange -->
+            <article class="store-card b-org">
+              <div class="sc-top">
+                <div><div class="sc-name">Zol Plus</div><div class="sc-rank">#3 · לפי הוצאה</div></div>
+                <span class="sc-band-tag">סביר</span>
+              </div>
+              <div class="sc-roas"><b class="tnum">2.10</b><span>×&nbsp;ROAS</span></div>
+              <div class="sc-spark">
+                <svg viewBox="0 0 200 32" preserveAspectRatio="none">
+                  <path d="M0,12 C20,14 30,18 50,16 C70,14 80,18 100,17 C120,16 130,20 150,18 C170,16 185,19 200,18" fill="none" stroke="#4a2806" stroke-width="3.4" opacity=".35" stroke-linecap="round"/>
+                  <path d="M0,12 C20,14 30,18 50,16 C70,14 80,18 100,17 C120,16 130,20 150,18 C170,16 185,19 200,18" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="sc-metrics">
+                <div class="sc-metric"><div class="k">הוצאה</div><div class="v tnum arrow-dn">C$93</div></div>
+                <div class="sc-metric"><div class="k">הכנסה</div><div class="v tnum arrow-up">C$195</div></div>
+                <div class="sc-metric"><div class="k">הזמנות</div><div class="v tnum">18</div></div>
+                <div class="sc-metric"><div class="k">CPM · AOV</div><div class="v tnum">C$12.4 · 10.8</div></div>
+              </div>
+            </article>
+            <!-- pdrn skin · red -->
+            <article class="store-card b-red">
+              <div class="sc-top">
+                <div><div class="sc-name">pdrn skin</div><div class="sc-rank">#4 · לפי הוצאה</div></div>
+                <span class="sc-band-tag">דורש בחינה</span>
+              </div>
+              <div class="sc-roas"><b class="tnum">1.60</b><span>×&nbsp;ROAS</span></div>
+              <div class="sc-spark">
+                <svg viewBox="0 0 200 32" preserveAspectRatio="none">
+                  <path d="M0,10 C20,12 30,16 50,18 C70,20 80,18 100,20 C120,22 130,20 150,22 C170,24 185,22 200,23" fill="none" stroke="#4a0612" stroke-width="3.4" opacity=".35" stroke-linecap="round"/>
+                  <path d="M0,10 C20,12 30,16 50,18 C70,20 80,18 100,20 C120,22 130,20 150,22 C170,24 185,22 200,23" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="sc-metrics">
+                <div class="sc-metric"><div class="k">הוצאה</div><div class="v tnum arrow-dn">C$40</div></div>
+                <div class="sc-metric"><div class="k">הכנסה</div><div class="v tnum arrow-up">C$64</div></div>
+                <div class="sc-metric"><div class="k">הזמנות</div><div class="v tnum">5</div></div>
+                <div class="sc-metric"><div class="k">CPM · AOV</div><div class="v tnum">C$16.0 · 12.8</div></div>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <!-- ④ STORE COMPARE + NC BY PLATFORM -->
+        <div class="sec">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="sec-num">04</span>
+              <div><h2>השוואת חנויות &amp; ערוצי רכישה</h2><span class="sub">דירוג ROAS · לקוחות חדשים לפי פלטפורמה</span></div>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1.25fr .75fr; gap:14px" class="cmp-row">
+            <div class="card compare">
+              <table>
+                <thead><tr><th>חנות</th><th>ROAS</th><th>הכנסה</th><th>חלק מההכנסה</th></tr></thead>
+                <tbody>
+                  <tr><td class="name"><span class="dotc b-blu"></span>uzoshop</td><td><span class="roas-cell tnum">3.41 <span class="roas-pip b-blu">מעולה</span></span></td><td class="tnum">C$3,312</td><td><div class="bar-track"><div class="bar-fill" style="width:77%; background:var(--grad-blu)"></div></div></td></tr>
+                  <tr><td class="name"><span class="dotc b-grn"></span>360usmile</td><td><span class="roas-cell tnum">2.85 <span class="roas-pip b-grn">טוב</span></span></td><td class="tnum">C$698</td><td><div class="bar-track"><div class="bar-fill" style="width:16%; background:var(--grad-grn)"></div></div></td></tr>
+                  <tr><td class="name"><span class="dotc b-org"></span>Zol Plus</td><td><span class="roas-cell tnum">2.10 <span class="roas-pip b-org">סביר</span></span></td><td class="tnum">C$195</td><td><div class="bar-track"><div class="bar-fill" style="width:5%; background:var(--grad-org)"></div></div></td></tr>
+                  <tr><td class="name"><span class="dotc b-red"></span>pdrn skin</td><td><span class="roas-cell tnum">1.60 <span class="roas-pip b-red">דורש בחינה</span></span></td><td class="tnum">C$64</td><td><div class="bar-track"><div class="bar-fill" style="width:2%; background:var(--grad-red)"></div></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card" style="overflow:hidden">
+              <div class="panel-head"><h3>חדשים לפי פלטפורמה</h3><span class="count">NC-ROAS</span></div>
+              <div class="nc-grid" style="border:0; border-radius:0">
+                <div class="nc-cell"><div class="plat"><span class="plat-badge plat-meta">META</span>Meta</div><div class="roas tnum">3.2</div><div class="nc-bar"><i style="width:80%; background:var(--grad-blu)"></i></div><div class="micro">NC-ROAS · מוביל</div></div>
+                <div class="nc-cell"><div class="plat"><span class="plat-badge plat-google">GGL</span>Google</div><div class="roas tnum">2.4</div><div class="nc-bar"><i style="width:60%; background:var(--grad-org)"></i></div><div class="micro">NC-ROAS · סביר</div></div>
+                <div class="nc-cell"><div class="plat"><span class="plat-badge plat-tiktok">TT</span>TikTok</div><div class="roas tnum">1.9</div><div class="nc-bar"><i style="width:48%; background:var(--grad-red)"></i></div><div class="micro">NC-ROAS · חלש</div></div>
+                <div class="nc-cell"><div class="plat"><span class="plat-badge plat-direct">DIR</span>ישיר</div><div class="roas tnum" style="color:var(--subtle)">—</div><div class="nc-bar"><i style="width:0; background:var(--grad-gry)"></i></div><div class="micro">אין נתונים</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ⑤ INSIGHTS + ACTIVITY (2-up) -->
+        <div class="sec" style="margin-bottom:8px">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="sec-num">05</span>
+              <div><h2>פעולות &amp; פעילות חיה</h2><span class="sub">תובנות בעדיפות גבוהה · אירועים בזמן אמת</span></div>
+            </div>
+          </div>
+          <div class="two-up">
+            <div class="card" style="overflow:hidden">
+              <div class="panel-head"><h3>🎯 לוח תובנות</h3><span class="count">3 דחופות</span></div>
+              <div class="panel-body">
+                <div class="insight">
+                  <div class="insight-ico bad">▼</div>
+                  <div class="insight-body">
+                    <b>pdrn skin מתחת לסף הרווחיות</b>
+                    <p>ROAS 1.60 · מתחת ל-2.0 כבר 3 ימים. PMax שורף תקציב ללא החזר.</p>
+                    <span class="insight-cta">השהיית קמפיין ←</span>
+                  </div>
+                </div>
+                <div class="insight">
+                  <div class="insight-ico warn">⚡</div>
+                  <div class="insight-body">
+                    <b>TikTok חלש בלקוחות חדשים</b>
+                    <p>NC-ROAS 1.9 מול Meta 3.2 — שקול הסטת תקציב לרכישה.</p>
+                    <span class="insight-cta">פתח פירוק ערוצים ←</span>
+                  </div>
+                </div>
+                <div class="insight">
+                  <div class="insight-ico good">▲</div>
+                  <div class="insight-body">
+                    <b>uzoshop · קיץ-מבצע מתפקד מעולה</b>
+                    <p>ROAS 3.60 על C$420 הוצאה — מועמד להרחבת תקציב.</p>
+                    <span class="insight-cta">הרחבת תקציב ←</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card" style="overflow:hidden">
+              <div class="panel-head"><h3>פיד פעילות<span class="live-dot" style="margin-inline-start:0"></span></h3><span class="count">חי</span></div>
+              <div class="panel-body">
+                <div class="feed-item"><div class="feed-dot">🛒</div><div class="feed-body"><b>הזמנה · uzoshop <span class="plat-badge plat-meta">META</span></b><span>לפני 2 דק׳ · 2 פריטים</span></div><div class="feed-amt tnum">+C$48</div></div>
+                <div class="feed-item"><div class="feed-dot">🛒</div><div class="feed-body"><b>הזמנה · 360usmile <span class="plat-badge plat-google">GGL</span></b><span>לפני 6 דק׳ · 1 פריט</span></div><div class="feed-amt tnum">+C$27</div></div>
+                <div class="feed-item"><div class="feed-dot">🛍️</div><div class="feed-body"><b>הוספה לעגלה · uzoshop <span class="plat-badge plat-tiktok">TT</span></b><span>לפני 9 דק׳</span></div><div class="feed-amt tnum" style="color:var(--subtle)">—</div></div>
+                <div class="feed-item"><div class="feed-dot">↩️</div><div class="feed-body"><b>החזר · Zol Plus <span class="plat-badge plat-direct">ישיר</span></b><span>לפני 14 דק׳</span></div><div class="feed-amt neg tnum">-C$11</div></div>
+                <div class="feed-item"><div class="feed-dot">🛒</div><div class="feed-body"><b>הזמנה · uzoshop <span class="plat-badge plat-meta">META</span></b><span>לפני 18 דק׳ · 3 פריטים</span></div><div class="feed-amt tnum">+C$62</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ TAB: CAMPAIGNS -->
+      <section class="tabpanel cascade" id="tab-campaigns">
+        <div class="sec">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="sec-num">01</span>
+              <div><h2>קמפיינים מובילים</h2><span class="sub">לפי ROAS · 30 ימים</span></div>
+            </div>
+            <div class="sec-actions"><div class="seg"><button class="on">ROAS</button><button>הוצאה</button><button>הכנסה</button></div></div>
+          </div>
+          <div class="perf-strip">
+            <div class="perf-card b-blu"><div class="rank">#1 · המוביל</div><div class="pname">קיץ-מבצע</div><div class="pmeta"><span class="plat-badge plat-meta">META</span>uzoshop</div><div class="proas tnum">3.60×</div><div class="pfoot"><span>הוצ׳ C$420</span><span>הכנ׳ C$1,510</span></div></div>
+            <div class="perf-card b-blu"><div class="rank">#2</div><div class="pname">ריטרגטינג</div><div class="pmeta"><span class="plat-badge plat-meta">META</span>uzoshop</div><div class="proas tnum">3.12×</div><div class="pfoot"><span>הוצ׳ C$210</span><span>הכנ׳ C$655</span></div></div>
+            <div class="perf-card b-grn"><div class="rank">#3</div><div class="pname">פרוספקטינג</div><div class="pmeta"><span class="plat-badge plat-google">GGL</span>360usmile</div><div class="proas tnum">2.53×</div><div class="pfoot"><span>הוצ׳ C$95</span><span>הכנ׳ C$240</span></div></div>
+            <div class="perf-card b-org"><div class="rank">#4</div><div class="pname">וידאו-טיקטוק</div><div class="pmeta"><span class="plat-badge plat-tiktok">TT</span>Zol Plus</div><div class="proas tnum">2.00×</div><div class="pfoot"><span>הוצ׳ C$60</span><span>הכנ׳ C$120</span></div></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="sec-num">02</span>
+              <div><h2>כל הקמפיינים</h2><span class="sub">לחיצה על שורה פותחת פירוק קמפיין</span></div>
+            </div>
+            <div class="sec-actions">
+              <button class="ghost-btn"><svg viewBox="0 0 24 24"><path d="M3 6h18M6 12h12M10 18h4"/></svg>סינון</button>
+              <button class="ghost-btn"><svg viewBox="0 0 24 24"><path d="M12 3v14M6 11l6 6 6-6M5 21h14"/></svg>ייצוא</button>
+            </div>
+          </div>
+          <!-- SIGNATURE console-well toolbar above the ledger table -->
+          <div class="console-well table-toolbar">
+            <span class="eyebrow">●&nbsp; LEDGER</span>
+            <span class="tw-meta">5 קמפיינים · ממוין לפי ROAS ↓</span>
+            <div class="tw-chips">
+              <span class="tw-chip on">הכל</span>
+              <span class="tw-chip">פעילים</span>
+              <span class="tw-chip">דורשים בחינה</span>
+            </div>
+          </div>
+          <div class="card table-wrap tw-attached">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th class="sticky-col">קמפיין</th>
+                  <th>חנות</th>
+                  <th>פלטפורמה</th>
+                  <th class="num">הוצאה</th>
+                  <th class="num">הכנסה</th>
+                  <th class="num sorted"><span class="sort">ROAS <svg viewBox="0 0 24 24"><path d="M7 14l5 5 5-5"/></svg></span></th>
+                  <th class="num">הזמנות</th>
+                  <th>סטטוס</th>
+                </tr>
+              </thead>
+              <tbody id="campTbody">
+                <tr data-camp="קיץ-מבצע" data-store="uzoshop" data-plat="Meta" data-roas="3.60">
+                  <td class="sticky-col"><span class="cell-name">קיץ-מבצע</span></td>
+                  <td><span class="store-pill"><span class="dotc b-blu"></span>uzoshop</span></td>
+                  <td><span class="plat-tag plat-meta">META</span></td>
+                  <td class="num tnum">C$420</td><td class="num tnum">C$1,510</td>
+                  <td class="num"><span class="roas-tag b-blu">3.60 <span class="tagname">מעולה</span></span></td>
+                  <td class="num tnum">41</td>
+                  <td><span class="status live"><i></i>פעיל</span></td>
+                </tr>
+                <tr data-camp="ריטרגטינג" data-store="uzoshop" data-plat="Meta" data-roas="3.12">
+                  <td class="sticky-col"><span class="cell-name">ריטרגטינג</span></td>
+                  <td><span class="store-pill"><span class="dotc b-blu"></span>uzoshop</span></td>
+                  <td><span class="plat-tag plat-meta">META</span></td>
+                  <td class="num tnum">C$210</td><td class="num tnum">C$655</td>
+                  <td class="num"><span class="roas-tag b-blu">3.12 <span class="tagname">מעולה</span></span></td>
+                  <td class="num tnum">22</td>
+                  <td><span class="status live"><i></i>פעיל</span></td>
+                </tr>
+                <tr data-camp="פרוספקטינג" data-store="360usmile" data-plat="Google" data-roas="2.53">
+                  <td class="sticky-col"><span class="cell-name">פרוספקטינג</span></td>
+                  <td><span class="store-pill"><span class="dotc b-grn"></span>360usmile</span></td>
+                  <td><span class="plat-tag plat-google">GGL</span></td>
+                  <td class="num tnum">C$95</td><td class="num tnum">C$240</td>
+                  <td class="num"><span class="roas-tag b-grn">2.53 <span class="tagname">סביר</span></span></td>
+                  <td class="num tnum">9</td>
+                  <td><span class="status live"><i></i>פעיל</span></td>
+                </tr>
+                <tr data-camp="וידאו-טיקטוק" data-store="Zol Plus" data-plat="TikTok" data-roas="2.00">
+                  <td class="sticky-col"><span class="cell-name">וידאו-טיקטוק</span></td>
+                  <td><span class="store-pill"><span class="dotc b-org"></span>Zol Plus</span></td>
+                  <td><span class="plat-tag plat-tiktok">TT</span></td>
+                  <td class="num tnum">C$60</td><td class="num tnum">C$120</td>
+                  <td class="num"><span class="roas-tag b-org">2.00 <span class="tagname">סביר</span></span></td>
+                  <td class="num tnum">7</td>
+                  <td><span class="status pause">מושהה</span></td>
+                </tr>
+                <tr data-camp="PMax" data-store="pdrn skin" data-plat="Google" data-roas="1.60">
+                  <td class="sticky-col"><span class="cell-name">PMax</span></td>
+                  <td><span class="store-pill"><span class="dotc b-red"></span>pdrn skin</span></td>
+                  <td><span class="plat-tag plat-google">GGL</span></td>
+                  <td class="num tnum">C$40</td><td class="num tnum">C$64</td>
+                  <td class="num"><span class="roas-tag b-red">1.60 <span class="tagname">דורש בחינה</span></span></td>
+                  <td class="num tnum">5</td>
+                  <td><span class="status check"><i></i>דורש בחינה</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ TAB: P&L -->
+      <section class="tabpanel cascade" id="tab-pnl">
+        <div class="sec">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="sec-num">01</span>
+              <div><h2>סיכום רווחיות</h2><span class="sub">כל החנויות · 30 ימים · CAD</span></div>
+            </div>
+          </div>
+          <div class="pnl-summary">
+            <div class="pnl-card"><div class="k">הכנסה נטו</div><div class="v tnum">C$4,269</div><div class="d">ברוטו C$4,540 − החזרים C$271</div></div>
+            <div class="pnl-card"><div class="k">עלות מוצר (25%)</div><div class="v tnum">−C$1,067</div><div class="d">COGS על הכנסה נטו</div></div>
+            <div class="pnl-card hero"><div class="k">רווח תפעולי</div><div class="v tnum">C$1,853</div><div class="d">▲ 12% מול תקופה קודמת</div></div>
+            <div class="pnl-card"><div class="k">הוצאת פרסום</div><div class="v tnum">−C$1,349</div><div class="d">ROAS 3.16×</div></div>
+            <div class="pnl-card"><div class="k">רווח נקי</div><div class="v tnum">C$1,553</div><div class="d">אחרי עלויות קבועות C$300</div></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="sec-num">02</span>
+              <div><h2>מפל P&amp;L</h2><span class="sub">מהכנסה ברוטו עד רווח נקי · עם תת-סיכומים לפי חנות</span></div>
+            </div>
+            <div class="sec-actions"><div class="seg"><button class="on">עסקי</button><button>לפי חנות</button></div></div>
+          </div>
+          <!-- SIGNATURE console-well toolbar above the P&L cascade -->
+          <div class="console-well table-toolbar">
+            <span class="eyebrow">●&nbsp; CASCADE</span>
+            <span class="tw-meta">ברוטו → נטו · 30 ימים · CAD</span>
+          </div>
+          <div class="card table-wrap tw-attached">
+            <table class="data">
+              <thead>
+                <tr><th>שלב</th><th class="num">סכום</th><th class="num">% מהכנסה ברוטו</th><th>תרומה</th></tr>
+              </thead>
+              <tbody>
+                <tr class="cascade-row"><td><span class="label"><span class="op">＋</span>הכנסה ברוטו</span></td><td class="num tnum">C$4,540</td><td class="num tnum">100%</td><td><div class="cascade-bar"><i style="width:100%; background:var(--grad-blu)"></i></div></td></tr>
+                <tr class="cascade-row"><td><span class="label"><span class="op">−</span>החזרים</span></td><td class="num tnum" style="color:var(--bad)">−C$271</td><td class="num tnum">6.0%</td><td><div class="cascade-bar"><i style="width:6%; background:var(--grad-red)"></i></div></td></tr>
+                <tr class="cascade-row total"><td><span class="label"><span class="op">＝</span>הכנסה נטו</span></td><td class="num tnum">C$4,269</td><td class="num tnum">94.0%</td><td><div class="cascade-bar"><i style="width:94%; background:var(--grad-blu)"></i></div></td></tr>
+                <tr class="cascade-row sub"><td><span class="label">uzoshop</span></td><td class="num tnum">C$3,312</td><td class="num tnum">73.0%</td><td><div class="cascade-bar"><i style="width:73%; background:var(--grad-blu)"></i></div></td></tr>
+                <tr class="cascade-row sub"><td><span class="label">360usmile</span></td><td class="num tnum">C$698</td><td class="num tnum">15.4%</td><td><div class="cascade-bar"><i style="width:15%; background:var(--grad-grn)"></i></div></td></tr>
+                <tr class="cascade-row sub"><td><span class="label">Zol Plus</span></td><td class="num tnum">C$195</td><td class="num tnum">4.3%</td><td><div class="cascade-bar"><i style="width:4%; background:var(--grad-org)"></i></div></td></tr>
+                <tr class="cascade-row sub"><td><span class="label">pdrn skin</span></td><td class="num tnum">C$64</td><td class="num tnum">1.4%</td><td><div class="cascade-bar"><i style="width:1.5%; background:var(--grad-red)"></i></div></td></tr>
+                <tr class="cascade-row"><td><span class="label"><span class="op">−</span>עלות מוצר (25%)</span></td><td class="num tnum" style="color:var(--bad)">−C$1,067</td><td class="num tnum">23.5%</td><td><div class="cascade-bar"><i style="width:23.5%; background:var(--grad-org)"></i></div></td></tr>
+                <tr class="cascade-row total"><td><span class="label"><span class="op">＝</span>רווח גולמי</span></td><td class="num tnum">C$3,202</td><td class="num tnum">70.5%</td><td><div class="cascade-bar"><i style="width:70.5%; background:var(--grad-grn)"></i></div></td></tr>
+                <tr class="cascade-row"><td><span class="label"><span class="op">−</span>הוצאת פרסום</span></td><td class="num tnum" style="color:var(--bad)">−C$1,349</td><td class="num tnum">29.7%</td><td><div class="cascade-bar"><i style="width:29.7%; background:var(--grad-red)"></i></div></td></tr>
+                <tr class="cascade-row total"><td><span class="label"><span class="op">＝</span>רווח תפעולי</span></td><td class="num tnum">C$1,853</td><td class="num tnum">40.8%</td><td><div class="cascade-bar"><i style="width:40.8%; background:var(--grad-blu)"></i></div></td></tr>
+                <tr class="cascade-row"><td><span class="label"><span class="op">−</span>עלויות קבועות</span></td><td class="num tnum" style="color:var(--bad)">−C$300</td><td class="num tnum">6.6%</td><td><div class="cascade-bar"><i style="width:6.6%; background:var(--grad-org)"></i></div></td></tr>
+                <tr class="cascade-row total"><td><span class="label"><span class="op">＝</span>רווח נקי</span></td><td class="num tnum">C$1,553</td><td class="num tnum">34.2%</td><td><div class="cascade-bar"><i style="width:34.2%; background:var(--grad-grn)"></i></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ TAB: CUSTOMERS -->
+      <section class="tabpanel cascade" id="tab-customers">
+        <div class="sec">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="sec-num">01</span>
+              <div><h2>ערך לקוח (LTV)</h2><span class="sub">כל החנויות · קוהורט 6 חודשים</span></div>
+            </div>
+            <div class="sec-actions"><div class="seg"><button class="on">כל החנויות</button><button>uzoshop</button><button>אחר</button></div></div>
+          </div>
+          <div class="ltv-hero">
+            <div class="ltv-big">
+              <div class="k">יחס LTV ל-nCAC</div>
+              <div class="v tnum">3.4×</div>
+              <span class="verdict">✓ בריא — מעל סף 3.0</span>
+            </div>
+            <div class="ltv-stat"><div class="k">nCAC · עלות רכישת לקוח חדש</div><div class="v tnum">C$28</div><div class="sub">ממוצע משוקלל על פני כל הערוצים</div></div>
+            <div class="ltv-stat"><div class="k">החזר השקעה</div><div class="v tnum">1.8 ח׳</div><div class="sub">זמן עד שלקוח מכסה את עלות הרכישה</div></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="sec-num">02</span>
+              <div><h2>עקומת LTV לפי קוהורט</h2><span class="sub">ערך מצטבר ללקוח לאורך חודשים</span></div>
+            </div>
+            <div class="sec-actions"><span class="legend"><span><i style="background:var(--blu-2)"></i>קוהורט ינואר</span><span><i style="background:var(--grn-2)"></i>קוהורט מרץ</span><span><i style="background:var(--org-2)"></i>קוהורט מאי</span></span></div>
+          </div>
+          <div class="chart-card">
+            <svg viewBox="0 0 1000 280" preserveAspectRatio="none" width="100%" height="240" style="display:block">
+              <rect x="44" y="14" width="952" height="206" fill="var(--plot-scrim)" rx="10"/>
+              <g stroke="var(--line)" stroke-width="1" stroke-dasharray="3 6">
+                <line x1="44" x2="996" y1="58" y2="58"/><line x1="44" x2="996" y1="116" y2="116"/><line x1="44" x2="996" y1="174" y2="174"/>
+              </g>
+              <g font-family="var(--mono)" font-size="11" fill="var(--subtle)">
+                <text x="10" y="62">C$60</text><text x="10" y="120">C$40</text><text x="10" y="178">C$20</text>
+              </g>
+              <!-- nCAC payback line -->
+              <line x1="44" x2="996" y1="170" y2="170" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="5 5" opacity=".8"/>
+              <text x="980" y="162" text-anchor="end" font-family="var(--mono)" font-size="10" fill="var(--accent-2)">nCAC C$28</text>
+              <!-- casing halos -->
+              <g fill="none" stroke="var(--halo)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity=".9">
+                <path d="M44,205 L204,180 L364,150 L524,120 L684,98 L844,82 L996,72"/>
+                <path d="M44,210 L204,190 L364,168 L524,148 L684,132 L844,120 L996,112"/>
+                <path d="M44,214 L204,200 L364,186 L524,172 L684,162 L844,154 L996,148"/>
+              </g>
+              <path d="M44,205 L204,180 L364,150 L524,120 L684,98 L844,82 L996,72" fill="none" stroke="var(--blu-2)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M44,210 L204,190 L364,168 L524,148 L684,132 L844,120 L996,112" fill="none" stroke="var(--grn-2)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M44,214 L204,200 L364,186 L524,172 L684,162 L844,154 L996,148" fill="none" stroke="var(--org-2)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <g font-family="var(--mono)" font-size="10" fill="var(--subtle)">
+                <text x="44" y="240" text-anchor="start">M0</text><text x="364" y="240" text-anchor="middle">M2</text><text x="684" y="240" text-anchor="middle">M4</text><text x="996" y="240" text-anchor="end">M6</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="sec-num">03</span>
+              <div><h2>nCAC חודשי</h2><span class="sub">עלות רכישת לקוח חדש לפי חודש</span></div>
+            </div>
+          </div>
+          <div class="card table-wrap">
+            <table class="data">
+              <thead><tr><th>חודש</th><th class="num">לקוחות חדשים</th><th class="num">הוצאת רכישה</th><th class="num">nCAC</th><th class="num">LTV (6ח׳)</th><th class="num">LTV:nCAC</th></tr></thead>
+              <tbody>
+                <tr><td>ינואר</td><td class="num tnum">62</td><td class="num tnum">C$1,612</td><td class="num tnum">C$26</td><td class="num tnum">C$94</td><td class="num"><span class="roas-tag b-blu">3.6×</span></td></tr>
+                <tr><td>פברואר</td><td class="num tnum">58</td><td class="num tnum">C$1,624</td><td class="num tnum">C$28</td><td class="num tnum">C$90</td><td class="num"><span class="roas-tag b-blu">3.2×</span></td></tr>
+                <tr><td>מרץ</td><td class="num tnum">71</td><td class="num tnum">C$2,059</td><td class="num tnum">C$29</td><td class="num tnum">C$88</td><td class="num"><span class="roas-tag b-grn">3.0×</span></td></tr>
+                <tr><td>אפריל</td><td class="num tnum">66</td><td class="num tnum">C$1,980</td><td class="num tnum">C$30</td><td class="num tnum">C$84</td><td class="num"><span class="roas-tag b-grn">2.8×</span></td></tr>
+                <tr><td>מאי</td><td class="num tnum">74</td><td class="num tnum">C$2,072</td><td class="num tnum">C$28</td><td class="num tnum">C$79</td><td class="num"><span class="roas-tag b-grn">2.8×</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ TAB: DETAIL -->
+      <section class="tabpanel cascade" id="tab-detail">
+        <div class="sec">
+          <div class="sec-head">
+            <div class="sec-title">
+              <span class="sec-num">01</span>
+              <div><h2>פירוט יומי</h2><span class="sub">תאריך × חנות × פלטפורמה · CAD</span></div>
+            </div>
+            <div class="sec-actions">
+              <div class="seg"><button class="on">כל החנויות</button><button>uzoshop</button></div>
+              <button class="ghost-btn"><svg viewBox="0 0 24 24"><path d="M3 6h18M6 12h12M10 18h4"/></svg>סינון</button>
+            </div>
+          </div>
+          <!-- SIGNATURE console-well toolbar above the ledger table -->
+          <div class="console-well table-toolbar">
+            <span class="eyebrow">●&nbsp; LIVE LEDGER</span>
+            <span class="tw-meta">28 שורות · 7 ימים אחרונים · CAD</span>
+            <div class="tw-chips">
+              <span class="tw-chip on">הכל</span>
+              <span class="tw-chip">Meta</span>
+              <span class="tw-chip">Google</span>
+              <span class="tw-chip">TikTok</span>
+            </div>
+          </div>
+          <div class="card table-wrap tw-attached">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th class="sticky-col">תאריך</th><th>חנות</th><th>פלטפורמה</th>
+                  <th class="num">הוצאה</th><th class="num">הכנסה</th>
+                  <th class="num sorted"><span class="sort">ROAS <svg viewBox="0 0 24 24"><path d="M7 14l5 5 5-5"/></svg></span></th>
+                  <th class="num">הזמנות</th><th class="num">CPM</th>
+                </tr>
+              </thead>
+              <tbody id="detailTbody"><!-- generated --></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- ===================================================== CAMPAIGN DRAWER -->
+<div class="drawer-scrim" id="drawerScrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-head">
+    <div>
+      <h3 id="drawerTitle">קיץ-מבצע</h3>
+      <div class="sub" id="drawerSub">uzoshop · Meta · 30 ימים</div>
+    </div>
+    <button class="drawer-close" id="drawerClose" aria-label="סגירה"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="drawer-body">
+    <div class="kpi-rail" style="grid-template-columns:repeat(3,1fr); margin-bottom:18px">
+      <div class="kpi"><div class="kpi-top"><span class="kpi-label">ROAS</span></div><div class="kpi-val accent tnum" id="dwRoas">3.60x</div></div>
+      <div class="kpi"><div class="kpi-top"><span class="kpi-label">הוצאה</span></div><div class="kpi-val tnum" id="dwSpend">C$420</div></div>
+      <div class="kpi"><div class="kpi-top"><span class="kpi-label">הכנסה</span></div><div class="kpi-val tnum" id="dwRev">C$1,510</div></div>
+    </div>
+    <div class="eyebrow" style="margin-bottom:9px">● &nbsp;ROAS יומי · 14 ימים</div>
+    <div class="chart-card" style="padding:12px; margin-bottom:18px">
+      <svg viewBox="0 0 400 120" preserveAspectRatio="none" width="100%" height="110" style="display:block">
+        <rect x="0" y="4" width="400" height="100" fill="var(--plot-scrim)" rx="8"/>
+        <line x1="0" x2="400" y1="40" y2="40" stroke="var(--line)" stroke-dasharray="3 5"/>
+        <path d="M0,70 L30,64 L60,72 L90,58 L120,50 L150,60 L180,44 L210,52 L240,38 L270,46 L300,34 L330,42 L360,30 L400,36" fill="none" stroke="var(--halo)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>
+        <path d="M0,70 L30,64 L60,72 L90,58 L120,50 L150,60 L180,44 L210,52 L240,38 L270,46 L300,34 L330,42 L360,30 L400,36" fill="none" stroke="var(--blu-2)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="400" cy="36" r="4" fill="var(--accent)"/>
+      </svg>
+    </div>
+    <div class="eyebrow" style="margin-bottom:9px">● &nbsp;מודעות בקמפיין</div>
+    <div class="card table-wrap">
+      <table class="data" style="min-width:auto">
+        <thead><tr><th>מודעה</th><th class="num">הוצאה</th><th class="num">ROAS</th><th>סטטוס</th></tr></thead>
+        <tbody>
+          <tr><td><span class="cell-name">קריאייטיב A</span></td><td class="num tnum">C$180</td><td class="num"><span class="roas-tag b-blu">3.9×</span></td><td><span class="status live"><i></i>פעיל</span></td></tr>
+          <tr><td><span class="cell-name">קריאייטיב B</span></td><td class="num tnum">C$140</td><td class="num"><span class="roas-tag b-blu">3.4×</span></td><td><span class="status live"><i></i>פעיל</span></td></tr>
+          <tr><td><span class="cell-name">קריאייטיב C</span></td><td class="num tnum">C$100</td><td class="num"><span class="roas-tag b-grn">2.9×</span></td><td><span class="status pause">מושהה</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</aside>
+
+<script>
+/* ===================== THEME TOGGLE ===================== */
+const root=document.documentElement, lightBtn=document.getElementById('lightBtn'), darkBtn=document.getElementById('darkBtn');
+function setTheme(t){
+  root.setAttribute('data-theme',t);
+  lightBtn.classList.toggle('on',t==='light'); darkBtn.classList.toggle('on',t==='dark');
+  /* force a synchronous style+layout flush so root surfaces repaint immediately
+     (defeats the custom-property invalidation timing quirk on theme switch) */
+  void document.body.offsetHeight;
+  const cs=getComputedStyle(root);
+  document.body.style.backgroundColor=cs.getPropertyValue('--canvas-1').trim();
+  const sb=document.getElementById('sidebar');
+  if(sb) sb.style.backgroundColor=cs.getPropertyValue('--sidebar').trim();
+}
+lightBtn.onclick=()=>setTheme('light'); darkBtn.onclick=()=>setTheme('dark');
+
+/* ===================== TAB SWITCHING ===================== */
+const HUBS={home:['סקירה','בית · מרכז הפיקוד'],campaigns:['ביצועים','קמפיינים'],pnl:['פיננסי','P&L · רווחיות'],customers:['לקוחות','ערך לקוח'],detail:['חי','פירוט יומי']};
+const navItems=[...document.querySelectorAll('.nav-item')];
+const panels=[...document.querySelectorAll('.tabpanel')];
+function activate(tab,el){
+  panels.forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
+  navItems.forEach(n=>n.classList.remove('active'));
+  (el||navItems.find(n=>n.dataset.tab===tab && !n.dataset.soft)).classList.add('active');
+  const h=HUBS[tab]||['',''];
+  document.getElementById('crumb-hub').textContent=h[0];
+  document.getElementById('crumb-title').textContent=h[1];
+  document.querySelector('.content').scrollTo?.({top:0});
+  window.scrollTo({top:0,behavior:'smooth'});
+  document.getElementById('sidebar').classList.remove('open');
+}
+navItems.forEach(n=>n.addEventListener('click',()=>activate(n.dataset.tab,n)));
+
+/* ===================== MOBILE SIDEBAR ===================== */
+document.getElementById('hamburger').onclick=()=>document.getElementById('sidebar').classList.toggle('open');
+
+/* ===================== CAMPAIGN DRAWER ===================== */
+const drawer=document.getElementById('drawer'), scrim=document.getElementById('drawerScrim');
+function openDrawer(r){
+  document.getElementById('drawerTitle').textContent=r.dataset.camp;
+  document.getElementById('drawerSub').textContent=`${r.dataset.store} · ${r.dataset.plat} · 30 ימים`;
+  document.getElementById('dwRoas').textContent=r.dataset.roas+'x';
+  document.getElementById('dwSpend').textContent=r.querySelector('td:nth-child(4)').textContent;
+  document.getElementById('dwRev').textContent=r.querySelector('td:nth-child(5)').textContent;
+  document.querySelectorAll('#campTbody tr').forEach(t=>t.classList.remove('sel')); r.classList.add('sel');
+  drawer.classList.add('open'); scrim.classList.add('open'); drawer.setAttribute('aria-hidden','false');
+}
+function closeDrawer(){drawer.classList.remove('open'); scrim.classList.remove('open'); drawer.setAttribute('aria-hidden','true'); document.querySelectorAll('#campTbody tr').forEach(t=>t.classList.remove('sel'));}
+document.querySelectorAll('#campTbody tr').forEach(r=>r.addEventListener('click',()=>openDrawer(r)));
+document.getElementById('drawerClose').onclick=closeDrawer; scrim.onclick=closeDrawer;
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer();});
+
+/* ===================== DETAIL TABLE (dense, generated) ===================== */
+(function(){
+  const stores=[['uzoshop','b-blu'],['360usmile','b-grn'],['Zol Plus','b-org'],['pdrn skin','b-red']];
+  const plats=[['Meta','plat-meta','META'],['Google','plat-google','GGL'],['TikTok','plat-tiktok','TT']];
+  function band(r){return r>=3?'b-blu':r>=2.7?'b-grn':r>=2?'b-org':'b-red';}
+  function tag(r){return r>=3?'מעולה':r>=2.7?'טוב':r>=2?'סביר':'דורש בחינה';}
+  const dates=['21 ביוני','20 ביוני','19 ביוני','18 ביוני','17 ביוני','16 ביוני','15 ביוני'];
+  let rows='', seed=7;
+  const rnd=()=>{seed=(seed*9301+49297)%233280; return seed/233280;};
+  dates.forEach(d=>{
+    stores.forEach(([sn,sc])=>{
+      const [pn,pc,pl]=plats[Math.floor(rnd()*plats.length)];
+      const spend=Math.round(20+rnd()*220);
+      const roas=+(1.5+rnd()*2.2).toFixed(2);
+      const rev=Math.round(spend*roas);
+      const orders=Math.round(2+rnd()*30);
+      const cpm=(11+rnd()*6).toFixed(1);
+      rows+=`<tr>
+        <td class="sticky-col"><span class="cell-name" style="font-weight:600">${d}</span></td>
+        <td><span class="store-pill"><span class="dotc ${sc}"></span>${sn}</span></td>
+        <td><span class="plat-tag ${pc}">${pl}</span></td>
+        <td class="num tnum">C$${spend}</td>
+        <td class="num tnum">C$${rev.toLocaleString()}</td>
+        <td class="num"><span class="roas-tag ${band(roas)}">${roas.toFixed(2)} <span class="tagname">${tag(roas)}</span></span></td>
+        <td class="num tnum">${orders}</td>
+        <td class="num tnum">C$${cpm}</td>
+      </tr>`;
+    });
+  });
+  document.getElementById('detailTbody').innerHTML=rows;
+})();
+</script>
+</body>
+</html>

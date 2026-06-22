@@ -1,0 +1,1633 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROAS Dashboard · Direction V4 (Faithful)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════ TOKENS ═══════════════════════ */
+:root{
+  /* dark (default, first-class) */
+  --canvas:#0b1437; --card:#111c44; --elevated:#162048; --sunken:#1B254B;
+  --edge:rgba(255,255,255,0.08); --edge-hot:rgba(117,81,255,0.5);
+  --ink:#ffffff; --ink-2:#cdd5ec; --muted:#A3AED0; --faint:#7C88AD;
+  --accent:#7551FF; --accent-fg:#ffffff; --accent-wash:rgba(117,81,255,0.10);
+  --pos:#0fb37a; --neg:#ef4d5b; --grid:rgba(255,255,255,0.06); --plot-scrim:#111c44;
+  /* ROAS bands */
+  --band-red:#ef4d5b; --band-orange:#EF9331; --band-green:#22c98a; --band-blue:#5b8df0;
+  --band-gray:#6b7693; --band-alarm:#d2293a;
+  --band-red-grad:linear-gradient(135deg,#e1334a,#ef4d5b);
+  --band-orange-grad:linear-gradient(135deg,#e07d18,#EF9331);
+  --band-green-grad:linear-gradient(135deg,#13a874,#22c98a);
+  --band-blue-grad:linear-gradient(135deg,#2f6bff,#4d8dff 52%,#85b8ff);
+  --band-gray-grad:linear-gradient(135deg,#535d78,#6b7693);
+  --band-alarm-grad:linear-gradient(135deg,#a81626,#d2293a);
+  /* type */
+  --sans:'Heebo',-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans Hebrew",sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --t-cap:11px; --t-sm:13px; --t-base:14px; --t-md:15px; --t-lg:17px; --t-xl:20px; --t-2xl:24px;
+  /* radius */
+  --r-card:18px; --r-sm:10px; --r-md:11px;
+  /* spacing */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s7:32px;
+  --shadow-card:0 0 rgba(0,0,0,0); --shadow-pop:0 16px 48px rgba(0,0,0,.55);
+  --side-w:220px; --rail-w:72px;
+}
+[data-theme="light"]{
+  --canvas:#F4F7FE; --card:#ffffff; --elevated:#F4F7FE; --sunken:#EDF1FB;
+  --edge:rgba(27,37,75,0.10); --edge-hot:rgba(66,42,251,0.40);
+  --ink:#1B254B; --ink-2:#2c3658; --muted:#5b6478; --faint:#8a93ad;
+  --accent:#422AFB; --accent-wash:rgba(66,42,251,0.07);
+  --pos:#0f9d6b; --neg:#e11d48; --grid:rgba(27,37,75,0.08); --plot-scrim:#ffffff;
+  --band-red:#e11d48; --band-orange:#EF9331; --band-green:#0f9d6b; --band-blue:#3b82f6;
+  --band-gray:#8a93ad; --band-alarm:#be123c;
+  --shadow-card:0 8px 24px rgba(112,144,176,.12); --shadow-pop:0 18px 50px rgba(22,26,48,.18);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--canvas); color:var(--ink); font-family:var(--sans);
+  font-size:var(--t-base); line-height:1.5; -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+bdi{unicode-bidi:isolate}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit}
+::selection{background:var(--accent);color:#fff}
+
+/* ═══════════════════════ APP SHELL ═══════════════════════ */
+.app{display:flex;min-height:100vh}
+/* SIDEBAR — flat 10-item list */
+.sidebar{
+  position:fixed;top:0;right:0;bottom:0;z-index:40;width:var(--rail-w);
+  background:var(--card);border-inline-start:1px solid var(--edge);
+  display:flex;flex-direction:column;transition:width .2s ease-out;overflow:hidden;
+}
+.sidebar:hover,.sidebar.pinned{width:var(--side-w)}
+.sb-brand{display:flex;align-items:center;gap:var(--s3);height:64px;padding:0 18px;flex-shrink:0}
+.sb-logo{width:34px;height:34px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px;flex-shrink:0}
+.sb-brand-tx{white-space:nowrap;opacity:0;transition:opacity .15s;font-weight:700;font-size:var(--t-md)}
+.sidebar:hover .sb-brand-tx,.sidebar.pinned .sb-brand-tx{opacity:1}
+.sb-nav{flex:1;padding:var(--s2) 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;overflow-x:hidden}
+.sb-nav::-webkit-scrollbar{width:0}
+.nav-item{
+  display:flex;align-items:center;gap:var(--s3);height:44px;padding:0 12px;border-radius:var(--r-sm);
+  color:var(--muted);cursor:pointer;border:none;background:none;width:100%;text-align:start;
+  position:relative;white-space:nowrap;font-size:var(--t-sm);font-weight:500;
+}
+.nav-item:hover{background:var(--accent-wash);color:var(--ink)}
+.nav-item.active{background:var(--accent-wash);color:var(--ink)}
+.nav-item.active::before{content:"";position:absolute;inset-inline-start:-10px;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
+.nav-item svg{width:19px;height:19px;flex-shrink:0}
+.nav-tx{opacity:0;transition:opacity .15s;flex:1}
+.sidebar:hover .nav-tx,.sidebar.pinned .nav-tx{opacity:1}
+.nav-kbd{font-family:var(--mono);font-size:10px;color:var(--faint);opacity:0;transition:opacity .15s}
+.sidebar:hover .nav-kbd,.sidebar.pinned .nav-kbd{opacity:.7}
+.sb-foot{border-top:1px solid var(--edge);padding:10px;display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.sb-foot .nav-item{height:40px}
+.theme-seg{display:flex;gap:2px;background:var(--sunken);border-radius:var(--r-sm);padding:3px;margin-top:4px}
+.theme-seg button{flex:1;height:30px;border:none;background:none;border-radius:7px;color:var(--muted);cursor:pointer;display:grid;place-items:center}
+.theme-seg button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow-card)}
+.theme-seg button svg{width:16px;height:16px}
+
+/* MAIN — rail is fixed at right:0, so reserve the gutter on the START (right) side in RTL.
+   margin-inline-start = right in RTL; center the bounded content with margin-inline-end:auto. */
+.main{flex:1;margin-inline-start:var(--rail-w);min-width:0;padding:0 clamp(14px,3vw,32px) 64px;max-width:1480px;margin-inline-end:auto;width:100%}
+
+/* TOPSTRIP — floating, non-sticky */
+.topstrip{
+  display:flex;align-items:center;gap:var(--s4);margin-top:var(--s4);margin-bottom:var(--s5);
+  background:color-mix(in srgb,var(--card) 80%,transparent);backdrop-filter:blur(14px);
+  border:1px solid var(--edge);border-radius:9999px;padding:10px 18px;box-shadow:var(--shadow-card);
+}
+.ts-left{display:flex;align-items:center;gap:var(--s4);min-width:0;flex:1}
+.ts-burger{display:none;width:38px;height:38px;border-radius:10px;border:1px solid var(--edge);background:var(--sunken);color:var(--ink);cursor:pointer;place-items:center;flex-shrink:0}
+.ts-burger svg{width:18px;height:18px}
+.ts-crumb{font-size:var(--t-cap);color:var(--faint);font-family:var(--mono);white-space:nowrap}
+.ts-crumb b{color:var(--muted);font-weight:600}
+.ts-title{font-size:var(--t-xl);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ts-right{display:flex;align-items:center;gap:var(--s2);flex-shrink:0}
+.ts-cmd{display:flex;align-items:center;gap:var(--s2);height:36px;padding:0 12px;border-radius:9999px;border:1px solid var(--edge);background:var(--sunken);color:var(--muted);cursor:pointer;font-size:var(--t-cap)}
+.ts-cmd svg{width:15px;height:15px}
+.ts-cmd kbd{font-family:var(--mono);font-size:10px;background:var(--card);border:1px solid var(--edge);border-radius:5px;padding:1px 5px}
+.chip{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 11px;border-radius:9999px;font-size:var(--t-cap);font-weight:600;font-family:var(--mono);white-space:nowrap}
+.chip.fresh{background:rgba(34,201,138,.16);color:var(--band-green)}
+.chip.sync{background:var(--accent-wash);color:var(--accent)}
+.chip.src{background:rgba(34,201,138,.12);color:var(--band-green)}
+.chip.src.bad{background:rgba(239,77,91,.14);color:var(--band-red)}
+.chip svg{flex-shrink:0}
+/* live dot = solid inner + an expanding ring (animate-ping), NO static color blur */
+.live-dot{position:relative;display:inline-block;width:7px;height:7px;flex-shrink:0}
+.live-dot::before{content:"";position:absolute;inset:0;border-radius:50%;background:currentColor;animation:ping 1.8s cubic-bezier(0,0,.2,1) infinite}
+.live-dot::after{content:"";position:absolute;inset:0;border-radius:50%;background:currentColor}
+.chip .dot{position:relative;display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0}
+.chip .dot::before{content:"";position:absolute;inset:0;border-radius:50%;background:currentColor;animation:ping 2s cubic-bezier(0,0,.2,1) infinite}
+@keyframes ping{0%{transform:scale(1);opacity:.55}75%,100%{transform:scale(2.4);opacity:0}}
+.ts-ai{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:9999px;border:1px solid var(--accent);background:var(--accent-wash);color:var(--accent);font-weight:600;font-size:var(--t-cap);cursor:pointer}
+.ts-ai svg{width:15px;height:15px}
+.ts-ai.hide{display:none}
+
+/* ═══════════════════════ PRIMITIVES ═══════════════════════ */
+.card{background:var(--card);border:1px solid var(--edge);border-radius:var(--r-card);box-shadow:var(--shadow-card)}
+/* table-bearing card wrappers use the tighter table radius (rounded-xl, not consumer 2xl) */
+.card.table-card{border-radius:var(--r-md)}
+.card.table-card .nc-well{border-radius:0 0 var(--r-md) var(--r-md)}
+.card.lift{transition:box-shadow .18s,transform .18s}
+.card.lift:hover{box-shadow:var(--shadow-pop);transform:translateY(-1px)}
+.pad{padding:var(--s5)}
+.tabpanel{display:none;animation:fade .25s ease}
+.tabpanel.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+
+/* section intro */
+.sec{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s4);margin:var(--s7) 0 var(--s4)}
+.sec:first-child{margin-top:0}
+.sec.tight{margin-top:var(--s6)}
+.sec-l{display:flex;gap:var(--s3);align-items:flex-start}
+.sec-bar{width:3px;border-radius:3px;background:var(--accent);align-self:stretch;min-height:34px;margin-top:2px}
+.sec-eyebrow{display:block;font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);font-weight:600;margin-bottom:3px}
+.sec-h{display:block;font-size:var(--t-lg);font-weight:700}
+.sec-desc{font-size:var(--t-cap);color:var(--muted);margin-top:3px;max-width:540px}
+.sec-r{display:flex;align-items:center;gap:var(--s2)}
+.link-cta{display:inline-flex;align-items:center;gap:4px;color:var(--accent);font-weight:600;font-size:var(--t-sm);cursor:pointer}
+.link-cta svg{width:15px;height:15px}
+
+/* grids */
+.grid{display:grid;gap:var(--s4)}
+.g-2{grid-template-columns:1fr 1fr}
+.g-3{grid-template-columns:repeat(3,1fr)}
+.g-4{grid-template-columns:repeat(4,1fr)}
+.g-5{grid-template-columns:repeat(5,1fr)}
+
+/* filters / pill rail */
+.filters{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2)}
+.pill-rail{display:inline-flex;gap:2px;background:var(--sunken);border-radius:var(--r-sm);padding:3px}
+.pill-rail button{height:32px;padding:0 13px;border:none;background:none;border-radius:7px;color:var(--muted);cursor:pointer;font-size:var(--t-cap);font-weight:600;white-space:nowrap}
+.pill-rail button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow-card)}
+.nsel{height:36px;padding:0 12px;border-radius:var(--r-sm);border:1px solid var(--edge);background:var(--sunken);color:var(--ink);font-size:var(--t-cap);font-weight:500;cursor:pointer}
+.search{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:var(--r-sm);border:1px solid var(--edge);background:var(--sunken);min-width:200px}
+.search svg{width:15px;height:15px;color:var(--faint);flex-shrink:0}
+.search input{border:none;background:none;outline:none;color:var(--ink);font-size:var(--t-cap);width:100%;font-family:inherit}
+.btn-ghost{height:36px;padding:0 12px;border-radius:var(--r-sm);border:1px solid var(--edge);background:var(--sunken);color:var(--muted);cursor:pointer;font-size:var(--t-cap);font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.btn-ghost svg{width:15px;height:15px}
+.btn-ghost.on{color:var(--accent);border-color:var(--accent)}
+
+/* band chips */
+.band{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 9px;border-radius:6px;font-size:var(--t-cap);font-weight:700;font-family:var(--mono);color:#fff;white-space:nowrap}
+.band.red{background:var(--band-red-grad)} .band.orange{background:var(--band-orange-grad)}
+.band.green{background:var(--band-green-grad)} .band.blue{background:var(--band-blue-grad)}
+.band.gray{background:var(--band-gray-grad)} .band.alarm{background:var(--band-alarm-grad)}
+/* health grade chips */
+.grade{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;font-weight:800;font-family:var(--mono);font-size:var(--t-cap);color:#fff}
+.grade.A{background:var(--band-green)} .grade.B{background:var(--band-blue)} .grade.C{background:var(--band-orange)} .grade.D{background:var(--band-red)} .grade.F{background:var(--band-alarm)}
+/* status pills */
+.spill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:9999px;font-size:var(--t-cap);font-weight:600}
+.spill .sd{width:6px;height:6px;border-radius:50%;background:currentColor}
+.spill.live{background:rgba(34,201,138,.14);color:var(--band-green)}
+.spill.off{background:rgba(124,136,173,.16);color:var(--faint)}
+.spill.warn{background:rgba(239,147,49,.16);color:var(--band-orange)}
+.spill.err{background:rgba(239,77,91,.16);color:var(--band-red)}
+
+/* KPI tile (compact, right-sized) */
+.kpi-tile{padding:14px 15px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.kpi-tile .k{display:flex;align-items:center;gap:6px;font-size:var(--t-cap);color:var(--muted);font-weight:500}
+.kpi-tile .k svg{width:14px;height:14px;color:var(--faint)}
+.kpi-tile .vrow{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+.kpi-tile .v{font-size:var(--t-2xl);font-weight:600;letter-spacing:-.01em;line-height:1;color:var(--ink)}
+.kpi-tile .v.sm{font-size:var(--t-xl)}
+.kpi-tile .cur{font-size:10px;font-family:var(--mono);color:var(--faint)}
+.delta{font-size:var(--t-cap);font-weight:600;font-family:var(--mono);display:inline-flex;align-items:center;gap:2px}
+.delta.up{color:var(--pos)} .delta.dn{color:var(--neg)}
+.kpi-tile .cmp{border-top:1px solid var(--edge);padding-top:8px;font-size:10px;color:var(--faint);display:flex;align-items:center;justify-content:space-between;gap:6px}
+.kpi-tile .cmp b{color:var(--ink-2);font-weight:600}
+.flag{font-size:9px;font-family:var(--mono);padding:1px 5px;border-radius:4px;background:var(--sunken);color:var(--muted)}
+.flag.man{color:var(--band-orange)}
+
+/* shared-edge panel for hero KPIs */
+.tile-panel{border:1px solid var(--edge);border-radius:var(--r-card);overflow:hidden;background:color-mix(in srgb,var(--edge) 35%,transparent);display:grid;gap:1px}
+.tile-panel .kpi-tile{background:var(--card)}
+
+/* tables */
+.table-wrap{background:var(--card);border:1px solid var(--edge);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--shadow-card)}
+.tbl-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);padding:12px;border-bottom:1px solid var(--edge)}
+.tbl-toolbar .grow{flex:1}
+.tbl-scroll{overflow:auto;max-height:70vh}
+table.data{width:100%;border-collapse:collapse;font-size:var(--t-cap)}
+table.data thead th{position:sticky;top:0;z-index:2;background:var(--elevated);height:40px;padding:0 10px;text-align:start;color:var(--muted);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;border-bottom:1px solid var(--edge)}
+table.data th.r,table.data td.r{text-align:end}
+table.data th.c,table.data td.c{text-align:center}
+table.data tbody td{padding:9px 10px;border-bottom:1px solid var(--edge);white-space:nowrap;color:var(--ink-2)}
+table.data tbody tr:last-child td{border-bottom:none}
+table.data tbody tr{cursor:default}
+table.data tbody tr.clk{cursor:pointer}
+table.data tbody tr.clk:hover{background:var(--accent-wash)}
+table.data .sticky-col{position:sticky;inset-inline-start:0;background:var(--card);z-index:1}
+table.data thead .sticky-col{z-index:3;background:var(--elevated)}
+table.data tr.clk:hover .sticky-col{background:color-mix(in srgb,var(--accent-wash),var(--card))}
+.active-sort{color:var(--accent)!important}
+.sortic{font-size:9px;margin-inline-start:3px}
+.nm-cell{display:flex;align-items:center;gap:8px}
+.plat{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:5px;font-size:9px;font-weight:800;color:#fff;flex-shrink:0}
+.plat.meta{background:#1877f2} .plat.google{background:#ea4335} .plat.tiktok{background:#111}
+.store-chip{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)}
+.store-chip .sc{width:6px;height:6px;border-radius:50%}
+table.data tfoot td,table.data tr.total td{font-weight:700;color:var(--ink);background:var(--elevated)}
+.refind{color:var(--neg);font-size:9px;margin-inline-start:4px}
+.neg{color:var(--neg)} .pos{color:var(--pos)}
+
+/* optimization toggle (flag) — replaces ✓/○ glyph + ⚑ header */
+.opt-tg{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:5px;border:1.5px solid var(--edge);background:var(--sunken);cursor:pointer}
+.opt-tg svg{width:11px;height:11px;color:transparent}
+.opt-tg.on{background:var(--accent);border-color:var(--accent)}
+.opt-tg.on svg{color:#fff}
+.thflag svg{width:14px;height:14px;color:var(--muted);vertical-align:middle}
+
+/* mini sparkline */
+.spark{width:80px;height:24px;display:block}
+.spark.sm{width:64px;height:20px}
+
+/* foot note */
+.foot-note{font-size:var(--t-cap);color:var(--faint);font-family:var(--mono);margin-top:var(--s3)}
+
+/* warning banner */
+.banner{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:var(--r-sm);font-size:var(--t-cap);margin-bottom:var(--s4)}
+.banner svg{width:16px;height:16px;flex-shrink:0;margin-top:1px}
+.banner.warn{background:rgba(239,147,49,.10);border:1px solid rgba(239,147,49,.30);color:var(--band-orange)}
+.banner.info{background:var(--accent-wash);border:1px solid var(--edge);color:var(--muted)}
+
+/* segmented sub-tabs */
+.subtabs{display:inline-flex;gap:2px;background:var(--sunken);border-radius:var(--r-sm);padding:3px;margin-bottom:var(--s4)}
+.subtabs button{height:34px;padding:0 16px;border:none;background:none;border-radius:7px;color:var(--muted);cursor:pointer;font-size:var(--t-sm);font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.subtabs button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow-card)}
+.subtabs button svg{width:15px;height:15px}
+.subpanel{display:none}
+.subpanel.on{display:block}
+
+/* donut */
+.donut{width:150px;height:150px;border-radius:50%;display:grid;place-items:center;position:relative;flex-shrink:0}
+.donut .hole{width:96px;height:96px;border-radius:50%;background:var(--card);display:grid;place-items:center;text-align:center}
+.donut .hp{font-size:var(--t-xl);font-weight:700} .donut .hl{font-size:10px;color:var(--muted)}
+.legend-list{display:flex;flex-direction:column;gap:8px;font-size:var(--t-cap)}
+.legend-list .li{display:flex;align-items:center;gap:8px}
+.legend-list .sw{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+.legend-list .lbl{flex:1;color:var(--ink-2)}
+.legend-list .val{font-family:var(--mono);color:var(--muted)}
+
+/* NC well */
+.nc-well{background:var(--sunken);border-radius:var(--r-sm);padding:14px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:var(--s4);margin-top:var(--s4);font-size:var(--t-cap)}
+.nc-well .k{color:var(--muted);font-weight:600}
+.nc-well .v{font-weight:700;font-family:var(--mono)}
+.nc-well .divid{width:1px;align-self:stretch;background:var(--edge)}
+.nc-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--edge)}
+.nc-row:last-child{border-bottom:none}
+.nc-logo{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:11px;flex-shrink:0}
+.nc-nm{width:64px;font-size:var(--t-cap);color:var(--ink-2)}
+.nc-track{flex:1;height:8px;border-radius:9999px;background:var(--sunken);overflow:hidden}
+.nc-fill{height:100%;border-radius:9999px}
+.nc-v{width:42px;text-align:end;font-family:var(--mono);font-weight:700}
+
+/* feed */
+.feed-item{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--edge)}
+.feed-item:last-child{border-bottom:none}
+.feed-av{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;flex-shrink:0}
+.feed-av svg{width:17px;height:17px}
+.feed-av.sale{background:rgba(34,201,138,.16);color:var(--band-green)} .feed-av.cart{background:rgba(91,141,240,.16);color:var(--band-blue)} .feed-av.refund{background:rgba(239,77,91,.16);color:var(--band-red)}
+/* neutral feed avatar for history/log rows */
+.feed-av.neutral{background:var(--sunken);color:var(--muted)}
+.feed-main{flex:1;min-width:0}
+.feed-t{font-size:var(--t-sm);font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.feed-meta{font-size:10px;color:var(--faint);display:flex;align-items:center;gap:6px;margin-top:2px}
+.plat-badge{font-size:9px;font-weight:700;font-family:var(--mono);padding:1px 5px;border-radius:4px}
+.feed-amt{font-family:var(--mono);font-weight:700;font-size:var(--t-sm)}
+.live-badge{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;font-family:var(--mono);color:var(--band-green)}
+.live-badge .ld{position:relative;display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0}
+.live-badge .ld::before{content:"";position:absolute;inset:0;border-radius:50%;background:currentColor;animation:ping 1.8s cubic-bezier(0,0,.2,1) infinite}
+.day-head{position:sticky;top:0;background:var(--card);font-size:var(--t-cap);font-weight:700;color:var(--muted);padding:8px 0;border-bottom:1px solid var(--edge);z-index:1}
+
+/* insight */
+.insight{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid var(--edge)}
+.insight:last-child{border-bottom:none}
+.insight .ico{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+.insight .ico svg{width:17px;height:17px}
+.insight.urgent .ico{background:rgba(239,77,91,.16);color:var(--band-red)}
+.insight.warn .ico{background:rgba(239,147,49,.16);color:var(--band-orange)}
+.insight.good .ico{background:rgba(34,201,138,.16);color:var(--band-green)}
+.insight .tt{font-size:var(--t-sm);font-weight:700;color:var(--ink)}
+.insight .ds{font-size:var(--t-cap);color:var(--muted);margin-top:3px;line-height:1.5}
+.insight .act{font-size:var(--t-cap);color:var(--accent);font-weight:600;margin-top:6px;cursor:pointer}
+
+/* per-store cards */
+.store-deck{display:grid;gap:var(--s4);grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.store-card{border-radius:var(--r-card);padding:18px;cursor:pointer;border:1px solid var(--edge);position:relative;overflow:hidden;transition:box-shadow .18s,border-color .18s;background:var(--card)}
+/* single-step hover lift: a precise ring edge, no translate + pop-shadow bloom */
+.store-card:hover{border-color:var(--edge-hot)}
+.store-card.banded:hover{box-shadow:0 0 0 2px var(--accent)}
+.store-card.banded{color:#fff;border:none}
+.store-card.banded.red{background:var(--band-red-grad)} .store-card.banded.alarm{background:var(--band-alarm-grad)}
+.store-card.banded.orange{background:var(--band-orange-grad)} .store-card.banded.gray{background:var(--band-gray-grad)}
+.store-card.edge-green{border-inline-start:4px solid var(--band-green)} .store-card.edge-blue{border-inline-start:4px solid var(--band-blue)}
+.sc-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.sc-name{font-weight:700;font-size:var(--t-md)}
+.sc-roas-cap{font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;opacity:.75;color:var(--muted)}
+.store-card.banded .sc-roas-cap{color:rgba(255,255,255,.8)}
+.sc-roas{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.05;margin:2px 0 10px;font-variant-numeric:tabular-nums}
+.sc-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+.sc-metric{background:var(--sunken);border-radius:9px;padding:9px 10px}
+.store-card.banded .sc-metric{background:rgba(255,255,255,.12)}
+.sc-mk{font-size:9px;text-transform:uppercase;letter-spacing:.05em;opacity:.75;margin-bottom:3px}
+.sc-mv{font-family:var(--mono);font-weight:700;font-size:var(--t-sm)}
+.sc-mv.red{color:var(--neg)} .sc-mv.green{color:var(--pos)}
+.store-card.banded .sc-mv,.store-card.banded .sc-mv.red,.store-card.banded .sc-mv.green{color:#fff}
+.sc-alarm{background:rgba(0,0,0,.28);border-radius:8px;padding:8px 10px;font-size:10px;margin-bottom:10px;color:#fff}
+.sc-cpm{margin-top:12px;padding-top:10px;border-top:1px solid var(--edge);display:flex;flex-direction:column;gap:6px}
+.store-card.banded .sc-cpm{border-top-color:rgba(255,255,255,.2)}
+.sc-cpm-row{display:flex;align-items:center;gap:8px;font-size:10px}
+.sc-cpm-row .ld{width:8px;height:8px;border-radius:3px}
+.sc-cpm-row .nm{flex:1;opacity:.85}
+.sc-tag{font-size:9px;font-weight:700;font-family:var(--mono);padding:2px 7px;border-radius:5px}
+.store-card.banded .sc-tag{background:rgba(0,0,0,.25);color:#fff}
+
+/* modal */
+.scrim{position:fixed;inset:0;z-index:60;background:rgba(5,9,25,.66);backdrop-filter:blur(3px);display:none;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto}
+.scrim.open{display:flex}
+.modal{background:var(--card);border:1px solid var(--edge);border-radius:var(--r-card);width:100%;max-width:880px;box-shadow:var(--shadow-pop);animation:pop .2s ease;margin:auto}
+.modal.wide{max-width:880px} .modal.store{max-width:760px} .modal.picker{max-width:560px}
+@keyframes pop{from{opacity:0;transform:scale(.97) translateY(8px)}to{opacity:1;transform:none}}
+@keyframes slideEnd{from{transform:translateX(-24px);opacity:.4}to{transform:none;opacity:1}}
+.m-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--edge);flex-wrap:wrap}
+.m-head .m-name{font-weight:700;font-size:var(--t-md);flex:1;min-width:0}
+.m-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--edge);background:var(--sunken);color:var(--muted);cursor:pointer;display:grid;place-items:center;flex-shrink:0}
+.m-close svg{width:16px;height:16px}
+.m-body{padding:20px;max-height:72vh;overflow-y:auto}
+.m-tabs{display:flex;gap:2px;padding:0 20px;border-bottom:1px solid var(--edge);overflow-x:auto}
+.m-tabs button{height:46px;padding:0 14px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:var(--t-sm);font-weight:600;white-space:nowrap;border-bottom:2px solid transparent}
+.m-tabs button.on{color:var(--accent);border-bottom-color:var(--accent)}
+.m-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;border-top:1px solid var(--edge)}
+.btn{height:38px;padding:0 16px;border-radius:var(--r-sm);font-weight:600;font-size:var(--t-cap);cursor:pointer;border:1px solid var(--edge);display:inline-flex;align-items:center;gap:6px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.ghost{background:var(--sunken);color:var(--muted)}
+.mpanel{display:none} .mpanel.on{display:block}
+
+/* accordion */
+.acc{border:1px solid var(--edge);border-radius:var(--r-sm);margin-bottom:10px;overflow:hidden}
+.acc summary{padding:12px 14px;cursor:pointer;font-size:var(--t-sm);font-weight:600;display:flex;align-items:center;justify-content:space-between;list-style:none}
+.acc summary::-webkit-details-marker{display:none}
+.acc summary::after{content:"▾";color:var(--faint);font-size:11px}
+.acc[open] summary::after{content:"▴"}
+.acc .acc-body{padding:0 14px 14px;font-size:var(--t-cap);color:var(--muted)}
+
+/* scorecard */
+.scorecard{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--edge);border:1px solid var(--edge);border-radius:var(--r-sm);overflow:hidden;margin-bottom:var(--s4)}
+.sc-cell{background:var(--card);padding:12px}
+.sc-cell .ck{font-size:10px;color:var(--muted);margin-bottom:5px}
+.sc-cell .cv{font-size:var(--t-lg);font-weight:700;font-variant-numeric:tabular-nums}
+
+/* checkbox row (picker) */
+.pick-row{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--edge)}
+.pick-row input{width:18px;height:18px;accent-color:var(--accent)}
+.pick-row .pr-t{flex:1;font-size:var(--t-sm)}
+.pick-row .pr-s{font-size:10px;color:var(--faint);font-family:var(--mono)}
+
+/* mobile sticky roas */
+.m-sticky{display:none}
+
+/* responsive */
+@media(max-width:1100px){.g-4{grid-template-columns:1fr 1fr}.g-5{grid-template-columns:repeat(3,1fr)}.g-3{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){
+  .main{margin-inline-start:0;padding:0 14px 80px}
+  .sidebar{transform:translateX(100%);width:256px;transition:transform .22s}
+  .sidebar.mobile-open{transform:translateX(0)}
+  .sidebar .nav-tx,.sidebar .sb-brand-tx,.sidebar .nav-kbd{opacity:1}
+  .ts-burger{display:grid}
+  .ts-cmd kbd,.ts-crumb{display:none}
+  .g-2,.g-3,.g-4,.g-5{grid-template-columns:1fr}
+  .ts-ai .ts-ai-tx{display:none}
+  .m-sticky{display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(12px);border:1px solid var(--edge);border-radius:14px;padding:10px 14px;margin-top:12px}
+  .m-sticky .mr{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+  .m-sticky .ml{font-size:10px;color:var(--muted)}
+  .store-deck{grid-template-columns:1fr}
+  .scorecard{grid-template-columns:1fr 1fr}
+}
+.mob-scrim{display:none;position:fixed;inset:0;z-index:39;background:rgba(0,0,0,.5)}
+.mob-scrim.open{display:block}
+@media(max-width:760px){.mob-scrim.open{display:block}}
+@media(min-width:761px){.mob-scrim{display:none!important}}
+
+/* ───────── PRESERVED ROAS-CARD (verbatim, scoped) ───────── */
+.roas-card{
+  --canvas-1:#0b1437;--glass-1:#111c44;--glass-2:#162048;
+  --glass-edge:rgba(255,255,255,0.08);--glass-edge-hot:rgba(117,81,255,0.5);
+  --surface-sunken:#1B254B;--text:#ffffff;--text-muted:#A3AED0;--text-subtle:#94a0b8;
+  --accent:#7551FF;--accent-fg:#ffffff;--radius-card:1.125rem;--radius-hero:1.125rem;
+  --shadow-glass:0 0 rgba(0,0,0,0);--shadow-overlay:0 8px 24px rgba(0,0,0,0.5);
+  --up:#0fb37a;--dn:#ef4d5b;
+  --band-red:#ff6b81;--band-orange:#ef9331;--band-green:#34e2ad;--band-blue:#5b8df0;
+  --band-blue-grad:linear-gradient(135deg,#2f6bff,#4d8dff 52%,#85b8ff);
+  --status-warning:#ef9331;--status-warning-bg:rgba(239,147,49,0.16);--status-warning-fg:#f7c897;
+  --chart-line-halo:var(--glass-1);--chart-target-line:#0fb37a;--chart-pin-line:#ef9331;
+  --chart-dot-max:#0fb37a;--chart-dot-min:#ef4d5b;--chart-grid-line:rgba(255,255,255,0.06);
+  --chart-today:var(--accent);--chart-today-pulse:rgba(117,81,255,0.30);--chart-hover-ring:var(--glass-2);
+  --chip-blue-bg:rgba(91,141,240,0.18);--chip-blue-fg:#5b8df0;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  direction:rtl;display:block;max-width:100%;margin:0;box-sizing:border-box;
+  background:var(--glass-1);border:1px solid var(--glass-edge);box-shadow:var(--shadow-glass);
+  border-radius:var(--radius-card);padding:20px;color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans Hebrew",sans-serif;position:relative;
+}
+:where(.light) .roas-card,.roas-card.light,[data-theme="light"] .roas-card{
+  --canvas-1:#F4F7FE;--glass-1:#ffffff;--glass-2:#F4F7FE;
+  --glass-edge:rgba(27,37,75,0.08);--glass-edge-hot:rgba(66,42,251,0.4);
+  --surface-sunken:#F4F7FE;--text:#1B254B;--text-muted:#5b6478;--text-subtle:#5f6680;
+  --accent:#422AFB;--shadow-glass:14px 17px 40px 4px rgba(112,144,176,0.08);
+  --shadow-overlay:0 8px 24px rgba(22,26,48,0.12);
+  --band-red:#e11d48;--band-green:#0f9d6b;--band-blue:#3b82f6;
+  --chart-grid-line:rgba(27,37,75,0.08);--chip-blue-bg:rgba(59,130,246,0.18);--chip-blue-fg:#3b82f6;
+  --status-warning-bg:#fbe6d0;--status-warning-fg:#8e4f0b;
+}
+.roas-card *{box-sizing:border-box}
+.rc-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.rc-head-left{flex:1 1 0;min-width:0}
+.rc-eyebrow{display:block;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:var(--text-subtle);font-weight:600;margin-bottom:4px}
+.rc-tldr{margin:0;font-size:1.05rem;line-height:1.4;font-weight:700;color:var(--text)}
+.rc-tldr .accent{font-weight:800;font-variant-numeric:tabular-nums;color:var(--band-blue)}
+.rc-head-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.rc-head-meta{display:flex;align-items:center;gap:8px}
+.rc-scope{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted)}
+.fresh-chip{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.06em;background:rgba(52,226,173,0.18);color:var(--band-green)}
+.fresh-chip .pulse{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor;animation:rc-pulse 2s ease-out infinite}
+@keyframes rc-pulse{0%{box-shadow:0 0 0 0 currentColor;opacity:1}70%{box-shadow:0 0 0 5px transparent;opacity:.65}100%{box-shadow:0 0 0 0 transparent;opacity:1}}
+.rc-pin-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 10px;border-radius:9999px;background:var(--status-warning-bg);color:var(--status-warning-fg);border:1px solid var(--status-warning)}
+.rc-range{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.rc-range button{height:28px;padding:0 10px;font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:0.03em;border-radius:8px;border:1px solid var(--glass-edge);background:var(--glass-2);color:var(--text-muted);cursor:pointer;line-height:1}
+.rc-range button:hover{color:var(--text);background:var(--glass-1);border-color:var(--glass-edge-hot)}
+.rc-range button.active{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--text)}
+.rc-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;border-radius:var(--radius-card);border:1px solid var(--glass-edge);overflow:hidden;background:color-mix(in srgb,var(--glass-edge) 40%,transparent);margin-bottom:16px}
+.rc-kpi{padding:12px;background:var(--glass-2);display:flex;flex-direction:column;gap:4px}
+.rc-kpi.highlight{background:var(--glass-1)}
+.rc-kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:600}
+.rc-kpi-row{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.rc-kpi-val{direction:ltr;font-size:1.4rem;font-weight:800;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;line-height:1;color:var(--text)}
+.rc-kpi-val.accent-blue{color:var(--band-blue)}
+.rc-kpi-suffix{font-size:10px;font-family:var(--font-mono);color:var(--text-subtle)}
+.band-chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:0.06em;font-family:var(--font-mono)}
+.chip-blue{background:var(--chip-blue-bg);color:var(--chip-blue-fg)}
+.rc-legend{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;padding:0 4px;font-size:11px;color:var(--text-muted)}
+.rc-legend-left{display:flex;align-items:center;gap:16px}
+.rc-legend-item{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);letter-spacing:0.02em}
+.rc-sw-line{display:inline-block;width:16px;height:2px;border-radius:2px;background:var(--band-blue)}
+.rc-sw-target{display:inline-block;width:16px;height:0;border-top:1.5px dashed var(--chart-target-line)}
+.rc-minmax{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.rc-minmax b{color:var(--text);font-weight:700}
+.rc-minmax .sep{opacity:.4;margin:0 8px}
+.rc-chart{position:relative}
+.rc-chart svg{display:block;width:100%;height:200px}
+.rc-overlay{position:absolute;inset:0;pointer-events:none}
+.rc-pin{position:absolute;top:-2px;transform:translateX(-50%)}
+.rc-pin .glyph{display:inline-grid;place-items:center;transform:translateX(-50%);width:18px;height:18px;border-radius:9999px;background:var(--chart-pin-line);color:#fff;cursor:default}
+.rc-pin .glyph svg{width:11px;height:11px}
+.rc-today-label{position:absolute;top:-2px;transform:translateX(-50%)}
+.rc-today-label span{display:inline-block;transform:translateX(-50%);padding:1px 6px;border-radius:9999px;font-size:9px;font-weight:800;line-height:1;color:var(--accent-fg);background:var(--chart-today)}
+.rc-foot{margin-top:12px;padding-top:12px;border-top:1px solid var(--glass-edge);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;font-size:12px}
+.rc-foot-item{display:inline-flex;align-items:baseline;gap:6px}
+.rc-foot-k{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted)}
+.rc-foot-v{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+.rc-foot-delta{font-size:11px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--up)}
+.rc-foot .sep{color:var(--text-subtle);opacity:.4}
+@media (max-width:720px){.roas-card .rc-kpis{grid-template-columns:repeat(2,1fr)}}
+@media (prefers-reduced-motion:reduce){.roas-card .fresh-chip .pulse{animation:none}}
+</style>
+</head>
+<body>
+<div class="mob-scrim" id="mobScrim" onclick="toggleMobNav(false)"></div>
+<div class="app">
+<!-- ═══════ SIDEBAR (flat 10-item list) ═══════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sb-brand">
+    <div class="sb-logo">R</div>
+    <span class="sb-brand-tx">ROAS</span>
+  </div>
+  <nav class="sb-nav" id="sbNav"></nav>
+  <div class="sb-foot">
+    <a class="nav-item" href="#" onclick="openOperator();return false">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-2.7.7 2 2 0 11-4 0 1.6 1.6 0 00-2.7-.7l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00-.7-2.7 2 2 0 010-4 1.6 1.6 0 00.7-2.7l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 002.7-.7 2 2 0 014 0 1.6 1.6 0 002.7.7l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00.7 2.7 2 2 0 010 4 1.6 1.6 0 00-1 .9z" stroke="currentColor" stroke-width="1.6"/></svg>
+      <span class="nav-tx">ניהול</span>
+    </a>
+    <a class="nav-item" href="#" onclick="return false">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="nav-tx">התנתק</span>
+    </a>
+    <div class="theme-seg" role="group" aria-label="ערכת נושא">
+      <button data-tm="system" aria-label="מערכת"><svg viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      <button data-tm="light" aria-label="בהיר"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      <button class="on" data-tm="dark" aria-label="כהה"><svg viewBox="0 0 24 24" fill="none"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+    </div>
+  </div>
+</aside>
+
+<main class="main">
+<!-- ═══════ TOPSTRIP (floating) ═══════ -->
+<div class="topstrip">
+  <div class="ts-left">
+    <button class="ts-burger" onclick="toggleMobNav(true)" aria-label="תפריט"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <div>
+      <div class="ts-crumb">עמודים / <b id="crumb">בית</b></div>
+      <div class="ts-title" id="pageTitle">בית</div>
+    </div>
+  </div>
+  <div class="ts-right">
+    <button class="ts-ai" id="aiBtn"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="8" width="16" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M12 8V4M9 13h.01M15 13h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="ts-ai-tx">ייצא דוח ל-AI</span></button>
+    <span class="chip fresh"><span class="dot"></span>סופי · 08:42</span>
+    <span class="chip src" aria-label="תקינות מקורות נתונים"><svg viewBox="0 0 24 24" fill="none" style="width:12px;height:12px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>מקורות תקינים</span>
+    <span class="chip sync"><svg viewBox="0 0 24 24" fill="none" style="width:12px;height:12px"><path d="M21 12a9 9 0 11-3-6.7L21 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 3v5h-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Sync</span>
+    <button class="ts-cmd"><svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>חיפוש<kbd>⌘K</kbd></button>
+  </div>
+</div>
+<div id="panels">
+
+<!-- ═══════════════ TAB 1 · בית (HOME) ═══════════════ -->
+<section class="tabpanel active" id="tab-home">
+  <!-- mobile sticky roas -->
+  <div class="m-sticky"><div><div class="ml">ROAS · 30 ימים · יעד 3.0</div><div class="mr num">3.16x <span class="delta up" style="font-size:13px">▲ +7.5%</span></div></div><span class="band blue">מעל היעד</span></div>
+
+  <!-- 1 · header & filters -->
+  <div class="sec">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">סקירה כללית</span><span class="sec-h">בית</span><span class="sec-desc">שנה טווח או חנות לעדכון כל המסך.</span></div></div>
+  </div>
+  <div class="card pad" style="margin-bottom:var(--s5)">
+    <div class="filters" style="justify-content:space-between">
+      <div class="filters">
+        <div class="pill-rail"><button>היום</button><button>7 ימים</button><button class="on">30 ימים</button><button>90 ימים</button><button>החודש</button></div>
+        <select class="nsel"><option>כל החנויות</option><option>uzoshop</option><option>360usmile</option><option>Zol Plus</option><option>pdrn skin</option></select>
+        <button class="btn-ghost"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M7 12h10M11 18h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>השוואה</button>
+      </div>
+      <div class="filters">
+        <span class="store-chip" style="font-family:var(--mono)">כל החנויות · 30 ימים · CAD</span>
+        <button class="btn-ghost"><svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>ציון דרך</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 · PER-STORE ROW (comes BEFORE business summary) -->
+  <div class="sec">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">לפי חנות</span><span class="sec-h">ביצועי חנויות</span><span class="sec-desc">כל חנות עם ה-ROAS, ההוצאה וההכנסה שלה. לחיצה פותחת ניתוח מלא.</span></div></div>
+  </div>
+  <div class="store-deck">
+    <!-- uzoshop · healthy green → neutral surface + thin edge -->
+    <div class="store-card edge-green" onclick="openStore('uzoshop')">
+      <div class="sc-head"><span class="sc-name"><bdi dir="ltr">uzoshop</bdi></span><span class="band green">3.41x</span></div>
+      <div class="sc-roas-cap">ROAS · 30 ימים</div>
+      <div class="sc-roas num">3.41x</div>
+      <svg class="spark" viewBox="0 0 80 24" style="width:100%;height:30px"><path d="M2,18 L14,15 L26,16 L38,11 L50,13 L62,8 L78,9" fill="none" stroke="var(--band-green)" stroke-width="2" stroke-linecap="round"/></svg>
+      <div class="sc-grid">
+        <div class="sc-metric"><div class="sc-mk">הוצאה</div><div class="sc-mv red num">C$971 ↓</div></div>
+        <div class="sc-metric"><div class="sc-mk">הכנסה</div><div class="sc-mv green num">C$3,312 ↑</div></div>
+        <div class="sc-metric"><div class="sc-mk">הזמנות</div><div class="sc-mv num">96</div></div>
+        <div class="sc-metric"><div class="sc-mk">AOV</div><div class="sc-mv green num">C$74</div></div>
+      </div>
+      <div class="sc-cpm">
+        <div class="sc-cpm-row"><span class="ld" style="background:#1877f2"></span><span class="nm">Meta</span><span class="num">C$12.40</span></div>
+        <div class="sc-cpm-row"><span class="ld" style="background:#ea4335"></span><span class="nm">Google</span><span class="num">C$16.10</span></div>
+      </div>
+    </div>
+    <!-- 360usmile · blue (>3) → neutral + edge -->
+    <div class="store-card edge-blue" onclick="openStore('360usmile')">
+      <div class="sc-head"><span class="sc-name"><bdi dir="ltr">360usmile</bdi></span><span class="band blue">3.08x</span></div>
+      <div class="sc-roas-cap">ROAS · 30 ימים</div>
+      <div class="sc-roas num">3.08x</div>
+      <svg class="spark" viewBox="0 0 80 24" style="width:100%;height:30px"><path d="M2,14 L14,16 L26,12 L38,13 L50,9 L62,11 L78,10" fill="none" stroke="var(--band-blue)" stroke-width="2" stroke-linecap="round"/></svg>
+      <div class="sc-grid">
+        <div class="sc-metric"><div class="sc-mk">הוצאה</div><div class="sc-mv red num">C$245 ↓</div></div>
+        <div class="sc-metric"><div class="sc-mk">הכנסה</div><div class="sc-mv green num">C$698 ↑</div></div>
+        <div class="sc-metric"><div class="sc-mk">הזמנות</div><div class="sc-mv num">21</div></div>
+        <div class="sc-metric"><div class="sc-mk">AOV</div><div class="sc-mv green num">C$72</div></div>
+      </div>
+      <div class="sc-cpm">
+        <div class="sc-cpm-row"><span class="ld" style="background:#1877f2"></span><span class="nm">Meta</span><span class="num">C$15.80</span></div>
+        <div class="sc-cpm-row"><span class="ld" style="background:#111"></span><span class="nm">TikTok</span><span class="num">C$9.20</span></div>
+      </div>
+    </div>
+    <!-- Zol Plus · orange (at-risk) → full band fill -->
+    <div class="store-card banded orange" onclick="openStore('Zol Plus')">
+      <div class="sc-head"><span class="sc-name"><bdi dir="ltr">Zol Plus</bdi></span><span class="sc-tag">בדיקה</span></div>
+      <div class="sc-roas-cap">ROAS · 30 ימים</div>
+      <div class="sc-roas num">2.10x</div>
+      <svg class="spark" viewBox="0 0 80 24" style="width:100%;height:30px"><path d="M2,10 L14,12 L26,14 L38,13 L50,16 L62,15 L78,17" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".9"/></svg>
+      <div class="sc-grid">
+        <div class="sc-metric"><div class="sc-mk">הוצאה</div><div class="sc-mv num">C$93 ↓</div></div>
+        <div class="sc-metric"><div class="sc-mk">הכנסה</div><div class="sc-mv num">C$195 ↑</div></div>
+        <div class="sc-metric"><div class="sc-mk">הזמנות</div><div class="sc-mv num">6</div></div>
+        <div class="sc-metric"><div class="sc-mk">AOV</div><div class="sc-mv num">C$33</div></div>
+      </div>
+      <div class="sc-cpm">
+        <div class="sc-cpm-row"><span class="ld" style="background:#1877f2"></span><span class="nm">Meta</span><span class="num">C$18.30</span></div>
+      </div>
+    </div>
+    <!-- pdrn skin · red-alarm → full band fill + alarm note -->
+    <div class="store-card banded red" onclick="openStore('pdrn skin')">
+      <div class="sc-head"><span class="sc-name"><bdi dir="ltr">pdrn skin</bdi></span><span class="sc-tag">סיכון</span></div>
+      <div class="sc-roas-cap">ROAS · 30 ימים</div>
+      <div class="sc-roas num">1.60x</div>
+      <div class="sc-alarm">הוצאה מעל $100 ללא מכירות מספקות — בדוק את הקמפיינים</div>
+      <div class="sc-grid">
+        <div class="sc-metric"><div class="sc-mk">הוצאה</div><div class="sc-mv num">C$40 ↓</div></div>
+        <div class="sc-metric"><div class="sc-mk">הכנסה</div><div class="sc-mv num">C$64 ↑</div></div>
+        <div class="sc-metric"><div class="sc-mk">הזמנות</div><div class="sc-mv num">2</div></div>
+        <div class="sc-metric"><div class="sc-mk">AOV</div><div class="sc-mv num">C$32</div></div>
+      </div>
+      <div class="sc-cpm">
+        <div class="sc-cpm-row"><span class="ld" style="background:#ea4335"></span><span class="nm">Google PMax</span><span class="num">C$21.40</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 · store comparison grid (ניתוח השוואתי) + NC footer -->
+  <div class="sec tight">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">ניתוח השוואתי</span><span class="sec-h">השוואת חנויות</span></div></div>
+  </div>
+  <div class="card table-card">
+    <div class="tbl-scroll" style="max-height:none">
+      <table class="data">
+        <thead><tr><th class="sticky-col">חנות</th><th class="r">הוצאה</th><th class="r">הכנסה</th><th class="c">ROAS</th><th class="r">CPM</th><th class="r">AOV</th><th class="r">הזמנות</th></tr></thead>
+        <tbody>
+          <tr><td class="sticky-col"><bdi dir="ltr">uzoshop</bdi></td><td class="r num neg">C$971</td><td class="r num pos">C$3,312</td><td class="c"><span class="band green">3.41x</span></td><td class="r num">C$13.20</td><td class="r num">C$74</td><td class="r num">96</td></tr>
+          <tr><td class="sticky-col"><bdi dir="ltr">360usmile</bdi></td><td class="r num neg">C$245</td><td class="r num pos">C$698</td><td class="c"><span class="band blue">3.08x</span></td><td class="r num">C$12.10</td><td class="r num">C$72</td><td class="r num">21</td></tr>
+          <tr><td class="sticky-col"><bdi dir="ltr">Zol Plus</bdi></td><td class="r num neg">C$93</td><td class="r num pos">C$195</td><td class="c"><span class="band orange">2.10x</span></td><td class="r num">C$18.30</td><td class="r num">C$33</td><td class="r num">6</td></tr>
+          <tr><td class="sticky-col"><bdi dir="ltr">pdrn skin</bdi></td><td class="r num neg">C$40</td><td class="r num pos">C$64</td><td class="c"><span class="band red">1.60x</span></td><td class="r num">C$21.40</td><td class="r num">C$32</td><td class="r num">2</td></tr>
+        </tbody>
+        <tfoot><tr><td class="sticky-col">סך הכל</td><td class="r num">C$1,349</td><td class="r num">C$4,269</td><td class="c"><span class="band blue">3.16x</span></td><td class="r num">C$14.10</td><td class="r num">C$68</td><td class="r num">125</td></tr></tfoot>
+      </table>
+    </div>
+    <div class="nc-well" style="margin:0;border-radius:0 0 var(--r-md) var(--r-md)">
+      <span class="k">NC-ROAS · נטו</span><span class="v" style="color:var(--band-blue)">2.13×</span><span class="spill warn" style="height:18px">ביטחון נמוך</span>
+      <span class="divid"></span>
+      <span class="k">nCAC</span><span class="v">C$28</span>
+      <span class="k" style="margin-inline-start:auto">87 חדשות · 31 חוזרות · 6% לא מסווג</span>
+    </div>
+  </div>
+
+  <!-- 4 · סיכום עסקי = TWO ROWS compact KPI tiles -->
+  <div class="sec tight">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">סיכום עסקי</span><span class="sec-h">מרכז הפיקוד</span></div></div>
+    <div class="sec-r"><span class="spill live" style="height:26px"><span class="sd"></span>כיסוי ייחוס 94%</span></div>
+  </div>
+  <!-- Row 1: 4-up -->
+  <div class="tile-panel g-4" style="margin-bottom:var(--s4)">
+    <div class="kpi-tile"><div class="k"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>הוצאת פרסום</div><div class="vrow"><span class="v sm num">C$1,349</span><span class="cur">CAD</span><span class="delta dn">▲ 6%</span></div><div class="cmp"><span>vs קודם <b>C$1,272</b></span><span class="flag">סופי</span></div></div>
+    <div class="kpi-tile"><div class="k"><svg viewBox="0 0 24 24" fill="none"><path d="M3 17l6-6 4 4 7-7M21 8v4h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>הכנסות</div><div class="vrow"><span class="v sm num">C$4,269</span><span class="cur">CAD</span><span class="delta up">▲ 9%</span></div><div class="cmp"><span>vs קודם <b>C$3,916</b></span></div></div>
+    <div class="kpi-tile"><div class="k"><svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18M7 14l3-3 3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>רווח תפעולי</div><div class="vrow"><span class="v sm num">C$1,853</span><span class="cur">CAD</span><span class="delta up">▲ 12%</span></div><div class="cmp"><span>vs קודם <b>C$1,654</b></span><span class="spill live" style="height:16px"><span class="sd"></span>LIVE</span></div></div>
+    <div class="kpi-tile"><div class="k"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 109 9h-9V3z" stroke="currentColor" stroke-width="1.8"/></svg>MER</div><div class="vrow"><span class="v sm num" style="color:var(--band-blue)">3.16x</span><span class="band blue" style="height:18px">מעולה</span></div><div class="cmp"><span>vs קודם <b>2.94x</b></span></div></div>
+  </div>
+  <!-- Row 2: 3-up + NC subordinate tile -->
+  <div class="grid g-2" style="grid-template-columns:2fr 1fr;align-items:stretch">
+    <div class="tile-panel g-3">
+      <div class="kpi-tile"><div class="k"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="20" r="1.5" fill="currentColor"/><circle cx="18" cy="20" r="1.5" fill="currentColor"/><path d="M2 3h3l2.4 12.4a1 1 0 001 .8h9.5a1 1 0 001-.8L21 7H6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>הזמנות</div><div class="vrow"><span class="v sm num">125</span><span class="delta up">▲ 8%</span></div><div class="cmp"><span>vs קודם <b>116</b></span></div></div>
+      <div class="kpi-tile"><div class="k"><svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18M8 17V9M13 17V5M18 17v-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>CPM עסקי</div><div class="vrow"><span class="v sm num">C$14.10</span><span class="cur">CAD</span><span class="delta up">▼ 4%</span></div><div class="cmp"><span>vs קודם <b>C$14.70</b></span></div></div>
+      <div class="kpi-tile"><div class="k"><svg viewBox="0 0 24 24" fill="none"><path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>מלאי (COGS)</div><div class="vrow"><span class="v sm num">C$1,067</span><span class="cur">CAD</span></div><div class="cmp"><span>~25% מהמחזור</span></div></div>
+    </div>
+    <div class="card pad" style="border-inline-start:4px solid var(--band-blue)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px"><span style="font-weight:700;font-size:var(--t-sm)">לקוחות חדשים · שאלה אחרת</span><span class="spill warn" style="height:18px">ביטחון נמוך</span></div>
+      <div style="display:flex;align-items:baseline;gap:8px"><span class="v num" style="font-size:var(--t-2xl);font-weight:600;color:var(--band-blue)">2.13×</span><span style="font-size:10px;color:var(--muted)">NC-ROAS · נטו (אחרי החזרים)</span></div>
+      <div style="font-size:var(--t-cap);color:var(--muted);margin-top:8px">nCAC <b style="color:var(--ink)" class="num">C$28</b> · 87 חדשות · 31 חוזרות · 6% לא מסווג</div>
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;font-size:10px">
+        <div class="sc-cpm-row" style="font-size:11px"><span class="ld" style="background:#1877f2;width:8px;height:8px;border-radius:3px"></span><span class="nm" style="flex:1">Meta</span><span class="num" style="color:var(--band-blue)">3.2×</span></div>
+        <div class="sc-cpm-row" style="font-size:11px"><span class="ld" style="background:#ea4335;width:8px;height:8px;border-radius:3px"></span><span class="nm" style="flex:1">Google</span><span class="num" style="color:var(--band-orange)">2.4×</span></div>
+        <div class="sc-cpm-row" style="font-size:11px"><span class="ld" style="background:#111;width:8px;height:8px;border-radius:3px"></span><span class="nm" style="flex:1">TikTok</span><span class="num" style="color:var(--band-red)">1.9×</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 · ROAS vs Target Chart (PRESERVED VERBATIM) -->
+  <div class="sec tight">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">ביצוע מול יעד</span><span class="sec-h">ROAS מול יעד 3.0</span></div></div>
+  </div>
+  <section class="roas-card" dir="rtl">
+    <div class="rc-head">
+      <div class="rc-head-left">
+        <span class="rc-eyebrow">מטרה 3.0 · 30 ימים</span>
+        <h3 class="rc-tldr">ה-ROAS עלה ל-<span class="accent">3.2</span> ב-30 הימים האחרונים — מעל היעד, עם מגמת שיפור מתמשכת.</h3>
+      </div>
+      <div class="rc-head-right">
+        <div class="rc-head-meta">
+          <span class="fresh-chip live" data-stage="fresh"><span class="pulse" aria-hidden="true"></span><bdi dir="ltr">08:42</bdi></span>
+          <span class="rc-scope">כל החנויות</span>
+        </div>
+        <span class="rc-pin-chip"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="width:12px;height:12px"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.4" fill="currentColor"/></svg>3 ציוני דרך</span>
+        <div class="rc-range" role="group" aria-label="טווח תאריכים לתרשים">
+          <button type="button">7</button>
+          <button type="button" class="active" aria-pressed="true">30</button>
+          <button type="button">90</button>
+          <button type="button">החודש</button>
+          <button type="button">מותאם</button>
+        </div>
+      </div>
+    </div>
+    <div class="rc-kpis">
+      <div class="rc-kpi"><span class="rc-kpi-label">הכנסות</span><div class="rc-kpi-row"><bdi class="rc-kpi-val" dir="ltr">C$4,269</bdi><span class="rc-kpi-suffix">CAD</span></div></div>
+      <div class="rc-kpi highlight"><span class="rc-kpi-label">ROAS</span><div class="rc-kpi-row"><bdi class="rc-kpi-val accent-blue" dir="ltr">3.16x</bdi><span class="band-chip chip-blue">מעולה</span></div></div>
+      <div class="rc-kpi"><span class="rc-kpi-label">הוצאת פרסום</span><div class="rc-kpi-row"><bdi class="rc-kpi-val" dir="ltr">C$1,349</bdi><span class="rc-kpi-suffix">CAD</span></div></div>
+      <div class="rc-kpi"><span class="rc-kpi-label">רווח תפעולי</span><div class="rc-kpi-row"><bdi class="rc-kpi-val" dir="ltr">C$1,853</bdi><span class="rc-kpi-suffix">CAD</span></div></div>
+      <div class="rc-kpi"><span class="rc-kpi-label">CPM</span><div class="rc-kpi-row"><bdi class="rc-kpi-val" dir="ltr">C$14.10</bdi><span class="rc-kpi-suffix">CAD</span></div></div>
+    </div>
+    <div class="rc-legend">
+      <div class="rc-legend-left">
+        <span class="rc-legend-item"><span class="rc-sw-line"></span>ROAS יומי</span>
+        <span class="rc-legend-item"><span class="rc-sw-target"></span>יעד 3.0</span>
+      </div>
+      <div class="rc-minmax">מקסימום: <b>3.95</b><span class="sep">·</span>מינימום: <b>2.20</b></div>
+    </div>
+    <div class="rc-chart">
+      <svg viewBox="0 0 1000 220" preserveAspectRatio="none" width="100%" height="200" role="img" aria-label="גרף ROAS יומי מול יעד 3.0">
+        <defs>
+          <linearGradient id="rcArea" x1="0" y1="20" x2="0" y2="180" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#5b8df0" stop-opacity="0.20"/>
+            <stop offset="100%" stop-color="#5b8df0" stop-opacity="0"/>
+          </linearGradient>
+          <clipPath id="rcClip"><rect x="40" y="16" width="960" height="148"/></clipPath>
+        </defs>
+        <g stroke="var(--chart-grid-line)" stroke-width="1" stroke-dasharray="3 5">
+          <line x1="40" x2="1000" y1="20" y2="20"/><line x1="40" x2="1000" y1="60" y2="60"/>
+          <line x1="40" x2="1000" y1="100" y2="100"/><line x1="40" x2="1000" y1="140" y2="140"/>
+        </g>
+        <g font-family="var(--font-mono,ui-monospace)" font-size="10" fill="var(--text-subtle)">
+          <text x="0" y="24">4.0</text><text x="0" y="64">3.0</text><text x="0" y="104">2.0</text><text x="0" y="144">1.0</text>
+        </g>
+        <path clip-path="url(#rcClip)" fill="url(#rcArea)" d="M40.00,75.20 C45.52,74.13 62.06,68.33 73.10,68.80 C84.13,69.27 95.17,78.80 106.21,78.00 C117.24,77.20 128.28,67.67 139.31,64.00 C150.34,60.33 161.38,52.67 172.41,56.00 C183.44,59.33 194.49,78.00 205.52,84.00 C216.56,90.00 227.59,95.00 238.62,92.00 C249.65,89.00 260.69,73.00 271.72,66.00 C282.75,59.00 293.79,53.67 304.83,50.00 C315.87,46.33 326.90,42.67 337.93,44.00 C348.96,45.33 360.00,55.00 371.03,58.00 C382.06,61.00 393.10,65.33 404.14,62.00 C415.18,58.67 426.21,43.00 437.24,38.00 C448.27,33.00 459.30,30.33 470.34,32.00 C481.38,33.67 492.41,42.53 503.45,48.00 C514.49,53.47 525.51,60.80 536.55,64.80 C547.58,68.80 558.62,73.80 569.66,72.00 C580.69,70.20 591.73,59.00 602.76,54.00 C613.79,49.00 624.83,46.33 635.86,42.00 C646.89,37.67 657.94,31.33 668.97,28.00 C680.00,24.67 691.04,20.67 702.07,22.00 C713.10,23.33 724.13,31.00 735.17,36.00 C746.20,41.00 757.25,47.87 768.28,52.00 C779.31,56.13 790.35,61.80 801.38,60.80 C812.41,59.80 823.45,49.47 834.48,46.00 C845.51,42.53 856.56,38.33 867.59,40.00 C878.62,41.67 889.66,52.13 900.69,56.00 C911.72,59.87 922.75,64.40 933.79,63.20 C944.82,62.00 955.87,50.40 966.90,48.80 C977.93,47.20 994.48,52.80 1000.00,53.60 L1000.00,180.00 L40.00,180.00 Z"/>
+        <line x1="40" x2="1000" y1="60" y2="60" stroke="var(--chart-target-line)" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.7"/>
+        <g stroke="var(--chart-pin-line)" stroke-width="1.2" opacity="0.5" stroke-dasharray="2 3">
+          <line x1="304.83" x2="304.83" y1="20" y2="190"/><line x1="569.66" x2="569.66" y1="20" y2="190"/><line x1="834.48" x2="834.48" y1="20" y2="190"/>
+        </g>
+        <path fill="none" stroke="var(--chart-line-halo)" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" opacity="0.9" d="M40.00,75.20 C45.52,74.13 62.06,68.33 73.10,68.80 C84.13,69.27 95.17,78.80 106.21,78.00 C117.24,77.20 128.28,67.67 139.31,64.00 C150.34,60.33 161.38,52.67 172.41,56.00 C183.44,59.33 194.49,78.00 205.52,84.00 C216.56,90.00 227.59,95.00 238.62,92.00 C249.65,89.00 260.69,73.00 271.72,66.00 C282.75,59.00 293.79,53.67 304.83,50.00 C315.87,46.33 326.90,42.67 337.93,44.00 C348.96,45.33 360.00,55.00 371.03,58.00 C382.06,61.00 393.10,65.33 404.14,62.00 C415.18,58.67 426.21,43.00 437.24,38.00 C448.27,33.00 459.30,30.33 470.34,32.00 C481.38,33.67 492.41,42.53 503.45,48.00 C514.49,53.47 525.51,60.80 536.55,64.80 C547.58,68.80 558.62,73.80 569.66,72.00 C580.69,70.20 591.73,59.00 602.76,54.00 C613.79,49.00 624.83,46.33 635.86,42.00 C646.89,37.67 657.94,31.33 668.97,28.00 C680.00,24.67 691.04,20.67 702.07,22.00 C713.10,23.33 724.13,31.00 735.17,36.00 C746.20,41.00 757.25,47.87 768.28,52.00 C779.31,56.13 790.35,61.80 801.38,60.80 C812.41,59.80 823.45,49.47 834.48,46.00 C845.51,42.53 856.56,38.33 867.59,40.00 C878.62,41.67 889.66,52.13 900.69,56.00 C911.72,59.87 922.75,64.40 933.79,63.20 C944.82,62.00 955.87,50.40 966.90,48.80 C977.93,47.20 994.48,52.80 1000.00,53.60"/>
+        <path fill="none" stroke="#5b8df0" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" data-band="blue" d="M40.00,75.20 C45.52,74.13 62.06,68.33 73.10,68.80 C84.13,69.27 95.17,78.80 106.21,78.00 C117.24,77.20 128.28,67.67 139.31,64.00 C150.34,60.33 161.38,52.67 172.41,56.00 C183.44,59.33 194.49,78.00 205.52,84.00 C216.56,90.00 227.59,95.00 238.62,92.00 C249.65,89.00 260.69,73.00 271.72,66.00 C282.75,59.00 293.79,53.67 304.83,50.00 C315.87,46.33 326.90,42.67 337.93,44.00 C348.96,45.33 360.00,55.00 371.03,58.00 C382.06,61.00 393.10,65.33 404.14,62.00 C415.18,58.67 426.21,43.00 437.24,38.00 C448.27,33.00 459.30,30.33 470.34,32.00 C481.38,33.67 492.41,42.53 503.45,48.00 C514.49,53.47 525.51,60.80 536.55,64.80 C547.58,68.80 558.62,73.80 569.66,72.00 C580.69,70.20 591.73,59.00 602.76,54.00 C613.79,49.00 624.83,46.33 635.86,42.00 C646.89,37.67 657.94,31.33 668.97,28.00 C680.00,24.67 691.04,20.67 702.07,22.00 C713.10,23.33 724.13,31.00 735.17,36.00 C746.20,41.00 757.25,47.87 768.28,52.00 C779.31,56.13 790.35,61.80 801.38,60.80 C812.41,59.80 823.45,49.47 834.48,46.00 C845.51,42.53 856.56,38.33 867.59,40.00 C878.62,41.67 889.66,52.13 900.69,56.00 C911.72,59.87 922.75,64.40 933.79,63.20 C944.82,62.00 955.87,50.40 966.90,48.80 C977.93,47.20 994.48,52.80 1000.00,53.60"/>
+        <g fill="#5b8df0">
+          <circle cx="40.00" cy="75.20" r="2.5"/><circle cx="73.10" cy="68.80" r="2.5"/><circle cx="106.21" cy="78.00" r="2.5"/>
+          <circle cx="139.31" cy="64.00" r="2.5"/><circle cx="172.41" cy="56.00" r="2.5"/><circle cx="205.52" cy="84.00" r="2.5"/>
+          <circle cx="271.72" cy="66.00" r="2.5"/><circle cx="304.83" cy="50.00" r="2.5"/><circle cx="337.93" cy="44.00" r="2.5"/>
+          <circle cx="371.03" cy="58.00" r="2.5"/><circle cx="404.14" cy="62.00" r="2.5"/><circle cx="437.24" cy="38.00" r="2.5"/>
+          <circle cx="470.34" cy="32.00" r="2.5"/><circle cx="503.45" cy="48.00" r="2.5"/><circle cx="536.55" cy="64.80" r="2.5"/>
+          <circle cx="569.66" cy="72.00" r="2.5"/><circle cx="602.76" cy="54.00" r="2.5"/><circle cx="635.86" cy="42.00" r="2.5"/>
+          <circle cx="668.97" cy="28.00" r="2.5"/><circle cx="735.17" cy="36.00" r="2.5"/><circle cx="768.28" cy="52.00" r="2.5"/>
+          <circle cx="801.38" cy="60.80" r="2.5"/><circle cx="834.48" cy="46.00" r="2.5"/><circle cx="867.59" cy="40.00" r="2.5"/>
+          <circle cx="900.69" cy="56.00" r="2.5"/><circle cx="933.79" cy="63.20" r="2.5"/><circle cx="966.90" cy="48.80" r="2.5"/>
+          <circle cx="1000.00" cy="53.60" r="2.5"/>
+        </g>
+        <circle cx="702.07" cy="22.00" r="3" fill="var(--chart-dot-max)"/>
+        <text x="702.07" y="14.00" text-anchor="middle" font-family="var(--font-mono,ui-monospace)" font-size="10" font-weight="700" fill="var(--chart-dot-max)">שיא 3.9</text>
+        <circle cx="238.62" cy="92.00" r="3" fill="var(--chart-dot-min)"/>
+        <text x="238.62" y="108.00" text-anchor="middle" font-family="var(--font-mono,ui-monospace)" font-size="10" font-weight="700" fill="var(--chart-dot-min)">שפל 2.2</text>
+        <line x1="1000" x2="1000" y1="20" y2="180" stroke="var(--chart-today)" stroke-width="1.5" stroke-dasharray="2 4" opacity="0.85"/>
+        <circle cx="1000" cy="53.60" r="6" fill="var(--chart-today-pulse)"/>
+        <circle cx="1000" cy="53.60" r="4" fill="var(--chart-today)"/>
+        <g font-family="var(--font-mono,ui-monospace)" font-size="10" fill="var(--text-subtle)">
+          <text x="40" y="216" text-anchor="start">23 במאי</text>
+          <text x="536.55" y="216" text-anchor="middle">7 ביוני</text>
+          <text x="1000" y="216" text-anchor="end">21 ביוני</text>
+        </g>
+      </svg>
+      <div class="rc-overlay" dir="ltr">
+        <div class="rc-pin" style="left:30.48%"><span class="glyph" role="img" aria-label="מבצע מחזור · ROAS 3.25"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.6" fill="currentColor"/></svg></span></div>
+        <div class="rc-pin" style="left:56.97%"><span class="glyph" role="img" aria-label="השקת מוצר · ROAS 3.20"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.6" fill="currentColor"/></svg></span></div>
+        <div class="rc-pin" style="left:83.45%"><span class="glyph" role="img" aria-label="הרחבת תקציב · ROAS 3.28"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.6" fill="currentColor"/></svg></span></div>
+        <div class="rc-today-label" style="left:100%"><span dir="rtl">היום</span></div>
+      </div>
+    </div>
+    <div class="rc-foot">
+      <div class="rc-foot-item"><span class="rc-foot-k">ROAS תקופה קודמת</span><span class="rc-foot-v">2.94</span><span class="rc-foot-delta">+7.5%</span></div>
+      <span class="sep">·</span>
+      <div class="rc-foot-item"><span class="rc-foot-k">הכנסות שכבר נצברו</span><span class="rc-foot-v">C$4,269 CAD</span></div>
+      <span class="sep">·</span>
+      <div class="rc-foot-item"><span class="rc-foot-k">ימי פעילות</span><span class="rc-foot-v">30</span></div>
+    </div>
+  </section>
+
+  <!-- 6 · New Customers by Platform -->
+  <div class="sec tight">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">רכישת לקוחות חדשים</span><span class="sec-h">לקוחות חדשים לפי פלטפורמה</span></div></div>
+    <div class="sec-r"><span class="store-chip" style="color:var(--muted)">6% מההזמנות לא-מסווגות</span><span class="band blue" style="height:26px">NC-ROAS עסקי · 2.13×</span></div>
+  </div>
+  <div class="grid g-3">
+    <div class="card pad"><div class="sc-cpm-row" style="font-size:13px;margin-bottom:10px"><span class="ld" style="background:#1877f2;width:12px;height:12px;border-radius:4px"></span><span class="nm" style="flex:1;font-weight:600">Meta</span><span style="font-size:11px;color:var(--muted)">52 חדשים</span></div><div class="nc-track"><div class="nc-fill" style="width:80%;background:var(--band-blue)"></div></div><div style="display:flex;justify-content:space-between;margin-top:10px;font-size:var(--t-cap)"><span class="num">nCAC C$24</span><span class="band blue" style="height:18px">3.2×</span></div></div>
+    <div class="card pad"><div class="sc-cpm-row" style="font-size:13px;margin-bottom:10px"><span class="ld" style="background:#ea4335;width:12px;height:12px;border-radius:4px"></span><span class="nm" style="flex:1;font-weight:600">Google</span><span style="font-size:11px;color:var(--muted)">23 חדשים</span></div><div class="nc-track"><div class="nc-fill" style="width:60%;background:var(--band-orange)"></div></div><div style="display:flex;justify-content:space-between;margin-top:10px;font-size:var(--t-cap)"><span class="num">nCAC C$31</span><span class="band orange" style="height:18px">2.4×</span></div></div>
+    <div class="card pad"><div class="sc-cpm-row" style="font-size:13px;margin-bottom:10px"><span class="ld" style="background:#111;width:12px;height:12px;border-radius:4px"></span><span class="nm" style="flex:1;font-weight:600">TikTok</span><span style="font-size:11px;color:var(--muted)">12 חדשים</span></div><div class="nc-track"><div class="nc-fill" style="width:47%;background:var(--band-red)"></div></div><div style="display:flex;justify-content:space-between;margin-top:10px;font-size:var(--t-cap)"><span class="num">nCAC C$39</span><span class="band red" style="height:18px">1.9×</span></div></div>
+  </div>
+
+  <!-- 7 · bottom 2-up: InsightsBoard + ActivityFeed -->
+  <div class="grid g-2" style="margin-top:var(--s5);align-items:start">
+    <div class="card pad">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3)"><span style="display:flex;align-items:center;gap:8px;font-weight:700"><svg viewBox="0 0 24 24" fill="none" style="width:18px;height:18px;color:var(--accent)"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15l-1.9-4.1L5.5 9l4.6-1.4L12 3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>תובנות חכמות</span><span style="font-size:10px;color:var(--faint)">3 תובנות פעילות</span></div>
+      <div class="insight urgent"><div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 4l-7 12A2 2 0 005 19h14a2 2 0 001.7-3L13.7 4a2 2 0 00-3.4 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><div class="tt">pdrn skin מתחת לסף הרווחיות <span class="band red" style="height:16px;font-size:9px">קריטי</span></div><div class="ds">ROAS 1.60 ב-7 הימים — מתחת ל-2.0. שקול הקטנת תקציב או עצירת PMax.</div><div class="act">בדוק קמפיין ←</div></div></div>
+      <div class="insight warn"><div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5l3 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><div class="tt">עייפות קריאייטיב · וידאו-טיקטוק</div><div class="ds">CTR ירד 22% וה-CPM עלה 18% ב-5 ימים. רענן קריאייטיב.</div><div class="act">צפה בנכסים ←</div></div></div>
+      <div class="insight good"><div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M4 14l5 5 11-13" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><div class="tt">קיץ-מבצע סוגר את היעד</div><div class="ds">ROAS 3.60 ב-uzoshop. הזדמנות להרחבת תקציב מבוקרת.</div><div class="act">הרחב תקציב ←</div></div></div>
+    </div>
+    <div class="card pad">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3)"><span style="font-weight:700">פיד פעילות</span><span class="live-badge"><span class="ld"></span>LIVE</span></div>
+      <div class="feed-item"><div class="feed-av sale"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="20" r="1.5" fill="currentColor"/><circle cx="18" cy="20" r="1.5" fill="currentColor"/><path d="M2 3h3l2.4 12.4a1 1 0 001 .8h9.5a1 1 0 001-.8L21 7H6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="feed-main"><div class="feed-t">הזמנה חדשה · uzoshop</div><div class="feed-meta">לפני 40ש׳ <span class="plat-badge" style="background:rgba(24,119,242,.18);color:#5b8df0">META</span></div></div><div class="feed-amt num">C$48.20</div></div>
+      <div class="feed-item"><div class="feed-av cart"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div><div class="feed-main"><div class="feed-t">הוספה לסל · 360usmile</div><div class="feed-meta">לפני 2 דק׳ <span class="plat-badge" style="background:rgba(234,67,53,.18);color:#ff9a8a">GOOGLE</span></div></div><div class="feed-amt num" style="color:var(--muted)">C$26.80</div></div>
+      <div class="feed-item"><div class="feed-av sale"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="20" r="1.5" fill="currentColor"/><circle cx="18" cy="20" r="1.5" fill="currentColor"/><path d="M2 3h3l2.4 12.4a1 1 0 001 .8h9.5a1 1 0 001-.8L21 7H6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="feed-main"><div class="feed-t">הזמנה חדשה · uzoshop</div><div class="feed-meta">לפני 5 דק׳ <span class="plat-badge" style="background:rgba(24,119,242,.18);color:#5b8df0">META</span></div></div><div class="feed-amt num">C$37.60</div></div>
+      <div class="feed-item"><div class="feed-av refund"><svg viewBox="0 0 24 24" fill="none"><path d="M3 8a9 9 0 11-2 5.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 4v4h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="feed-main"><div class="feed-t">החזר · Zol Plus</div><div class="feed-meta">לפני 11 דק׳ <span class="plat-badge" style="background:rgba(0,0,0,.2);color:var(--muted)">ישיר</span></div></div><div class="feed-amt neg num">−C$10.80</div></div>
+      <div style="text-align:start;margin-top:10px"><span class="link-cta" onclick="go('activity')">ראה הכל ‹</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ TAB 2 · פעילות (ACTIVITY) ═══════════════ -->
+<section class="tabpanel" id="tab-activity">
+  <div class="sec">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">כל האירועים · 30 הימים האחרונים</span><span class="sec-h">פעילות</span></div></div>
+  </div>
+  <div class="subtabs" data-sub="act">
+    <button class="on" data-p="act-feed"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>פיד חי</button>
+    <button data-p="act-stats"><svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18M8 17V9M13 17V5M18 17v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>סטטיסטיקות והתפלגויות</button>
+  </div>
+
+  <!-- 2.1 LIVE FEED -->
+  <div class="subpanel on" id="act-feed">
+    <div class="card">
+      <div class="tbl-toolbar">
+        <select class="nsel"><option>כל החנויות</option><option>uzoshop</option><option>360usmile</option><option>Zol Plus</option><option>pdrn skin</option></select>
+        <select class="nsel"><option>כל הימים</option><option>היום</option><option>אתמול</option><option>20/06/2026</option></select>
+        <div class="pill-rail"><button class="on">הכל</button><button>מכירות</button><button>החזרים</button><button>עגלה</button></div>
+        <span class="grow"></span><span class="live-badge"><span class="ld"></span>LIVE</span>
+      </div>
+      <div class="pad">
+        <div class="day-head">היום · 22 ביוני</div>
+        <div class="feed-item"><div class="feed-av sale"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="20" r="1.5" fill="currentColor"/><circle cx="18" cy="20" r="1.5" fill="currentColor"/><path d="M2 3h3l2.4 12.4a1 1 0 001 .8h9.5a1 1 0 001-.8L21 7H6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="feed-main"><div class="feed-t">מכירה · נורת לילה כוכבים</div><div class="feed-meta"><span class="store-chip"><span class="sc" style="background:var(--band-green)"></span><bdi dir="ltr">uzoshop</bdi></span><span class="plat-badge" style="background:rgba(24,119,242,.18);color:#5b8df0">META</span><bdi dir="ltr" class="num">08:41</bdi></div></div><div class="feed-amt num">C$48.20</div></div>
+        <div class="feed-item"><div class="feed-av cart"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div><div class="feed-main"><div class="feed-t">הוספה לסל · מברשת סיליקון</div><div class="feed-meta"><span class="store-chip"><span class="sc" style="background:var(--band-blue)"></span><bdi dir="ltr">360usmile</bdi></span><span class="plat-badge" style="background:rgba(234,67,53,.18);color:#ff9a8a">GOOGLE</span><bdi dir="ltr" class="num">08:39</bdi></div></div></div>
+        <div class="feed-item"><div class="feed-av sale"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="20" r="1.5" fill="currentColor"/><circle cx="18" cy="20" r="1.5" fill="currentColor"/><path d="M2 3h3l2.4 12.4a1 1 0 001 .8h9.5a1 1 0 001-.8L21 7H6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="feed-main"><div class="feed-t">מכירה · ערכת טיפוח עור</div><div class="feed-meta"><span class="store-chip"><span class="sc" style="background:var(--band-green)"></span><bdi dir="ltr">uzoshop</bdi></span><span class="plat-badge" style="background:rgba(24,119,242,.18);color:#5b8df0">META</span><bdi dir="ltr" class="num">08:37</bdi></div></div><div class="feed-amt num">C$37.60</div></div>
+        <div class="feed-item"><div class="feed-av refund"><svg viewBox="0 0 24 24" fill="none"><path d="M3 8a9 9 0 11-2 5.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 4v4h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="feed-main"><div class="feed-t">החזר · מארז 3 יח׳</div><div class="feed-meta"><span class="store-chip"><span class="sc" style="background:var(--band-orange)"></span><bdi dir="ltr">Zol Plus</bdi></span><bdi dir="ltr" class="num">08:30</bdi></div></div><div class="feed-amt neg num">−C$10.80</div></div>
+        <div class="day-head" style="margin-top:14px">אתמול · 21 ביוני</div>
+        <div class="feed-item"><div class="feed-av sale"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="20" r="1.5" fill="currentColor"/><circle cx="18" cy="20" r="1.5" fill="currentColor"/><path d="M2 3h3l2.4 12.4a1 1 0 001 .8h9.5a1 1 0 001-.8L21 7H6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="feed-main"><div class="feed-t">מכירה · נורת לילה כוכבים</div><div class="feed-meta"><span class="store-chip"><span class="sc" style="background:var(--band-green)"></span><bdi dir="ltr">uzoshop</bdi></span><span class="plat-badge" style="background:rgba(0,0,0,.2);color:var(--muted)">ישיר</span><bdi dir="ltr" class="num">23:14</bdi></div></div><div class="feed-amt num">C$42.10</div></div>
+        <div class="feed-item"><div class="feed-av sale"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="20" r="1.5" fill="currentColor"/><circle cx="18" cy="20" r="1.5" fill="currentColor"/><path d="M2 3h3l2.4 12.4a1 1 0 001 .8h9.5a1 1 0 001-.8L21 7H6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="feed-main"><div class="feed-t">מכירה · מסכת LED</div><div class="feed-meta"><span class="store-chip"><span class="sc" style="background:var(--band-red)"></span><bdi dir="ltr">pdrn skin</bdi></span><span class="plat-badge" style="background:rgba(234,67,53,.18);color:#ff9a8a">GOOGLE</span><bdi dir="ltr" class="num">21:02</bdi></div></div><div class="feed-amt num">C$31.90</div></div>
+      </div>
+      <div class="tbl-toolbar" style="border-top:1px solid var(--edge);border-bottom:none;justify-content:center;gap:16px">
+        <button class="btn-ghost"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>הקודם</button>
+        <span style="font-size:var(--t-cap);color:var(--muted);font-family:var(--mono)">עמוד 1 מתוך 14</span>
+        <button class="btn-ghost">הבא<svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2.2 STATS -->
+  <div class="subpanel" id="act-stats">
+    <div class="filters" style="justify-content:space-between;margin-bottom:var(--s4)">
+      <div style="display:flex;align-items:center;gap:10px"><svg viewBox="0 0 24 24" fill="none" style="width:18px;height:18px;color:var(--accent)"><path d="M3 3v18h18M8 17V9M13 17V5M18 17v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span style="font-weight:700">סטטיסטיקות והתפלגויות</span></div>
+      <div class="filters">
+        <div class="pill-rail"><button class="on">7 ימים</button><button>30 ימים</button><button>מותאם</button></div>
+        <div class="pill-rail"><button class="on">לפי הזמנות</button><button>לפי הכנסה</button></div>
+      </div>
+    </div>
+    <div class="grid g-4" style="margin-bottom:var(--s4)">
+      <div class="card kpi-tile"><div class="k">הזמנות בטווח</div><div class="vrow"><span class="v num">125</span></div></div>
+      <div class="card kpi-tile"><div class="k">מיוחס לפרסום ממומן</div><div class="vrow"><span class="v num" style="color:var(--accent)">71%</span></div></div>
+      <div class="card kpi-tile"><div class="k">הוספות לעגלה</div><div class="vrow"><span class="v num">418</span></div></div>
+      <div class="card kpi-tile"><div class="k">כיסוי קליק-ראשון <svg viewBox="0 0 24 24" fill="none" style="width:13px;height:13px;color:var(--faint)"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 16v-4M12 8h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div><div class="vrow"><span class="v num">62%</span></div></div>
+    </div>
+    <div class="grid g-2" style="margin-bottom:var(--s4)">
+      <div class="card pad"><div style="font-weight:700;font-size:var(--t-sm);margin-bottom:14px">ממומן מול לא-ממומן</div><div style="display:flex;align-items:center;gap:20px"><div class="donut" style="background:conic-gradient(var(--accent) 0 71%,var(--sunken) 71% 100%)"><div class="hole"><div class="hp num">71%</div><div class="hl">ממומן</div></div></div><div class="legend-list"><div class="li"><span class="sw" style="background:var(--accent)"></span><span class="lbl">ממומן</span><span class="val num">89</span></div><div class="li"><span class="sw" style="background:var(--sunken)"></span><span class="lbl">לא-ממומן</span><span class="val num">36</span></div></div></div></div>
+      <div class="card pad"><div style="font-weight:700;font-size:var(--t-sm);margin-bottom:14px">התפלגות לפי פלטפורמה</div><div style="display:flex;align-items:center;gap:20px"><div class="donut" style="background:conic-gradient(#5b8df0 0 58%,#EF9331 58% 84%,#111 84% 100%)"><div class="hole"><div class="hp">Meta</div><div class="hl">58%</div></div></div><div class="legend-list"><div class="li"><span class="sw" style="background:#5b8df0"></span><span class="lbl">Meta</span><span class="val num">58%</span></div><div class="li"><span class="sw" style="background:#EF9331"></span><span class="lbl">Google</span><span class="val num">26%</span></div><div class="li"><span class="sw" style="background:#111"></span><span class="lbl">TikTok</span><span class="val num">16%</span></div></div></div></div>
+    </div>
+    <div class="card table-card">
+      <div class="tbl-toolbar"><span style="font-weight:700;font-size:var(--t-sm)">לפי מוצר — מאיפה מגיעים</span><span class="grow"></span><div class="pill-rail"><button class="on">רכישות</button><button>הוספות לעגלה</button></div><span style="font-size:10px;color:var(--faint);font-family:var(--mono)">מציג 6 מתוך 41 מוצרים</span></div>
+      <div class="tbl-scroll" style="max-height:none">
+        <table class="data">
+          <thead><tr><th class="sticky-col">מוצר</th><th class="r">הוספות לעגלה</th><th class="r">רכישות</th><th class="r">המרה</th><th>פילוח מקור (רכישות)</th></tr></thead>
+          <tbody>
+            <tr><td class="sticky-col">נורת לילה כוכבים</td><td class="r num">142</td><td class="r num">38</td><td class="r num">27%</td><td><div class="nc-track" style="width:240px"><div style="display:flex;height:100%"><div style="width:64%;background:#5b8df0"></div><div style="width:24%;background:#EF9331"></div><div style="width:12%;background:#111"></div></div></div></td></tr>
+            <tr><td class="sticky-col">מברשת סיליקון</td><td class="r num">98</td><td class="r num">26</td><td class="r num">27%</td><td><div class="nc-track" style="width:240px"><div style="display:flex;height:100%"><div style="width:50%;background:#5b8df0"></div><div style="width:40%;background:#EF9331"></div><div style="width:10%;background:#111"></div></div></div></td></tr>
+            <tr><td class="sticky-col">ערכת טיפוח עור</td><td class="r num">74</td><td class="r num">21</td><td class="r num">28%</td><td><div class="nc-track" style="width:240px"><div style="display:flex;height:100%"><div style="width:70%;background:#5b8df0"></div><div style="width:18%;background:#EF9331"></div><div style="width:12%;background:#111"></div></div></div></td></tr>
+            <tr><td class="sticky-col">מסכת LED</td><td class="r num">61</td><td class="r num">14</td><td class="r num">23%</td><td><div class="nc-track" style="width:240px"><div style="display:flex;height:100%"><div style="width:40%;background:#5b8df0"></div><div style="width:52%;background:#EF9331"></div><div style="width:8%;background:#111"></div></div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pad" style="font-size:10px;color:var(--faint);line-height:1.7"><p style="margin:0">פילוח המקור מבוסס על <code>first_touch_source</code> ברמת ההזמנה. "רכישות" סופרות הזמנות שהושלמו בחלון הייחוס. "המרה" = רכישות חלקי הוספות לעגלה. מוצרים ללא הוספות לעגלה מוסתרים.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ TAB 3 · לקוחות (CUSTOMERS) ═══════════════ -->
+<section class="tabpanel" id="tab-customers">
+  <div class="sec">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">כמה שווה לך לקוח</span><span class="sec-h">כלכלת לקוחות</span></div></div>
+    <div class="sec-r"><span class="store-chip" style="font-family:var(--mono)">עודכן ל-2026-05-31</span><select class="nsel"><option>כל העסק</option><option>uzoshop</option></select><div class="pill-rail"><button class="on">רווח</button><button>הכנסה</button></div></div>
+  </div>
+  <!-- verdict -->
+  <div class="card pad" style="margin-bottom:var(--s5);border-inline-start:4px solid var(--band-green)">
+    <p style="font-size:var(--t-md);line-height:1.7;margin:0">לקוח חדש שווה לך <b style="color:var(--pos)" class="num">C$94</b> רווח לאורך שנה, בעלות גיוס של <b class="num">C$28</b> — <b style="color:var(--pos)" class="num">C$66</b> נטו ללקוח. ההשקעה מחזירה את עצמה תוך <b>1.8 חודשים</b>, ו-<b>34%</b> מהלקוחות חוזרים לקנות. יחס LTV:nCAC עומד על <b style="color:var(--pos)">3.4×</b>. <span class="spill live" style="height:18px"><svg viewBox="0 0 24 24" fill="none" style="width:12px;height:12px"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>בריא</span></p>
+  </div>
+  <!-- KPI row -->
+  <div class="grid g-4" style="margin-bottom:var(--s5)">
+    <div class="card kpi-tile"><div class="k">שווי לקוח (12 ח׳, רווח)</div><div class="vrow"><span class="v num">C$94</span><span class="cur">CAD</span></div><div class="cmp"><span>ערך מצטבר</span></div></div>
+    <div class="card kpi-tile"><div class="k">עלות גיוס לקוח (nCAC)</div><div class="vrow"><span class="v num">C$28</span><span class="cur">CAD</span></div><div class="cmp"><span>ממוצע משוקלל לערוץ</span></div></div>
+    <div class="card kpi-tile"><div class="k">החזר עלות (payback)</div><div class="vrow"><span class="v num">1.8</span><span class="cur">חודשים</span></div><div class="cmp"><span>נקודת איזון</span></div></div>
+    <div class="card kpi-tile"><div class="k">חוזרים לקנות</div><div class="vrow"><span class="v num">34%</span></div><div class="cmp"><span>repeat rate</span></div></div>
+  </div>
+  <!-- LTV curve + new vs old -->
+  <div class="grid g-2" style="grid-template-columns:3fr 2fr;align-items:start">
+    <div class="card pad">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><span style="font-weight:700;font-size:var(--t-sm)">העקומה: כמה לקוח מחזיר ככל שעובר הזמן</span><span style="font-size:10px;color:var(--faint);font-family:var(--mono)">12 חודשים</span></div>
+      <svg viewBox="0 0 600 220" preserveAspectRatio="none" width="100%" height="200" role="img" aria-label="עקומת LTV מצטבר">
+        <defs><linearGradient id="cvArea" x1="0" y1="20" x2="0" y2="190" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="var(--accent)" stop-opacity="0.28"/><stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+        <g stroke="var(--grid)" stroke-width="1" stroke-dasharray="3 5"><line x1="40" x2="600" y1="40" y2="40"/><line x1="40" x2="600" y1="90" y2="90"/><line x1="40" x2="600" y1="140" y2="140"/><line x1="40" x2="600" y1="190" y2="190"/></g>
+        <g font-family="var(--mono)" font-size="10" fill="var(--faint)"><text x="2" y="44">C$95</text><text x="2" y="94">C$64</text><text x="2" y="144">C$32</text><text x="2" y="194">C$0</text></g>
+        <line x1="40" x2="600" y1="146" y2="146" stroke="var(--neg)" stroke-width="1.4" stroke-dasharray="4 4" opacity="0.7"/>
+        <text x="596" y="140" text-anchor="end" font-family="var(--mono)" font-size="10" fill="var(--neg)">קו עלות-גיוס C$28</text>
+        <path fill="url(#cvArea)" d="M40,170 C120,150 200,120 280,96 C360,78 440,62 520,52 C560,48 580,46 600,45 L600,190 L40,190 Z"/>
+        <path fill="none" stroke="var(--plot-scrim)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" d="M40,170 C120,150 200,120 280,96 C360,78 440,62 520,52 C560,48 580,46 600,45"/>
+        <path fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M40,170 C120,150 200,120 280,96 C360,78 440,62 520,52 C560,48 580,46 600,45"/>
+        <circle cx="200" cy="120" r="5" fill="var(--accent)"/><text x="200" y="110" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--accent)">↩ החזר · חודש 2</text>
+        <g font-family="var(--mono)" font-size="10" fill="var(--faint)"><text x="40" y="212">רכישה</text><text x="200" y="212" text-anchor="middle">ח׳ 2</text><text x="360" y="212" text-anchor="middle">ח׳ 6</text><text x="600" y="212" text-anchor="end">ח׳ 12</text></g>
+      </svg>
+    </div>
+    <div class="card pad">
+      <div style="font-weight:700;font-size:var(--t-sm);margin-bottom:6px">הלקוחות החדשים — טובים יותר או פחות?</div>
+      <div style="font-size:var(--t-cap);color:var(--muted);margin-bottom:16px">לקוחות חדשים מ-30 הימים מניבים ערך גבוה מהוותיקים — סימן בריא לגיוס.</div>
+      <div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:var(--t-cap);margin-bottom:6px"><span>חדשים</span><span class="num pos">C$94</span></div><div class="nc-track" style="height:12px"><div class="nc-fill" style="width:100%;background:var(--band-green)"></div></div></div>
+      <div><div style="display:flex;justify-content:space-between;font-size:var(--t-cap);margin-bottom:6px"><span>ותיקים</span><span class="num">C$78</span></div><div class="nc-track" style="height:12px"><div class="nc-fill" style="width:83%;background:var(--faint)"></div></div></div>
+    </div>
+  </div>
+  <details class="acc" style="margin-top:var(--s5)">
+    <summary>תצוגה מתקדמת — רשת ה-cohorts המלאה (retention matrix)</summary>
+    <div class="acc-body"><p style="margin:0 0 10px">מטריצת שימור לפי חודש-גיוס. nCAC זמינה רק מ-מאי 2026 ואילך.</p>
+      <table class="data" style="font-size:10px"><thead><tr><th>קוהורט</th><th class="c">ח׳ 0</th><th class="c">ח׳ 1</th><th class="c">ח׳ 2</th><th class="c">ח׳ 3</th><th class="r">nCAC</th></tr></thead><tbody>
+        <tr><td>מאי 2026</td><td class="c num">100%</td><td class="c num">38%</td><td class="c num">29%</td><td class="c num">—</td><td class="r num">C$28</td></tr>
+        <tr><td>אפר 2026</td><td class="c num">100%</td><td class="c num">35%</td><td class="c num">27%</td><td class="c num">22%</td><td class="r num">C$31</td></tr>
+        <tr><td>מרץ 2026</td><td class="c num">100%</td><td class="c num">33%</td><td class="c num">25%</td><td class="c num">20%</td><td class="r" style="color:var(--faint)">אין נתוני הוצאה</td></tr>
+      </tbody></table>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════ TAB 4 · טבלאות אופטימיזציה (OPTIMIZATION TABLES / ARCHIVE) ═══════════════ -->
+<section class="tabpanel" id="tab-tables">
+  <div class="sec">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">ארכיון · טבלאות חודשיות</span><span class="sec-h">טבלאות אופטימיזציה</span><span class="sec-desc">פירוט יומי לפי חודש עם צבעי ROAS. "0" שחור = יום הוצאה ללא מכירה.</span></div></div>
+  </div>
+  <div class="filters" style="margin-bottom:var(--s4)">
+    <span class="store-chip" style="font-weight:600;color:var(--muted)">מקרא:</span>
+    <span class="band red" style="height:20px"><bdi dir="ltr">&lt; 2</bdi></span>
+    <span class="band orange" style="height:20px"><bdi dir="ltr">2–2.7</bdi></span>
+    <span class="band green" style="height:20px"><bdi dir="ltr">2.7–3</bdi></span>
+    <span class="band blue" style="height:20px"><bdi dir="ltr">&gt; 3</bdi></span>
+  </div>
+  <div class="card pad" style="margin-bottom:var(--s4)">
+    <div class="filters">
+      <select class="nsel"><option>2026</option><option>2025</option><option>2024</option></select>
+      <select class="nsel"><option>כל השנה</option><option>יוני</option><option>מאי</option><option>אפריל</option></select>
+      <div class="pill-rail"><button class="on">לפי חנות</button><button>סיכום כללי</button></div>
+      <select class="nsel"><option>uzoshop</option><option>360usmile</option></select>
+    </div>
+  </div>
+  <div class="table-wrap" style="margin-bottom:var(--s4)">
+    <div class="tbl-toolbar"><span style="font-weight:700;font-size:var(--t-sm)">יוני 2026 • <bdi dir="ltr">uzoshop</bdi></span></div>
+    <div class="tbl-scroll" style="max-height:60vh">
+      <table class="data">
+        <thead><tr><th class="sticky-col">תאריך</th><th class="r">פייסבוק</th><th class="r">גוגל</th><th class="r">טיקטוק</th><th class="r">יצא סה"כ</th><th class="r">נכנס</th><th class="c">ROAS</th></tr></thead>
+        <tbody>
+          <tr><td class="sticky-col num">22/06</td><td class="r num">C$32</td><td class="r num">C$11</td><td class="r num">—</td><td class="r num">C$43</td><td class="r num">C$148</td><td class="c"><span class="band green">3.44x</span></td></tr>
+          <tr><td class="sticky-col num">21/06</td><td class="r num">C$29</td><td class="r num">C$10</td><td class="r num">C$4</td><td class="r num">C$43</td><td class="r num">C$170</td><td class="c"><span class="band blue">3.95x</span></td></tr>
+          <tr><td class="sticky-col num">20/06</td><td class="r num">C$34</td><td class="r num">C$12</td><td class="r num">—</td><td class="r num">C$46</td><td class="r num">C$129</td><td class="c"><span class="band green">2.80x</span></td></tr>
+          <tr><td class="sticky-col num">19/06</td><td class="r num">C$30</td><td class="r num">C$9</td><td class="r num">—</td><td class="r num">C$39</td><td class="r num">C$86 <span class="refind">↩</span></td><td class="c"><span class="band orange">2.20x</span></td></tr>
+          <tr><td class="sticky-col num">18/06</td><td class="r num">C$28</td><td class="r num">C$11</td><td class="r num">C$3</td><td class="r num">C$42</td><td class="r num">C$58</td><td class="c"><span class="band red">1.38x</span></td></tr>
+        </tbody>
+        <tfoot><tr><td class="sticky-col">סך הכל</td><td class="r num">C$971</td><td class="r num">C$310</td><td class="r num">C$68</td><td class="r num">C$1,349</td><td class="r num">C$3,312</td><td class="c"><span class="band green">3.41x</span></td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ TAB 5 · P&L ═══════════════ -->
+<section class="tabpanel" id="tab-pnl">
+  <div class="sec">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">כמה נשאר ביד?</span><span class="sec-h">רווח והפסד</span></div></div>
+    <div class="sec-r"><button class="btn-ghost" onclick="this.textContent=this.textContent.includes('הסתר')?'הצג פירוט מלא':'הסתר פירוט';document.getElementById('pnlDetail').classList.toggle('hide')">הסתר פירוט</button></div>
+  </div>
+  <div class="grid g-3" style="margin-bottom:var(--s5)">
+    <div class="card kpi-tile" style="padding:18px"><div class="k">הכנסות</div><div class="vrow"><span class="v num">C$4,269</span><span class="cur">CAD</span></div><div class="cmp"><span>100% — בסיס החישוב</span></div></div>
+    <div class="card kpi-tile" style="padding:18px"><div class="k">סך עלויות</div><div class="vrow"><span class="v num">C$2,716</span><span class="cur">CAD</span></div><div class="cmp"><span>64% מההכנסות</span></div></div>
+    <div class="card kpi-tile" style="padding:18px;border-inline-start:4px solid var(--band-green)"><div class="k">רווח נטו</div><div class="vrow"><span class="v num" style="color:var(--pos)">C$1,553</span><span class="cur">CAD</span><span class="delta up">▲ 14%</span></div><div class="cmp"><span>36% מרג׳ין</span></div></div>
+  </div>
+  <div id="pnlDetail">
+    <div class="banner info" style="display:none"></div>
+    <div class="table-wrap" style="margin-bottom:var(--s4)">
+      <div class="tbl-toolbar"><span style="font-weight:700;font-size:var(--t-sm)">מהכנסה לרווח · מפל הכנסה</span></div>
+      <div class="tbl-scroll" style="max-height:none">
+        <table class="data">
+          <thead><tr><th class="sticky-col">שלב</th><th class="r">סכום</th><th class="r">% מההכנסה</th><th class="r">נשאר</th></tr></thead>
+          <tbody>
+            <tr><td class="sticky-col">הכנסות (נטו)</td><td class="r num">C$4,269</td><td class="r num">100%</td><td class="r num">C$4,269</td></tr>
+            <tr><td class="sticky-col" style="padding-inline-start:24px">החזרים בתקופה</td><td class="r num neg">−C$271</td><td class="r num">−6.3%</td><td class="r num">C$3,998</td></tr>
+            <tr><td class="sticky-col" style="padding-inline-start:24px">הוצאות פרסום <span class="flag">סופי</span></td><td class="r num neg">−C$1,349</td><td class="r num">−31.6%</td><td class="r num">C$2,649</td></tr>
+            <tr><td class="sticky-col" style="padding-inline-start:24px">עלות סחורה (COGS 25%)</td><td class="r num neg">−C$1,067</td><td class="r num">−25.0%</td><td class="r num">C$1,582</td></tr>
+            <tr><td class="sticky-col" style="padding-inline-start:24px">עמלות עיבוד תשלום (6.5%)</td><td class="r num neg">−C$278</td><td class="r num">−6.5%</td><td class="r num">C$1,304</td></tr>
+            <tr><td class="sticky-col" style="padding-inline-start:24px">הוצאות קבועות (יחסי)</td><td class="r num neg">−C$300</td><td class="r num">−7.0%</td><td class="r num">C$1,004</td></tr>
+            <tr class="total"><td class="sticky-col">רווח נטו אמיתי</td><td class="r num pos">C$1,553</td><td class="r num">36%</td><td class="r num pos">C$1,553</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <details class="acc">
+      <summary>פירוט עלויות קבועות לפי קטגוריה</summary>
+      <div class="acc-body">
+        <table class="data" style="font-size:10px"><thead><tr><th>קטגוריה</th><th class="r">סכום (יחסי)</th><th class="r">% מההכנסה</th><th class="r">% מהקבועים</th></tr></thead><tbody>
+          <tr><td>Shopify Plan</td><td class="r num">C$118</td><td class="r num">2.8%</td><td class="r num">39%</td></tr>
+          <tr><td>אפליקציה דרך Shopify</td><td class="r num">C$74</td><td class="r num">1.7%</td><td class="r num">25%</td></tr>
+          <tr><td>אפליקציה חיצונית</td><td class="r num">C$52</td><td class="r num">1.2%</td><td class="r num">17%</td></tr>
+          <tr><td>שירות אימייל</td><td class="r num">C$36</td><td class="r num">0.8%</td><td class="r num">12%</td></tr>
+          <tr><td>אחר</td><td class="r num">C$20</td><td class="r num">0.5%</td><td class="r num">7%</td></tr>
+        </tbody><tfoot><tr><td>סך הכל</td><td class="r num">C$300</td><td class="r num">7.0%</td><td class="r num">100%</td></tr></tfoot></table>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ═══════════════ TAB 6 · מגמות (TRENDS) ═══════════════ -->
+<section class="tabpanel" id="tab-trends">
+  <div class="sec">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">טווח לניתוח</span><span class="sec-h">מגמות</span><span class="sec-desc">קו אחד לכל חנות; קו יעד אדום מקווקו ב-3.0. הסינון משפיע רק על הגרף והאירועים.</span></div></div>
+  </div>
+  <div class="card pad" style="margin-bottom:var(--s4)">
+    <div class="filters" style="justify-content:space-between">
+      <span class="store-chip" style="font-family:var(--mono)">כל החנויות · 90 ימים · CAD</span>
+      <div class="filters"><div class="pill-rail"><button>30 ימים</button><button class="on">90 ימים</button><button>YTD</button><button>מותאם</button></div><select class="nsel"><option>כל החנויות</option></select></div>
+    </div>
+    <p style="margin:14px 0 0;font-size:var(--t-cap);color:var(--muted);line-height:1.6"><b style="color:var(--ink)">סינתזה:</b> ה-ROAS העסקי התייצב סביב 3.1× ב-90 הימים, מונע בעיקר ע״י uzoshop. ביטחון: בינוני-גבוה.</p>
+  </div>
+  <div class="card pad" style="margin-bottom:var(--s4)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><svg viewBox="0 0 24 24" fill="none" style="width:17px;height:17px;color:var(--accent)"><path d="M3 17l6-6 4 4 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="font-weight:700;font-size:var(--t-sm)">מגמת ROAS לאורך זמן</span></div>
+    <svg viewBox="0 0 600 220" preserveAspectRatio="none" width="100%" height="220" role="img" aria-label="מגמת ROAS לפי חנות">
+      <g stroke="var(--grid)" stroke-width="1" stroke-dasharray="3 5"><line x1="36" x2="600" y1="40" y2="40"/><line x1="36" x2="600" y1="90" y2="90"/><line x1="36" x2="600" y1="140" y2="140"/><line x1="36" x2="600" y1="180" y2="180"/></g>
+      <g font-family="var(--mono)" font-size="10" fill="var(--faint)"><text x="2" y="44">4.0</text><text x="2" y="94">3.0</text><text x="2" y="144">2.0</text><text x="2" y="184">1.0</text></g>
+      <line x1="36" x2="600" y1="90" y2="90" stroke="var(--neg)" stroke-width="1.4" stroke-dasharray="4 4" opacity="0.65"/>
+      <text x="596" y="84" text-anchor="end" font-family="var(--mono)" font-size="10" fill="var(--neg)">יעד 3.0</text>
+      <path fill="none" stroke="var(--band-green)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M36,100 C120,92 200,78 280,72 C360,66 440,58 520,52 C560,50 580,49 600,48"/>
+      <path fill="none" stroke="var(--band-blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".85" d="M36,110 C120,104 200,98 280,92 C360,88 440,86 520,82 C560,80 580,79 600,78"/>
+      <path fill="none" stroke="var(--band-orange)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".75" d="M36,150 C120,148 200,140 280,144 C360,148 440,146 520,150 C560,151 580,152 600,152"/>
+      <path fill="none" stroke="var(--band-red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".7" stroke-dasharray="5 4" d="M36,170 C120,166 200,168 280,172 C360,170 440,174 520,176 C560,177 580,178 600,180"/>
+      <line x1="360" x2="360" y1="36" y2="190" stroke="var(--accent)" stroke-width="1" stroke-dasharray="2 3" opacity=".5"/><text x="360" y="30" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--accent)">מבצע</text>
+      <g font-family="var(--mono)" font-size="10" fill="var(--faint)"><text x="36" y="210">24/03</text><text x="318" y="210" text-anchor="middle">07/05</text><text x="600" y="210" text-anchor="end">22/06</text></g>
+    </svg>
+    <div class="filters" style="margin-top:12px;font-size:var(--t-cap);color:var(--muted)">
+      <span class="legend-list" style="flex-direction:row;gap:16px"><span class="li"><span class="sw" style="background:var(--band-green)"></span><b style="color:var(--ink)">uzoshop</b></span><span class="li"><span class="sw" style="background:var(--band-blue)"></span>360usmile</span><span class="li"><span class="sw" style="background:var(--band-orange)"></span>Zol Plus</span><span class="li"><span class="sw" style="background:var(--band-red)"></span>pdrn skin</span><span class="li"><span class="sw dash" style="border-top:1.5px dashed var(--neg);height:0;width:16px"></span>יעד 3.0</span></span>
+    </div>
+  </div>
+  <details class="acc" open>
+    <summary><span style="display:flex;align-items:center;gap:8px"><svg viewBox="0 0 24 24" fill="none" style="width:16px;height:16px"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" stroke-width="1.8"/></svg>יומן אירועים · 3 אירועים בטווח</span></summary>
+    <div class="acc-body">
+      <button class="btn-ghost" style="margin-bottom:12px"><svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>תעד אירוע חדש</button>
+      <div class="feed-item"><div class="feed-av cart"><svg viewBox="0 0 24 24" fill="none"><path d="M20.6 13.4l-7.2 7.2a2 2 0 01-2.8 0l-7.2-7.2a2 2 0 01-.6-1.4V4a1 1 0 011-1h8a2 2 0 011.4.6l7.4 7.4a2 2 0 010 2.4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="7.5" cy="7.5" r="1.4" fill="currentColor"/></svg></div><div class="feed-main"><div class="feed-t">מבצע מחזור</div><div class="feed-meta">07/05/2026 · כל החנויות · השקת קמפיין מחזור עונתי</div></div><span class="link-cta" style="font-size:11px">ערוך</span></div>
+      <div class="feed-item"><div class="feed-av sale"><svg viewBox="0 0 24 24" fill="none"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2a2.1 2.1 0 00-3-3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 15l-3-3a11 11 0 015-8 6 6 0 016 6 11 11 0 01-8 5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12H4s.5-2.8 2-4a3.5 3.5 0 013 0M12 15v5s2.8-.5 4-2a3.5 3.5 0 000-3" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div><div class="feed-main"><div class="feed-t">השקת מוצר</div><div class="feed-meta">28/05/2026 · uzoshop · נורת לילה חדשה</div></div><span class="link-cta" style="font-size:11px">ערוך</span></div>
+      <div class="feed-item"><div class="feed-av sale"><svg viewBox="0 0 24 24" fill="none"><path d="M3 17l6-6 4 4 7-7M21 8v4h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="feed-main"><div class="feed-t">הרחבת תקציב</div><div class="feed-meta">14/06/2026 · uzoshop · +30% תקציב Meta</div></div><span class="link-cta" style="font-size:11px">ערוך</span></div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════ TAB 7 · קמפיינים (CAMPAIGNS) ═══════════════ -->
+<section class="tabpanel" id="tab-campaigns">
+  <div class="sec">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">כל הקמפיינים · 30 ימים</span><span class="sec-h">קמפיינים</span></div></div>
+    <div class="sec-r"><div class="pill-rail"><button class="on">קמפיין</button><button>אד-סט</button></div></div>
+  </div>
+  <div class="card pad" style="margin-bottom:var(--s4)">
+    <div class="filters">
+      <select class="nsel"><option>כל הפלטפורמות</option><option>Meta</option><option>Google</option><option>TikTok</option></select>
+      <select class="nsel"><option>כל החנויות</option><option>uzoshop</option><option>Zol Plus</option><option>360usmile</option></select>
+      <div class="search"><svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><input placeholder="חיפוש קמפיין…"></div>
+      <button class="btn-ghost on"><svg viewBox="0 0 24 24" fill="none"><path d="M9 17H7A5 5 0 017 7h2M15 7h2a5 5 0 010 10h-2M8 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>רק קמפיינים ממופים</button>
+      <button class="btn-ghost">כל הקמפיינים</button>
+      <span class="grow" style="flex:1"></span>
+      <button class="btn-ghost"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M7 12h10M10 18h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>עמודות (20+ · 11 מוסתרות)</button>
+    </div>
+  </div>
+  <div class="tile-panel g-4" style="margin-bottom:var(--s4)">
+    <div class="kpi-tile"><div class="k">ROAS (פלטפורמה)</div><div class="vrow"><span class="v sm num" style="color:var(--band-blue)">3.16x</span><span class="band blue" style="height:18px">מעולה</span></div></div>
+    <div class="kpi-tile"><div class="k">הוצאה</div><div class="vrow"><span class="v sm num">C$1,349</span><span class="cur">CAD</span></div></div>
+    <div class="kpi-tile"><div class="k">ערך המרות</div><div class="vrow"><span class="v sm num">C$4,269</span><span class="cur">CAD</span></div></div>
+    <div class="kpi-tile"><div class="k">המרות</div><div class="vrow"><span class="v sm num">125</span></div></div>
+    <div class="kpi-tile"><div class="k">קליקים</div><div class="vrow"><span class="v sm num">4,820</span></div></div>
+    <div class="kpi-tile"><div class="k">CTR</div><div class="vrow"><span class="v sm num">2.1%</span></div></div>
+    <div class="kpi-tile"><div class="k">CPM</div><div class="vrow"><span class="v sm num">C$14.10</span></div><div class="cmp"><span class="link-cta" style="font-size:10px">הצג מגמה</span></div></div>
+    <div class="kpi-tile"><div class="k">משני</div><div class="vrow" style="font-size:var(--t-cap);color:var(--muted)"><span class="num">CPC C$0.28 · CPA C$10.8 · חשיפות 95.6K</span></div></div>
+  </div>
+  <div class="banner warn"><svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 4l-7 12A2 2 0 005 19h14a2 2 0 001.7-3L13.7 4a2 2 0 00-3.4 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>פער ייחוס:</b> הפלטפורמות מדווחות C$4,640 ערך המרה מול C$4,269 הכנסת Shopify — דיווח-יתר של 8.7%. יחס אמינות 0.92.</span></div>
+  <div class="table-wrap" style="margin-bottom:var(--s4)">
+    <div class="tbl-toolbar"><span style="font-weight:700;font-size:var(--t-sm)">טבלת ביצועים</span><span class="grow" style="flex:1"></span><div class="pill-rail"><button class="on">הכל</button><button>פעיל</button><button>מושהה</button></div></div>
+    <div class="tbl-scroll">
+      <table class="data" style="min-width:1340px">
+        <thead><tr>
+          <th class="c thflag" style="width:36px"><svg viewBox="0 0 24 24" fill="none" aria-label="סימון אופטימיזציה"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></th><th class="c">ציון</th><th class="sticky-col">קמפיין</th><th class="c">מגמה</th>
+          <th class="r">תקציב יומי</th><th class="r">הוצאה</th><th class="r">ערך המרות</th><th class="r active-sort">ROAS<span class="sortic">▾</span></th><th class="r">ROAS Shopify</th>
+          <th class="r">המרות</th><th class="r">CTR</th><th class="r">CPC</th><th class="r">CPM</th><th class="r">CPA</th><th>סטטוס</th><th class="c thflag"><svg viewBox="0 0 24 24" fill="none" aria-label="Ads Manager"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></th>
+        </tr></thead>
+        <tbody id="campBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="sec tight">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">המובילים · 30 ימים</span><span class="sec-h">קמפיינים מובילים</span></div></div>
+  </div>
+  <div class="grid g-2">
+    <div class="card pad">
+      <div style="display:flex;align-items:center;gap:8px;font-weight:700;margin-bottom:14px"><svg viewBox="0 0 24 24" fill="none" style="width:18px;height:18px;color:var(--band-green)"><path d="M6 9H4.5a2.5 2.5 0 010-5H6M18 9h1.5a2.5 2.5 0 000-5H18M6 4h12v5a6 6 0 01-12 0V4zM9 18h6M10 22h4M12 15v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>מנצחים</div>
+      <div class="nc-row"><span class="band green" style="height:20px;width:42px;justify-content:center">3.6x</span><div style="flex:1"><div style="font-weight:600;font-size:var(--t-sm)"><bdi dir="ltr">UZ_Meta_Prospecting</bdi></div><div style="font-size:10px;color:var(--faint)"><span class="plat meta" style="width:14px;height:14px">f</span> uzoshop · CAC C$9.2</div></div><span style="font-size:var(--t-cap);color:var(--pos);font-weight:600">הגדל תקציב משמעותית</span></div>
+      <div class="nc-row"><span class="band green" style="height:20px;width:42px;justify-content:center">3.3x</span><div style="flex:1"><div style="font-weight:600;font-size:var(--t-sm)"><bdi dir="ltr">UZ_Meta_Retarget</bdi></div><div style="font-size:10px;color:var(--faint)"><span class="plat meta" style="width:14px;height:14px">f</span> uzoshop · CAC C$10.1</div></div><span style="font-size:var(--t-cap);color:var(--pos);font-weight:600">מקום להגדיל תקציב</span></div>
+      <div class="nc-row"><span class="band blue" style="height:20px;width:42px;justify-content:center">3.1x</span><div style="flex:1"><div style="font-weight:600;font-size:var(--t-sm)"><bdi dir="ltr">US_TikTok_Video</bdi></div><div style="font-size:10px;color:var(--faint)"><span class="plat tiktok" style="width:14px;height:14px">T</span> 360usmile · CAC C$11.8</div></div><span style="font-size:var(--t-cap);color:var(--pos);font-weight:600">יציב — שמור על תקציב</span></div>
+    </div>
+    <div class="card pad">
+      <div style="display:flex;align-items:center;gap:8px;font-weight:700;margin-bottom:14px"><svg viewBox="0 0 24 24" fill="none" style="width:18px;height:18px;color:var(--band-red)"><path d="M12 9v4m0 4h.01M10.3 4l-7 12A2 2 0 005 19h14a2 2 0 001.7-3L13.7 4a2 2 0 00-3.4 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>לתשומת לב</div>
+      <div class="nc-row"><span class="band red" style="height:20px;width:42px;justify-content:center">1.6x</span><div style="flex:1"><div style="font-weight:600;font-size:var(--t-sm)"><bdi dir="ltr">PDRN_Google_PMax</bdi></div><div style="font-size:10px;color:var(--faint)"><span class="plat google" style="width:14px;height:14px">G</span> pdrn skin · CAC C$21.4</div></div><span style="font-size:var(--t-cap);color:var(--neg);font-weight:600">סגור או בדוק מיפוי</span></div>
+      <div class="nc-row"><span class="band orange" style="height:20px;width:42px;justify-content:center">2.1x</span><div style="flex:1"><div style="font-weight:600;font-size:var(--t-sm)"><bdi dir="ltr">ZOL_Meta_Broad</bdi></div><div style="font-size:10px;color:var(--faint)"><span class="plat meta" style="width:14px;height:14px">f</span> Zol Plus · CAC C$18.3</div></div><span style="font-size:var(--t-cap);color:var(--neg);font-weight:600">הקטן תקציב / אופטימיזציה</span></div>
+      <div class="nc-row"><span class="band orange" style="height:20px;width:42px;justify-content:center">2.3x</span><div style="flex:1"><div style="font-weight:600;font-size:var(--t-sm)"><bdi dir="ltr">UZ_Google_Brand</bdi></div><div style="font-size:10px;color:var(--faint)"><span class="plat google" style="width:14px;height:14px">G</span> uzoshop · CAC C$15.0</div></div><span style="font-size:var(--t-cap);color:var(--neg);font-weight:600">בדוק מה רץ פה</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ TAB 8 · מוצרים (PRODUCTS) ═══════════════ -->
+<section class="tabpanel" id="tab-products">
+  <div class="sec">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">ביצועי מוצרים</span><span class="sec-h">מוצרים</span></div></div>
+  </div>
+  <div class="card pad" style="margin-bottom:var(--s4)">
+    <div class="filters" style="justify-content:space-between">
+      <div class="pill-rail"><button>יומי</button><button>שבועי</button><button class="on">חודשי</button><button>חצי-שנתי</button><button>שנתי</button></div>
+      <div class="filters"><select class="nsel"><option>כל החנויות</option><option>uzoshop</option></select><span class="store-chip" style="font-family:var(--mono)">30 ימים · 1 תקופה</span></div>
+    </div>
+  </div>
+  <div class="card pad" style="margin-bottom:var(--s4)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><span style="font-weight:700;font-size:var(--t-sm)">כל החנויות · יוני 2026</span></div>
+    <div class="grid g-5">
+      <div><div class="sc-mk" style="opacity:1;color:var(--muted)">הזמנות</div><div class="num" style="font-size:var(--t-xl);font-weight:600">125</div></div>
+      <div><div class="sc-mk" style="opacity:1;color:var(--muted)">יחידות</div><div class="num" style="font-size:var(--t-xl);font-weight:600;color:var(--band-orange)">187</div></div>
+      <div><div class="sc-mk" style="opacity:1;color:var(--muted)">ברוטו</div><div class="num" style="font-size:var(--t-xl);font-weight:600">C$4,540</div></div>
+      <div><div class="sc-mk" style="opacity:1;color:var(--muted)">נטו</div><div class="num" style="font-size:var(--t-xl);font-weight:600">C$4,269</div></div>
+      <div><div class="sc-mk" style="opacity:1;color:var(--muted)">מוצרים שונים</div><div class="num" style="font-size:var(--t-xl);font-weight:600">41</div></div>
+    </div>
+    <div class="foot-note">ממוצע ליום: 6.2 יחידות · C$151 ברוטו</div>
+  </div>
+  <div class="table-wrap">
+    <div class="tbl-toolbar"><span class="live-badge"><span class="ld"></span>חי · 08:42</span><span style="font-weight:700;font-size:var(--t-sm)">יוני 2026 · 187 יחידות · C$4,540 ברוטו</span><span class="grow" style="flex:1"></span><button class="btn-ghost" onclick="openPicker()"><svg viewBox="0 0 24 24" fill="none"><path d="M21 16V8l-9-5-9 5v8l9 5 9-5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>שייך לקמפיין</button></div>
+    <div class="tbl-scroll" style="max-height:70vh">
+      <table class="data">
+        <thead><tr><th class="sticky-col">מוצר</th><th class="r">הזמנות</th><th class="r">יחידות</th><th class="r">ברוטו</th><th class="r">נטו</th><th class="r">מרג'ין</th><th class="r">% יחידות</th></tr></thead>
+        <tbody>
+          <tr><td class="sticky-col"><span class="store-chip" style="gap:8px"><b style="color:var(--ink)">1</b> נורת לילה כוכבים</span></td><td class="r num">38</td><td class="r num" style="font-weight:700">52</td><td class="r num">C$1,560</td><td class="r num">C$1,478</td><td class="r num pos">95%</td><td class="r num">28%</td></tr>
+          <tr><td class="sticky-col"><span class="store-chip" style="gap:8px"><b style="color:var(--ink)">2</b> מברשת סיליקון <span class="flag" style="font-size:8px">×1.2 UPO</span></span></td><td class="r num">26</td><td class="r num" style="font-weight:700">41</td><td class="r num">C$984</td><td class="r num">C$910</td><td class="r num" style="color:var(--ink)">92%</td><td class="r num">22%</td></tr>
+          <tr><td class="sticky-col"><span class="store-chip" style="gap:8px"><b style="color:var(--ink)">3</b> ערכת טיפוח עור</span></td><td class="r num">21</td><td class="r num" style="font-weight:700">28</td><td class="r num">C$840</td><td class="r num">C$798</td><td class="r num pos">95%</td><td class="r num">15%</td></tr>
+          <tr><td class="sticky-col"><span class="store-chip" style="gap:8px"><b style="color:var(--ink)">4</b> מסכת LED</span></td><td class="r num">14</td><td class="r num" style="font-weight:700">19</td><td class="r num">C$760</td><td class="r num">C$608</td><td class="r num" style="color:var(--band-orange)">80%</td><td class="r num">10%</td></tr>
+          <tr><td class="sticky-col"><span class="store-chip" style="gap:8px"><b style="color:var(--ink)">5</b> מארז 3 יח׳</span></td><td class="r num">9</td><td class="r num" style="font-weight:700">27</td><td class="r num">C$540</td><td class="r num">C$243</td><td class="r num neg">45%</td><td class="r num">14%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pad"><span class="link-cta">הצג עוד 36 מוצרים</span></div>
+  </div>
+</section>
+
+<!-- ═══════════════ TAB 9 · תשלומים (PAYMENTS) ═══════════════ -->
+<section class="tabpanel" id="tab-payments">
+  <div class="sec">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">אמצעי תשלום</span><span class="sec-h">תשלומים</span></div></div>
+    <div class="sec-r"><div class="pill-rail"><button class="on">חודש</button><button>רבעון</button><button>שליש</button></div><div class="pill-rail"><button class="on">כלל-העסק</button><button>פר-חנות</button></div></div>
+  </div>
+  <div class="grid g-4" style="margin-bottom:var(--s4)">
+    <div class="card pad"><div style="font-size:var(--t-cap);color:var(--muted);margin-bottom:8px">חלוקת הזמנות — כל התקופה</div><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px"><span class="num" style="font-size:var(--t-xl);font-weight:600">1,284 הזמנות</span><span class="cur">C$48.2K</span></div><div class="nc-track" style="height:12px"><div style="display:flex;height:100%"><div style="width:68%;background:var(--accent)"></div><div style="width:24%;background:var(--band-blue)"></div><div style="width:8%;background:var(--faint)"></div></div></div><div class="filters" style="margin-top:10px;font-size:10px;color:var(--muted)"><span>אשראי 68%</span><span>PayPal 24%</span><span>אחר 8%</span></div></div>
+    <div class="card kpi-tile"><div class="k">אשראי</div><div class="vrow"><span class="v sm num">873</span><span class="cur">68%</span></div><div class="cmp"><span>C$32.8K</span></div></div>
+    <div class="card kpi-tile"><div class="k">PayPal</div><div class="vrow"><span class="v sm num">308</span><span class="cur">24%</span></div><div class="cmp"><span>C$11.6K</span></div></div>
+    <div class="card kpi-tile"><div class="k">אחר</div><div class="vrow"><span class="v sm num">103</span><span class="cur">8%</span></div><div class="cmp"><span>C$3.8K</span></div></div>
+  </div>
+  <div class="card table-card">
+    <div class="tbl-toolbar"><span style="font-weight:700;font-size:var(--t-sm)">פילוח לפי שנה</span></div>
+    <details class="acc" open style="border:none;border-radius:0;margin:0">
+      <summary style="padding:14px 16px">2026 · 642 הזמנות · C$24.1K</summary>
+      <div class="acc-body" style="padding:0 12px 12px">
+        <div class="tbl-scroll" style="max-height:50vh">
+          <table class="data" style="font-size:10px">
+            <thead><tr><th class="sticky-col">תקופה</th><th class="r">אשראי</th><th class="r">PayPal</th><th class="r">אחר</th><th class="r">סה״כ</th><th>חלוקה</th></tr></thead>
+            <tbody>
+              <tr><td class="sticky-col">יוני</td><td class="r num">C$3.1K</td><td class="r num">C$1.1K</td><td class="r num">C$0.3K</td><td class="r num">C$4.5K</td><td><div class="nc-track" style="width:120px;height:8px"><div style="display:flex;height:100%"><div style="width:69%;background:var(--accent)"></div><div style="width:24%;background:var(--band-blue)"></div><div style="width:7%;background:var(--faint)"></div></div></div></td></tr>
+              <tr><td class="sticky-col">מאי</td><td class="r num">C$2.8K</td><td class="r num">C$1.0K</td><td class="r num">C$0.4K</td><td class="r num">C$4.2K</td><td><div class="nc-track" style="width:120px;height:8px"><div style="display:flex;height:100%"><div style="width:66%;background:var(--accent)"></div><div style="width:24%;background:var(--band-blue)"></div><div style="width:10%;background:var(--faint)"></div></div></div></td></tr>
+              <tr><td class="sticky-col">אפריל</td><td class="r num">C$2.6K</td><td class="r num">C$0.9K</td><td class="r num">C$0.3K</td><td class="r num">C$3.8K</td><td><div class="nc-track" style="width:120px;height:8px"><div style="display:flex;height:100%"><div style="width:68%;background:var(--accent)"></div><div style="width:24%;background:var(--band-blue)"></div><div style="width:8%;background:var(--faint)"></div></div></div></td></tr>
+            </tbody>
+            <tfoot><tr><td class="sticky-col">סך הכל</td><td class="r num">C$16.4K</td><td class="r num">C$5.8K</td><td class="r num">C$1.9K</td><td class="r num">C$24.1K</td><td></td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </details>
+    <div class="pad" style="font-size:10px;color:var(--faint)">המספרים מגיעים מ-Shopify (<code>payment_gateway_names</code>) על כל היסטוריית ההזמנות. "אחר" = מתנה / manual / COD.</div>
+  </div>
+</section>
+
+<!-- ═══════════════ TAB 10 · פירוט (DETAIL) ═══════════════ -->
+<section class="tabpanel" id="tab-detail">
+  <div class="sec">
+    <div class="sec-l"><span class="sec-bar"></span><div class="sec-tt"><span class="sec-eyebrow">100 שורות אחרונות</span><span class="sec-h">פירוט יומי</span></div></div>
+  </div>
+  <div class="table-wrap">
+    <div class="tbl-toolbar"><svg viewBox="0 0 24 24" fill="none" style="width:16px;height:16px;color:var(--muted)"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 9h18M9 21V9" stroke="currentColor" stroke-width="1.8"/></svg><span style="font-weight:700;font-size:var(--t-sm)">פירוט יומי (100 שורות אחרונות)</span></div>
+    <div class="tbl-scroll" style="max-height:70vh">
+      <table class="data" style="min-width:900px">
+        <thead><tr><th class="sticky-col">תאריך</th><th>חנות</th><th class="c">מגמת חנות</th><th class="r">פייסבוק</th><th class="r">גוגל</th><th class="r">טיקטוק</th><th class="r">סה"כ הוצאה</th><th class="r">הכנסה</th><th class="c">ROAS</th><th class="r">רווח גולמי</th><th class="r">COGS</th><th class="r">רווח תפעולי</th></tr></thead>
+        <tbody>
+          <tr><td class="sticky-col num">22/06</td><td><bdi dir="ltr">uzoshop</bdi></td><td class="c"><svg class="spark sm" viewBox="0 0 64 20"><path d="M2,15 L20,12 L38,8 L62,6" fill="none" stroke="var(--band-green)" stroke-width="1.6"/></svg></td><td class="r num">C$32</td><td class="r num">C$11</td><td class="r num">—</td><td class="r num">C$43</td><td class="r num">C$148</td><td class="c"><span class="band green">3.44x</span></td><td class="r num">C$111</td><td class="r num neg">−C$37</td><td class="r num pos">C$68</td></tr>
+          <tr><td class="sticky-col num">22/06</td><td><bdi dir="ltr">360usmile</bdi></td><td class="c"><svg class="spark sm" viewBox="0 0 64 20"><path d="M2,12 L20,13 L38,9 L62,10" fill="none" stroke="var(--band-blue)" stroke-width="1.6"/></svg></td><td class="r num">C$9</td><td class="r num">—</td><td class="r num">C$4</td><td class="r num">C$13</td><td class="r num">C$40</td><td class="c"><span class="band blue">3.08x</span></td><td class="r num">C$30</td><td class="r num neg">−C$10</td><td class="r num pos">C$17</td></tr>
+          <tr><td class="sticky-col num">21/06</td><td><bdi dir="ltr">uzoshop</bdi></td><td class="c"><svg class="spark sm" viewBox="0 0 64 20"><path d="M2,14 L20,10 L38,9 L62,5" fill="none" stroke="var(--band-blue)" stroke-width="1.6"/></svg></td><td class="r num">C$29</td><td class="r num">C$10</td><td class="r num">C$4</td><td class="r num">C$43</td><td class="r num">C$170</td><td class="c"><span class="band blue">3.95x</span></td><td class="r num">C$127</td><td class="r num neg">−C$43</td><td class="r num pos">C$84</td></tr>
+          <tr><td class="sticky-col num">21/06</td><td><bdi dir="ltr">Zol Plus</bdi></td><td class="c"><svg class="spark sm" viewBox="0 0 64 20"><path d="M2,8 L20,11 L38,12 L62,15" fill="none" stroke="var(--band-orange)" stroke-width="1.6"/></svg></td><td class="r num">C$14</td><td class="r num">—</td><td class="r num">—</td><td class="r num">C$14</td><td class="r num">C$29 <span class="refind">↩</span></td><td class="c"><span class="band orange">2.07x</span></td><td class="r num">C$15</td><td class="r num neg">−C$7</td><td class="r num pos">C$1</td></tr>
+          <tr><td class="sticky-col num">21/06</td><td><bdi dir="ltr">pdrn skin</bdi></td><td class="c"><svg class="spark sm" viewBox="0 0 64 20"><path d="M2,7 L20,9 L38,12 L62,14" fill="none" stroke="var(--band-red)" stroke-width="1.6"/></svg></td><td class="r num">—</td><td class="r num">C$11</td><td class="r num">—</td><td class="r num">C$11</td><td class="r num">C$18</td><td class="c"><span class="band red">1.64x</span></td><td class="r num">C$14</td><td class="r num neg">−C$5</td><td class="r num neg">−C$2</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+</div>
+</main>
+</div>
+
+<!-- ═══════════════ CAMPAIGN MODAL (centered 880px · 6 sub-tabs) ═══════════════ -->
+<div class="scrim" id="campScrim" onclick="if(event.target===this)closeModal('campScrim')">
+  <div class="modal wide">
+    <div class="m-head">
+      <span class="plat meta">f</span>
+      <span class="m-name"><bdi dir="ltr">UZ_Meta_Prospecting</bdi></span>
+      <span class="store-chip"><span class="sc" style="background:var(--band-green)"></span><bdi dir="ltr">uzoshop</bdi></span>
+      <span class="band green">3.60x</span>
+      <span class="spill live" style="height:22px"><span class="sd"></span>פעיל · 28 ימים</span>
+      <button class="btn-ghost" style="height:30px"><svg viewBox="0 0 24 24" fill="none"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Ads Manager</button>
+      <button class="m-close" onclick="closeModal('campScrim')"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="m-tabs" data-mtabs="camp">
+      <button class="on" data-mp="cm-over">סקירה</button>
+      <button data-mp="cm-daily">יומי</button>
+      <button data-mp="cm-sets">סטים</button>
+      <button data-mp="cm-ads">מודעות</button>
+      <button data-mp="cm-status">סטטוס</button>
+      <button data-mp="cm-hist">היסטוריה</button>
+    </div>
+    <div class="m-body">
+      <!-- 1 סקירה -->
+      <div class="mpanel on" id="cm-over">
+        <div class="scorecard">
+          <div class="sc-cell"><div class="ck">ROAS פלטפורמה</div><div class="cv" style="color:var(--band-green)">3.60x</div><span class="band green" style="height:16px;margin-top:4px">מעולה</span></div>
+          <div class="sc-cell"><div class="ck">ערך המרות</div><div class="cv num">C$1,820</div></div>
+          <div class="sc-cell"><div class="ck">אמינות attribution</div><div class="cv num">92<span style="font-size:11px;color:var(--muted)">/100</span></div><span class="spill live" style="height:16px;margin-top:4px">גבוהה</span></div>
+          <div class="sc-cell"><div class="ck">ציון בריאות</div><div class="cv"><span class="grade A">A</span></div></div>
+        </div>
+        <div class="grid g-5" style="gap:1px" >
+          <div class="kpi-tile card"><div class="k">הוצאה</div><div class="vrow"><span class="v sm num">C$506</span></div></div>
+          <div class="kpi-tile card"><div class="k">המרות</div><div class="vrow"><span class="v sm num">55</span></div></div>
+          <div class="kpi-tile card"><div class="k">CTR</div><div class="vrow"><span class="v sm num">2.4%</span></div></div>
+          <div class="kpi-tile card"><div class="k">CPC</div><div class="vrow"><span class="v sm num">C$0.24</span></div></div>
+          <div class="kpi-tile card"><div class="k">CPA</div><div class="vrow"><span class="v sm num">C$9.20</span></div></div>
+        </div>
+        <details class="acc" style="margin-top:var(--s4)"><summary>ציון בריאות קמפיין</summary><div class="acc-body">ROAS גבוה (35 נק׳) · יציבות מגמה (28 נק׳) · CTR מעל בנצ׳מרק (18 נק׳) · עומק חשבון (11 נק׳). סה״כ A · 92.</div></details>
+        <details class="acc"><summary>מוצרי Shopify משויכים <span class="link-cta" style="font-size:11px" onclick="event.preventDefault();openPicker()">ערוך</span></summary><div class="acc-body">נורת לילה כוכבים · ערכת טיפוח עור · 2 מוצרים נוספים.</div></details>
+        <details class="acc"><summary>השוואת cohort (קניבליזציה)</summary><div class="acc-body">אין חפיפת קהל משמעותית עם UZ_Meta_Retarget. סיכון קניבליזציה: נמוך.</div></details>
+        <details class="acc" open><summary>ניתוח attribution</summary><div class="acc-body">הפלטפורמה מדווחת C$1,820 מול C$1,690 ב-Shopify (over-count 7.7%). 88% מההזמנות נושאות click-id. יחס אמינות 0.93.</div></details>
+        <details class="acc"><summary>פילוח מוצר × ערוץ (Meta בלבד)</summary><div class="acc-body">Feed 62% · Stories 24% · Reels 14% מערך ההמרות.</div></details>
+        <details class="acc"><summary>התאמת ערוצים↔Shopify</summary><div class="acc-body">מקור Meta ממופה ל-utm_source=facebook · utm_medium=paid.</div></details>
+      </div>
+      <!-- 2 יומי -->
+      <div class="mpanel" id="cm-daily">
+        <div class="filters" style="justify-content:space-between;margin-bottom:14px"><span style="font-weight:700;font-size:var(--t-sm)">הוצאה ↔ ערך המרות + מגמת CPM</span><div class="pill-rail"><button class="on">חצי</button><button>קודם</button></div></div>
+        <svg viewBox="0 0 600 200" preserveAspectRatio="none" width="100%" height="180" role="img" aria-label="גרף יומי">
+          <g stroke="var(--grid)" stroke-width="1" stroke-dasharray="3 5"><line x1="30" x2="600" y1="40" y2="40"/><line x1="30" x2="600" y1="90" y2="90"/><line x1="30" x2="600" y1="140" y2="140"/></g>
+          <path fill="rgba(34,201,138,.14)" d="M30,150 C120,130 210,120 300,100 C390,80 480,70 600,55 L600,170 L30,170 Z"/>
+          <path fill="none" stroke="var(--band-green)" stroke-width="2.2" d="M30,150 C120,130 210,120 300,100 C390,80 480,70 600,55"/>
+          <path fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="4 4" d="M30,120 C120,118 210,110 300,108 C390,106 480,100 600,98"/>
+          <g font-family="var(--mono)" font-size="9" fill="var(--faint)"><text x="30" y="190">01/06</text><text x="600" y="190" text-anchor="end">22/06</text></g>
+        </svg>
+        <div class="banner info" style="margin-top:14px"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 8h.01M11 12h1v4h1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>ה-CPM ירד 6% וערך ההמרות עלה 18% מול חצי התקופה הקודם — מגמה חיובית.</span></div>
+      </div>
+      <!-- 3 סטים -->
+      <div class="mpanel" id="cm-sets">
+        <div style="font-weight:700;font-size:var(--t-sm);margin-bottom:10px">סטים <span class="flag">3</span></div>
+        <table class="data" style="border:1px solid var(--edge);border-radius:var(--r-md);overflow:hidden">
+          <thead><tr><th class="c thflag"><svg viewBox="0 0 24 24" fill="none" aria-label="סימון אופטימיזציה"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></th><th class="sticky-col">שם</th><th class="r">הוצאה</th><th class="r">תקציב</th><th class="r">ערך</th><th class="r">ROAS</th><th class="r">ROAS Shopify</th><th class="r">המרות</th></tr></thead>
+          <tbody>
+            <tr class="clk" onclick="openModal('adsScrim')"><td class="c"><span class="opt-tg on" role="checkbox" aria-checked="true" aria-label="סימון אופטימיזציה"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></td><td class="sticky-col"><bdi dir="ltr">AS_Broad_18-45</bdi></td><td class="r num">C$240</td><td class="r num">C$30</td><td class="r num">C$910</td><td class="r"><span class="band green">3.8x</span></td><td class="r num">3.5x</td><td class="r num">27</td></tr>
+            <tr class="clk" onclick="openModal('adsScrim')"><td class="c"><span class="opt-tg on" role="checkbox" aria-checked="true" aria-label="סימון אופטימיזציה"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></td><td class="sticky-col"><bdi dir="ltr">AS_Lookalike_2%</bdi></td><td class="r num">C$176</td><td class="r num">C$25</td><td class="r num">C$610</td><td class="r"><span class="band green">3.5x</span></td><td class="r num">3.2x</td><td class="r num">19</td></tr>
+            <tr class="clk" onclick="openModal('adsScrim')"><td class="c"><span class="opt-tg" role="checkbox" aria-checked="false" aria-label="סימון אופטימיזציה"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></td><td class="sticky-col"><bdi dir="ltr">AS_Interest_Skincare</bdi></td><td class="r num">C$90</td><td class="r num">C$15</td><td class="r num">C$300</td><td class="r"><span class="band orange">2.6x</span></td><td class="r num">2.4x</td><td class="r num">9</td></tr>
+          </tbody>
+        </table>
+        <p class="foot-note">לחיצה על שורה פותחת את לוח המודעות (AdsDrawer) ←</p>
+      </div>
+      <!-- 4 מודעות -->
+      <div class="mpanel" id="cm-ads">
+        <div style="font-weight:700;font-size:var(--t-sm);margin-bottom:10px">בחר ad-set לצפייה במודעות</div>
+        <button class="btn-ghost" style="width:100%;justify-content:space-between;margin-bottom:8px" onclick="openModal('adsScrim')"><span><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> AS_Broad_18-45</span><span class="num" style="color:var(--muted)">C$240</span></button>
+        <button class="btn-ghost" style="width:100%;justify-content:space-between;margin-bottom:8px" onclick="openModal('adsScrim')"><span><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> AS_Lookalike_2%</span><span class="num" style="color:var(--muted)">C$176</span></button>
+        <button class="btn-ghost" style="width:100%;justify-content:space-between" onclick="openModal('adsScrim')"><span><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> AS_Interest_Skincare</span><span class="num" style="color:var(--muted)">C$90</span></button>
+      </div>
+      <!-- 5 סטטוס -->
+      <div class="mpanel" id="cm-status">
+        <table class="data" style="border:1px solid var(--edge);border-radius:var(--r-md);overflow:hidden">
+          <tbody>
+            <tr><td>Configured status</td><td class="r"><span class="spill live" style="height:20px"><span class="sd"></span>ACTIVE</span></td></tr>
+            <tr><td>Effective status</td><td class="r"><span class="spill live" style="height:20px"><span class="sd"></span>ACTIVE</span></td></tr>
+            <tr><td>Delivery status</td><td class="r">delivering</td></tr>
+            <tr><td>First Seen At</td><td class="r num">25/05/2026 09:14</td></tr>
+            <tr><td>Status Changed At</td><td class="r num">25/05/2026 09:14</td></tr>
+            <tr><td>Last Status Success At</td><td class="r num">22/06/2026 08:40</td></tr>
+            <tr><td>Last Live Tick At</td><td class="r num">22/06/2026 08:40</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <!-- 6 היסטוריה -->
+      <div class="mpanel" id="cm-hist">
+        <div class="feed-item"><div class="feed-av sale"><svg viewBox="0 0 24 24" fill="none"><path d="M3 17l6-6 4 4 7-7M21 8v4h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="feed-main"><div class="feed-t">תקציב הועלה · C$25 → C$30</div><div class="feed-meta">14/06/2026 11:02 · אוטומטי</div></div></div>
+        <div class="feed-item"><div class="feed-av cart"><svg viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 11-3-6.7L21 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 3v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="feed-main"><div class="feed-t">ad-set חדש נוסף · AS_Interest_Skincare</div><div class="feed-meta">02/06/2026 08:30</div></div></div>
+        <div class="feed-item"><div class="feed-av neutral"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="feed-main"><div class="feed-t">קמפיין הופעל</div><div class="feed-meta">25/05/2026 09:14</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ ADS DRAWER (nested side sheet over campaign modal) ═══════════════ -->
+<div class="scrim" id="adsScrim" style="align-items:stretch;justify-content:flex-end;padding:0" onclick="if(event.target===this)closeModal('adsScrim')">
+  <div class="modal" style="max-width:820px;border-radius:0;height:100vh;margin:0;display:flex;flex-direction:column;animation:slideEnd .22s ease">
+    <div class="m-head">
+      <span class="m-name">מודעות ב-ad-set · <bdi dir="ltr">AS_Broad_18-45</bdi></span>
+      <button class="m-close" onclick="closeModal('adsScrim')"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="tile-panel g-4" style="margin:16px 20px;flex-shrink:0">
+      <div class="kpi-tile"><div class="k">הוצאה</div><div class="vrow"><span class="v sm num">C$240</span></div></div>
+      <div class="kpi-tile"><div class="k">ערך</div><div class="vrow"><span class="v sm num">C$910</span></div></div>
+      <div class="kpi-tile"><div class="k">ROAS</div><div class="vrow"><span class="v sm num" style="color:var(--band-green)">3.8x</span></div></div>
+      <div class="kpi-tile"><div class="k">המרות</div><div class="vrow"><span class="v sm num">27</span></div></div>
+    </div>
+    <div class="tbl-scroll" style="flex:1;max-height:none">
+      <table class="data" style="min-width:760px">
+        <thead><tr><th class="c thflag"><svg viewBox="0 0 24 24" fill="none" aria-label="סימון אופטימיזציה"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></th><th class="sticky-col">מודעה</th><th class="r">הוצאה</th><th class="r">ערך</th><th class="r">ROAS</th><th class="r">ROAS Shopify</th><th class="r">first-click</th><th class="r">המרות</th><th class="r">חשיפות</th><th class="r">קליקים</th><th class="c thflag"><svg viewBox="0 0 24 24" fill="none" aria-label="Ads Manager"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></th></tr></thead>
+        <tbody>
+          <tr><td class="c"><span class="opt-tg on" role="checkbox" aria-checked="true" aria-label="סימון אופטימיזציה"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></td><td class="sticky-col"><bdi dir="ltr">AD_Video_Stars_v3</bdi></td><td class="r num">C$120</td><td class="r num">C$498</td><td class="r"><span class="band blue">4.1x</span></td><td class="r num">3.8x</td><td class="r num pos">+0.3</td><td class="r num">14</td><td class="r num">38.2K</td><td class="r num">920</td><td class="c thflag"><svg viewBox="0 0 24 24" fill="none"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></td></tr>
+          <tr><td class="c"><span class="opt-tg on" role="checkbox" aria-checked="true" aria-label="סימון אופטימיזציה"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></td><td class="sticky-col"><bdi dir="ltr">AD_Carousel_Bundle</bdi></td><td class="r num">C$78</td><td class="r num">C$273</td><td class="r"><span class="band green">3.5x</span></td><td class="r num">3.2x</td><td class="r num">+0.1</td><td class="r num">9</td><td class="r num">22.4K</td><td class="r num">540</td><td class="c thflag"><svg viewBox="0 0 24 24" fill="none"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></td></tr>
+          <tr><td class="c"><span class="opt-tg" role="checkbox" aria-checked="false" aria-label="סימון אופטימיזציה"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></td><td class="sticky-col"><bdi dir="ltr">AD_Static_Promo</bdi></td><td class="r num">C$42</td><td class="r num">C$139</td><td class="r"><span class="band orange">2.4x</span></td><td class="r num">2.2x</td><td class="r num neg">−0.2</td><td class="r num">4</td><td class="r num">12.1K</td><td class="r num">280</td><td class="c thflag"><svg viewBox="0 0 24 24" fill="none"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ STORE DETAIL MODAL (7 sections) ═══════════════ -->
+<div class="scrim" id="storeScrim" onclick="if(event.target===this)closeModal('storeScrim')">
+  <div class="modal store">
+    <!-- 1 banded header -->
+    <div style="background:var(--band-green-grad);color:#fff;padding:20px;border-radius:var(--r-card) var(--r-card) 0 0;position:relative">
+      <button class="m-close" style="position:absolute;top:16px;inset-inline-start:16px;background:rgba(0,0,0,.2);border:none;color:#fff" onclick="closeModal('storeScrim')"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="font-weight:700;font-size:var(--t-md)" id="storeModalName"><bdi dir="ltr">uzoshop</bdi></span><span class="fresh-chip" style="background:rgba(0,0,0,.2);color:#fff">סופי · 08:42</span><span class="sc-tag" style="background:rgba(0,0,0,.25)">מעל היעד</span></div>
+      <div style="font-size:10px;opacity:.8;text-transform:uppercase;letter-spacing:.06em">ROAS · 30 ימים</div>
+      <div class="num" style="font-size:34px;font-weight:700;line-height:1.1">3.41x</div>
+      <svg viewBox="0 0 200 30" width="100%" height="30" style="margin-top:6px"><path d="M2,22 L40,18 L80,19 L120,12 L160,14 L198,8" fill="none" stroke="#fff" stroke-width="2" opacity=".85"/></svg>
+    </div>
+    <div class="m-body">
+      <!-- 2 KPI + delta -->
+      <div class="grid g-5" style="gap:10px;margin-bottom:var(--s4)">
+        <div class="sc-metric"><div class="sc-mk" style="opacity:1;color:var(--muted)">הוצאה</div><div class="sc-mv num">C$971</div><div class="delta dn" style="font-size:10px">▼ 4%</div></div>
+        <div class="sc-metric"><div class="sc-mk" style="opacity:1;color:var(--muted)">הכנסה</div><div class="sc-mv num">C$3,312</div><div class="delta up" style="font-size:10px">▲ 9%</div></div>
+        <div class="sc-metric"><div class="sc-mk" style="opacity:1;color:var(--muted)">רווח תפעולי</div><div class="sc-mv num">C$1,513</div><div class="delta up" style="font-size:10px">▲ 12%</div></div>
+        <div class="sc-metric"><div class="sc-mk" style="opacity:1;color:var(--muted)">הזמנות</div><div class="sc-mv num">96</div><div class="delta up" style="font-size:10px">▲ 8%</div></div>
+        <div class="sc-metric"><div class="sc-mk" style="opacity:1;color:var(--muted)">AOV</div><div class="sc-mv num">C$74</div><div class="delta up" style="font-size:10px">▲ 2%</div></div>
+      </div>
+      <!-- 3 NC tile -->
+      <div class="card pad" style="border-inline-start:4px solid var(--band-green);margin-bottom:var(--s4)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700;font-size:var(--t-sm)">לקוחות חדשים · שאלה אחרת</span><span class="spill warn" style="height:18px">ביטחון נמוך</span></div>
+        <div style="font-size:var(--t-cap);color:var(--muted)">NC-ROAS <b style="color:var(--band-green)">2.9×</b> · nCAC <b style="color:var(--ink)" class="num">C$24</b> · 71 חדשות · 25 חוזרות</div>
+      </div>
+      <!-- 4 ROAS over time -->
+      <div class="card pad" style="margin-bottom:var(--s4)">
+        <div style="font-weight:700;font-size:var(--t-sm);margin-bottom:10px">ROAS לאורך זמן</div>
+        <svg viewBox="0 0 600 160" preserveAspectRatio="none" width="100%" height="150">
+          <g stroke="var(--grid)" stroke-width="1" stroke-dasharray="3 5"><line x1="20" x2="600" y1="40" y2="40"/><line x1="20" x2="600" y1="80" y2="80"/><line x1="20" x2="600" y1="120" y2="120"/></g>
+          <line x1="20" x2="600" y1="60" y2="60" stroke="var(--neg)" stroke-width="1.2" stroke-dasharray="4 4" opacity=".6"/>
+          <path fill="none" stroke="var(--band-green)" stroke-width="2.2" d="M20,90 C120,82 240,72 360,64 C480,58 540,54 600,52"/>
+        </svg>
+      </div>
+      <!-- 5 per-platform -->
+      <div class="grid g-3" style="margin-bottom:var(--s4)">
+        <div class="sc-metric"><div class="sc-cpm-row"><span class="ld" style="background:#1877f2;width:8px;height:8px;border-radius:3px"></span><span class="nm" style="flex:1;font-weight:600">Meta</span></div><div style="font-size:10px;color:var(--muted);margin-top:6px">הוצאה C$612 · CPM C$12.4 · <span class="band green" style="height:14px;font-size:9px">3.6x</span></div></div>
+        <div class="sc-metric"><div class="sc-cpm-row"><span class="ld" style="background:#ea4335;width:8px;height:8px;border-radius:3px"></span><span class="nm" style="flex:1;font-weight:600">Google</span></div><div style="font-size:10px;color:var(--muted);margin-top:6px">הוצאה C$310 · CPM C$16.1 · <span class="band orange" style="height:14px;font-size:9px">2.3x</span></div></div>
+        <div class="sc-metric"><div class="sc-cpm-row"><span class="ld" style="background:#111;width:8px;height:8px;border-radius:3px"></span><span class="nm" style="flex:1;font-weight:600">TikTok</span></div><div style="font-size:10px;color:var(--muted);margin-top:6px">הוצאה C$49 · CPM C$9.2 · <span class="band blue" style="height:14px;font-size:9px">3.1x</span></div></div>
+      </div>
+      <!-- 6 top campaigns -->
+      <div style="font-weight:700;font-size:var(--t-sm);margin-bottom:6px">קמפיינים מובילים</div>
+      <div class="nc-row clk" onclick="closeModal('storeScrim');openModal('campScrim')" style="cursor:pointer"><div style="flex:1"><div style="font-weight:600;font-size:var(--t-sm)"><bdi dir="ltr">UZ_Meta_Prospecting</bdi></div><div style="font-size:10px;color:var(--faint)">55 הזמנות · C$1,820 · הוצ׳ C$506</div></div><span class="band green">3.6x</span></div>
+      <div class="nc-row clk" onclick="closeModal('storeScrim');openModal('campScrim')" style="cursor:pointer"><div style="flex:1"><div style="font-weight:600;font-size:var(--t-sm)"><bdi dir="ltr">UZ_Meta_Retarget</bdi></div><div style="font-size:10px;color:var(--faint)">31 הזמנות · C$980 · הוצ׳ C$297</div></div><span class="band green">3.3x</span></div>
+    </div>
+    <!-- 7 footer -->
+    <div class="m-foot">
+      <button class="btn primary" onclick="closeModal('storeScrim');go('campaigns')">פתח את כל הקמפיינים של uzoshop ‹</button>
+      <button class="btn ghost" onclick="closeModal('storeScrim')">סגור</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PRODUCT PICKER MODAL ═══════════════ -->
+<div class="scrim" id="pickScrim" onclick="if(event.target===this)closeModal('pickScrim')">
+  <div class="modal picker">
+    <div class="m-head">
+      <span class="plat" style="background:var(--accent)"><svg viewBox="0 0 24 24" fill="none" style="width:12px;height:12px"><path d="M21 16V8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 22V13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <div class="m-name" style="line-height:1.3">שייך מוצרי uzoshop לקמפיין<div style="font-size:10px;color:var(--faint);font-weight:400">UZ_Meta_Prospecting · מוצגים רק מוצרים מחנות uzoshop</div></div>
+      <button class="m-close" onclick="closeModal('pickScrim')"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="m-body">
+      <div class="search" style="width:100%;margin-bottom:14px"><svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><input placeholder="חפש מוצר…" autofocus></div>
+      <label class="pick-row"><input type="checkbox" checked><span class="pr-t">נורת לילה כוכבים<div class="pr-s">52 יחידות · C$1,560</div></span></label>
+      <label class="pick-row"><input type="checkbox" checked><span class="pr-t">ערכת טיפוח עור<div class="pr-s">28 יחידות · C$840</div></span></label>
+      <label class="pick-row"><input type="checkbox"><span class="pr-t">מברשת סיליקון<div class="pr-s">41 יחידות · C$984 · <span style="color:var(--band-orange);display:inline-flex;align-items:center;gap:3px"><svg viewBox="0 0 24 24" fill="none" style="width:11px;height:11px"><path d="M9 17H7A5 5 0 017 7h2M15 7h2a5 5 0 010 10h-2M8 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>גם ב-2 קמפיינים</span></div></span></label>
+      <label class="pick-row"><input type="checkbox"><span class="pr-t">מסכת LED<div class="pr-s">עדיין לא בוצעו מכירות</div></span></label>
+    </div>
+    <div class="m-foot">
+      <span style="font-size:var(--t-cap);color:var(--muted)">2 נבחרו</span>
+      <div style="display:flex;gap:8px"><button class="btn ghost" onclick="closeModal('pickScrim')">ביטול</button><button class="btn primary" onclick="closeModal('pickScrim')"><svg viewBox="0 0 24 24" fill="none" style="width:14px;height:14px"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>שמור</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ OPERATOR MODAL (7-tab Radix bar) ═══════════════ -->
+<div class="scrim" id="opScrim" onclick="if(event.target===this)closeModal('opScrim')">
+  <div class="modal wide">
+    <div class="m-head">
+      <span class="m-name">ניהול</span>
+      <span class="spill live" style="height:22px"><span class="sd"></span>טריות 96% · 0 כשלי טוקן</span>
+      <button class="btn-ghost" style="height:30px">רענן</button>
+      <button class="m-close" onclick="closeModal('opScrim')"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="m-tabs" data-mtabs="op">
+      <button class="on" data-mp="op-health">בריאות</button>
+      <button data-mp="op-sync">סנכרון</button>
+      <button data-mp="op-act">פעילות</button>
+      <button data-mp="op-danger">מסוכן</button>
+      <button data-mp="op-ads">מצב פרסום</button>
+      <button data-mp="op-stores">חנויות</button>
+      <button data-mp="op-diag">אבחון סיווג</button>
+    </div>
+    <div class="m-body">
+      <div class="mpanel on" id="op-health">
+        <div class="banner warn"><svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 4l-7 12A2 2 0 005 19h14a2 2 0 001.7-3L13.7 4a2 2 0 00-3.4 0z" stroke="currentColor" stroke-width="2"/></svg><span>TikTok attribution: דיווח עשוי להיות חלקי בחשבון משותף.</span></div>
+        <div style="font-weight:700;font-size:var(--t-sm);margin-bottom:8px">טריות נתונים</div>
+        <table class="data" style="border:1px solid var(--edge);border-radius:10px;overflow:hidden"><thead><tr><th class="sticky-col">חנות</th><th>פלטפורמה</th><th>טבלה</th><th class="c">סטטוס</th><th class="r">Lag (דק׳)</th></tr></thead><tbody>
+          <tr><td class="sticky-col">uzoshop</td><td>Meta</td><td>data_daily</td><td class="c"><span class="spill live" style="height:18px"><span class="sd"></span>OK</span></td><td class="r num">2</td></tr>
+          <tr><td class="sticky-col">uzoshop</td><td>Google</td><td>campaigns_daily</td><td class="c"><span class="spill warn" style="height:18px">מאט</span></td><td class="r num">18</td></tr>
+          <tr><td class="sticky-col">Zol Plus</td><td>TikTok</td><td>data_daily</td><td class="c"><span class="spill err" style="height:18px">stuck</span></td><td class="r num">64</td></tr>
+        </tbody></table>
+      </div>
+      <div class="mpanel" id="op-sync">
+        <div style="font-weight:700;font-size:var(--t-sm);margin-bottom:8px">סנכרון עכשיו</div>
+        <div class="filters" style="margin-bottom:16px"><button class="btn primary">סנכרן הכל</button><button class="btn ghost">uzoshop</button><button class="btn ghost">360usmile</button><button class="btn ghost">Zol Plus</button></div>
+        <div style="font-weight:700;font-size:var(--t-sm);margin-bottom:8px">Backfill טווח תאריכים</div>
+        <div class="filters"><input class="nsel" type="date"><input class="nsel" type="date"><button class="btn primary">הרץ Backfill</button></div>
+      </div>
+      <div class="mpanel" id="op-act">
+        <div style="font-weight:700;font-size:var(--t-sm);margin-bottom:8px">ריצות אחרונות</div>
+        <table class="data" style="border:1px solid var(--edge);border-radius:10px;overflow:hidden"><thead><tr><th class="sticky-col">job</th><th class="c">סטטוס</th><th class="r">הצלחה אחרונה</th><th>תזמון</th></tr></thead><tbody>
+          <tr><td class="sticky-col">cron-live</td><td class="c"><span class="spill live" style="height:18px"><span class="sd"></span>OK</span></td><td class="r num">08:40</td><td>~10 דק׳</td></tr>
+          <tr><td class="sticky-col">cron-daily</td><td class="c"><span class="spill live" style="height:18px"><span class="sd"></span>OK</span></td><td class="r num">00:31</td><td>00:30 IL</td></tr>
+          <tr><td class="sticky-col">cron-tick</td><td class="c"><span class="spill live" style="height:18px"><span class="sd"></span>OK</span></td><td class="r num">08:42</td><td>~5 דק׳</td></tr>
+        </tbody></table>
+      </div>
+      <div class="mpanel" id="op-danger">
+        <div style="font-weight:700;font-size:var(--t-sm);margin-bottom:8px">התראות WhatsApp</div>
+        <div class="filters" style="margin-bottom:16px"><button class="btn ghost">שלח 12:00</button><button class="btn ghost">שלח 18:00</button><button class="btn ghost">שלח 00:10</button></div>
+        <div class="card pad" style="border:1px solid var(--band-red)"><div style="font-weight:700;color:var(--band-red);margin-bottom:6px">ניקוי וריסט</div><div style="font-size:var(--t-cap);color:var(--muted);margin-bottom:10px">פעולה בלתי-הפיכה. דורש אישור מוקלד.</div><button class="btn" style="border-color:var(--band-red);color:var(--band-red)">ריסט נתונים</button></div>
+      </div>
+      <div class="mpanel" id="op-ads">
+        <div style="font-weight:700;font-size:var(--t-sm);margin-bottom:8px">מצב פרסום · store × platform</div>
+        <table class="data" style="border:1px solid var(--edge);border-radius:10px;overflow:hidden"><thead><tr><th class="sticky-col">חנות</th><th class="c">Meta</th><th class="c">Google</th><th class="c">TikTok</th></tr></thead><tbody>
+          <tr><td class="sticky-col">uzoshop</td><td class="c"><span class="spill live" style="height:18px">ON</span></td><td class="c"><span class="spill live" style="height:18px">ON</span></td><td class="c"><span class="spill live" style="height:18px">ON</span></td></tr>
+          <tr><td class="sticky-col">pdrn skin</td><td class="c"><span class="spill off" style="height:18px">לא מחובר</span></td><td class="c"><span class="spill live" style="height:18px">ON</span></td><td class="c"><span class="spill off" style="height:18px">OFF</span></td></tr>
+        </tbody></table>
+      </div>
+      <div class="mpanel" id="op-stores">
+        <div class="filters" style="justify-content:space-between;margin-bottom:12px"><span style="font-weight:700;font-size:var(--t-sm)">חנויות</span><button class="btn primary">+ הוסף חנות</button></div>
+        <table class="data" style="border:1px solid var(--edge);border-radius:10px;overflow:hidden"><thead><tr><th class="sticky-col">חנות</th><th class="c">Shopify</th><th class="c">Meta</th><th class="c">Google</th><th class="c">TikTok</th></tr></thead><tbody>
+          <tr><td class="sticky-col">uzoshop</td><td class="c"><svg viewBox="0 0 24 24" fill="none" style="width:14px;height:14px;color:var(--band-green)"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td class="c"><svg viewBox="0 0 24 24" fill="none" style="width:14px;height:14px;color:var(--band-green)"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td class="c"><svg viewBox="0 0 24 24" fill="none" style="width:14px;height:14px;color:var(--band-green)"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td class="c"><svg viewBox="0 0 24 24" fill="none" style="width:14px;height:14px;color:var(--band-green)"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></td></tr>
+          <tr><td class="sticky-col">360usmile</td><td class="c"><svg viewBox="0 0 24 24" fill="none" style="width:14px;height:14px;color:var(--band-green)"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td class="c"><svg viewBox="0 0 24 24" fill="none" style="width:14px;height:14px;color:var(--band-green)"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td class="c" style="color:var(--faint)">—</td><td class="c"><svg viewBox="0 0 24 24" fill="none" style="width:14px;height:14px;color:var(--band-green)"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></td></tr>
+        </tbody></table>
+      </div>
+      <div class="mpanel" id="op-diag">
+        <div class="filters" style="justify-content:space-between;margin-bottom:12px"><span style="font-weight:700;font-size:var(--t-sm)">אבחון סיווג · 30 ימים אחרונים</span><button class="btn-ghost" style="height:30px">הרץ מחדש</button></div>
+        <div class="grid g-3"><div class="sc-metric"><div class="sc-mk" style="opacity:1;color:var(--muted)">first-touch coverage</div><div class="sc-mv num">62%</div></div><div class="sc-metric"><div class="sc-mk" style="opacity:1;color:var(--muted)">murky bucket</div><div class="sc-mv num">6%</div></div><div class="sc-metric"><div class="sc-mk" style="opacity:1;color:var(--muted)">ATC sources</div><div class="sc-mv num">8</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ───── nav config (flat 10-tab list) ───── */
+var NAV=[
+ ['home','בית','⌘1','M3 12l9-8 9 8M5 10v10h5v-6h4v6h5V10'],
+ ['activity','פעילות','⌘2','M13 2L3 14h7l-1 8 10-12h-7l1-8z'],
+ ['customers','לקוחות','⌘3','M16 18a4 4 0 00-8 0M12 11a3 3 0 100-6 3 3 0 000 6zM20 19a3 3 0 00-3-3M4 19a3 3 0 013-3'],
+ ['tables','טבלאות אופטימיזציה','⌘4','M3 3h18v18H3zM3 9h18M9 21V9'],
+ ['pnl','P&L','⌘5','M3 3v18h18M7 14l3-3 3 3 5-6'],
+ ['trends','מגמות','⌘6','M3 17l6-6 4 4 7-7M21 8v4h-4'],
+ ['campaigns','קמפיינים','⌘7','M3 11l18-5v12L3 14v-3zM7 14v4a2 2 0 004 0'],
+ ['products','מוצרים','⌘8','M21 16V8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5'],
+ ['payments','תשלומים','⌘9','M2 7h20v10H2zM2 11h20'],
+ ['detail','פירוט','⌘10','M3 3h18v18H3zM3 9h18M3 15h18M9 3v18']
+];
+var TITLES={home:'בית',activity:'פעילות',customers:'לקוחות',tables:'טבלאות אופטימיזציה',pnl:'P&L',trends:'מגמות',campaigns:'קמפיינים',products:'מוצרים',payments:'תשלומים',detail:'פירוט'};
+(function buildNav(){
+  var nav=document.getElementById('sbNav'),html='';
+  NAV.forEach(function(n){
+    html+='<button class="nav-item'+(n[0]==='home'?' active':'')+'" data-tab="'+n[0]+'" onclick="go(\''+n[0]+'\')">'+
+      '<svg viewBox="0 0 24 24" fill="none"><path d="'+n[3]+'" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'+
+      '<span class="nav-tx">'+n[1]+'</span><span class="nav-kbd">'+n[2]+'</span></button>';
+  });
+  nav.innerHTML=html;
+})();
+function go(tab){
+  document.querySelectorAll('.tabpanel').forEach(function(p){p.classList.remove('active')});
+  var el=document.getElementById('tab-'+tab); if(el)el.classList.add('active');
+  document.querySelectorAll('.nav-item[data-tab]').forEach(function(b){b.classList.toggle('active',b.dataset.tab===tab)});
+  document.getElementById('pageTitle').textContent=TITLES[tab];
+  document.getElementById('crumb').textContent=TITLES[tab];
+  document.getElementById('aiBtn').classList.toggle('hide',tab!=='home');
+  toggleMobNav(false); window.scrollTo(0,0);
+}
+/* ───── sub-tabs (Activity) ───── */
+document.querySelectorAll('.subtabs').forEach(function(group){
+  group.querySelectorAll('button').forEach(function(btn){
+    btn.onclick=function(){
+      group.querySelectorAll('button').forEach(function(b){b.classList.remove('on')});
+      btn.classList.add('on');
+      var scope=group.parentElement;
+      scope.querySelectorAll('.subpanel').forEach(function(p){p.classList.remove('on')});
+      document.getElementById(btn.dataset.p).classList.add('on');
+    };
+  });
+});
+/* ───── modal sub-tabs (campaign + operator) ───── */
+document.querySelectorAll('.m-tabs').forEach(function(group){
+  group.querySelectorAll('button').forEach(function(btn){
+    btn.onclick=function(){
+      group.querySelectorAll('button').forEach(function(b){b.classList.remove('on')});
+      btn.classList.add('on');
+      var body=group.parentElement.querySelector('.m-body');
+      body.querySelectorAll('.mpanel').forEach(function(p){p.classList.remove('on')});
+      var t=document.getElementById(btn.dataset.mp); if(t)t.classList.add('on');
+    };
+  });
+});
+/* ───── modals ───── */
+function openModal(id){document.getElementById(id).classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+function openStore(name){document.getElementById('storeModalName').textContent=name;openModal('storeScrim')}
+function openPicker(){openModal('pickScrim')}
+function openOperator(){openModal('opScrim')}
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){document.querySelectorAll('.scrim.open').forEach(function(s){s.classList.remove('open')})}});
+/* ───── theme toggle ───── */
+document.querySelectorAll('.theme-seg button').forEach(function(b){
+  b.onclick=function(){
+    document.querySelectorAll('.theme-seg button').forEach(function(x){x.classList.remove('on')});
+    b.classList.add('on');
+    var m=b.dataset.tm;
+    if(m==='system')m=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+    document.documentElement.setAttribute('data-theme',m);
+  };
+});
+/* ───── mobile nav ───── */
+function toggleMobNav(open){
+  document.getElementById('sidebar').classList.toggle('mobile-open',open);
+  document.getElementById('mobScrim').classList.toggle('open',open);
+}
+/* ───── campaign table rows ───── */
+(function fillCamp(){
+  var rows=[
+    ['✓','A','UZ_Meta_Prospecting','meta','uzoshop','green',3.6,'C$30','C$506','C$1,820','3.60x','3.5x',55,'2.4%','C$0.24','C$11.2','C$9.20','live'],
+    ['✓','A','UZ_Meta_Retarget','meta','uzoshop','green',3.3,'C$25','C$297','C$980','3.30x','3.1x',31,'3.1%','C$0.21','C$10.4','C$9.60','live'],
+    ['✓','B','US_TikTok_Video','tiktok','360usmile','blue',3.1,'C$20','C$142','C$440','3.10x','2.9x',13,'1.9%','C$0.30','C$9.2','C$10.9','live'],
+    ['○','C','UZ_Google_Brand','google','uzoshop','orange',2.3,'C$15','C$210','C$483','2.30x','2.1x',14,'4.2%','C$0.18','C$16.1','C$15.0','live'],
+    ['○','C','ZOL_Meta_Broad','meta','Zol Plus','orange',2.1,'C$12','C$93','C$195','2.10x','1.9x',6,'1.6%','C$0.34','C$18.3','C$18.3','live'],
+    ['○','F','PDRN_Google_PMax','google','pdrn skin','red',1.6,'C$10','C$40','C$64','1.60x','—',2,'2.8%','C$0.27','C$21.4','C$21.4','off']
+  ];
+  var tb=document.getElementById('campBody'); if(!tb)return; var h='';
+  rows.forEach(function(r){
+    var statusPill=r[17]==='live'?'<span class="spill live" style="height:18px"><span class="sd"></span>live</span>':'<span class="spill off" style="height:18px">כבוי</span>';
+    var optTg='<span class="opt-tg'+(r[0]==='✓'?' on':'')+'" role="checkbox" aria-checked="'+(r[0]==='✓')+'" aria-label="סימון אופטימיזציה"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5 11-12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
+    var sp='<svg class="spark" viewBox="0 0 80 24"><path d="M2,'+(20-r[6]*3)+' L26,'+(18-r[6]*3)+' L52,'+(15-r[6]*2)+' L78,'+(13-r[6]*2)+'" fill="none" stroke="var(--band-'+r[5]+')" stroke-width="1.6"/></svg>';
+    h+='<tr class="clk" onclick="openModal(\'campScrim\')">'+
+      '<td class="c" onclick="event.stopPropagation();var t=this.querySelector(\'.opt-tg\');t.classList.toggle(\'on\')">'+optTg+'</td>'+
+      '<td class="c"><span class="grade '+r[1]+'">'+r[1]+'</span></td>'+
+      '<td class="sticky-col"><span class="nm-cell"><span class="plat '+r[3]+'">'+(r[3]==='meta'?'f':r[3]==='google'?'G':'T')+'</span><bdi dir="ltr">'+r[2]+'</bdi><span class="store-chip"><span class="sc" style="background:var(--band-'+r[5]+')"></span>'+r[4]+'</span></span></td>'+
+      '<td class="c">'+sp+'</td>'+
+      '<td class="r num">'+r[7]+'</td><td class="r num">'+r[8]+'</td><td class="r num">'+r[9]+'</td>'+
+      '<td class="r"><span class="band '+r[5]+'">'+r[10]+'</span></td>'+
+      '<td class="r num" style="color:var(--band-blue)">'+r[11]+'</td>'+
+      '<td class="r num">'+r[12]+'</td><td class="r num">'+r[13]+'</td><td class="r num">'+r[14]+'</td><td class="r num">'+r[15]+'</td><td class="r num">'+r[16]+'</td>'+
+      '<td>'+statusPill+'</td><td class="c thflag"><svg viewBox="0 0 24 24" fill="none"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></td></tr>';
+  });
+  tb.innerHTML=h;
+})();
+/* ───── keyboard shortcuts ⌘1..⌘0 ───── */
+document.addEventListener('keydown',function(e){
+  if((e.metaKey||e.ctrlKey)&&/^[0-9]$/.test(e.key)){
+    e.preventDefault();
+    var idx=e.key==='0'?9:parseInt(e.key,10)-1;
+    if(NAV[idx])go(NAV[idx][0]);
+  }
+});
+</script>
+</body>
+</html>
