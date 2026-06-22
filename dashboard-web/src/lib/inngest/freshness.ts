@@ -64,7 +64,11 @@ const ERROR_MSG_MAX_LEN = 500;
 export async function recordFreshness(opts: {
   // string (not the 3-literal): freshness only persists store_id to a text column; self-serve stores flow here in Phase 4
   storeId: string;
-  platform: 'meta' | 'google' | 'tiktok' | 'shopify';
+  // 'system' is a dedicated non-platform lane for cron HEARTBEAT rows (the 5
+  // schedule-cadence crons that have no per-store/platform telemetry). The
+  // data_freshness.platform column is plain text (no CHECK), so 'system' is
+  // valid against the schema; it never collides with a real ad-platform lane.
+  platform: 'meta' | 'google' | 'tiktok' | 'shopify' | 'system';
   scope: string;       // e.g. 'kpi_daily', 'campaign_status', …
   tableName: string;   // e.g. 'data_daily', 'campaigns_daily', 'campaign_registry'
   status: FreshnessStatus;
