@@ -152,6 +152,10 @@ function rollupFreshness(rows: FreshnessRow[], now: number): {
   let anyError = false;
   let anyStale = false;
   let lastError: { code: string | null; message: string | null } | null = null;
+  // Attempt time of the error row currently surfaced in lastError, so we can
+  // keep the genuinely MOST-RECENT error rather than whichever errored row the
+  // DB happened to return last (row-order-independent / deterministic).
+  let lastErrorAttemptAt: string | null = null;
 
   for (const r of rows) {
     // Newest last_success_at across the job's scopes.
@@ -164,9 +168,20 @@ function rollupFreshness(rows: FreshnessRow[], now: number): {
 
     if (!HEALTHY_STATUSES.has(r.status)) {
       anyError = true;
-      // Keep the most recent error's detail.
+      // Surface the detail of the most recent error BY last_attempt_at (not
+      // merely the last row iterated), so which error the operator sees is
+      // deterministic and independent of the DB query's row ordering. A row
+      // with a newer attempt (or the first error seen, when attempts are null)
+      // wins.
       if (r.error_message || r.error_code) {
-        lastError = { code: r.error_code, message: r.error_message };
+        const isNewer =
+          lastError == null ||
+          (r.last_attempt_at != null &&
+            (lastErrorAttemptAt == null || r.last_attempt_at > lastErrorAttemptAt));
+        if (isNewer) {
+          lastError = { code: r.error_code, message: r.error_message };
+          lastErrorAttemptAt = r.last_attempt_at ?? lastErrorAttemptAt;
+        }
       }
     } else if (isAgeStale(r.last_success_at, r.scope, now)) {
       anyStale = true;
@@ -186,15 +201,52 @@ function rollupFreshness(rows: FreshnessRow[], now: number): {
 const RECENT_TICKS = 12;
 
 /**
+ * Staleness SLA for the cron-tick orchestrator, in MINUTES. The tick fires
+ * every 10 min (vercel.json cron "every 10 minutes"); a latest tick older than
+ * ~3x that cadence means the orchestrator job ITSELF has stopped firing — not a per-event
+ * failure but a dead job. 30 min absorbs one missed cycle + clock skew before
+ * we flag, mirroring the worker age-gate philosophy in rollupFreshness (a
+ * success-but-aged row is SYNTHETIC stale, never a forever-green dead job).
+ */
+const TICK_SLA_MINUTES = 30;
+
+/**
+ * True when the latest tick's finished_at is older than the tick SLA (or is
+ * null/unparseable — never-finished is never fresh). `now` injected for purity.
+ */
+function isTickStale(finishedAt: string | null, now: number): boolean {
+  if (finishedAt == null) return true;
+  const parsed = Date.parse(finishedAt);
+  if (Number.isNaN(parsed)) return true;
+  return (now - parsed) / 60_000 > TICK_SLA_MINUTES;
+}
+
+/**
  * Roll the latest cron_tick_snapshots row into the cron-tick verdict. The
  * orchestrator tick is its own job (the every-10-min fan-out planner) — its telemetry
  * is cron_tick_snapshots, NOT data_freshness. The latest tick's failed-event
- * count drives the verdict; finished_at is the last "success" time.
+ * count drives the `error` verdict; finished_at is the last "success" time.
+ *
+ * AGE-GATE (the case-3 fix for the tick row): a tick row carries
+ * `events_failed_count` from when it RAN, but says NOTHING about whether the
+ * orchestrator is STILL firing. If the every-10-min cron stops entirely, the
+ * latest tick is just the last (clean) tick from hours ago and would stay
+ * `success` = green forever — the exact dead-job-stays-green hole the worker
+ * fix closes for data_freshness. So a clean-but-aged latest tick (finished_at
+ * older than TICK_SLA_MINUTES) is treated as SYNTHETIC `stale`, not `success`.
+ * A real failed-event count still wins as `error` (we surface failures, not
+ * mute them) — error takes precedence over stale, same ordering as the worker
+ * rollup.
  */
-function rollupTick(ticks: CronTickSnapshotRow[]): RunRow {
+function rollupTick(ticks: CronTickSnapshotRow[], now: number): RunRow {
   // fetchCronTickSnapshots already orders tick_id DESC, so ticks[0] is newest.
   const latest = ticks[0];
-  const status: RunStatus = (latest.events_failed_count ?? 0) > 0 ? 'error' : 'success';
+  const status: RunStatus =
+    (latest.events_failed_count ?? 0) > 0
+      ? 'error'
+      : isTickStale(latest.finished_at, now)
+        ? 'stale'
+        : 'success';
   return {
     job: 'cron-tick',
     lastSuccessAt: latest.finished_at,
@@ -237,7 +289,7 @@ export function buildRunsSummary(input: BuildRunsInput): RunRow[] {
 
   // cron-tick orchestrator: derived from cron_tick_snapshots (its own source).
   if (ticks.length > 0) {
-    derived.set('cron-tick', rollupTick(ticks));
+    derived.set('cron-tick', rollupTick(ticks, now));
   }
 
   // Platform-keyed worker jobs: derive ONLY from the scopes the live worker

@@ -65,7 +65,7 @@ const JOB_SCHEDULE: Record<JobId, string> = {
   'worker-tiktok': 'fan-out מ-tick',
   'whatsapp': '12:00 / 18:00 / 00:10 IL',
   'oauth-canary': 'יומי 00:00 IL',
-  'cohort': 'כל ~2 שעות',
+  'cohort': 'שבועי (יום ב׳ ~01:00 IL)',
 };
 
 // ---------------------------------------------------------------------------

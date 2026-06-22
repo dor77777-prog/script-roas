@@ -215,6 +215,41 @@ describe('buildRunsSummary — worker-meta', () => {
     expect(meta.status).toBe('success');
     expect(meta.source).toBe('data_freshness');
   });
+
+  // With TWO errored live scopes, the surfaced lastError must be the genuinely
+  // MOST-RECENT one (by last_attempt_at), independent of DB row ordering — the
+  // OLDER error appears LAST in the array but must NOT win.
+  it('surfaces the most-recent error by last_attempt_at, not the last row iterated', () => {
+    const olderError = freshness({
+      platform: 'meta',
+      scope: 'campaign_status',
+      table_name: 'campaign_registry',
+      status: 'transient_error',
+      error_code: 'OLD',
+      error_message: 'older failure',
+      last_attempt_at: '2026-06-22T08:00:00.000Z',
+      last_success_at: '2026-06-22T07:00:00.000Z',
+    });
+    const newerError = freshness({
+      platform: 'meta',
+      scope: 'ad_status',
+      table_name: 'ad_registry',
+      status: 'auth_error',
+      error_code: 'NEW',
+      error_message: 'newer failure',
+      last_attempt_at: '2026-06-22T09:30:00.000Z',
+      last_success_at: '2026-06-22T07:00:00.000Z',
+    });
+    // newer error first, older error LAST in row order — older must not clobber.
+    const rows = buildRunsSummary({
+      freshness: [newerError, olderError],
+      ticks: [],
+      now: NOW,
+    });
+    const meta = rows.find((r) => r.job === 'worker-meta')!;
+    expect(meta.status).toBe('error');
+    expect(meta.lastError).toEqual({ code: 'NEW', message: 'newer failure' });
+  });
 });
 
 describe('buildRunsSummary — cron-tick', () => {
@@ -239,6 +274,78 @@ describe('buildRunsSummary — cron-tick', () => {
     const rows = buildRunsSummary({
       freshness: [],
       ticks: [tick({ tick_id: 'tick_x', events_failed_count: 3 })],
+      now: NOW,
+    });
+    const cronTick = rows.find((r) => r.job === 'cron-tick')!;
+    expect(cronTick.status).toBe('error');
+  });
+
+  // ---- AGE-GATE: a stopped orchestrator must NOT stay green forever ----------
+  // The tick fires every 10 min. If the cron stops firing entirely, the latest
+  // tick is just the last clean tick from hours ago (events_failed_count:0).
+  // Without an age-gate it would read 'success' = GREEN FOREVER (the case-3
+  // dead-job-stays-green hole). A clean-but-aged latest tick must be 'stale'.
+  it('GENUINE OUTAGE: a single old clean tick (3h ago, 0 failures) → cron-tick = stale (not success)', () => {
+    const threeHoursAgo = '2026-06-22T07:00:00.000Z';
+    const rows = buildRunsSummary({
+      freshness: [],
+      ticks: [
+        tick({
+          tick_id: 'tick_old',
+          started_at: '2026-06-22T06:59:55.000Z',
+          finished_at: threeHoursAgo,
+          events_failed_count: 0,
+        }),
+      ],
+      now: NOW,
+    });
+    const cronTick = rows.find((r) => r.job === 'cron-tick')!;
+    expect(cronTick.status).toBe('stale');
+    expect(cronTick.lastSuccessAt).toBe(threeHoursAgo);
+  });
+
+  it('a fresh clean tick (5 min ago) stays success — normal cadence is not flagged', () => {
+    const rows = buildRunsSummary({
+      freshness: [],
+      ticks: [
+        tick({
+          tick_id: 'tick_fresh',
+          finished_at: '2026-06-22T09:55:00.000Z', // 5 min ago, within 30-min SLA
+          events_failed_count: 0,
+        }),
+      ],
+      now: NOW,
+    });
+    const cronTick = rows.find((r) => r.job === 'cron-tick')!;
+    expect(cronTick.status).toBe('success');
+  });
+
+  it('a tick boundary just inside the SLA (25 min) stays success; one just past (35 min) is stale', () => {
+    const inside = buildRunsSummary({
+      freshness: [],
+      ticks: [tick({ tick_id: 'tick_25', finished_at: '2026-06-22T09:35:00.000Z', events_failed_count: 0 })],
+      now: NOW,
+    });
+    expect(inside.find((r) => r.job === 'cron-tick')!.status).toBe('success');
+
+    const outside = buildRunsSummary({
+      freshness: [],
+      ticks: [tick({ tick_id: 'tick_35', finished_at: '2026-06-22T09:25:00.000Z', events_failed_count: 0 })],
+      now: NOW,
+    });
+    expect(outside.find((r) => r.job === 'cron-tick')!.status).toBe('stale');
+  });
+
+  it('a failed-event count still wins as error even when the tick is aged (failures surfaced, not muted)', () => {
+    const rows = buildRunsSummary({
+      freshness: [],
+      ticks: [
+        tick({
+          tick_id: 'tick_old_fail',
+          finished_at: '2026-06-22T06:00:00.000Z', // 4h ago (would be stale if clean)
+          events_failed_count: 2,
+        }),
+      ],
       now: NOW,
     });
     const cronTick = rows.find((r) => r.job === 'cron-tick')!;
