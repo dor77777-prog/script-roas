@@ -241,6 +241,121 @@ describe('sourceStatusRollup — age gate (#5)', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// LIVE-vs-STALE error gate — the SourceHealthChip false-alarm fix.
+//
+// The home chip was reading "meta · transient_error" off a SINGLE stale
+// slow-cadence scope: data_freshness platform='meta', scope='kpi_daily',
+// store='uzoshop', status='transient_error', last_attempt ~8h ago,
+// last_success NULL — written by the DAILY cron and not retried since (daily
+// cadence). Meanwhile every LIVE meta metric scope was success/lag 0. That old
+// error is not actionable on the home chip; an error must only drive
+// source-health "error/transient" if it is LIVE (recent last_attempt relative
+// to the scope's cadence SLA). A recent live error MUST still flag (we filter
+// stale errors, we do NOT mute current failures).
+// ---------------------------------------------------------------------------
+
+describe('sourceStatusRollup — stale-error gate (SourceHealthChip false alarm)', () => {
+  it('FALSE ALARM GONE: a stale daily kpi_daily transient_error (8h ago, never succeeded) does NOT flag meta while live scopes are fresh', () => {
+    const rows = [
+      // The exact false-alarm row: daily-cadence error, last attempt 8h ago.
+      row({
+        store_id: 'uzoshop',
+        platform: 'meta',
+        scope: 'kpi_daily',
+        status: 'transient_error',
+        last_success_at: null,
+        last_attempt_at: isoMinutesAgo(8 * 60),
+      }),
+      // Live metric scopes — fresh + success.
+      row({ store_id: 'uzoshop', platform: 'meta', scope: 'campaign_metrics', status: 'success', last_success_at: isoMinutesAgo(2) }),
+      row({ store_id: 'uzoshop', platform: 'meta', scope: 'ad_metrics', status: 'success', last_success_at: isoMinutesAgo(2) }),
+    ];
+    const out = sourceStatusRollup(rows, NOW);
+    expect(out.anyUnhealthy).toBe(false);
+    expect(out.unhealthy).toEqual([]);
+  });
+
+  it('REAL FAILURE NOT HIDDEN: a RECENT live meta metric error (last_attempt 2m ago) still flags meta', () => {
+    const rows = [
+      row({
+        store_id: 'uzoshop',
+        platform: 'meta',
+        scope: 'campaign_metrics',
+        status: 'transient_error',
+        last_success_at: isoMinutesAgo(70),
+        last_attempt_at: isoMinutesAgo(2),
+        lag_minutes: 70,
+      }),
+    ];
+    const out = sourceStatusRollup(rows, NOW);
+    expect(out.anyUnhealthy).toBe(true);
+    expect(out.unhealthy).toHaveLength(1);
+    expect(out.unhealthy[0].platform).toBe('meta');
+    expect(out.unhealthy[0].status).toBe('transient_error');
+  });
+
+  it('a recent error on a SLOW-cadence scope still flags (cohort_monthly attempted 1h ago, within its 7-day window)', () => {
+    const rows = [
+      row({
+        store_id: 'uzoshop',
+        platform: 'shopify',
+        scope: 'cohort_monthly',
+        status: 'transient_error',
+        last_success_at: isoDaysAgo(1),
+        last_attempt_at: isoMinutesAgo(60),
+      }),
+    ];
+    const out = sourceStatusRollup(rows, NOW);
+    expect(out.anyUnhealthy).toBe(true);
+    expect(out.unhealthy[0].status).toBe('transient_error');
+  });
+
+  it('a stale error does NOT mask a fresh live error in the SAME group', () => {
+    const rows = [
+      // stale daily error — should be dropped
+      row({ store_id: 'uzoshop', platform: 'meta', scope: 'kpi_daily', status: 'transient_error', last_success_at: null, last_attempt_at: isoMinutesAgo(8 * 60) }),
+      // fresh live error — should win the group
+      row({ store_id: 'uzoshop', platform: 'meta', scope: 'campaign_status', status: 'auth_error', last_success_at: isoMinutesAgo(90), last_attempt_at: isoMinutesAgo(3) }),
+    ];
+    const out = sourceStatusRollup(rows, NOW);
+    expect(out.anyUnhealthy).toBe(true);
+    expect(out.unhealthy).toHaveLength(1);
+    expect(out.unhealthy[0].status).toBe('auth_error');
+  });
+
+  it('IGNORES system-platform heartbeat rows entirely (cron health lives on the RunsPanel, not the home chip)', () => {
+    // A failing cron writes a system/heartbeat transient_error row. That is a
+    // RunsPanel concern, not a per-(store,platform) data-source health concern;
+    // it must never surface a "system · transient_error" badge on the home chip.
+    const rows = [
+      row({
+        store_id: '__system__',
+        platform: 'system',
+        scope: 'cron_live',
+        table_name: 'heartbeat',
+        status: 'transient_error',
+        last_attempt_at: isoMinutesAgo(2), // recent → would flag if not excluded
+        last_success_at: isoMinutesAgo(120),
+      }),
+    ];
+    const out = sourceStatusRollup(rows, NOW);
+    expect(out.anyUnhealthy).toBe(false);
+    expect(out.unhealthy).toEqual([]);
+  });
+
+  it('an AGED SUCCESS still flips to synthetic stale (this gate only relaxes ERROR rows, not the success age-gate)', () => {
+    // Regression guard: the stale-error gate must NOT also suppress the
+    // aged-success → stale path that FIX #5 added.
+    const rows = [
+      row({ store_id: 'uzoshop', platform: 'meta', scope: 'campaign_metrics', status: 'success', last_success_at: isoMinutesAgo(120) }),
+    ];
+    const out = sourceStatusRollup(rows, NOW);
+    expect(out.anyUnhealthy).toBe(true);
+    expect(out.unhealthy[0].status).toBe('stale');
+  });
+});
+
 describe('scopeSlaMinutes / isAgeStale (#5)', () => {
   it('campaign_metrics + status scopes → 60 min SLA', () => {
     expect(scopeSlaMinutes('campaign_metrics')).toBe(60);

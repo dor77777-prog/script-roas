@@ -124,6 +124,29 @@ function liveLagMinutes(
   return Math.max(0, Math.floor((now - parsed) / 60_000));
 }
 
+/**
+ * True when an ERROR row's last_attempt_at is OLDER than its scope cadence SLA
+ * (or is null/unparseable). Such an error is STALE — it was recorded long ago
+ * and has not been retried since (the cron writes on its own slow cadence), so
+ * it is not an actionable live failure for the home SourceHealthChip.
+ *
+ * This mirrors the runsSummary stale-vs-live discipline: we surface CURRENT
+ * failures, not frozen old ones a slow-cadence cron has not had a chance to
+ * clear. A LIVE error (recent last_attempt) is NOT stale and still flags — so a
+ * genuine current meta-metric failure is never hidden.
+ */
+function isErrorAttemptStale(
+  lastAttemptAt: string | null | undefined,
+  scope: string,
+  now: number,
+): boolean {
+  if (lastAttemptAt == null) return true;
+  const parsed = Date.parse(lastAttemptAt);
+  if (Number.isNaN(parsed)) return true;
+  const ageMin = (now - parsed) / 60_000;
+  return ageMin > scopeSlaMinutes(scope);
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -152,6 +175,11 @@ export function sourceStatusRollup(
   const worstByGroup = new Map<string, UnhealthySource>();
 
   for (const r of rows) {
+    // The 'system' platform is the cron HEARTBEAT lane (recordHeartbeat), not a
+    // per-(store, platform) DATA SOURCE. Cron health is the RunsPanel's job; a
+    // failing cron must never raise a "system · …" badge on the home chip.
+    if (r.platform === 'system') continue;
+
     // FIX #5: a `success`/`budget_skip` row is healthy ONLY if its
     // last_success_at is within the scope SLA. An aged one is treated as a
     // SYNTHETIC stale (it reads "succeeded" but the worker stopped firing).
@@ -164,6 +192,14 @@ export function sourceStatusRollup(
       if (!isAgeStale(r.last_success_at, r.scope, now)) continue; // genuinely fresh
       status = SYNTHETIC_STALE_STATUS;
       lagMinutes = liveLagMinutes(r.last_success_at, now);
+    } else if (isErrorAttemptStale(r.last_attempt_at, r.scope, now)) {
+      // SourceHealthChip false-alarm fix: a real ERROR row only drives
+      // source-health "error/transient" while it is LIVE (last_attempt within
+      // the scope's cadence). A stale slow-cadence error (e.g. a daily
+      // kpi_daily transient_error from 8h ago, never retried) is dropped here
+      // so it cannot flag the home chip while the live metric scopes are fresh.
+      // A RECENT error stays (we filter stale errors, never mute current ones).
+      continue;
     }
 
     const key = `${r.store_id}::${r.platform}`;
