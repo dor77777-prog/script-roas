@@ -11,6 +11,10 @@ import { NativeSelect } from '@/components/ui/NativeSelect';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Switch } from '@/components/ui/Switch';
 import { Checkbox } from '@/components/ui/Checkbox';
+import { Button } from '@/components/ui/Button';
+import { Download } from 'lucide-react';
+import { buildMonthlyCsv } from '@/lib/monthlyTablesCsv';
+import { toCsv, downloadCsv } from '@/lib/csvExport';
 import { SectionIntro } from '@/components/SectionIntro';
 import { PageScope } from '@/components/ui/PageScope';
 import { PageSynthesis } from '@/components/ui/PageSynthesis';
@@ -153,6 +157,33 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
     year,
   });
 
+  // CSV export reflects EXACTLY what the tables show. Start from scopedRows
+  // (year-scoped by the SWR range + global-store-filtered), then apply the same
+  // visible-month filter MonthlyTables uses (multi-month → single month →
+  // all-year) and, in per-store mode, narrow to the selected store. Summary
+  // mode keeps all stores. Mirrors MonthlyTables' precedence so the export and
+  // the on-screen tables never disagree.
+  const visibleCsvRows = scopedRows.filter(r => {
+    const mm = r.date.slice(5, 7);
+    if (monthsProp) {
+      if (!monthsProp.map(m => String(m).padStart(2, '0')).includes(mm)) return false;
+    } else if (month != null) {
+      if (mm !== String(month).padStart(2, '0')) return false;
+    }
+    if (mode === 'per-store' && r.storeName !== storeFilter) return false;
+    return true;
+  });
+  const handleExportCsv = () => {
+    const { headers, rows } = buildMonthlyCsv(visibleCsvRows);
+    const scopeTag = mode === 'per-store' ? storeFilter : 'all-stores';
+    const monthTag = monthsProp
+      ? monthsProp.join('-')
+      : month != null
+        ? String(month).padStart(2, '0')
+        : 'year';
+    downloadCsv(`monthly_${scopeTag}_${year}-${monthTag}.csv`, toCsv(headers, rows));
+  };
+
   return (
     // animate-fade-in-up restores the mount transition the Radix TabsContent
     // used to provide (now a top-level tab) and matches HomeTab / PnLTab.
@@ -277,6 +308,25 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
             </div>
           </div>
         )}
+        {/* CSV export — sits at the END of the controls row (ms-auto) so the
+            row never crowds; on narrow screens it wraps onto its own line. The
+            label is icon-only on mobile (text hidden) to save width. Exports
+            EXACTLY the on-screen rows (visibleCsvRows). */}
+        <div className="flex flex-col gap-1 ms-auto">
+          <span className="text-xs text-ink-muted invisible select-none" aria-hidden="true">ייצוא</span>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={handleExportCsv}
+            disabled={visibleCsvRows.length === 0}
+            className="gap-1.5 h-9"
+            aria-label="ייצוא CSV"
+          >
+            <Download size={14} />
+            <span className="hidden sm:inline">ייצוא CSV</span>
+          </Button>
+        </div>
       </div>
       {/* Compare-months checkboxes — revealed only when compare mode is on.
           Each month is a labelled native checkbox (Checkbox primitive) so the
