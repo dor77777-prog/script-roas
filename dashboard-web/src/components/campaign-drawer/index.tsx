@@ -88,6 +88,7 @@ import {
 import {
   readProductMap,
   campaignKey,
+  adSetKey,
   setMappedProducts,
   allocateProductRevenue,
   type ProductMap,
@@ -558,6 +559,18 @@ export function CampaignDrawer({
     for (const a of cohortAggregated) {
       campaignSpend.set(a.key, a.spend);
     }
+    // Ad-set-level mapping (2026-06-23): per-ad-set spend from the raw
+    // campaign rows (each carries adSetId + spend). Passed to the allocator
+    // so an ad-set with its own product mapping overrides its campaign's.
+    // No-op when no ad-set mappings exist — the allocator ignores this and
+    // the campaign-level output stays byte-identical.
+    const adSetSpend = new Map<string, number>();
+    for (const r of campaignsData?.rows ?? []) {
+      if (r.storeId !== effectiveStoreId) continue;
+      if (!r.adSetId) continue;
+      const k = adSetKey(r.storeId, r.platform, r.campaignId, r.adSetId);
+      adSetSpend.set(k, (adSetSpend.get(k) ?? 0) + r.spend);
+    }
     const ordersForAllocator = (ordersAttrData?.rows ?? [])
       .filter(o => o.storeId === effectiveStoreId)
       .filter(o => o.date >= rangeFrom && o.date <= rangeTo)
@@ -573,6 +586,7 @@ export function CampaignDrawer({
       map: productMap,
       productRevenue,
       campaignSpend,
+      adSetSpend,
       orders: ordersForAllocator,
     });
     const roasShopifyByKey = new Map<string, number>();
@@ -611,7 +625,7 @@ export function CampaignDrawer({
       roasShopifyByKey,
       roasShopifyPlatformByKey,
     });
-  }, [summary, currentCampaignKey, productMap, cohortAggregated, productsData, ordersAttrData, effectiveStoreId, rangeFrom, rangeTo]);
+  }, [summary, currentCampaignKey, productMap, cohortAggregated, campaignsData, productsData, ordersAttrData, effectiveStoreId, rangeFrom, rangeTo]);
 
   const productChannelBreakdown = useMemo(() => {
     if (!summary || summary.platform !== 'Meta') return null;

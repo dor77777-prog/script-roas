@@ -541,3 +541,102 @@ describe('buildProductCentricView — b/HI-03 allocator parity with campaign-cen
     expect(sumAlloc).toBeCloseTo(400, 1);
   });
 });
+
+describe('buildProductCentricView — ad-set-level mapping (2026-06-23)', () => {
+  function asKey(platform: string, campaignId: string, adSetId: string): string {
+    return `${STORE}::${platform}::${campaignId}::${adSetId}`;
+  }
+
+  it('REGRESSION: passing adSetSpend with NO ad-set mappings yields identical rows', () => {
+    const productMap: ProductMap = {
+      [k('Meta', 'c1')]: ['p1'],
+      [k('TikTok', 't1')]: ['p1'],
+    };
+    const aggregated = [
+      makeAgg({ key: k('Meta', 'c1'), spend: 200 }),
+      makeAgg({ key: k('TikTok', 't1'), campaignId: 't1', platform: 'TikTok', spend: 300 }),
+    ];
+    const orders = [
+      {
+        storeId: STORE, source: 'direct', fbclidPresent: false,
+        gclidPresent: false,
+        lineItems: [{ productId: 'p1', units: 3, revenueCad: 300 }],
+      },
+    ];
+    const base = {
+      storeId: STORE,
+      productMap,
+      aggregated,
+      productNetRevenue: new Map([['p1', 300]]),
+      productUnits: new Map([['p1', 3]]),
+      orders,
+    };
+    const without = buildProductCentricView(base);
+    const withSpend = buildProductCentricView({
+      ...base,
+      // Ad-set spend supplied but NO 4-segment entries in the map → ignored.
+      adSetSpend: new Map([
+        [asKey('Meta', 'c1', 'as-m1'), 200],
+        [asKey('TikTok', 't1', 'as-t1'), 300],
+      ]),
+    });
+    // Per-member allocations must match exactly.
+    expect(withSpend).toHaveLength(without.length);
+    for (let i = 0; i < without.length; i++) {
+      const a = without[i];
+      const b = withSpend[i];
+      expect(b.productId).toBe(a.productId);
+      expect(b.totalNetRevenue).toBeCloseTo(a.totalNetRevenue, 9);
+      const aByKey = new Map(a.members.map(m => [m.campaignKey, m.allocatedRevenueEstimate]));
+      for (const m of b.members) {
+        expect(m.allocatedRevenueEstimate).toBeCloseTo(aByKey.get(m.campaignKey) ?? 0, 6);
+      }
+    }
+  });
+
+  it('ad-set override: a remapped ad-set redirects its spend+revenue to its own product', () => {
+    // Campaign c1 maps to p1. Ad-set as-m2 within c1 is remapped to p2.
+    // c1 has two ad-sets: as-m1 (inherits → p1) spend 100, as-m2 (own → p2)
+    // spend 200. With orders crediting both products by direct source, the
+    // campaign rollup credit for p2 must come via the as-m2 spend.
+    const productMap: ProductMap = {
+      [k('Meta', 'c1')]: ['p1'],
+      [asKey('Meta', 'c1', 'as-m2')]: ['p2'],
+    };
+    const aggregated = [makeAgg({ key: k('Meta', 'c1'), spend: 300 })];
+    const orders = [
+      {
+        storeId: STORE, source: 'direct', fbclidPresent: false,
+        gclidPresent: false,
+        lineItems: [
+          { productId: 'p1', units: 1, revenueCad: 100 },
+          { productId: 'p2', units: 2, revenueCad: 400 },
+        ],
+      },
+    ];
+    const rows = buildProductCentricView({
+      storeId: STORE,
+      productMap,
+      aggregated,
+      productNetRevenue: new Map([['p1', 100], ['p2', 400]]),
+      productUnits: new Map([['p1', 1], ['p2', 2]]),
+      orders,
+      adSetSpend: new Map([
+        [asKey('Meta', 'c1', 'as-m1'), 100],
+        [asKey('Meta', 'c1', 'as-m2'), 200],
+      ]),
+    });
+    // Both products appear; each rolls up to the same campaign c1.
+    const p1Row = rows.find(r => r.productId === 'p1');
+    const p2Row = rows.find(r => r.productId === 'p2');
+    expect(p1Row).toBeDefined();
+    expect(p2Row).toBeDefined();
+    // p2 (the ad-set-remapped product) gets its full revenue attributed to c1.
+    const p2Member = p2Row!.members.find(m => m.campaignKey === k('Meta', 'c1'));
+    expect(p2Member).toBeDefined();
+    expect(p2Member!.allocatedRevenueEstimate).toBeCloseTo(400, 5);
+    // p1's c1 member gets p1's revenue.
+    const p1Member = p1Row!.members.find(m => m.campaignKey === k('Meta', 'c1'));
+    expect(p1Member!.allocatedRevenueEstimate).toBeCloseTo(100, 5);
+  });
+});

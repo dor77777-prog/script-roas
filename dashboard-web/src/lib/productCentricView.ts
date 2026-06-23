@@ -127,6 +127,17 @@ export type ProductCentricInputs = {
     gclidPresent: boolean;
     lineItems: Array<{ productId: string; units: number; revenueCad: number }>;
   }>;
+  /**
+   * Ad-set-level mapping (2026-06-23) — per-ad-set spend keyed by
+   * `adSetKey(store, platform, campaign, adSet)`. When provided AND the
+   * productMap has at least one 4-segment ad-set entry for this store, the
+   * per-product allocator runs at ad-set granularity (ad-set own mapping
+   * overrides its campaign), then rolls up to campaign keys so the
+   * product-centric view stays consistent with the campaign-centric drawer.
+   * No-op (campaign-level output unchanged) when no ad-set mappings exist.
+   * Only consulted on the allocator branch (orders provided).
+   */
+  adSetSpend?: Map<string, number>;
 };
 
 // =============================================================================
@@ -138,7 +149,7 @@ export function buildProductCentricView(
 ): ProductCohortRow[] {
   const {
     storeId, productMap, aggregated, productNetRevenue, productTitles,
-    productUnits, orders,
+    productUnits, orders, adSetSpend,
   } = inputs;
 
   // 1. Pre-index aggregated rows by campaignKey for O(1) lookup.
@@ -148,14 +159,27 @@ export function buildProductCentricView(
   }
 
   // 2. Reverse productMap: productId → [campaignKey, ...] (this store only).
+  //
+  // Ad-set-level mapping (2026-06-23): a 4-segment ad-set key
+  // (`store::platform::campaign::adSet`) is NORMALIZED to its 3-segment
+  // campaign key for COHORT MEMBERSHIP — the product-centric view is
+  // campaign-centric (each member resolves to a campaign Aggregated row),
+  // so an ad-set-mapped product must surface under its campaign. The PRECISE
+  // per-ad-set revenue attribution is handled by allocateProductRevenue
+  // (which receives adSetSpend below). 3-segment campaign keys pass through
+  // unchanged, so the legacy behaviour is byte-identical when no ad-set
+  // keys exist. Dedupe so a campaign mapped at BOTH levels appears once.
   const storePrefix = `${storeId}::`;
-  const cohortByProduct = new Map<string, string[]>();
+  const cohortByProduct = new Map<string, Set<string>>();
   for (const [key, pids] of Object.entries(productMap)) {
     if (!key.startsWith(storePrefix)) continue;
     if (!Array.isArray(pids)) continue;
+    const parts = key.split('::');
+    // 4-segment ad-set key → campaign key; else use the key as-is.
+    const cohortKey = parts.length === 4 ? parts.slice(0, 3).join('::') : key;
     for (const pid of pids) {
-      if (!cohortByProduct.has(pid)) cohortByProduct.set(pid, []);
-      cohortByProduct.get(pid)!.push(key);
+      if (!cohortByProduct.has(pid)) cohortByProduct.set(pid, new Set());
+      cohortByProduct.get(pid)!.add(cohortKey);
     }
   }
 
@@ -180,7 +204,8 @@ export function buildProductCentricView(
 
   // 3. Build one row per product.
   const rows: ProductCohortRow[] = [];
-  for (const [productId, campaignKeys] of cohortByProduct.entries()) {
+  for (const [productId, campaignKeySet] of cohortByProduct.entries()) {
+    const campaignKeys = Array.from(campaignKeySet);
     // AUDIT ALG-02 + ALG-03 (2026-05-24, Phase 12.2.3): preserve stale-
     // mapped cohort members + emit dormant members with zero metrics
     // per the JSDoc contract below. Pre-fix:
@@ -285,6 +310,7 @@ export function buildProductCentricView(
           },
         ],
         campaignSpend: campaignSpendForAllocator,
+        adSetSpend,
         orders,
       });
       allocByCampaign = new Map();

@@ -31,7 +31,7 @@ import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { buildProductCentricView, type ProductCohortRow } from '@/lib/productCentricView';
 import { aggregate } from '@/lib/campaignsAggregator';
-import { readProductMap, type ProductMap } from '@/lib/campaignProductMap';
+import { readProductMap, adSetKey, type ProductMap } from '@/lib/campaignProductMap';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { ProductsResponse } from '@/app/api/products/route';
@@ -373,6 +373,21 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
     [ordersAttrData, internalStoreId, range.from, range.to],
   );
 
+  // Per-ad-set spend (2026-06-23) — built from the raw campaign rows (each
+  // carries adSetId + spend), scoped to this store. Threaded to the allocator
+  // so an ad-set with its own product mapping overrides its campaign's. No-op
+  // when no ad-set mappings exist (allocator ignores it → identical output).
+  const adSetSpend = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const r of campaignsData?.rows ?? []) {
+      if (r.storeId !== internalStoreId) continue;
+      if (!r.adSetId) continue;
+      const k = adSetKey(r.storeId, r.platform, r.campaignId, r.adSetId);
+      out.set(k, (out.get(k) ?? 0) + r.spend);
+    }
+    return out;
+  }, [campaignsData, internalStoreId]);
+
   const allRows = useMemo(
     () =>
       buildProductCentricView({
@@ -383,8 +398,9 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
         productTitles,
         productUnits,
         orders: ordersForAllocator,
+        adSetSpend,
       }),
-    [internalStoreId, productMap, aggregated, productNetRevenue, productTitles, productUnits, ordersForAllocator],
+    [internalStoreId, productMap, aggregated, productNetRevenue, productTitles, productUnits, ordersForAllocator, adSetSpend],
   );
 
   const rows = useMemo(
