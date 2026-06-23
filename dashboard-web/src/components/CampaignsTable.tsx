@@ -903,7 +903,14 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows, a
   const mappedCampaignKeys = useMemo(() => {
     const set = new Set<string>();
     for (const [key, productIds] of Object.entries(productMap)) {
-      if (Array.isArray(productIds) && productIds.length > 0) set.add(key);
+      if (!Array.isArray(productIds) || productIds.length === 0) continue;
+      set.add(key);
+      // Ad-set-level mapping (4-seg key, 2026-06-23): a mapped ad-set also
+      // marks its PARENT campaign (3-seg key) as mapped, so the campaign row's
+      // "🏷️ לא ממופה" chip flips off once any of its ad-sets is mapped — even
+      // when there is no campaign-level mapping.
+      const parts = key.split('::');
+      if (parts.length === 4) set.add(parts.slice(0, 3).join('::'));
     }
     // Phase A.5 v2 post-deploy fix (2026-05-29 evening) — for TikTok rows the
     // operator has tagged, the productMap entry is written under the EFFECTIVE

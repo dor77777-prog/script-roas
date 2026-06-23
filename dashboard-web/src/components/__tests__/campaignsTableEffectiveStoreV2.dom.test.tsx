@@ -198,3 +198,54 @@ describe('resolveChipVisible — Bug B: chip hides after product mapping via dra
     expect(visible).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Mirrors the mappedCampaignKeys useMemo in CampaignsTable (2026-06-23 ad-set
+// fix): an entry with products marks its own key AS WELL AS — for a 4-segment
+// ad-set key — its parent 3-segment campaign key, so the campaign row's
+// "🏷️ לא ממופה" chip flips off once any of its ad-sets is mapped, even with no
+// campaign-level mapping. If the component logic changes, update this mirror.
+// ---------------------------------------------------------------------------
+function buildMappedCampaignKeys(productMap: Record<string, string[]>): Set<string> {
+  const set = new Set<string>();
+  for (const [key, productIds] of Object.entries(productMap)) {
+    if (!Array.isArray(productIds) || productIds.length === 0) continue;
+    set.add(key);
+    const parts = key.split('::');
+    if (parts.length === 4) set.add(parts.slice(0, 3).join('::'));
+  }
+  return set;
+}
+
+describe('mappedCampaignKeys — ad-set mapping marks the parent campaign mapped (2026-06-23)', () => {
+  const CAMP = 'uzoshop::Meta::RETARGETING';
+
+  it('a campaign whose only mapping is at the AD-SET level counts as mapped (chip off)', () => {
+    const set = buildMappedCampaignKeys({ [`${CAMP}::ADSET1`]: ['prod-1'] });
+    expect(set.has(CAMP)).toBe(true);          // parent campaign → chip hidden
+    expect(set.has(`${CAMP}::ADSET1`)).toBe(true);
+  });
+
+  it('multiple ad-sets mapped → parent campaign counted once', () => {
+    const set = buildMappedCampaignKeys({
+      [`${CAMP}::ADSET1`]: ['prod-1'],
+      [`${CAMP}::ADSET2`]: ['prod-2'],
+    });
+    expect(set.has(CAMP)).toBe(true);
+  });
+
+  it('no mapping at all → parent campaign NOT in set (chip stays on)', () => {
+    const set = buildMappedCampaignKeys({});
+    expect(set.has(CAMP)).toBe(false);
+  });
+
+  it('an EMPTY ad-set mapping (no products) does not mark the parent', () => {
+    const set = buildMappedCampaignKeys({ [`${CAMP}::ADSET1`]: [] });
+    expect(set.has(CAMP)).toBe(false);
+  });
+
+  it('campaign-level mapping still counts (unchanged behavior)', () => {
+    const set = buildMappedCampaignKeys({ [CAMP]: ['prod-1'] });
+    expect(set.has(CAMP)).toBe(true);
+  });
+});
