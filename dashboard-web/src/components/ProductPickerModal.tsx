@@ -64,7 +64,20 @@ type Props = {
   storeId: string;
   storeName: string;
   campaignName: string;
-  /** Currently-mapped product IDs for this campaign. */
+  /**
+   * Ad-set scope (2026-06-23). When `adSetName` is present the picker maps a
+   * SPECIFIC ad-set inside `campaignName`, not the whole campaign: the header
+   * names the ad-set (under the campaign), `initial` is the ad-set's OWN
+   * mapping, and the parent's `onSave` routes to `setMappedProductsForAdSet`.
+   * When absent the campaign-level behaviour is byte-for-byte unchanged.
+   *
+   * `adSetId` is carried only so the parent can correlate the open picker to
+   * the row being edited; the modal itself keys nothing off it (it's a pure
+   * presentational picker — scope decisions live in the parent).
+   */
+  adSetId?: string;
+  adSetName?: string;
+  /** Currently-mapped product IDs for this campaign (or ad-set, in ad-set scope). */
   initial: string[];
   /**
    * Phase 05.7.x (2026-05-23) — for each productId, the list of OTHER
@@ -96,10 +109,13 @@ export function ProductPickerModal({
   storeId,
   storeName,
   campaignName,
+  adSetName,
   initial,
   otherCampaignsByProduct,
   onSave,
 }: Props) {
+  // Ad-set scope is driven purely by the presence of an ad-set name.
+  const isAdSetScope = !!adSetName;
   // Full catalog from <storeId>-products-catalog → drives the picker list.
   // Includes products that haven't sold yet, which products-daily misses.
   const {
@@ -267,7 +283,11 @@ export function ProductPickerModal({
         overlayClassName="z-[60]"
         className={cn('z-[60] p-0 gap-0 sm:max-w-[560px]')}
       >
-        <SheetTitle className="sr-only">{`שייך מוצרי ${storeName} לקמפיין ${campaignName}`}</SheetTitle>
+        <SheetTitle className="sr-only">
+          {isAdSetScope
+            ? `שייך מוצרי ${storeName} לאד-סט ${adSetName} בקמפיין ${campaignName}`
+            : `שייך מוצרי ${storeName} לקמפיין ${campaignName}`}
+        </SheetTitle>
         <SheetHeader className="flex items-center justify-between gap-3 sm:px-5 py-3">
           <div className="min-w-0 flex items-center gap-2.5">
             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent-soft text-accent shrink-0">
@@ -275,17 +295,26 @@ export function ProductPickerModal({
             </span>
             <div className="min-w-0">
               <div className="text-fs-2xs uppercase tracking-[0.12em] font-semibold text-ink-muted">
-                שייך מוצרי {storeName} לקמפיין
+                {isAdSetScope
+                  ? `שייך מוצרי ${storeName} לאד-סט`
+                  : `שייך מוצרי ${storeName} לקמפיין`}
               </div>
-              <HelpTooltip content={campaignName}>
+              <HelpTooltip content={isAdSetScope ? adSetName : campaignName}>
                 <Heading level="section" id="product-picker-title" className="font-bold truncate">
-                  {campaignName}
+                  {isAdSetScope ? adSetName : campaignName}
                 </Heading>
               </HelpTooltip>
-              <div className="text-fs-2xs text-ink-muted mt-0.5 inline-flex items-center gap-1">
-                <span>מוצגים רק מוצרים מחנות:</span>
-                <span className="font-semibold text-accent">{storeName}</span>
-              </div>
+              {isAdSetScope ? (
+                <div className="text-fs-2xs text-ink-muted mt-0.5 inline-flex items-center gap-1 min-w-0">
+                  <span className="shrink-0">בקמפיין:</span>
+                  <bdi dir="ltr" className="font-semibold text-ink-secondary truncate">{campaignName}</bdi>
+                </div>
+              ) : (
+                <div className="text-fs-2xs text-ink-muted mt-0.5 inline-flex items-center gap-1">
+                  <span>מוצגים רק מוצרים מחנות:</span>
+                  <span className="font-semibold text-accent">{storeName}</span>
+                </div>
+              )}
             </div>
           </div>
           <Button
@@ -312,12 +341,24 @@ export function ProductPickerModal({
             </div>
           )}
           <p className="text-[11px] sm:text-xs text-ink-secondary leading-relaxed mb-2.5">
-            בחר את המוצרים שהקמפיין מקדם. ה-ROAS יחושב מחדש לפי מכירות
-            Shopify אמיתיות במקום ערך ההמרה ש-Meta דיווח.{' '}
-            <span className="text-ink-muted">
-              אם יותר מקמפיין משויך לאותו מוצר, ההכנסה מחולקת ביניהם פרופורציונלית
-              להוצאה.
-            </span>
+            {isAdSetScope ? (
+              <>
+                בחר את המוצרים שהאד-סט הזה מקדם. שיוך ברמת האד-סט גובר על שיוך
+                הקמפיין עבור האד-סט הזה בלבד.{' '}
+                <span className="text-ink-muted">
+                  אם תשאיר ריק, האד-סט יירש את שיוך הקמפיין.
+                </span>
+              </>
+            ) : (
+              <>
+                בחר את המוצרים שהקמפיין מקדם. ה-ROAS יחושב מחדש לפי מכירות
+                Shopify אמיתיות במקום ערך ההמרה ש-Meta דיווח.{' '}
+                <span className="text-ink-muted">
+                  אם יותר מקמפיין משויך לאותו מוצר, ההכנסה מחולקת ביניהם פרופורציונלית
+                  להוצאה.
+                </span>
+              </>
+            )}
           </p>
           {/*
             HIGH-2 audit fix (2026-05-23): use the logical `end-…`

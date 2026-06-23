@@ -110,3 +110,41 @@ describe('<ProductPickerModal> — interactive nested dialog (anti-inert regress
     expect(onClose).toHaveBeenCalled();
   });
 });
+
+describe('<ProductPickerModal> — ad-set scope (2026-06-23)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('campaign scope (no adSetName): header names the CAMPAIGN, not an ad-set', () => {
+    renderPicker({ campaignName: 'קמפיין ראשי' });
+    // Campaign-level header copy ("…לקמפיין") is unchanged (sr-only title +
+    // the visible uppercase label both carry it).
+    expect(screen.getAllByText(/לקמפיין/).length).toBeGreaterThan(0);
+    // The ad-set-scope label is absent.
+    expect(screen.queryByText(/לאד-סט/)).toBeNull();
+  });
+
+  it('ad-set scope (adSetName present): header names the AD-SET being mapped', () => {
+    renderPicker({ campaignName: 'קמפיין ראשי', adSetId: 'as-7', adSetName: 'אד-סט נשים 25-34' });
+    // Ad-set scope header copy mentions the ad-set (sr-only + visible label).
+    expect(screen.getAllByText(/לאד-סט/).length).toBeGreaterThan(0);
+    // The ad-set name is shown in the title block.
+    expect(screen.getByText('אד-סט נשים 25-34')).toBeInTheDocument();
+  });
+
+  it('ad-set scope: initial selection seeds from the ad-set own mapping (passed via initial)', () => {
+    renderPicker({ adSetId: 'as-7', adSetName: 'AS 7', initial: ['p-alpha'] });
+    // p-alpha pre-selected → counter shows 1.
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByText('Alpha Mascara').closest('button')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('ad-set scope: save emits the selected ids (parent routes to setMappedProductsForAdSet)', () => {
+    const { onSave, onClose } = renderPicker({ adSetId: 'as-7', adSetName: 'AS 7', initial: [] });
+    fireEvent.click(screen.getByText('Beta Overol').closest('button')!);
+    fireEvent.click(screen.getByRole('button', { name: /שמור/ }));
+    expect(onSave).toHaveBeenCalledWith(['p-beta']);
+    expect(onClose).toHaveBeenCalled();
+  });
+});
