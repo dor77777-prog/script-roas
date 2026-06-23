@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { isAuthError, isRateLimitError } from '../detectAuthError';
+import {
+  isAuthError,
+  isRateLimitError,
+  classifyMetaErrorForAlert,
+} from '../detectAuthError';
 
 describe('isRateLimitError', () => {
   it('detects Meta 429 from message body', () => {
@@ -74,5 +78,82 @@ describe('isAuthError — Meta transient-service exclusion (2026-06-12)', () => 
 
   it('non-meta providers unaffected by the exclusion', () => {
     expect(isAuthError('google', 'INVALID_GRANT: token revoked')).toBe(true);
+  });
+});
+
+// 2026-06-23 — alert-build-time classification. The operator-facing
+// "🚨 Token failure" WhatsApp alert MIS-CLASSIFIED transient Meta errors
+// (code 2 "Service temporarily unavailable" subcode 1504044; code 4
+// "Application request limit reached" subcode 1504022; is_transient:true) as
+// TOKEN FAILURES and told the operator to "Refresh the Meta access token and
+// redeploy" — wrong + worrying, because a token refresh does nothing for a
+// transient/rate-limit blip that self-heals on retry. Only code 190 + genuine
+// auth/permission OAuthExceptions are real token failures.
+describe('classifyMetaErrorForAlert (2026-06-23)', () => {
+  const TOKEN_REFRESH_RE = /refresh.*access token/i;
+
+  it('code 190 (invalid OAuth access token) → token_failure WITH refresh advice', () => {
+    const out = classifyMetaErrorForAlert(
+      '{"error":{"type":"OAuthException","code":190,"message":"Invalid OAuth access token"}}',
+    );
+    expect(out.kind).toBe('token_failure');
+    expect(out.advice).toMatch(TOKEN_REFRESH_RE);
+  });
+
+  it('code 2 / subcode 1504044 "Service temporarily unavailable" → transient WITHOUT refresh advice, not titled token failure', () => {
+    const out = classifyMetaErrorForAlert(
+      'Meta hot-metrics batch part failed (code=400): {"error":{"message":"Service temporarily unavailable","type":"OAuthException","is_transient":false,"code":2,"error_subcode":1504044}}',
+    );
+    expect(out.kind).toBe('transient');
+    expect(out.advice).not.toMatch(TOKEN_REFRESH_RE);
+    // The operation / label must NOT brand this a token failure.
+    expect(out.operation).not.toMatch(/auth/i);
+    expect(out.titleIsTokenFailure).toBe(false);
+  });
+
+  it('code 4 / subcode 1504022 "Application request limit reached" → transient/rate-limit WITHOUT refresh advice', () => {
+    const out = classifyMetaErrorForAlert(
+      'Meta account spend uzoshop failed (code=4): {"error":{"message":"Application request limit reached","type":"OAuthException","is_transient":true,"code":4,"error_subcode":1504022}}',
+    );
+    expect(out.kind).toBe('transient');
+    expect(out.advice).not.toMatch(TOKEN_REFRESH_RE);
+    expect(out.titleIsTokenFailure).toBe(false);
+  });
+
+  it('is_transient:true → transient (no refresh advice) even with OAuthException wrapper', () => {
+    const out = classifyMetaErrorForAlert(
+      '{"error":{"type":"OAuthException","is_transient":true,"code":368}}',
+    );
+    expect(out.kind).toBe('transient');
+    expect(out.advice).not.toMatch(TOKEN_REFRESH_RE);
+  });
+
+  it('an unknown error code → neutral message, NO refresh advice, not titled token failure', () => {
+    const out = classifyMetaErrorForAlert('fetch failed: ETIMEDOUT');
+    expect(out.kind).toBe('unknown');
+    expect(out.advice).not.toMatch(TOKEN_REFRESH_RE);
+    expect(out.titleIsTokenFailure).toBe(false);
+  });
+
+  it('genuine auth: HTTP 401 → token_failure WITH refresh advice (preserved behavior)', () => {
+    const out = classifyMetaErrorForAlert('HTTP 401 Unauthorized');
+    expect(out.kind).toBe('token_failure');
+    expect(out.advice).toMatch(TOKEN_REFRESH_RE);
+    expect(out.titleIsTokenFailure).toBe(true);
+  });
+
+  it('hard-auth wins over a transient phrase: code 190 + "Service temporarily unavailable" → token_failure', () => {
+    const out = classifyMetaErrorForAlert(
+      '{"error":{"message":"Service temporarily unavailable","type":"OAuthException","code":190}}',
+    );
+    expect(out.kind).toBe('token_failure');
+    expect(out.advice).toMatch(TOKEN_REFRESH_RE);
+  });
+
+  it('transient advice is Hebrew and tells the operator no action is needed unless it persists', () => {
+    const out = classifyMetaErrorForAlert(
+      '{"error":{"message":"Service temporarily unavailable","type":"OAuthException","code":2}}',
+    );
+    expect(out.advice).toMatch(/אין צורך בפעולה/);
   });
 });

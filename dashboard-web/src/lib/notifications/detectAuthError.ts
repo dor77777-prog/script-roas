@@ -133,6 +133,107 @@ export function isAuthError(provider: TokenFailureProvider, errMsg: unknown): bo
 }
 
 /**
+ * 2026-06-23 — alert-build-time classification for the operator-facing
+ * "🚨 Token failure" WhatsApp alert.
+ *
+ * BACKGROUND (production incident, operator-reported): the alert MIS-CLASSIFIED
+ * transient Meta API errors as token failures and gave MISLEADING fix advice.
+ * Meta wraps EVERY Graph error — including pure service blips and rate limits —
+ * in `"type":"OAuthException"`, so the alert path that always handed out
+ * "Refresh the Meta access token … and redeploy" advice did so even for:
+ *   - `code 2` / subcode `1504044` "Service temporarily unavailable" (generic
+ *     transient "try again") — refreshing the token does nothing.
+ *   - `code 4` / subcode `1504022` "Application request limit reached" (rate
+ *     limit, `is_transient:true`) — self-heals on retry.
+ * Only `code 190` (expired/invalid access token) + genuine auth/permission
+ * OAuthExceptions are REAL token failures that warrant "refresh the token".
+ *
+ * This is a SINGLE source of truth for the message/Fix-text/title flavor, so
+ * the cronDaily Meta catch and the metaWorker hot_metrics catch classify
+ * identically. It composes the existing `isAuthError` (hard-auth-wins, transient
+ * exclusion) + `isRateLimitError` rather than re-implementing the matching.
+ *
+ *   kind 'token_failure' → REAL auth failure (code 190 / 401 / 403 / session /
+ *                          invalid-or-expired token) → KEEP refresh advice.
+ *   kind 'transient'     → service-unavailable (code 2) / rate-limit
+ *                          (4 / 17 / 32 / 613 / 80004) / is_transient:true →
+ *                          self-heals on retry → NO refresh advice, NOT titled
+ *                          a token failure.
+ *   kind 'unknown'       → anything else (5xx, network, parse) → neutral
+ *                          message, NO refresh advice.
+ */
+export type MetaAlertKind = 'token_failure' | 'transient' | 'unknown';
+
+export interface MetaAlertClassification {
+  kind: MetaAlertKind;
+  /** Machine-readable throttle-key operation suffix. Distinct per kind so a
+   *  transient blip and a real auth failure don't suppress each other's
+   *  alerts, and so the /operator panel + WhatsApp header don't brand a
+   *  transient as an auth failure. */
+  operation: string;
+  /** The operator-facing "💡 Fix:" advice. Token-refresh advice ONLY for the
+   *  real-token-failure kind. */
+  advice: string;
+  /** Whether this alert should be titled / treated as a genuine token failure
+   *  (true only for kind 'token_failure'). */
+  titleIsTokenFailure: boolean;
+}
+
+/** Additional Meta rate-limit subcodes not already covered by isRateLimitError's
+ *  code 4/17/32 list. Documented "request limit reached" subcodes. */
+const META_RATE_LIMIT_EXTRA = [
+  /"code":\s*613\b/, // Calls to this api have exceeded the rate limit
+  /"code":\s*80004\b/, // Ads Insights rate-limit family
+];
+
+export function classifyMetaErrorForAlert(errorMsg: unknown): MetaAlertClassification {
+  const msg = typeof errorMsg === 'string' ? errorMsg : String(errorMsg ?? '');
+
+  // 1. Hard auth wins first (mirrors isAuthError's hard-auth-wins-over-transient
+  //    ordering): a "code 190 + service unavailable" combo is still a token
+  //    failure. isAuthError already returns false for a transient-only Meta body.
+  if (isAuthError('meta', msg)) {
+    return {
+      kind: 'token_failure',
+      operation: 'meta_auth',
+      advice:
+        'Refresh the Meta access token (e.g. <STORE>_META_ACCESS_TOKEN) in Vercel and redeploy. ' +
+        'רענן את טוקן הגישה של Meta ב-Vercel ועשה redeploy.',
+      titleIsTokenFailure: true,
+    };
+  }
+
+  // 2. Transient / rate-limit (self-heals on retry): code 2 service-unavailable,
+  //    is_transient:true, or any rate-limit signature (4 / 17 / 32 / 613 / 80004
+  //    / HTTP 429 / "request limit reached").
+  const isTransient =
+    META_TRANSIENT_SERVICE.some((p) => p.test(msg)) ||
+    META_RATE_LIMIT_EXTRA.some((p) => p.test(msg)) ||
+    isRateLimitError('meta', msg);
+  if (isTransient) {
+    return {
+      kind: 'transient',
+      operation: 'meta_transient',
+      advice:
+        'שגיאה זמנית של Meta — מתאוששת בטיק הבא (retry + אידמפוטנטי). ' +
+        'אין צורך בפעולה אלא אם נמשך על פני טיקים רבים. ' +
+        '(Transient Meta error — self-heals on the next tick; no action unless it persists across many ticks.)',
+      titleIsTokenFailure: false,
+    };
+  }
+
+  // 3. Unknown — neutral, no token advice.
+  return {
+    kind: 'unknown',
+    operation: 'meta_fetch_error',
+    advice:
+      'שגיאת fetch לא מזוהה מ-Meta — בדוק את ה-stack ב-Sentry. ' +
+      '(Unidentified Meta fetch error — check Sentry for the full stack trace.)',
+    titleIsTokenFailure: false,
+  };
+}
+
+/**
  * Phase 13.9 (2026-05-27) — classifier for rate-limit / quota-exhaustion
  * errors from ad platforms. Distinct from `isAuthError` because the
  * operator's mitigation is different: auth = "refresh the token", rate-
