@@ -717,11 +717,20 @@ async function runDailyForStoreInner(
         ? `Refresh the Meta access token in Vercel (${storeId.toUpperCase()}_META_ACCESS_TOKEN) and redeploy. ` +
           'רענן את טוקן הגישה של Meta ב-Vercel ועשה redeploy.'
         : metaClass.advice;
+      // 2026-06-24 — TOTAL SILENCE on transient Meta blips. captureCronFetchError
+      // owns the WhatsApp send at this site (it fires notifyTokenFailure UNLESS
+      // quietWhatsapp is set). A transient/rate-limit blip self-heals on the next
+      // tick, so we suppress the WhatsApp (quietWhatsapp:true) — Sentry capture
+      // still happens inside captureCronFetchError, and the transient_error
+      // freshness row below is still written, so RunsPanel + SourceHealthChip
+      // still surface a persisting failure + the data going stale. token_failure
+      // (real auth) + unknown keep the WhatsApp so a genuine problem still pings.
       await captureCronFetchError(
         {
           storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
           platform: 'meta',
           dedup: fetchErrorDedup,
+          quietWhatsapp: metaClass.kind === 'transient',
         },
         e,
         metaAdvice,

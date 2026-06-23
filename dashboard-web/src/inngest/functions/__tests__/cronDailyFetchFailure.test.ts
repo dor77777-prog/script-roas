@@ -226,13 +226,23 @@ beforeEach(() => {
   captureCronFetchErrorMock.mockClear();
 });
 
-/** The `advice` argument cronDaily passed to captureCronFetchError for Meta. */
-function metaAlertAdvice(): string {
+/** The Meta captureCronFetchError call (opts, err, advice). */
+function metaCaptureCall() {
   const call = captureCronFetchErrorMock.mock.calls.find(
     (c) => (c[0] as { platform?: string }).platform === 'meta',
   );
   expect(call).toBeDefined();
-  return String(call![2] ?? '');
+  return call!;
+}
+
+/** The `advice` argument cronDaily passed to captureCronFetchError for Meta. */
+function metaAlertAdvice(): string {
+  return String(metaCaptureCall()[2] ?? '');
+}
+
+/** Whether cronDaily told captureCronFetchError to SUPPRESS the WhatsApp for Meta. */
+function metaQuietWhatsapp(): boolean {
+  return Boolean((metaCaptureCall()[0] as { quietWhatsapp?: boolean }).quietWhatsapp);
 }
 
 function dataDailyRow(): Record<string, unknown> {
@@ -398,5 +408,84 @@ describe('cronDaily — Meta alert advice is classified, not always "refresh tok
     await runDailyForStore('uzoshop', PAST_DATE, { step });
 
     expect(metaAlertAdvice()).not.toMatch(TOKEN_REFRESH_RE);
+  });
+});
+
+// 2026-06-24 — TOTAL SILENCE on transient Meta blips at the cronDaily Meta catch.
+// The WhatsApp send at this site is owned by captureCronFetchError: it fires
+// notifyTokenFailure UNLESS quietWhatsapp is set. The operator wants ZERO
+// WhatsApp on a transient/self-healing blip — only real token failures (code
+// 190 / auth) + genuinely-persisting failures warrant a ping. So for a
+// `transient` classification cronDaily passes quietWhatsapp:true (Sentry capture
+// still happens inside captureCronFetchError; the transient_error freshness row
+// is still recorded). token_failure + unknown keep the WhatsApp (quietWhatsapp
+// unset/false).
+describe('cronDaily — Meta transient blips fire NO WhatsApp (quietWhatsapp), token failures DO', () => {
+  const PAST_DATE = '2026-05-20';
+
+  it('code 2 "Service temporarily unavailable" (transient) → quietWhatsapp=true (WhatsApp suppressed)', async () => {
+    mockState.throwIn = 'meta';
+    mockState.metaThrowMsg =
+      'Meta spend failed (code=400): {"error":{"message":"Service temporarily unavailable","type":"OAuthException","is_transient":false,"code":2,"error_subcode":1504044}}';
+
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', PAST_DATE, { step });
+
+    expect(metaQuietWhatsapp()).toBe(true);
+  });
+
+  it('code 4 "Application request limit reached" (transient rate-limit) → quietWhatsapp=true', async () => {
+    mockState.throwIn = 'meta';
+    mockState.metaThrowMsg =
+      'Meta spend failed: {"error":{"message":"Application request limit reached","type":"OAuthException","is_transient":true,"code":4,"error_subcode":1504022}}';
+
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', PAST_DATE, { step });
+
+    expect(metaQuietWhatsapp()).toBe(true);
+  });
+
+  it('transient blip STILL records the transient_error freshness row + still captures to Sentry (captureCronFetchError called)', async () => {
+    mockState.throwIn = 'meta';
+    mockState.metaThrowMsg =
+      'Meta spend failed (code=400): {"error":{"message":"Service temporarily unavailable","type":"OAuthException","code":2}}';
+
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', PAST_DATE, { step });
+
+    // Sentry capture (+ the WhatsApp gate) still runs — just with quietWhatsapp.
+    expect(captureCronFetchErrorMock).toHaveBeenCalled();
+    // Telemetry: transient_error freshness for kpi_daily/data_daily.
+    const metaTransient = recordFreshnessSpy.mock.calls
+      .map((c) => c[0] as Record<string, unknown>)
+      .find(
+        (a) =>
+          a.platform === 'meta' &&
+          a.scope === 'kpi_daily' &&
+          a.tableName === 'data_daily' &&
+          a.status === 'transient_error',
+      );
+    expect(metaTransient).toBeDefined();
+  });
+
+  it('code 190 (real token failure) → quietWhatsapp NOT set (WhatsApp sent)', async () => {
+    mockState.throwIn = 'meta';
+    mockState.metaThrowMsg =
+      'Meta spend failed: {"error":{"type":"OAuthException","code":190,"message":"Invalid OAuth access token"}}';
+
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', PAST_DATE, { step });
+
+    expect(metaQuietWhatsapp()).toBe(false);
+  });
+
+  it('unknown error (network) → quietWhatsapp NOT set (current behavior unchanged — WhatsApp sent)', async () => {
+    mockState.throwIn = 'meta';
+    mockState.metaThrowMsg = 'fetch failed: ETIMEDOUT';
+
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', PAST_DATE, { step });
+
+    expect(metaQuietWhatsapp()).toBe(false);
   });
 });
