@@ -46,6 +46,12 @@ vi.mock('swr', () => ({
   }),
 }));
 
+// The scorecard matrix is unrelated to the multi-month wiring under test —
+// stub it (its own contract lives in monthScorecardMatrix.dom.test.tsx).
+vi.mock('@/components/MonthScorecardMatrix', () => ({
+  MonthScorecardMatrix: () => null,
+}));
+
 // Expose the `months` (and `month`) props MonthlyTables receives so we can
 // assert the multi-month wiring without rendering the real table.
 vi.mock('@/components/MonthlyTables', () => ({

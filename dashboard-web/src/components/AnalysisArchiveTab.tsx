@@ -6,6 +6,7 @@ import { CalendarDays } from 'lucide-react';
 import { YearSelector } from '@/components/YearSelector';
 import { MonthSelector } from '@/components/MonthSelector';
 import { MonthlyTables, type Mode } from '@/components/MonthlyTables';
+import { MonthScorecardMatrix } from '@/components/MonthScorecardMatrix';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Switch } from '@/components/ui/Switch';
@@ -200,6 +201,10 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
           confidence={archiveSynthesis.confidence}
         />
       )}
+      {/* Month-summary scorecard matrix — the whole year at a glance ABOVE the
+          detailed month blocks. Reuses scopedRows (already year-scoped by the
+          SWR range + store-filtered) so the matrix and the blocks agree. */}
+      {!error && <MonthScorecardMatrix rows={scopedRows} />}
       {/* All FOUR archive controls on a SINGLE aligned row (operator request
           2026-06-01): year · month · mode-toggle · store-picker. Each is
           constrained to a fixed width so they don't span the full screen.

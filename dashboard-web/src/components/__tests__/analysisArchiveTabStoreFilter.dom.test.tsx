@@ -73,6 +73,16 @@ vi.mock('swr', () => ({
   }),
 }));
 
+// The month-summary scorecard matrix renders real month rows (e.g. "מרץ 2026")
+// from the same scopedRows the synthesiser uses. This test asserts the synthesis
+// COPY via getByText(/מרץ 2026/), so the matrix's duplicate month labels would
+// make those queries ambiguous. Stub it out — its own contract is pinned in
+// monthScorecardMatrix.dom.test.tsx — so this suite stays scoped to the
+// store-filter + synthesis behavior.
+vi.mock('@/components/MonthScorecardMatrix', () => ({
+  MonthScorecardMatrix: () => null,
+}));
+
 // MonthlyTables fires its own SWR; keep its render minimal so this test
 // stays scoped to AnalysisArchiveTab's scoping contract. We expose the
 // controlled props (mode / storeFilter) AnalysisArchiveTab now lifts so the
