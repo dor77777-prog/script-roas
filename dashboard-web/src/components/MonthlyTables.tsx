@@ -17,6 +17,7 @@ import { roasCell } from '@/lib/format/roasCell';
 import { RoasBadge, roasCellTdClass } from '@/lib/format/RoasBadge';
 import { Heading } from '@/components/ui/Typography';
 import { isStoreFullyOff, type AdStateMap, type AdPlatform } from '@/lib/adState';
+import { marginPct } from '@/lib/monthlyTablesAggregate';
 
 const HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 
@@ -36,6 +37,51 @@ const MODE_OPTIONS = [
 // title/sr-only safety. RTL-isolated via the primitive's own <bdi dir="ltr">.
 function MoneyCell({ value }: { value: number }) {
   return <Money value={value} prefix="none" locale="he-IL" decimals={2} />;
+}
+
+// Net-profit cell — overflow-safe money at 0 decimals (matches DetailTable's
+// "רווח תפעולי" render), toned green when ≥0 and red when <0. Renders "—" when
+// the row/month has no COGS so the operator never reads an empty 0 as profit.
+function netProfitToneClass(netProfit: number, hasCogs: boolean): string {
+  if (!hasCogs) return 'text-ink-muted';
+  return netProfit >= 0 ? 'text-status-greenFg' : 'text-status-redFg';
+}
+
+function NetProfitCell({
+  netProfit,
+  hasCogs,
+  className,
+}: {
+  netProfit: number;
+  hasCogs: boolean;
+  className?: string;
+}) {
+  return (
+    <td className={cn('px-3 py-1.5 text-end tabular-nums font-medium', netProfitToneClass(netProfit, hasCogs), className)}>
+      {hasCogs ? <Money value={netProfit} prefix="none" locale="he-IL" decimals={0} /> : '—'}
+    </td>
+  );
+}
+
+// Margin (% of revenue) cell — toned green/red like the net-profit cell. The
+// percent body is a he-IL whole number isolated in <bdi dir="ltr"> for RTL.
+function MarginCell({
+  netProfit,
+  revenue,
+  hasCogs,
+  className,
+}: {
+  netProfit: number;
+  revenue: number;
+  hasCogs: boolean;
+  className?: string;
+}) {
+  const m = hasCogs ? marginPct(netProfit, revenue) : null;
+  return (
+    <td className={cn('px-3 py-1.5 text-end tabular-nums font-medium', netProfitToneClass(netProfit, hasCogs), className)}>
+      {m == null ? '—' : <bdi dir="ltr">{Math.round(m * 100)}%</bdi>}
+    </td>
+  );
 }
 
 type Props = {
@@ -396,6 +442,11 @@ export function MonthBlockPerStore({
   let totalFb = 0, totalGa = 0, totalTt = 0, totalSpend = 0, totalRev = 0;
   let totalGross = 0;
   let totalRefund = 0;
+  // Net profit only accumulates from COGS-bearing rows so a partially-populated
+  // month doesn't read as low-profit (see aggregateRows). `monthHasCogs` gates
+  // the whole "רווח נקי"/"מרווח" display for the block.
+  let totalNetProfit = 0;
+  let monthHasCogs = false;
   for (const r of rows) {
     totalFb += r.fbSpend;
     totalGa += r.gaSpend;
@@ -406,6 +457,10 @@ export function MonthBlockPerStore({
     totalGross += r.grossRevenue ?? r.revenue;
     if (r.refundDeduction !== null && r.refundDeduction > 0) {
       totalRefund += r.refundDeduction;
+    }
+    if (r.hasCogs) {
+      totalNetProfit += r.netProfit;
+      monthHasCogs = true;
     }
   }
   const totalRoas = totalSpend > 0 ? totalRev / totalSpend : 0;
@@ -442,6 +497,8 @@ export function MonthBlockPerStore({
                 <th className="px-3 py-2 text-end font-medium">{anyPlatform ? 'יצא סה"כ' : 'יצא'}</th>
                 <th className="px-3 py-2 text-end font-medium">נכנס</th>
                 <th className="px-3 py-2 text-center font-medium">ROAS</th>
+                <th className="px-3 py-2 text-end font-medium">רווח נקי</th>
+                <th className="px-3 py-2 text-end font-medium">מרווח</th>
               </tr>
             </thead>
             <tbody>
@@ -474,6 +531,19 @@ export function MonthBlockPerStore({
                     <td className={cn('px-3 py-1.5 text-center tabular-nums font-medium', roasCellTdClass(cell.className))}>
                       <RoasBadge className={cell.className} text={cell.text} />
                     </td>
+                    {/* Net profit + margin — only meaningful on a COGS-bearing
+                        day; otherwise "—". Tone follows the sign. */}
+                    {r && r.hasCogs ? (
+                      <>
+                        <NetProfitCell netProfit={r.netProfit} hasCogs />
+                        <MarginCell netProfit={r.netProfit} revenue={r.revenue} hasCogs />
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-3 py-1.5 text-end tabular-nums text-ink-muted">—</td>
+                        <td className="px-3 py-1.5 text-end tabular-nums text-ink-muted">—</td>
+                      </>
+                    )}
                   </tr>
                 );
               })}
@@ -498,6 +568,8 @@ export function MonthBlockPerStore({
                     </td>
                   );
                 })()}
+                <NetProfitCell netProfit={totalNetProfit} hasCogs={monthHasCogs} className="py-2" />
+                <MarginCell netProfit={totalNetProfit} revenue={totalRev} hasCogs={monthHasCogs} className="py-2" />
               </tr>
             </tbody>
           </TableBase>
@@ -536,10 +608,10 @@ export function MonthBlockSummary({
   // Aggregate by date across all stores. Phase 05.7.3: also accumulate
   // gross + refund so the summary table can show the refund indicator
   // per-day and on the month total.
-  type Agg = { fb: number; ga: number; tt: number; spend: number; revenue: number; gross: number; refund: number };
+  type Agg = { fb: number; ga: number; tt: number; spend: number; revenue: number; gross: number; refund: number; net: number; hasCogs: boolean };
   const byDate = new Map<string, Agg>();
   for (const r of rows) {
-    if (!byDate.has(r.date)) byDate.set(r.date, { fb: 0, ga: 0, tt: 0, spend: 0, revenue: 0, gross: 0, refund: 0 });
+    if (!byDate.has(r.date)) byDate.set(r.date, { fb: 0, ga: 0, tt: 0, spend: 0, revenue: 0, gross: 0, refund: 0, net: 0, hasCogs: false });
     const e = byDate.get(r.date)!;
     e.fb += r.fbSpend;
     e.ga += r.gaSpend;
@@ -549,6 +621,10 @@ export function MonthBlockSummary({
     e.gross += r.grossRevenue ?? r.revenue;
     if (r.refundDeduction !== null && r.refundDeduction > 0) {
       e.refund += r.refundDeduction;
+    }
+    if (r.hasCogs) {
+      e.net += r.netProfit;
+      e.hasCogs = true;
     }
   }
   // Per-platform column visibility — show a platform iff it spent this month
@@ -560,6 +636,8 @@ export function MonthBlockSummary({
 
   let totalFb = 0, totalGa = 0, totalTt = 0;
   let totalSpend = 0, totalRev = 0, totalGross = 0, totalRefund = 0;
+  let totalNetProfit = 0;
+  let monthHasCogs = false;
   for (const r of rows) {
     totalFb += r.fbSpend;
     totalGa += r.gaSpend;
@@ -569,6 +647,10 @@ export function MonthBlockSummary({
     totalGross += r.grossRevenue ?? r.revenue;
     if (r.refundDeduction !== null && r.refundDeduction > 0) {
       totalRefund += r.refundDeduction;
+    }
+    if (r.hasCogs) {
+      totalNetProfit += r.netProfit;
+      monthHasCogs = true;
     }
   }
   const totalRoas = totalSpend > 0 ? totalRev / totalSpend : 0;
@@ -602,6 +684,8 @@ export function MonthBlockSummary({
                 <th className="px-3 py-2 text-end font-medium">{anyPlatform ? 'יצא סה"כ' : 'יצא'}</th>
                 <th className="px-3 py-2 text-end font-medium">נכנס סה&quot;כ</th>
                 <th className="px-3 py-2 text-center font-medium">ROAS</th>
+                <th className="px-3 py-2 text-end font-medium">רווח נקי</th>
+                <th className="px-3 py-2 text-end font-medium">מרווח</th>
               </tr>
             </thead>
             <tbody>
@@ -630,6 +714,17 @@ export function MonthBlockSummary({
                     <td className={cn('px-3 py-1.5 text-center tabular-nums font-medium', roasCellTdClass(cell.className))}>
                       <RoasBadge className={cell.className} text={cell.text} />
                     </td>
+                    {agg && agg.hasCogs ? (
+                      <>
+                        <NetProfitCell netProfit={agg.net} hasCogs />
+                        <MarginCell netProfit={agg.net} revenue={agg.revenue} hasCogs />
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-3 py-1.5 text-end tabular-nums text-ink-muted">{agg ? '—' : ''}</td>
+                        <td className="px-3 py-1.5 text-end tabular-nums text-ink-muted">{agg ? '—' : ''}</td>
+                      </>
+                    )}
                   </tr>
                 );
               })}
@@ -649,6 +744,8 @@ export function MonthBlockSummary({
                 <td className={cn('px-3 py-2 text-center tabular-nums', roasCellTdClass(totalCell.className))}>
                   <RoasBadge className={totalCell.className} text={totalCell.text} />
                 </td>
+                <NetProfitCell netProfit={totalNetProfit} hasCogs={monthHasCogs} className="py-2" />
+                <MarginCell netProfit={totalNetProfit} revenue={totalRev} hasCogs={monthHasCogs} className="py-2" />
               </tr>
             </tbody>
           </TableBase>
