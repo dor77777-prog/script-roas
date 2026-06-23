@@ -37,10 +37,7 @@ import {
 } from '@/lib/registries/upsert';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { recordMetaBucUsage } from '@/lib/notifications/metaBucUsage';
-import {
-  isRateLimitError,
-  classifyMetaErrorForAlert,
-} from '@/lib/notifications/detectAuthError';
+import { classifyMetaErrorForAlert } from '@/lib/notifications/detectAuthError';
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
 import { getTodayInIsraelTz } from '@/lib/dateRange';
 // Phase E1.7 (2026-05-30 night) — Meta worker no longer fetches
@@ -656,37 +653,29 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
     // panel AND fire WhatsApp via notifyTokenFailure. Mirrors googleWorker
     // pattern. Re-throw preserves Inngest's exponential-backoff retry.
     const message = err instanceof Error ? err.message : String(err);
+    // Telemetry ALWAYS lands: the transient_error freshness pair (campaign_metrics
+    // + ad_metrics) is recorded regardless of error class, so RunsPanel +
+    // SourceHealthChip surface the failure (and the data going stale) even when no
+    // WhatsApp fires. Re-throw preserves Inngest's exponential-backoff retry.
     await recHotPair('transient_error', message);
-    // 2026-06-23 — classify so a transient Meta error (Meta wraps EVERY Graph
-    // error in type:OAuthException) is NOT alerted as a token failure with
-    // "refresh the token" advice. Only a real token failure (code 190 / 401 /
-    // 403 / session) keeps the refresh guidance; transient/rate-limit get a
-    // truthful "self-heals on the next tick" message. Unknown errors stay
-    // SILENT here on purpose — this is a high-frequency (10 min) worker and a
-    // generic 5xx/parse blip self-heals on retry; alerting on it would re-add
-    // exactly the kind of noise this fix removes.
+    // 2026-06-24 — TOTAL SILENCE on transient blips. Meta wraps EVERY Graph error
+    // in type:OAuthException, so classify the body and send a WhatsApp ONLY for a
+    // real token failure (code 190 / 401 / 403 / session). A transient/rate-limit
+    // blip (code 2 service-unavailable / 429 / is_transient:true) self-heals on
+    // the next tick and now fires ZERO WhatsApp — telemetry above is the only
+    // signal. Unknown errors (5xx/parse/network) also stay SILENT here (a generic
+    // blip self-heals on retry; alerting would re-add the noise this fix removes).
     const cls = classifyMetaErrorForAlert(message);
-    if (cls.kind !== 'unknown' && input.notifyTokenFailure) {
-      const isRate = isRateLimitError('meta', message);
-      // Preserve the legacy operation names so the /operator panel + throttle
-      // keys are stable: real token failure → meta_hot_metrics_auth; any
-      // transient (429/quota OR service-unavailable code 2) → the rate-limit
-      // key (it shares the "wait, retries next tick" mitigation).
-      const operation =
-        cls.kind === 'token_failure' ? 'meta_hot_metrics_auth' : 'meta_hot_metrics_rate_limit';
-      const advice =
-        cls.kind === 'token_failure'
-          ? 'Refresh the Meta access token in Vercel and redeploy. See docs/PROPS-MAP.md for the env var name. ' +
-            'רענן את טוקן הגישה של Meta ב-Vercel ועשה redeploy.'
-          : isRate
-            ? 'Meta reported HTTP 429 / quota-exceeded. Hot metrics worker will retry on next orchestrator tick (10 min). No operator action needed unless this persists across multiple ticks.'
-            : cls.advice;
+    if (cls.kind === 'token_failure' && input.notifyTokenFailure) {
       await input.notifyTokenFailure({
         provider: 'meta',
         storeId,
-        operation,
+        // Stable /operator-panel + throttle key for a genuine auth failure.
+        operation: 'meta_hot_metrics_auth',
         errorMsg: message,
-        advice,
+        advice:
+          'Refresh the Meta access token in Vercel and redeploy. See docs/PROPS-MAP.md for the env var name. ' +
+          'רענן את טוקן הגישה של Meta ב-Vercel ועשה redeploy.',
       }).catch((alertErr) => {
         console.warn(`metaWorker hot_metrics ${cls.kind} alert threw: ${alertErr instanceof Error ? alertErr.message : alertErr}`);
       });

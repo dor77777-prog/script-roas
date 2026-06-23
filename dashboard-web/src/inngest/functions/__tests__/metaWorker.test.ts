@@ -568,7 +568,7 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
     expect(aggregateDataDaily).toHaveBeenCalledWith('2026-05-29');
   });
 
-  it('Phase E1: hot_metrics fetch rejects with 429 → recHotPair transient_error + notifyTokenFailure(meta_hot_metrics_rate_limit)', async () => {
+  it('Phase E1: hot_metrics fetch rejects with 429 → recHotPair transient_error, NO notifyTokenFailure (total silence on transient)', async () => {
     const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
     const recordFreshness = vi.fn().mockResolvedValue(undefined);
     const err = new Error('Meta Graph API: HTTP 429 rate limit exceeded');
@@ -595,8 +595,8 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
     })).rejects.toThrow('rate limit');
     const transientErrorCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'transient_error');
     expect(transientErrorCalls.map(c => c[0].scope).sort()).toEqual(['ad_metrics', 'campaign_metrics']);
-    expect(notifyTokenFailure).toHaveBeenCalledOnce();
-    expect(notifyTokenFailure.mock.calls[0][0].operation).toBe('meta_hot_metrics_rate_limit');
+    // Transient blip → ZERO WhatsApp.
+    expect(notifyTokenFailure).not.toHaveBeenCalled();
   });
 
   it('Phase E1: hot_metrics fetch rejects with auth → notifyTokenFailure(meta_hot_metrics_auth)', async () => {
@@ -629,12 +629,17 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
     expect(String(notifyTokenFailure.mock.calls[0][0].advice)).toMatch(/refresh.*access token/i);
   });
 
-  // 2026-06-23 — transient classification at the hot_metrics catch. Meta wraps
-  // EVERY Graph error in type:OAuthException, so a transient code 2 "Service
-  // temporarily unavailable" (subcode 1504044) must NOT be alerted as an auth
-  // failure with "refresh the token" advice — it self-heals on the next tick.
-  it('hot_metrics fetch rejects with code 2 "Service temporarily unavailable" → transient alert, NOT auth, no refresh advice', async () => {
+  // 2026-06-24 — TOTAL SILENCE on transient Meta blips at the hot_metrics catch.
+  // Meta wraps EVERY Graph error in type:OAuthException, so a transient code 2
+  // "Service temporarily unavailable" (subcode 1504044) self-heals on the next
+  // tick. The operator wants ZERO WhatsApp for a transient blip: do NOT call
+  // notifyTokenFailure at all — but STILL record the transient_error freshness
+  // pair (so RunsPanel + SourceHealthChip surface it if it persists) AND still
+  // re-throw (Inngest retry stays intact). WhatsApp is reserved for real token
+  // failures (code 190 / auth) + genuinely-persisting failures.
+  it('hot_metrics fetch rejects with code 2 "Service temporarily unavailable" (transient) → NO notifyTokenFailure, but freshness recorded + re-throws', async () => {
     const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
+    const recordFreshness = vi.fn().mockResolvedValue(undefined);
     const err = new Error(
       'Meta hot-metrics batch part failed (code=400): {"error":{"message":"Service temporarily unavailable","type":"OAuthException","is_transient":false,"code":2,"error_subcode":1504044}}',
     );
@@ -653,19 +658,53 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
       upsertCampaignsDaily: vi.fn(),
       upsertAdsDaily: vi.fn(),
       getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 1 } as never),
-      recordFreshness: vi.fn(),
+      recordFreshness,
       upsertBuc: vi.fn(),
       isMetaConfigured: () => true,
       notifyTokenFailure,
       nowIso: NOW_ISO,
     })).rejects.toThrow('Service temporarily unavailable');
-    expect(notifyTokenFailure).toHaveBeenCalledOnce();
-    const call = notifyTokenFailure.mock.calls[0][0];
-    // Must NOT be branded a token/auth failure.
-    expect(call.operation).not.toBe('meta_hot_metrics_auth');
-    expect(String(call.operation)).not.toMatch(/auth/i);
-    // Must NOT advise refreshing the access token.
-    expect(String(call.advice)).not.toMatch(/refresh.*access token/i);
+    // ZERO WhatsApp for a transient blip.
+    expect(notifyTokenFailure).not.toHaveBeenCalled();
+    // …but the transient_error freshness pair is STILL recorded (telemetry).
+    const transientErrorScopes = recordFreshness.mock.calls
+      .filter((c) => c[0].status === 'transient_error')
+      .map((c) => c[0].scope)
+      .sort();
+    expect(transientErrorScopes).toEqual(['ad_metrics', 'campaign_metrics']);
+  });
+
+  it('hot_metrics fetch rejects with rate-limit 429 (transient) → NO notifyTokenFailure, freshness still recorded', async () => {
+    const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
+    const recordFreshness = vi.fn().mockResolvedValue(undefined);
+    const err = new Error('Meta Graph API: HTTP 429 rate limit exceeded');
+    const fetchHotMetrics = vi.fn().mockRejectedValue(err);
+    await expect(runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 12 },
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics,
+      getHotCampaignIds: async () => ['C1'],
+      getHotAdsetIds: async () => ['AS1'],
+      getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(),
+      upsertAdsDaily: vi.fn(),
+      getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 1 } as never),
+      recordFreshness,
+      upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
+      notifyTokenFailure,
+      nowIso: NOW_ISO,
+    })).rejects.toThrow('rate limit');
+    expect(notifyTokenFailure).not.toHaveBeenCalled();
+    const transientErrorScopes = recordFreshness.mock.calls
+      .filter((c) => c[0].status === 'transient_error')
+      .map((c) => c[0].scope)
+      .sort();
+    expect(transientErrorScopes).toEqual(['ad_metrics', 'campaign_metrics']);
   });
 
   it('Phase E1.7 (2026-05-30 night): hot_metrics calls aggregateDataDaily twice (pre-fetch + post-upsert) for today', async () => {
