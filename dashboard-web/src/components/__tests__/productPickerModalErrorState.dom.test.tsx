@@ -23,7 +23,7 @@ let salesState: SwrState = { data: undefined, isLoading: false };
 vi.mock('swr', () => ({
   default: (key: string | null) => {
     if (key === '/api/product-catalog') return catalogState;
-    if (key === '/api/products') return salesState;
+    if (typeof key === 'string' && key.startsWith('/api/products')) return salesState;
     return { data: undefined, isLoading: false };
   },
 }));

@@ -134,13 +134,25 @@ export function ProductPickerModal({
   // Sales data is overlaid as context (units sold, recent revenue) so the
   // user can see which product is the hero — but it's NOT the source of
   // truth for which products exist.
+  // /api/products requires an explicit date range — parseRangeParams throws
+  // "Both ?from and ?to are required" when they're absent (this previously
+  // surfaced as the picker's "שגיאה בטעינת המוצרים" banner). The picker only
+  // needs sales context to rank heroes, so request a wide trailing window
+  // (last 365 days), stable within a day so SWR's key doesn't churn.
+  const productsUrl = useMemo(() => {
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - 365);
+    return `/api/products?from=${fmt(from)}&to=${fmt(to)}`;
+  }, []);
   const {
     data: salesData,
     isLoading: salesLoading,
     error: salesError,
     mutate: mutateSales,
   } = useSWR<ProductsResponse>(
-    open ? '/api/products' : null,
+    open ? productsUrl : null,
     salesFetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
