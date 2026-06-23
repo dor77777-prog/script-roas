@@ -71,7 +71,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 // `token_failure_alert` was approved by Meta on 2026-05-24, so alerts now
 // actually reach +972524809540 (operator's primary number).
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
-import { isAuthError } from '@/lib/notifications/detectAuthError';
+import { isAuthError, classifyMetaErrorForAlert } from '@/lib/notifications/detectAuthError';
 import { captureCronFetchError, captureStepError } from '@/lib/sentry/capture';
 // Phase A 2026-05-29 (Task 13) — pre-flight Meta BUC gate + finalization writes.
 import { getMetaBucUsageForStore } from '@/lib/notifications/metaBucUsage';
@@ -704,6 +704,19 @@ async function runDailyForStoreInner(
       // (5xx, network, parse) now fires both signals. Dedup Set scoped to
       // this cron invocation; existing 1/6h throttle in tokenFailures.ts is
       // the second-line dedupe across runs.
+      //
+      // 2026-06-23 — classify the error so a transient/rate-limit blip (Meta
+      // wraps EVERY Graph error in type:OAuthException) no longer gets the
+      // "refresh the access token + redeploy" advice — that does nothing for a
+      // self-healing error and needlessly worries the operator. Only a real
+      // token failure (code 190 / 401 / 403 / session / invalid-or-expired
+      // token) keeps the refresh guidance; transient/rate-limit/unknown get a
+      // truthful, non-token message.
+      const metaClass = classifyMetaErrorForAlert(e instanceof Error ? e.message : String(e));
+      const metaAdvice = metaClass.titleIsTokenFailure
+        ? `Refresh the Meta access token in Vercel (${storeId.toUpperCase()}_META_ACCESS_TOKEN) and redeploy. ` +
+          'רענן את טוקן הגישה של Meta ב-Vercel ועשה redeploy.'
+        : metaClass.advice;
       await captureCronFetchError(
         {
           storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
@@ -711,7 +724,7 @@ async function runDailyForStoreInner(
           dedup: fetchErrorDedup,
         },
         e,
-        `Refresh the Meta access token in Vercel (${storeId.toUpperCase()}_META_ACCESS_TOKEN) and redeploy, OR check Meta's status page if recurrent.`,
+        metaAdvice,
       );
       // #31 (2026-06-20): also write a transient_error freshness row for the
       // kpi_daily/data_daily scope so the operator freshness matrix does NOT

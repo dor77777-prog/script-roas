@@ -43,12 +43,16 @@ type MockState = {
   throwIn: 'meta' | 'google' | null;
   /** drives a genuine successful zero-activity day for the success-path test */
   metaZeroActivity: boolean;
+  /** error message the Meta fetchers throw when throwIn === 'meta' — lets a
+   *  test drive the alert-classification path with a real Meta error body. */
+  metaThrowMsg: string;
 };
 
 const mockState = vi.hoisted<MockState>(() => ({
   upserts: [],
   throwIn: null,
   metaZeroActivity: false,
+  metaThrowMsg: 'meta-token-expired',
 }));
 
 // recordFreshness spy (hoisted so the vi.mock factory can close over it).
@@ -83,18 +87,18 @@ vi.mock('@/lib/fetchers/shopify', () => ({
 // ---------------------------------------------------------------------------
 vi.mock('@/lib/fetchers/meta', () => ({
   fetchMetaSpendForDay: vi.fn(async () => {
-    if (mockState.throwIn === 'meta') throw new Error('meta-token-expired');
+    if (mockState.throwIn === 'meta') throw new Error(mockState.metaThrowMsg);
     if (mockState.metaZeroActivity) {
       return { storeId: 'uzoshop', date: '2026-05-20', spend: 0, currency: 'ILS', impressions: 0 };
     }
     return { storeId: 'uzoshop', date: '2026-05-20', spend: 100, currency: 'ILS', impressions: 1000 };
   }),
   fetchMetaAdSetInsights: vi.fn(async () => {
-    if (mockState.throwIn === 'meta') throw new Error('meta-token-expired');
+    if (mockState.throwIn === 'meta') throw new Error(mockState.metaThrowMsg);
     return [];
   }),
   fetchMetaAdInsights: vi.fn(async () => {
-    if (mockState.throwIn === 'meta') throw new Error('meta-token-expired');
+    if (mockState.throwIn === 'meta') throw new Error(mockState.metaThrowMsg);
     return [];
   }),
   fetchMetaBudgets: vi.fn(async () => ({ currency: 'ILS', campaigns: {}, adSets: {} })),
@@ -201,6 +205,9 @@ vi.mock('@/lib/postgresReaders', async (orig) => ({
 }));
 
 import { runDailyForStore } from '../cronDaily';
+import { captureCronFetchError } from '@/lib/sentry/capture';
+
+const captureCronFetchErrorMock = vi.mocked(captureCronFetchError);
 
 function makeMockStep() {
   return {
@@ -214,8 +221,19 @@ beforeEach(() => {
   mockState.upserts = [];
   mockState.throwIn = null;
   mockState.metaZeroActivity = false;
+  mockState.metaThrowMsg = 'meta-token-expired';
   recordFreshnessSpy.mockClear();
+  captureCronFetchErrorMock.mockClear();
 });
+
+/** The `advice` argument cronDaily passed to captureCronFetchError for Meta. */
+function metaAlertAdvice(): string {
+  const call = captureCronFetchErrorMock.mock.calls.find(
+    (c) => (c[0] as { platform?: string }).platform === 'meta',
+  );
+  expect(call).toBeDefined();
+  return String(call![2] ?? '');
+}
 
 function dataDailyRow(): Record<string, unknown> {
   const call = mockState.upserts.find((u) => u.table === 'data_daily');
@@ -327,5 +345,58 @@ describe('cronDaily — FETCH failure preserves prior spend/impressions (#2/#16/
     // no fetch failure).
     expect('total_spend_cad' in row).toBe(true);
     expect(row.is_finalized).toBe(true);
+  });
+});
+
+// 2026-06-23 — alert classification at the cronDaily Meta catch. Previously
+// the catch ALWAYS passed "Refresh the Meta access token … and redeploy" advice
+// to captureCronFetchError for ANY Meta error, so transient/rate-limit blips
+// (which self-heal on retry) told the operator to refresh a perfectly good
+// token. Now the advice is classified by the error body.
+describe('cronDaily — Meta alert advice is classified, not always "refresh token"', () => {
+  const PAST_DATE = '2026-05-20';
+  const TOKEN_REFRESH_RE = /refresh.*access token/i;
+
+  it('code 190 (real token failure) → advice INCLUDES refresh-token guidance', async () => {
+    mockState.throwIn = 'meta';
+    mockState.metaThrowMsg =
+      'Meta spend failed: {"error":{"type":"OAuthException","code":190,"message":"Invalid OAuth access token"}}';
+
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', PAST_DATE, { step });
+
+    expect(metaAlertAdvice()).toMatch(TOKEN_REFRESH_RE);
+  });
+
+  it('code 2 / subcode 1504044 "Service temporarily unavailable" → advice does NOT mention refreshing the token', async () => {
+    mockState.throwIn = 'meta';
+    mockState.metaThrowMsg =
+      'Meta spend failed (code=400): {"error":{"message":"Service temporarily unavailable","type":"OAuthException","is_transient":false,"code":2,"error_subcode":1504044}}';
+
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', PAST_DATE, { step });
+
+    expect(metaAlertAdvice()).not.toMatch(TOKEN_REFRESH_RE);
+  });
+
+  it('code 4 / subcode 1504022 "Application request limit reached" → advice does NOT mention refreshing the token', async () => {
+    mockState.throwIn = 'meta';
+    mockState.metaThrowMsg =
+      'Meta spend failed: {"error":{"message":"Application request limit reached","type":"OAuthException","is_transient":true,"code":4,"error_subcode":1504022}}';
+
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', PAST_DATE, { step });
+
+    expect(metaAlertAdvice()).not.toMatch(TOKEN_REFRESH_RE);
+  });
+
+  it('an unknown error (network) → neutral advice, NO refresh-token guidance', async () => {
+    mockState.throwIn = 'meta';
+    mockState.metaThrowMsg = 'fetch failed: ETIMEDOUT';
+
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', PAST_DATE, { step });
+
+    expect(metaAlertAdvice()).not.toMatch(TOKEN_REFRESH_RE);
   });
 });
