@@ -8,6 +8,8 @@ import { MonthSelector } from '@/components/MonthSelector';
 import { MonthlyTables, type Mode } from '@/components/MonthlyTables';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { Switch } from '@/components/ui/Switch';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { SectionIntro } from '@/components/SectionIntro';
 import { PageScope } from '@/components/ui/PageScope';
 import { PageSynthesis } from '@/components/ui/PageSynthesis';
@@ -59,10 +61,33 @@ const MODE_OPTIONS: { value: Mode; label: string }[] = [
 const fetcher = (url: string): Promise<DashboardData> =>
   fetchJsonStrict<DashboardData>(url);
 
+// Hebrew month labels for the compare-months checkbox row (index 0 = January).
+// Duplicated with MonthlyTables/MonthSelector on purpose for now (a dedup is a
+// separate cleanup) — same list, same order.
+const HE_MONTHS = [
+  'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
+];
+
 export function AnalysisArchiveTab({ stores, globalStore }: Props) {
   const now = new Date();
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number | null>(now.getMonth() + 1);
+
+  // Step 2 — multi-month compare. When `compareMonths` is on, the single
+  // month/year selectors are replaced by a checkbox row; the chosen month
+  // numbers drive MonthlyTables via its `months` prop (which takes precedence
+  // over `month`). Turning compare off clears the selection and restores the
+  // single-month behavior. Sorted ascending so the `months` prop + CSV order
+  // are stable regardless of click order.
+  const [compareMonths, setCompareMonths] = useState(false);
+  const [selectedMonths, setSelectedMonths] = useState<number[]>([]);
+  const toggleSelectedMonth = (m: number) => {
+    setSelectedMonths(prev =>
+      prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m].sort((a, b) => a - b),
+    );
+  };
+  const monthsProp = compareMonths && selectedMonths.length > 0 ? selectedMonths : null;
 
   // Lifted from MonthlyTables so the mode toggle (לפי חנות / סיכום כללי) +
   // store picker sit on the SAME row as year/month (operator request
@@ -191,12 +216,30 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
             <YearSelector value={year} onChange={setYear} />
           </div>
         </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-ink-muted">חודש</span>
-          <div className="w-40">
-            <MonthSelector value={month} onChange={setMonth} />
-          </div>
-        </label>
+        {/* The single-month selector is superseded by the checkbox row while
+            compare mode is on, so hide it then to avoid two conflicting month
+            controls. */}
+        {!compareMonths && (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-ink-muted">חודש</span>
+            <div className="w-40">
+              <MonthSelector value={month} onChange={setMonth} />
+            </div>
+          </label>
+        )}
+        {/* Compare-months toggle. Switch carries role="switch"; the visible
+            caption is its accessible name (aria-label). */}
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-ink-muted">השוואה</span>
+          <label className="flex items-center gap-2 h-9 cursor-pointer select-none">
+            <Switch
+              aria-label="השוואת חודשים"
+              checked={compareMonths}
+              onCheckedChange={setCompareMonths}
+            />
+            <span className="text-xs text-ink">השוואת חודשים</span>
+          </label>
+        </div>
         {/* div (not label): the toggle is a role="tablist" of buttons, not a
             single form control, so a <label> wrapper would mis-associate its
             caption text with the first tab's accessible name. */}
@@ -230,11 +273,34 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
           </div>
         )}
       </div>
+      {/* Compare-months checkboxes — revealed only when compare mode is on.
+          Each month is a labelled native checkbox (Checkbox primitive) so the
+          accessible name is the Hebrew month. The chosen months drive
+          MonthlyTables' `months` prop (which supersedes the single `month`). */}
+      {compareMonths && (
+        <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-pill-track border border-glass-edge px-4 py-3">
+          <legend className="sr-only">בחירת חודשים להשוואה</legend>
+          {HE_MONTHS.map((label, idx) => {
+            const m = idx + 1;
+            return (
+              <label key={m} className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-ink">
+                <Checkbox
+                  aria-label={label}
+                  checked={selectedMonths.includes(m)}
+                  onCheckedChange={() => toggleSelectedMonth(m)}
+                />
+                {label}
+              </label>
+            );
+          })}
+        </fieldset>
+      )}
       <MonthlyTables
         stores={stores}
         globalStore={globalStore}
         year={year}
         month={month}
+        months={monthsProp}
         mode={mode}
         onModeChange={setMode}
         storeFilter={storeFilter}

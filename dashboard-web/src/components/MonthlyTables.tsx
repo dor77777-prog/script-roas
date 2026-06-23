@@ -108,6 +108,15 @@ type Props = {
    */
   month?: number | null;
   /**
+   * Multi-month compare (Step 2). When a NON-EMPTY array of month numbers
+   * (1-12) is provided, the visible blocks are restricted to exactly those
+   * months within the selected year — so the operator can view several
+   * months' tables side-by-side. Takes precedence over `month`. When null,
+   * undefined, or empty, behavior defers to `month` (single-month) and then
+   * to the all-year default. Client-side filter only — no extra fetch.
+   */
+  months?: number[] | null;
+  /**
    * When true, suppress the internal mode-toggle (לפי חנות / סיכום כללי) and
    * store dropdown. Forces mode='per-store' and uses globalStore directly.
    * Use this when the parent is already controlling the store via a sub-tab
@@ -200,6 +209,7 @@ export function MonthlyTables({
   bare = false,
   year,
   month,
+  months,
   hideStoreToolbar = false,
   mode: controlledMode,
   onModeChange,
@@ -281,9 +291,22 @@ export function MonthlyTables({
       .sort((a, b) => b.ym.localeCompare(a.ym));
   }, [rows]);
 
-  // Client-side month filter: when `month` is a number (1-12), keep only
-  // the single month group whose key matches `${year}-MM`. No re-fetch.
+  // Client-side month filter (no re-fetch). Precedence:
+  //   1. `months` (non-empty) → multi-month compare: keep every group whose
+  //      month number is in the set (within the locked year if any).
+  //   2. `month` (number)     → single month: keep the one matching group.
+  //   3. null/empty everywhere → all-year (every group).
   const visibleMonthGroups = useMemo(() => {
+    // Multi-month compare takes precedence when a non-empty list is given.
+    if (months && months.length > 0) {
+      const wanted = new Set(months.map(m => String(m).padStart(2, '0')));
+      return monthGroups.filter(({ ym }) => {
+        const mm = ym.slice(5, 7);
+        if (!wanted.has(mm)) return false;
+        // Respect the locked year so e.g. "May" can't pull a different year's May.
+        return year == null || ym.startsWith(`${year}-`);
+      });
+    }
     if (month == null) return monthGroups;
     const suffix = String(month).padStart(2, '0');
     // If a year is locked, prefer exact YYYY-MM match; otherwise just match -MM.
@@ -291,7 +314,7 @@ export function MonthlyTables({
     return monthGroups.filter(({ ym }) =>
       year != null ? ym === target : ym.endsWith(`-${suffix}`),
     );
-  }, [monthGroups, month, year]);
+  }, [monthGroups, month, months, year]);
 
   if (isLoading) {
     return (
