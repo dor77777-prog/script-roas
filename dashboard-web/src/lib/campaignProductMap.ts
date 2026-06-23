@@ -352,44 +352,35 @@ export type CampaignAllocation = {
   deterministicUnits: number;
 };
 
-export function allocateProductRevenue(args: {
-  storeId: string;
-  map: ProductMap;
-  productRevenue: Array<{ productId: string; netRevenueCad: number; units: number }>;
-  campaignSpend: Map<string, number>; // campaignKey → spend in range
-  /** Phase 05.7.9 — orders for the same (storeId, date range). When
-   *  provided, the allocator uses deterministic per-platform attribution
-   *  before falling back to spend-proportional split. Optional for
-   *  backwards compat with tests + callers that don't have orders. */
-  orders?: AllocatorOrder[];
-}): Map<string, CampaignAllocation> {
-  const { storeId, map, productRevenue, campaignSpend, orders } = args;
-  const out = new Map<string, CampaignAllocation>();
+// Helper: initialize a campaign/ad-set allocation accumulator. Used at every
+// out.get() site to keep the deterministic vs full breakdown consistent.
+function emptyAlloc(): CampaignAllocation {
+  return { revenue: 0, units: 0, deterministicRevenue: 0, deterministicUnits: 0 };
+}
 
-  // Pre-filter orders to the store once. Cheap O(N) — used per product.
-  const storeOrders = orders
-    ? orders.filter(o => o.storeId === storeId)
-    : null;
-
-  // Helper: initialize a campaign allocation accumulator. Used at every
-  // out.get() site to keep the deterministic vs full breakdown consistent.
-  const emptyAlloc = (): CampaignAllocation => ({
-    revenue: 0,
-    units: 0,
-    deterministicRevenue: 0,
-    deterministicUnits: 0,
-  });
-
-  for (const p of productRevenue) {
-    if (!p.productId) continue;
-    // Audit fix 2026-05-23 (CR-03 revenue): the previous `<= 0` filter
-    // dropped refund-heavy products (units > 0 but netRevenue < 0 after
-    // cross-day refund deduction) — those campaigns never got their
-    // refund penalty applied to ROAS. Only skip genuinely empty rows.
-    if (p.netRevenueCad === 0 && p.units === 0) continue;
-    const mappedKeys = campaignsForProductInStore(storeId, p.productId, map);
-    if (mappedKeys.length === 0) continue; // orphan — skip
-
+/**
+ * Core per-product allocation (Steps 1-3) over an arbitrary set of
+ * "allocation units". A unit is identified by a key whose 2nd `::`-segment
+ * is the platform — TRUE for both 3-segment campaign keys
+ * (`store::platform::campaign`) AND 4-segment ad-set keys
+ * (`store::platform::campaign::adset`). The algorithm is byte-identical
+ * regardless of unit granularity: deterministic per-platform attribution,
+ * intra-platform spend-share split, then spend-proportional remainder.
+ *
+ * Extracted so the legacy campaign-level path and the new ad-set-level path
+ * share ONE implementation — guaranteeing the campaign path is unchanged.
+ *
+ * Mutates `out` in place (keyed by unit key).
+ */
+function allocateProductToUnits(args: {
+  product: { productId: string; netRevenueCad: number; units: number };
+  unitKeys: string[];
+  unitSpend: Map<string, number>;
+  storeOrders: AllocatorOrder[] | null;
+  out: Map<string, CampaignAllocation>;
+}): void {
+  const { product: p, unitKeys: mappedKeys, unitSpend: campaignSpend, storeOrders, out } = args;
+  {
     // ── Step 1: deterministic per-platform attribution ──────────────────
     // Walk orders containing this product; for each order with a platform
     // signal, sum the product's lineItems units + revenueCad into the
@@ -551,5 +542,142 @@ export function allocateProductRevenue(args: {
       }
     }
   }
+}
+
+/** Drop the ad-set segment of a 4-segment key to recover the 3-segment
+ *  campaign key. Returns the key unchanged when it is not 4-segment. */
+function campaignKeyFromAdSetKey(adSetKeyStr: string): string {
+  const parts = adSetKeyStr.split('::');
+  if (parts.length !== 4) return adSetKeyStr;
+  return parts.slice(0, 3).join('::');
+}
+
+export function allocateProductRevenue(args: {
+  storeId: string;
+  map: ProductMap;
+  productRevenue: Array<{ productId: string; netRevenueCad: number; units: number }>;
+  campaignSpend: Map<string, number>; // campaignKey → spend in range
+  /** Phase 05.7.9 — orders for the same (storeId, date range). When
+   *  provided, the allocator uses deterministic per-platform attribution
+   *  before falling back to spend-proportional split. Optional for
+   *  backwards compat with tests + callers that don't have orders. */
+  orders?: AllocatorOrder[];
+  /**
+   * Ad-set-level allocation (data layer 2026-06-23). Per-ad-set spend keyed
+   * by `adSetKey(store, platform, campaign, adSet)`. When provided AND the
+   * map contains at least one 4-segment ad-set entry for this store, the
+   * allocation UNIT becomes the ad-set instead of the campaign:
+   *   - each ad-set resolves its products via `readProductsForAdSet`
+   *     (ad-set own mapping OVERRIDES the campaign mapping; unmapped ad-sets
+   *     inherit the campaign mapping);
+   *   - the deterministic-first + spend-proportional algorithm runs at
+   *     ad-set granularity;
+   *   - results are then rolled UP to campaign keys so the returned contract
+   *     (`Map<campaignKey, CampaignAllocation>`) is unchanged for callers.
+   *
+   * CRITICAL no-regression guarantee: when NO 4-segment ad-set entry exists
+   * for the store (the current production world), this param is IGNORED and
+   * the legacy campaign-level path runs unchanged — output is byte-identical.
+   */
+  adSetSpend?: Map<string, number>;
+  /** When true (and the ad-set path is active), the returned map ALSO carries
+   *  the per-ad-set allocations under their 4-segment keys, in addition to the
+   *  rolled-up campaign keys. Default false — only the rolled-up campaign keys
+   *  are emitted, preserving the legacy contract. */
+  emitAdSetKeys?: boolean;
+}): Map<string, CampaignAllocation> {
+  const { storeId, map, productRevenue, campaignSpend, orders, adSetSpend, emitAdSetKeys } = args;
+  const out = new Map<string, CampaignAllocation>();
+
+  // Pre-filter orders to the store once. Cheap O(N) — used per product.
+  const storeOrders = orders
+    ? orders.filter(o => o.storeId === storeId)
+    : null;
+
+  const storePrefix = `${storeId}::`;
+  // Detect whether ANY 4-segment ad-set entry exists for this store. Only
+  // then do we engage the ad-set path — otherwise the legacy campaign path
+  // is byte-identical.
+  const hasAdSetMappings =
+    !!adSetSpend &&
+    Object.keys(map).some(
+      k => k.startsWith(storePrefix) && k.split('::').length === 4,
+    );
+
+  if (!hasAdSetMappings) {
+    // ── Legacy campaign-level path (UNCHANGED) ──────────────────────────
+    for (const p of productRevenue) {
+      if (!p.productId) continue;
+      // Audit fix 2026-05-23 (CR-03 revenue): only skip genuinely empty rows.
+      if (p.netRevenueCad === 0 && p.units === 0) continue;
+      const mappedKeys = campaignsForProductInStore(storeId, p.productId, map);
+      if (mappedKeys.length === 0) continue; // orphan — skip
+      allocateProductToUnits({
+        product: p,
+        unitKeys: mappedKeys,
+        unitSpend: campaignSpend,
+        storeOrders,
+        out,
+      });
+    }
+    return out;
+  }
+
+  // ── Ad-set-level path ─────────────────────────────────────────────────
+  // Build the universe of ad-set keys for this store from BOTH the spend map
+  // (every ad-set that spent in range) AND the map's 4-segment entries (an
+  // ad-set may be remapped even with zero spend). This mirrors the legacy
+  // path's reliance on the map for membership.
+  const adSetUniverse = new Set<string>();
+  for (const k of adSetSpend!.keys()) {
+    if (k.startsWith(storePrefix) && k.split('::').length === 4) adSetUniverse.add(k);
+  }
+  for (const k of Object.keys(map)) {
+    if (k.startsWith(storePrefix) && k.split('::').length === 4) adSetUniverse.add(k);
+  }
+
+  // Resolve, once, each ad-set's effective product list (own mapping →
+  // overrides; else campaign mapping; else []). Index ad-sets by productId so
+  // the per-product loop can pick the units in O(1).
+  const adSetsByProduct = new Map<string, string[]>();
+  for (const asKey of adSetUniverse) {
+    const parts = asKey.split('::'); // store, platform, campaign, adSet
+    const products = readProductsForAdSet(parts[0], parts[1], parts[2], parts[3], map);
+    for (const pid of products) {
+      if (!adSetsByProduct.has(pid)) adSetsByProduct.set(pid, []);
+      adSetsByProduct.get(pid)!.push(asKey);
+    }
+  }
+
+  // Allocate per product at AD-SET granularity into a private map, then roll
+  // up to campaign keys for the returned contract.
+  const adSetOut = new Map<string, CampaignAllocation>();
+  for (const p of productRevenue) {
+    if (!p.productId) continue;
+    if (p.netRevenueCad === 0 && p.units === 0) continue;
+    const unitKeys = adSetsByProduct.get(p.productId) ?? [];
+    if (unitKeys.length === 0) continue; // orphan — no ad-set promotes it
+    allocateProductToUnits({
+      product: p,
+      unitKeys,
+      unitSpend: adSetSpend!,
+      storeOrders,
+      out: adSetOut,
+    });
+  }
+
+  // Roll up ad-set allocations to campaign keys (sum). Mass is conserved —
+  // each ad-set's contribution lands in exactly one campaign bucket.
+  for (const [asKey, alloc] of adSetOut.entries()) {
+    const cKey = campaignKeyFromAdSetKey(asKey);
+    const cur = out.get(cKey) ?? emptyAlloc();
+    cur.revenue += alloc.revenue;
+    cur.units += alloc.units;
+    cur.deterministicRevenue += alloc.deterministicRevenue;
+    cur.deterministicUnits += alloc.deterministicUnits;
+    out.set(cKey, cur);
+    if (emitAdSetKeys) out.set(asKey, alloc);
+  }
+
   return out;
 }

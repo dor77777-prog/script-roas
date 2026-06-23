@@ -468,3 +468,219 @@ describe('allocateProductRevenue — deterministic-first attribution (Phase 05.7
     });
   });
 });
+
+// =============================================================================
+// allocateProductRevenue — AD-SET-level allocation (precedence + no-regression)
+// =============================================================================
+
+describe('allocateProductRevenue — ad-set-level allocation', () => {
+  const STORE = 'uzoshop';
+  const PROD = 'prod-A';
+  const PROD_B = 'prod-B';
+  const META_CAMP = campaignKey(STORE, 'Meta', 'meta-1');
+  const TIKTOK_CAMP = campaignKey(STORE, 'TikTok', 'tt-1');
+
+  // (a) REGRESSION: when no ad-set-level mappings exist anywhere, supplying
+  // adSetSpend must NOT change the campaign-level output vs the legacy call.
+  it('REGRESSION: identical campaign-level output when no ad-set mappings exist (adSetSpend ignored)', () => {
+    const map = { [META_CAMP]: [PROD], [TIKTOK_CAMP]: [PROD] } as ProductMap;
+    const productRevenue = [{ productId: PROD, netRevenueCad: 100, units: 2 }];
+    const campaignSpend = new Map([[META_CAMP, 30], [TIKTOK_CAMP, 70]]);
+    const orders = [
+      {
+        storeId: STORE,
+        source: 'tiktok-paid',
+        fbclidPresent: false,
+        gclidPresent: false,
+        lineItems: [{ productId: PROD, units: 1, revenueCad: 50 }],
+      },
+      {
+        storeId: STORE,
+        source: 'direct',
+        fbclidPresent: false,
+        gclidPresent: false,
+        lineItems: [{ productId: PROD, units: 1, revenueCad: 50 }],
+      },
+    ];
+    const legacy = allocateProductRevenue({
+      storeId: STORE, map, productRevenue, campaignSpend, orders,
+    });
+    const withAdSetSpend = allocateProductRevenue({
+      storeId: STORE, map, productRevenue, campaignSpend, orders,
+      // Per-ad-set spend supplied, but NO ad-set entries in the map →
+      // the campaign-level output must be byte-identical.
+      adSetSpend: new Map([
+        [adSetKey(STORE, 'Meta', 'meta-1', 'as-m1'), 10],
+        [adSetKey(STORE, 'Meta', 'meta-1', 'as-m2'), 20],
+        [adSetKey(STORE, 'TikTok', 'tt-1', 'as-t1'), 70],
+      ]),
+    });
+    // Same keys, same numbers.
+    expect([...withAdSetSpend.keys()].sort()).toEqual([...legacy.keys()].sort());
+    for (const [k, v] of legacy.entries()) {
+      const w = withAdSetSpend.get(k)!;
+      expect(w.revenue).toBeCloseTo(v.revenue, 9);
+      expect(w.units).toBeCloseTo(v.units, 9);
+      expect(w.deterministicRevenue).toBeCloseTo(v.deterministicRevenue, 9);
+      expect(w.deterministicUnits).toBeCloseTo(v.deterministicUnits, 9);
+    }
+  });
+
+  // (b) ad-set mapping OVERRIDES the campaign mapping for that ad-set.
+  it('ad-set mapping overrides campaign mapping for that ad-set', () => {
+    // Campaign meta-1 maps to PROD. Ad-set as-m2 within it is remapped to
+    // PROD_B. So PROD is promoted by {as-m1 (inherits camp)} and PROD_B by
+    // {as-m2 (own)}. With $40 on as-m1 and $60 on as-m2 (campaign spend $100),
+    // PROD's revenue should attribute only to meta-1 via as-m1 ($40 of spend)
+    // and PROD_B's revenue only via as-m2.
+    const map = {
+      [META_CAMP]: [PROD],
+      [adSetKey(STORE, 'Meta', 'meta-1', 'as-m2')]: [PROD_B],
+    } as ProductMap;
+    const result = allocateProductRevenue({
+      storeId: STORE,
+      map,
+      productRevenue: [
+        { productId: PROD, netRevenueCad: 100, units: 2 },
+        { productId: PROD_B, netRevenueCad: 300, units: 3 },
+      ],
+      campaignSpend: new Map([[META_CAMP, 100]]),
+      adSetSpend: new Map([
+        [adSetKey(STORE, 'Meta', 'meta-1', 'as-m1'), 40],
+        [adSetKey(STORE, 'Meta', 'meta-1', 'as-m2'), 60],
+      ]),
+    });
+    // Both products' revenue rolls up to the SAME campaign key (meta-1) —
+    // the contract returns campaign keys. PROD (100) + PROD_B (300) = 400.
+    const meta = result.get(META_CAMP)!;
+    expect(meta.revenue).toBeCloseTo(400, 5);
+    expect(meta.units).toBeCloseTo(5, 5);
+  });
+
+  // (c) MIXED: some ad-sets mapped, others fall back to campaign.
+  it('mixed: a remapped ad-set carries its own product; unmapped ad-sets fall back to the campaign', () => {
+    // Campaign meta-1 → PROD. Ad-set as-m2 remapped to PROD_B. Two products,
+    // each only attributable to its own ad-set's spend within the campaign.
+    // The campaign-level rollup nets out: meta-1 gets PROD (via as-m1) + PROD_B
+    // (via as-m2). We verify per-ad-set granularity via the ad-set output keys.
+    const map = {
+      [META_CAMP]: [PROD],
+      [adSetKey(STORE, 'Meta', 'meta-1', 'as-m2')]: [PROD_B],
+    } as ProductMap;
+    const result = allocateProductRevenue({
+      storeId: STORE,
+      map,
+      productRevenue: [
+        { productId: PROD, netRevenueCad: 100, units: 2 },
+        { productId: PROD_B, netRevenueCad: 300, units: 3 },
+      ],
+      campaignSpend: new Map([[META_CAMP, 100]]),
+      adSetSpend: new Map([
+        [adSetKey(STORE, 'Meta', 'meta-1', 'as-m1'), 40],
+        [adSetKey(STORE, 'Meta', 'meta-1', 'as-m2'), 60],
+      ]),
+      // request ad-set-granular output too
+      emitAdSetKeys: true,
+    });
+    const asM1 = result.get(adSetKey(STORE, 'Meta', 'meta-1', 'as-m1'))!;
+    const asM2 = result.get(adSetKey(STORE, 'Meta', 'meta-1', 'as-m2'))!;
+    // as-m1 inherits campaign mapping (PROD) → gets PROD's 100.
+    expect(asM1.revenue).toBeCloseTo(100, 5);
+    // as-m2 owns PROD_B → gets PROD_B's 300.
+    expect(asM2.revenue).toBeCloseTo(300, 5);
+  });
+
+  // (d) NO DOUBLE-COUNT: sum of per-product allocations == total allocatable.
+  it('no double-count: campaign rollup sum equals total product revenue', () => {
+    const map = {
+      [META_CAMP]: [PROD],
+      [adSetKey(STORE, 'Meta', 'meta-1', 'as-m2')]: [PROD_B],
+    } as ProductMap;
+    const result = allocateProductRevenue({
+      storeId: STORE,
+      map,
+      productRevenue: [
+        { productId: PROD, netRevenueCad: 100, units: 2 },
+        { productId: PROD_B, netRevenueCad: 300, units: 3 },
+      ],
+      campaignSpend: new Map([[META_CAMP, 100]]),
+      adSetSpend: new Map([
+        [adSetKey(STORE, 'Meta', 'meta-1', 'as-m1'), 40],
+        [adSetKey(STORE, 'Meta', 'meta-1', 'as-m2'), 60],
+      ]),
+    });
+    let sum = 0;
+    for (const v of result.values()) sum += v.revenue;
+    // Total allocatable = 100 + 300 = 400; no leak, no double-count.
+    expect(sum).toBeCloseTo(400, 5);
+  });
+
+  // (e) MULTI-PRODUCT RETARGETING: each ad-set → its own product → each
+  // ad-set's spend attributes only to its product.
+  it('multi-product retargeting campaign: each ad-set attributes its spend to its own product', () => {
+    // One campaign, three ad-sets, each remapped to a different product.
+    const PROD_C = 'prod-C';
+    const asA = adSetKey(STORE, 'Meta', 'meta-1', 'as-A');
+    const asB = adSetKey(STORE, 'Meta', 'meta-1', 'as-B');
+    const asC = adSetKey(STORE, 'Meta', 'meta-1', 'as-C');
+    const map = {
+      [asA]: [PROD],
+      [asB]: [PROD_B],
+      [asC]: [PROD_C],
+    } as ProductMap;
+    const result = allocateProductRevenue({
+      storeId: STORE,
+      map,
+      productRevenue: [
+        { productId: PROD, netRevenueCad: 100, units: 1 },
+        { productId: PROD_B, netRevenueCad: 200, units: 2 },
+        { productId: PROD_C, netRevenueCad: 300, units: 3 },
+      ],
+      campaignSpend: new Map([[META_CAMP, 60]]),
+      adSetSpend: new Map([[asA, 10], [asB, 20], [asC, 30]]),
+      emitAdSetKeys: true,
+    });
+    expect(result.get(asA)!.revenue).toBeCloseTo(100, 5);
+    expect(result.get(asA)!.units).toBeCloseTo(1, 5);
+    expect(result.get(asB)!.revenue).toBeCloseTo(200, 5);
+    expect(result.get(asB)!.units).toBeCloseTo(2, 5);
+    expect(result.get(asC)!.revenue).toBeCloseTo(300, 5);
+    expect(result.get(asC)!.units).toBeCloseTo(3, 5);
+    // Campaign rollup = full 600, no double-count.
+    expect(result.get(META_CAMP)!.revenue).toBeCloseTo(600, 5);
+  });
+
+  // Deterministic-first behaviour preserved at ad-set granularity within a
+  // single product mapped to ad-sets across platforms.
+  it('preserves deterministic-first within ad-set allocation', () => {
+    // PROD mapped to a Meta ad-set and a TikTok ad-set. 2 units both
+    // tiktok-paid → TikTok ad-set gets both deterministically.
+    const metaAs = adSetKey(STORE, 'Meta', 'meta-1', 'as-m1');
+    const ttAs = adSetKey(STORE, 'TikTok', 'tt-1', 'as-t1');
+    const map = { [metaAs]: [PROD], [ttAs]: [PROD] } as ProductMap;
+    const orders = [
+      {
+        storeId: STORE, source: 'tiktok-paid', fbclidPresent: false,
+        gclidPresent: false,
+        lineItems: [{ productId: PROD, units: 1, revenueCad: 50 }],
+      },
+      {
+        storeId: STORE, source: 'tiktok-paid', fbclidPresent: false,
+        gclidPresent: false,
+        lineItems: [{ productId: PROD, units: 1, revenueCad: 50 }],
+      },
+    ];
+    const result = allocateProductRevenue({
+      storeId: STORE,
+      map,
+      productRevenue: [{ productId: PROD, netRevenueCad: 100, units: 2 }],
+      campaignSpend: new Map([[META_CAMP, 30], [TIKTOK_CAMP, 70]]),
+      adSetSpend: new Map([[metaAs, 30], [ttAs, 70]]),
+      orders,
+    });
+    // Deterministic → TikTok campaign gets all 2 units; Meta gets nothing.
+    expect(result.get(TIKTOK_CAMP)!.units).toBeCloseTo(2, 5);
+    expect(result.get(TIKTOK_CAMP)!.revenue).toBeCloseTo(100, 5);
+    expect(result.get(META_CAMP)?.units ?? 0).toBeCloseTo(0, 5);
+  });
+});
