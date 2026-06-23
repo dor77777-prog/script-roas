@@ -90,6 +90,8 @@ import {
   campaignKey,
   adSetKey,
   setMappedProducts,
+  setMappedProductsForAdSet,
+  readProductsForAdSet,
   allocateProductRevenue,
   type ProductMap,
 } from '@/lib/campaignProductMap';
@@ -162,6 +164,16 @@ export function CampaignDrawer({
   // Cloud-synced product mapping picker.
   const [productMap, setProductMap] = useState<ProductMap>(() => ({}));
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Ad-set-level mapping (2026-06-23). When set, the single ProductPickerModal
+  // is scoped to this ad-set (header + save route to setMappedProductsForAdSet);
+  // when null the picker is campaign-scoped (legacy behaviour, unchanged).
+  const [editingAdSet, setEditingAdSet] = useState<{
+    storeId: string;
+    platform: string;
+    campaignId: string;
+    adSetId: string;
+    adSetName: string;
+  } | null>(null);
   // Phase A.5 v2 — TikTok-only campaign↔store mapping (cloud-synced).
   const [storeMap, setStoreMap] = useState<CampaignStoreMap>(() => ({}));
   // Optimization marks — shared with CampaignsTable.
@@ -462,6 +474,31 @@ export function CampaignDrawer({
     }
     return out;
   }, [productMap, effectiveStoreId, currentCampaignKey, campaignNameByKey]);
+
+  // ---- Per-ad-set mapping summary (2026-06-23) ------------------------
+  // For each ad-set row, resolve how many products it maps: `ownCount` from
+  // its OWN 4-segment entry (overrides the campaign), `inheritedCount` from
+  // the campaign mapping when the ad-set has no own entry. Keyed by the
+  // ad-set id (matches `AdSetItem.id`, the key AdSetTable looks up). Drives
+  // the per-row own/inherited indicator chip.
+  const mappingByAdSet = useMemo(() => {
+    const out = new Map<string, { ownCount: number; inheritedCount: number }>();
+    const platform = summary?.platform ?? rows[0]?.platform ?? '';
+    for (const a of summary?.adSets ?? []) {
+      if (!a.id) continue;
+      const ownKey = adSetKey(effectiveStoreId, platform, campaignId, a.id);
+      const own = productMap[ownKey];
+      if (Array.isArray(own) && own.length > 0) {
+        out.set(a.id, { ownCount: own.length, inheritedCount: 0 });
+      } else {
+        // No own entry → it inherits the campaign mapping. Count via the
+        // resolver so precedence stays the single source of truth.
+        const inherited = readProductsForAdSet(effectiveStoreId, platform, campaignId, a.id, productMap);
+        out.set(a.id, { ownCount: 0, inheritedCount: inherited.length });
+      }
+    }
+    return out;
+  }, [productMap, summary?.adSets, summary?.platform, rows, effectiveStoreId, campaignId]);
 
   // ---- Cohort aggregation (preserved verbatim) ------------------------
   const cohortAggregated = useMemo(() => {
@@ -962,7 +999,12 @@ export function CampaignDrawer({
                 cannibalizationVerdicts={cannibalizationVerdicts}
                 mappedIds={mappedIds}
                 otherCampaignsByProduct={otherCampaignsByProduct}
-                onEditMapping={() => setPickerOpen(true)}
+                onEditMapping={() => {
+                  // Campaign scope: clear any ad-set selection so the single
+                  // picker opens campaign-scoped (legacy behaviour).
+                  setEditingAdSet(null);
+                  setPickerOpen(true);
+                }}
                 storeMappingSlot={storeMappingSlot}
               />
             </TabsContent>
@@ -996,6 +1038,21 @@ export function CampaignDrawer({
                 onToggleOptimized={onToggle}
                 onDrillAds={setAdDrillSet}
                 rangeIncludesToday={rangeIncludesToday}
+                mappingByAdSet={mappingByAdSet}
+                onMapProducts={(set) => {
+                  // Force the effective store + the campaign's platform so the
+                  // ad-set key matches the productMap/allocator scope (TikTok
+                  // remap-aware). The row carries the same store/platform, but
+                  // we normalise via the drawer's resolved scope.
+                  setEditingAdSet({
+                    storeId: effectiveStoreId,
+                    platform: summary.platform,
+                    campaignId,
+                    adSetId: set.adSetId,
+                    adSetName: set.adSetName,
+                  });
+                  setPickerOpen(true);
+                }}
               />
             </TabsContent>
 
@@ -1037,16 +1094,44 @@ export function CampaignDrawer({
         </SheetBody>
       </SheetContent>
 
+      {/* ONE ProductPickerModal serves both scopes. `editingAdSet` decides:
+          when set, it's scoped to that ad-set (header + initial = the ad-set's
+          OWN 4-segment mapping; save → setMappedProductsForAdSet). When null,
+          it's the campaign-level picker (byte-for-byte unchanged). */}
       <ProductPickerModal
         open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
+        onClose={() => {
+          setPickerOpen(false);
+          setEditingAdSet(null);
+        }}
         storeId={effectiveStoreId}
         storeName={effectiveStoreName}
         campaignName={summary.campaignName}
-        initial={productMap[campaignKey(effectiveStoreId, summary.platform, campaignId)] ?? []}
+        adSetId={editingAdSet?.adSetId}
+        adSetName={editingAdSet?.adSetName}
+        initial={
+          editingAdSet
+            ? // Ad-set scope: seed ONLY from the ad-set's own 4-segment entry
+              // (not the inherited campaign mapping) so an empty selection
+              // means "inherit", and saving a list writes the ad-set override.
+              productMap[
+                adSetKey(effectiveStoreId, summary.platform, campaignId, editingAdSet.adSetId)
+              ] ?? []
+            : productMap[campaignKey(effectiveStoreId, summary.platform, campaignId)] ?? []
+        }
         otherCampaignsByProduct={otherCampaignsByProduct}
         onSave={(productIds) => {
-          setMappedProducts(effectiveStoreId, summary.platform, campaignId, productIds);
+          if (editingAdSet) {
+            setMappedProductsForAdSet(
+              effectiveStoreId,
+              summary.platform,
+              campaignId,
+              editingAdSet.adSetId,
+              productIds,
+            );
+          } else {
+            setMappedProducts(effectiveStoreId, summary.platform, campaignId, productIds);
+          }
         }}
       />
 
