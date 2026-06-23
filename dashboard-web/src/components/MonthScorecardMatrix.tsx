@@ -23,6 +23,7 @@ import {
   computeMonthScorecards,
   type MonthScorecard,
 } from '@/lib/monthlyTablesAggregate';
+import { ColumnHelp, COLUMN_HELP } from '@/components/MonthlyTables';
 
 const HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 
@@ -142,9 +143,24 @@ export function MonthScorecardMatrix({ rows }: { rows: DailyRow[] }) {
                 </th>
                 <th className="px-3 py-2.5 text-end font-medium">הוצאה</th>
                 <th className="px-3 py-2.5 text-end font-medium">הכנסה</th>
-                <th className="px-3 py-2.5 text-center font-medium">ROAS</th>
-                <th className="px-3 py-2.5 text-end font-medium">רווח נקי</th>
-                <th className="px-3 py-2.5 text-end font-medium">מרווח</th>
+                <th className="px-3 py-2.5 text-center font-medium">
+                  <span className="inline-flex items-center justify-center gap-1">
+                    ROAS
+                    <ColumnHelp label="ROAS" content={COLUMN_HELP.roas} />
+                  </span>
+                </th>
+                <th className="px-3 py-2.5 text-end font-medium">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    רווח נקי
+                    <ColumnHelp label="רווח נקי" content={COLUMN_HELP.netProfit} />
+                  </span>
+                </th>
+                <th className="px-3 py-2.5 text-end font-medium">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    מרווח
+                    <ColumnHelp label="מרווח" content={COLUMN_HELP.margin} />
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>

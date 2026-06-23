@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import type { DailyRow, DashboardData } from '@/lib/types';
 import { cn, formatDate } from '@/lib/utils';
 import { RefundIndicator } from './RefundIndicator';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Money } from '@/components/ui/Money';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -30,6 +31,46 @@ const MODE_OPTIONS = [
   { value: 'per-store', label: 'לפי חנות' },
   { value: 'summary', label: 'סיכום כללי' },
 ] as const;
+
+// ---------------------------------------------------------------------------
+// Column help copy + the shared header-help affordance (Task 2, 2026-06-24).
+//
+// The רווח נקי / מרווח / ROAS columns were added without any explanation; native
+// `title=` is BANNED by the lint guard, so the header carries the sanctioned
+// HelpTooltip ⓘ primitive. Exported so MonthScorecardMatrix renders the IDENTICAL
+// wording (single source of truth across the per-store block, summary block, and
+// the year matrix).
+// ---------------------------------------------------------------------------
+export const COLUMN_HELP = {
+  netProfit:
+    'הכנסה פחות הוצאת-פרסום ופחות עלות-המוצר (COGS) — הרווח האמיתי שנותר. (הכנסה − הוצאה − COGS)',
+  margin: 'רווח נקי כאחוז מההכנסה (רווח נקי ÷ הכנסה).',
+  roas:
+    'החזר על הוצאת-פרסום — הכנסה ÷ הוצאה. צבע: אדום <2 · כתום 2–2.7 · ירוק ~3 · כחול >3.',
+} as const;
+
+/**
+ * Header help ⓘ — mirrors the canonical CampaignsTable column-header pattern: a
+ * rich HelpTooltip (desktop → portalled Radix Popover that escapes the table's
+ * overflow-auto; touch → ⓘ tap → bottom-sheet) wrapping a violet ⓘ Button whose
+ * `bg-accent/text-accent-fg` pairing clears WCAG-AA in both themes. `title` is
+ * the column label so the popover carries a headline; `touchTrigger="child"`
+ * makes the ⓘ itself the tap target (no duplicate gray ⓘ on touch).
+ */
+export function ColumnHelp({ label, content }: { label: string; content: string }) {
+  return (
+    <HelpTooltip variant="rich" title={label} content={content} align="center" touchTrigger="child">
+      <Button
+        type="button"
+        variant="ghost"
+        aria-label={`הסבר על ${label}`}
+        className="!p-0 inline-flex items-center justify-center w-4 h-4 shrink-0 rounded-full bg-accent text-accent-fg hover:bg-accent-deep transition-colors align-middle"
+      >
+        <Info size={10} aria-hidden="true" />
+      </Button>
+    </HelpTooltip>
+  );
+}
 
 // Overflow-safe money cell for the daily/total table values. Mirrors the
 // legacy `formatNumber` render (he-IL, 2 decimals, NO currency prefix) exactly
@@ -519,9 +560,24 @@ export function MonthBlockPerStore({
                 {hasTt && <th className="px-3 py-2 text-end font-medium">טיקטוק</th>}
                 <th className="px-3 py-2 text-end font-medium">{anyPlatform ? 'יצא סה"כ' : 'יצא'}</th>
                 <th className="px-3 py-2 text-end font-medium">נכנס</th>
-                <th className="px-3 py-2 text-center font-medium">ROAS</th>
-                <th className="px-3 py-2 text-end font-medium">רווח נקי</th>
-                <th className="px-3 py-2 text-end font-medium">מרווח</th>
+                <th className="px-3 py-2 text-center font-medium">
+                  <span className="inline-flex items-center justify-center gap-1">
+                    ROAS
+                    <ColumnHelp label="ROAS" content={COLUMN_HELP.roas} />
+                  </span>
+                </th>
+                <th className="px-3 py-2 text-end font-medium">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    רווח נקי
+                    <ColumnHelp label="רווח נקי" content={COLUMN_HELP.netProfit} />
+                  </span>
+                </th>
+                <th className="px-3 py-2 text-end font-medium">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    מרווח
+                    <ColumnHelp label="מרווח" content={COLUMN_HELP.margin} />
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -706,9 +762,24 @@ export function MonthBlockSummary({
                 {hasTt && <th className="px-3 py-2 text-end font-medium">טיקטוק</th>}
                 <th className="px-3 py-2 text-end font-medium">{anyPlatform ? 'יצא סה"כ' : 'יצא'}</th>
                 <th className="px-3 py-2 text-end font-medium">נכנס סה&quot;כ</th>
-                <th className="px-3 py-2 text-center font-medium">ROAS</th>
-                <th className="px-3 py-2 text-end font-medium">רווח נקי</th>
-                <th className="px-3 py-2 text-end font-medium">מרווח</th>
+                <th className="px-3 py-2 text-center font-medium">
+                  <span className="inline-flex items-center justify-center gap-1">
+                    ROAS
+                    <ColumnHelp label="ROAS" content={COLUMN_HELP.roas} />
+                  </span>
+                </th>
+                <th className="px-3 py-2 text-end font-medium">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    רווח נקי
+                    <ColumnHelp label="רווח נקי" content={COLUMN_HELP.netProfit} />
+                  </span>
+                </th>
+                <th className="px-3 py-2 text-end font-medium">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    מרווח
+                    <ColumnHelp label="מרווח" content={COLUMN_HELP.margin} />
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
