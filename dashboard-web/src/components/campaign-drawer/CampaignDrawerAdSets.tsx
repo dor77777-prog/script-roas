@@ -48,6 +48,26 @@ export interface CampaignDrawerAdSetsProps {
   onDrillAds: (set: { storeId: string; campaignId: string; adSetId: string; adSetName: string }) => void;
   /** 2026-06-09 (Task 7) — gates the "מתעדכן…/ממתין…" pending state. Spread to AdSetTable. */
   rangeIncludesToday: boolean;
+  /**
+   * Ad-set-level product mapping (2026-06-23). Opens the ProductPickerModal
+   * scoped to a specific ad-set. The parent (campaign-drawer/index.tsx) owns
+   * the picker + the productMap write (setMappedProductsForAdSet).
+   */
+  onMapProducts: (set: {
+    storeId: string;
+    platform: string;
+    campaignId: string;
+    adSetId: string;
+    adSetName: string;
+  }) => void;
+  /**
+   * Per-ad-set mapping summary keyed by ad-set id (`AdSetItem.id`):
+   *   - `ownCount` — products in the ad-set's OWN mapping (overrides campaign).
+   *   - `inheritedCount` — products the ad-set INHERITS from the campaign
+   *     mapping (only meaningful when `ownCount === 0`).
+   * Drives the row indicator: an own-count chip, or an "inherited" hint.
+   */
+  mappingByAdSet: Map<string, { ownCount: number; inheritedCount: number }>;
 }
 
 export function CampaignDrawerAdSets(props: CampaignDrawerAdSetsProps) {

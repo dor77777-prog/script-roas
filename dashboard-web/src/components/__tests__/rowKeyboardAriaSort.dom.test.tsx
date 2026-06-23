@@ -117,6 +117,8 @@ function renderAdSetTable(onDrillAds = vi.fn()) {
       onToggleOptimized={vi.fn()}
       onDrillAds={onDrillAds}
       rangeIncludesToday={false}
+      onMapProducts={vi.fn()}
+      mappingByAdSet={new Map()}
     />
   );
   return onDrillAds;
@@ -284,6 +286,8 @@ function renderAdSetTableForSort() {
       onToggleOptimized={vi.fn()}
       onDrillAds={vi.fn()}
       rangeIncludesToday={false}
+      onMapProducts={vi.fn()}
+      mappingByAdSet={new Map()}
     />
   );
 }

@@ -4,9 +4,12 @@ import {
   Layers,
   CheckCircle2,
   Circle,
+  Edit3,
+  Link2,
 } from 'lucide-react';
 import { cn, formatNumber } from '@/lib/utils';
 import { fmtMoneyString } from '@/lib/format';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { TableBase } from '@/components/ui/TableBase';
 import { HelpTooltip } from '@/components/ui/Tooltip';
@@ -69,6 +72,16 @@ type Props = {
   onDrillAds: (set: { storeId: string; campaignId: string; adSetId: string; adSetName: string }) => void;
   /** 2026-06-09 (Task 7) — gates the "מתעדכן…/ממתין…" pending state. */
   rangeIncludesToday: boolean;
+  /** Ad-set-level product mapping (2026-06-23) — open the picker for this row. */
+  onMapProducts: (set: {
+    storeId: string;
+    platform: string;
+    campaignId: string;
+    adSetId: string;
+    adSetName: string;
+  }) => void;
+  /** Per-ad-set mapping summary keyed by `AdSetItem.id` (own vs inherited). */
+  mappingByAdSet: Map<string, { ownCount: number; inheritedCount: number }>;
 };
 
 export function AdSetTable({
@@ -81,6 +94,8 @@ export function AdSetTable({
   onToggleOptimized,
   onDrillAds,
   rangeIncludesToday,
+  onMapProducts,
+  mappingByAdSet,
 }: Props) {
   return (
     <section>
@@ -89,15 +104,16 @@ export function AdSetTable({
         אד-סטים ({adSets.length})
       </Heading>
       {/* Horizontal scroll mirrors the AdsDrawer pattern — the
-          ad-sets table has 7 columns (toggle / name / spend / budget /
-          value / ROAS / conversions) and gets wider than the drawer's
-          640px on smaller widths. `overflow-x-auto` keeps the rounded
-          border + lets the table scroll inside. */}
+          ad-sets table has 9 columns (toggle / name / spend / budget /
+          value / ROAS / ROAS-Shopify / conversions / product-mapping) and
+          gets wider than the drawer's 640px on smaller widths.
+          `overflow-x-auto` keeps the rounded border + lets the table
+          scroll inside. */}
       {/* Same pattern as AdsDrawer: a real vertical scroll context
           on the wrapper so the sticky thead pins correctly when
           scrolling rows. */}
       <div className="rounded-xl border border-glass-edge overflow-auto max-h-[50vh]">
-        <TableBase className="text-xs sm:text-sm" minWidth={720} stickyHeader>
+        <TableBase className="text-xs sm:text-sm" minWidth={880} stickyHeader>
           <thead>
             <tr className="text-ink-secondary">
               <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
@@ -115,6 +131,14 @@ export function AdSetTable({
                 </HelpTooltip>
               </th>
               <SortableHeader<AdSetSortKey> label="המרות" sortKey="conversions" activeSortKey={sortKey} sortDir={sortDir} onSort={onSort} align="center" />
+              {/* Ad-set-level product mapping (2026-06-23). Non-sortable —
+                  the cell holds the per-ad-set "מפה מוצרים" action + an
+                  own/inherited indicator. */}
+              <th className="font-medium px-3 py-2 text-center text-ink-secondary">
+                <HelpTooltip content="שייך מוצרי Shopify לאד-סט הזה. שיוך ברמת האד-סט גובר על שיוך הקמפיין; ריק = יורש מהקמפיין.">
+                  <span>מיפוי מוצרים</span>
+                </HelpTooltip>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -285,6 +309,68 @@ export function AdSetTable({
                     })()}
                   </td>
                   <td className="px-3 py-2 text-center tabular-nums">{formatNumber(a.conversions, 0)}</td>
+                  {/* Ad-set-level product mapping cell. Own mapping → blue
+                      count chip (overrides campaign); else inherited hint;
+                      else nothing. The "מפה מוצרים" Button reuses the same
+                      `variant="secondary" size="sm"` + Edit3 icon as the
+                      campaign-level mapping action (CampaignDrawerOverview).
+                      stopPropagation keeps a click from ALSO drilling the row
+                      (same pattern as the optimize toggle). */}
+                  <td className="px-3 py-2 text-center">
+                    {(() => {
+                      const mapInfo = mappingByAdSet.get(a.id) ?? { ownCount: 0, inheritedCount: 0 };
+                      return (
+                        <div className="inline-flex items-center gap-1.5">
+                          {mapInfo.ownCount > 0 ? (
+                            <Badge
+                              tone="blue"
+                              data-testid={`adset-mapping-own-${a.id}`}
+                              aria-label={`${mapInfo.ownCount} מוצרים משויכים לאד-סט`}
+                            >
+                              {mapInfo.ownCount}
+                            </Badge>
+                          ) : mapInfo.inheritedCount > 0 ? (
+                            <HelpTooltip content={`האד-סט יורש ${mapInfo.inheritedCount} מוצרים משיוך הקמפיין. שייך מוצרים כדי לגבור עליו.`}>
+                              <Badge
+                                tone="gray"
+                                data-testid={`adset-mapping-inherited-${a.id}`}
+                                aria-label={`יורש ${mapInfo.inheritedCount} מוצרים מהקמפיין`}
+                              >
+                                <Link2 size={11} className="shrink-0" aria-hidden />
+                                יורש
+                              </Badge>
+                            </HelpTooltip>
+                          ) : null}
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="text-fs-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onMapProducts({
+                                storeId: a.storeId,
+                                platform: a.platform,
+                                campaignId: a.campaignId,
+                                adSetId: a.id,
+                                adSetName: a.name,
+                              });
+                            }}
+                            onKeyDown={(e) => {
+                              // Don't let Enter/Space on the action bubble to the
+                              // row's drill handler.
+                              if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                                e.stopPropagation();
+                              }
+                            }}
+                          >
+                            <Edit3 size={12} />
+                            {mapInfo.ownCount > 0 ? 'ערוך מיפוי' : 'מפה מוצרים'}
+                          </Button>
+                        </div>
+                      );
+                    })()}
+                  </td>
                 </tr>
                 </HelpTooltip>
               );
