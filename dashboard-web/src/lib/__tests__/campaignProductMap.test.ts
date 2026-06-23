@@ -47,7 +47,15 @@ installWindowShim();
 
 // Import AFTER the shim so the module-level checks see `window`.
 const mod = await import('@/lib/campaignProductMap');
-const { campaignKey, migrateProductMapKeys, writeProductMap } = mod;
+const {
+  campaignKey,
+  migrateProductMapKeys,
+  writeProductMap,
+  adSetKey,
+  setMappedProductsForAdSet,
+  readProductsForAdSet,
+  readProductMap,
+} = mod;
 type ProductMap = ReturnType<typeof mod.readProductMap>;
 
 beforeEach(() => {
@@ -123,6 +131,101 @@ describe('migrateProductMapKeys', () => {
       rows: [{ storeId: 'uzoshop', campaignId: 'camp-1', platform: 'Meta' }],
     });
     expect(twice).toEqual(once);
+  });
+
+  it('ad-set: leaves a 4-segment ad-set key untouched (not misclassified as legacy 2-seg)', () => {
+    // New ad-set keys (storeId::platform::campaignId::adSetId) must coexist
+    // with campaign keys in the same map without being migrated/mangled.
+    const asKey = adSetKey('uzoshop', 'Meta', 'camp-1', 'as-9');
+    writeProductMap({ [asKey]: ['prod-A'] } as ProductMap);
+    const migrated = migrateProductMapKeys({
+      rows: [{ storeId: 'uzoshop', campaignId: 'camp-1', platform: 'Meta' }],
+    });
+    expect(migrated[asKey]).toEqual(['prod-A']);
+  });
+});
+
+// =============================================================================
+// Ad-set-level mapping helpers (adSetKey / setMappedProductsForAdSet /
+// readProductsForAdSet)
+// =============================================================================
+
+describe('adSetKey', () => {
+  it('produces a 4-segment key storeId::platform::campaignId::adSetId', () => {
+    expect(adSetKey('uzoshop', 'Meta', 'camp-1', 'as-9')).toBe(
+      'uzoshop::Meta::camp-1::as-9',
+    );
+    // The campaign key is the 3-segment prefix of the ad-set key.
+    expect(adSetKey('uzoshop', 'Meta', 'camp-1', 'as-9')).toBe(
+      `${campaignKey('uzoshop', 'Meta', 'camp-1')}::as-9`,
+    );
+  });
+});
+
+describe('setMappedProductsForAdSet', () => {
+  it('writes a 4-segment ad-set entry and dedupes/filters empties', () => {
+    const map = setMappedProductsForAdSet('uzoshop', 'Meta', 'camp-1', 'as-9', [
+      'prod-A',
+      'prod-A',
+      '',
+      'prod-B',
+    ]);
+    expect(map[adSetKey('uzoshop', 'Meta', 'camp-1', 'as-9')]).toEqual([
+      'prod-A',
+      'prod-B',
+    ]);
+    // Persisted to storage too.
+    expect(
+      readProductMap()[adSetKey('uzoshop', 'Meta', 'camp-1', 'as-9')],
+    ).toEqual(['prod-A', 'prod-B']);
+  });
+
+  it('removes the ad-set entry when given an empty product list', () => {
+    setMappedProductsForAdSet('uzoshop', 'Meta', 'camp-1', 'as-9', ['prod-A']);
+    const map = setMappedProductsForAdSet('uzoshop', 'Meta', 'camp-1', 'as-9', []);
+    expect(map[adSetKey('uzoshop', 'Meta', 'camp-1', 'as-9')]).toBeUndefined();
+  });
+
+  it('does NOT touch the campaign-level entry for the same campaign', () => {
+    writeProductMap({
+      [campaignKey('uzoshop', 'Meta', 'camp-1')]: ['camp-prod'],
+    } as ProductMap);
+    const map = setMappedProductsForAdSet('uzoshop', 'Meta', 'camp-1', 'as-9', [
+      'as-prod',
+    ]);
+    // Campaign entry preserved exactly.
+    expect(map[campaignKey('uzoshop', 'Meta', 'camp-1')]).toEqual(['camp-prod']);
+    // Ad-set entry added alongside.
+    expect(map[adSetKey('uzoshop', 'Meta', 'camp-1', 'as-9')]).toEqual([
+      'as-prod',
+    ]);
+  });
+});
+
+describe('readProductsForAdSet — precedence', () => {
+  it('returns the ad-set products when an ad-set entry exists (overrides campaign)', () => {
+    const map: ProductMap = {
+      [campaignKey('uzoshop', 'Meta', 'camp-1')]: ['camp-prod'],
+      [adSetKey('uzoshop', 'Meta', 'camp-1', 'as-9')]: ['as-prod'],
+    };
+    expect(
+      readProductsForAdSet('uzoshop', 'Meta', 'camp-1', 'as-9', map),
+    ).toEqual(['as-prod']);
+  });
+
+  it('falls back to the campaign products when the ad-set has no own entry', () => {
+    const map: ProductMap = {
+      [campaignKey('uzoshop', 'Meta', 'camp-1')]: ['camp-prod'],
+    };
+    expect(
+      readProductsForAdSet('uzoshop', 'Meta', 'camp-1', 'as-unmapped', map),
+    ).toEqual(['camp-prod']);
+  });
+
+  it('returns [] when neither the ad-set nor the campaign is mapped', () => {
+    expect(
+      readProductsForAdSet('uzoshop', 'Meta', 'camp-1', 'as-9', {}),
+    ).toEqual([]);
   });
 });
 

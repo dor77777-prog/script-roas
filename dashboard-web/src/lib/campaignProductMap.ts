@@ -29,6 +29,30 @@ export function campaignKey(storeId: string, platform: string, campaignId: strin
   return `${storeId}::${platform}::${campaignId}`;
 }
 
+/**
+ * Ad-set-level key — a 4-segment composite
+ * `${storeId}::${platform}::${campaignId}::${adSetId}`.
+ *
+ * Coexists in the SAME ProductMap as the 3-segment campaign keys: an ad-set
+ * with its own mapping overrides the campaign mapping for that ad-set
+ * (resolved by `readProductsForAdSet`); ad-sets without an entry fall back to
+ * the campaign mapping. The 3-segment campaign key is exactly the prefix of
+ * the 4-segment ad-set key (`${campaignKey(...)}::${adSetId}`), so the two
+ * granularities never collide.
+ *
+ * NOTE: the migration helper (`migrateProductMapKeys`) keys legacy detection
+ * off segment count (length === 2). 4-segment ad-set keys are therefore left
+ * untouched (skipped alongside 3-segment already-migrated keys).
+ */
+export function adSetKey(
+  storeId: string,
+  platform: string,
+  campaignId: string,
+  adSetId: string,
+): string {
+  return `${storeId}::${platform}::${campaignId}::${adSetId}`;
+}
+
 export function readProductMap(): ProductMap {
   if (typeof window === 'undefined') return {};
   try {
@@ -144,6 +168,52 @@ export function setMappedProducts(
   }
   writeProductMap(map);
   return map;
+}
+
+/** Convenience: replace the product list for a single AD-SET. Mirrors
+ *  `setMappedProducts` exactly (dedupe + drop-empties + immediate cloud push)
+ *  but writes the 4-segment ad-set key. An empty array removes the ad-set's
+ *  entry so storage stays clean — and removing the ad-set entry naturally
+ *  re-exposes the campaign-level mapping (see `readProductsForAdSet`).
+ *  The campaign-level entry for the same campaign is never touched. */
+export function setMappedProductsForAdSet(
+  storeId: string,
+  platform: string,
+  campaignId: string,
+  adSetId: string,
+  productIds: string[],
+): ProductMap {
+  const map = readProductMap();
+  const k = adSetKey(storeId, platform, campaignId, adSetId);
+  const cleaned = Array.from(new Set(productIds.filter(Boolean)));
+  if (cleaned.length === 0) {
+    delete map[k];
+  } else {
+    map[k] = cleaned;
+  }
+  writeProductMap(map);
+  return map;
+}
+
+/** Resolve the effective product list for an ad-set, applying precedence:
+ *  1. the ad-set's OWN mapping if present (overrides the campaign);
+ *  2. else the campaign-level mapping (the unchanged legacy behaviour);
+ *  3. else [] (unmapped).
+ *
+ *  This is the single source of truth for ad-set → product resolution.
+ *  Returns a copy so callers can't mutate the stored arrays. */
+export function readProductsForAdSet(
+  storeId: string,
+  platform: string,
+  campaignId: string,
+  adSetId: string,
+  map: ProductMap,
+): string[] {
+  const asKey = adSetKey(storeId, platform, campaignId, adSetId);
+  if (Array.isArray(map[asKey])) return [...map[asKey]];
+  const cKey = campaignKey(storeId, platform, campaignId);
+  if (Array.isArray(map[cKey])) return [...map[cKey]];
+  return [];
 }
 
 /** Reverse lookup: for a given product, which campaigns map to it? Returns
