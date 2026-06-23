@@ -600,9 +600,14 @@ export function allocateProductRevenue(args: {
   // is byte-identical.
   const hasAdSetMappings =
     !!adSetSpend &&
-    Object.keys(map).some(
-      k => k.startsWith(storePrefix) && k.split('::').length === 4,
-    );
+    Object.keys(map).some(k => {
+      const parts = k.split('::');
+      // Require a NON-EMPTY 4th segment: a trailing-empty
+      // `store::platform::campaign::` key (defensively guarded against in the
+      // UI, but cheap to reject here too) must not flip a store into the
+      // ad-set allocation path.
+      return k.startsWith(storePrefix) && parts.length === 4 && parts[3] !== '';
+    });
 
   if (!hasAdSetMappings) {
     // ── Legacy campaign-level path (UNCHANGED) ──────────────────────────
@@ -629,11 +634,17 @@ export function allocateProductRevenue(args: {
   // ad-set may be remapped even with zero spend). This mirrors the legacy
   // path's reliance on the map for membership.
   const adSetUniverse = new Set<string>();
+  const isRealAdSetKey = (k: string): boolean => {
+    const parts = k.split('::');
+    // 4 segments AND a non-empty ad-set id — never admit a trailing-empty
+    // `store::platform::campaign::` key into the allocation universe.
+    return k.startsWith(storePrefix) && parts.length === 4 && parts[3] !== '';
+  };
   for (const k of adSetSpend!.keys()) {
-    if (k.startsWith(storePrefix) && k.split('::').length === 4) adSetUniverse.add(k);
+    if (isRealAdSetKey(k)) adSetUniverse.add(k);
   }
   for (const k of Object.keys(map)) {
-    if (k.startsWith(storePrefix) && k.split('::').length === 4) adSetUniverse.add(k);
+    if (isRealAdSetKey(k)) adSetUniverse.add(k);
   }
 
   // Resolve, once, each ad-set's effective product list (own mapping →

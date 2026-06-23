@@ -465,6 +465,13 @@ export function CampaignDrawer({
     const storePrefix = `${effectiveStoreId}::`;
     for (const [k, pids] of Object.entries(productMap)) {
       if (!k.startsWith(storePrefix)) continue;
+      // The chip reads "גם ב-N קמפיינים" — count ONLY true campaign-level
+      // mappings (3-segment store::platform::campaign keys). 4-segment
+      // ad-set keys (2026-06-23 ad-set scope) are NOT campaigns: counting
+      // them inflates the multi-mapping chip and, since campaignNameByKey is
+      // built from 3-segment keys only, labels every ad-set entry '(לא ידוע)'
+      // in BOTH the campaign-level and the ad-set picker. Skip them.
+      if (k.split('::').length !== 3) continue;
       if (k === currentCampaignKey) continue;
       const name = campaignNameByKey.get(k) ?? '(לא ידוע)';
       for (const pid of pids) {

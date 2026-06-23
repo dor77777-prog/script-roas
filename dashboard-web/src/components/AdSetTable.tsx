@@ -318,6 +318,15 @@ export function AdSetTable({
                       (same pattern as the optimize toggle). */}
                   <td className="px-3 py-2 text-center">
                     {(() => {
+                      // Gate the whole mapping action on a real ad-set id —
+                      // mirrors `canDrillToAds`. An id-less row (a.id === '';
+                      // e.g. Google PMax/Shopping fallback or the '(אחר)'
+                      // bucket) has no own-count indicator (mappingByAdSet
+                      // skips `!a.id` rows) and writing a trailing-empty
+                      // `store::platform::campaign::` key would be invisible
+                      // and confusing. Render nothing for such rows so the
+                      // operator can't create a bogus empty-adSetId mapping.
+                      if (!a.id) return null;
                       const mapInfo = mappingByAdSet.get(a.id) ?? { ownCount: 0, inheritedCount: 0 };
                       return (
                         <div className="inline-flex items-center gap-1.5">
