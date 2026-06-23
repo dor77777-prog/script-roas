@@ -625,6 +625,47 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
     })).rejects.toThrow('invalid access token');
     expect(notifyTokenFailure).toHaveBeenCalledOnce();
     expect(notifyTokenFailure.mock.calls[0][0].operation).toBe('meta_hot_metrics_auth');
+    // Real token failure keeps the refresh-the-token guidance.
+    expect(String(notifyTokenFailure.mock.calls[0][0].advice)).toMatch(/refresh.*access token/i);
+  });
+
+  // 2026-06-23 — transient classification at the hot_metrics catch. Meta wraps
+  // EVERY Graph error in type:OAuthException, so a transient code 2 "Service
+  // temporarily unavailable" (subcode 1504044) must NOT be alerted as an auth
+  // failure with "refresh the token" advice — it self-heals on the next tick.
+  it('hot_metrics fetch rejects with code 2 "Service temporarily unavailable" → transient alert, NOT auth, no refresh advice', async () => {
+    const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
+    const err = new Error(
+      'Meta hot-metrics batch part failed (code=400): {"error":{"message":"Service temporarily unavailable","type":"OAuthException","is_transient":false,"code":2,"error_subcode":1504044}}',
+    );
+    const fetchHotMetrics = vi.fn().mockRejectedValue(err);
+    await expect(runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 12 },
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics,
+      getHotCampaignIds: async () => ['C1'],
+      getHotAdsetIds: async () => ['AS1'],
+      getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(),
+      upsertAdsDaily: vi.fn(),
+      getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 1 } as never),
+      recordFreshness: vi.fn(),
+      upsertBuc: vi.fn(),
+      isMetaConfigured: () => true,
+      notifyTokenFailure,
+      nowIso: NOW_ISO,
+    })).rejects.toThrow('Service temporarily unavailable');
+    expect(notifyTokenFailure).toHaveBeenCalledOnce();
+    const call = notifyTokenFailure.mock.calls[0][0];
+    // Must NOT be branded a token/auth failure.
+    expect(call.operation).not.toBe('meta_hot_metrics_auth');
+    expect(String(call.operation)).not.toMatch(/auth/i);
+    // Must NOT advise refreshing the access token.
+    expect(String(call.advice)).not.toMatch(/refresh.*access token/i);
   });
 
   it('Phase E1.7 (2026-05-30 night): hot_metrics calls aggregateDataDaily twice (pre-fetch + post-upsert) for today', async () => {
