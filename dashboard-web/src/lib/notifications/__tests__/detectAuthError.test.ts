@@ -72,8 +72,29 @@ describe('isAuthError — Meta transient-service exclusion (2026-06-12)', () => 
     expect(isAuthError('meta', '{"error":{"type":"OAuthException","code":102,"message":"Session key invalid"}}')).toBe(true);
   });
 
-  it('plain OAuthException with no transient signature still classifies auth (unchanged behavior)', () => {
-    expect(isAuthError('meta', 'OAuthException: something about access')).toBe(true);
+  // 2026-06-24 — ROOT FIX: Meta wraps EVERY Graph error in type:OAuthException,
+  // so a bare OAuthException with no auth code/message is NOT auth. The old
+  // premise (a plain OAuthException classifies auth) WAS the bug — non-auth
+  // codes (e.g. code 100 "Invalid parameter") rode the /OAuthException/ wrapper
+  // into a false token_failure. Auth is now CODE/MESSAGE-driven, not
+  // wrapper-driven.
+  it('a bare OAuthException with NO auth code/message is NOT auth (root over-trust removed)', () => {
+    expect(isAuthError('meta', 'OAuthException: something about access')).toBe(false);
+    expect(isAuthError('meta', '{"error":{"type":"OAuthException"}}')).toBe(false);
+  });
+
+  it('code 100 / subcode 1504018 "Invalid parameter" (shorter date range) is NOT auth', () => {
+    // Exact prod alert body flavor: code 100, subcode 1504018, HTTP 400.
+    expect(
+      isAuthError(
+        'meta',
+        'Meta hot-metrics batch part failed (code=400): {"error":{"message":"Invalid parameter","type":"OAuthException","is_transient":false,"code":100,"error_subcode":1504018,"error_user_title":"x","error_user_msg":"יש לנסות טווח תאריכים קצר יותר"}}',
+      ),
+    ).toBe(false);
+  });
+
+  it('explicit auth MESSAGE without an auth code is still auth (invalid/expired access token)', () => {
+    expect(isAuthError('meta', '{"error":{"type":"OAuthException","message":"Invalid OAuth access token"}}')).toBe(true);
   });
 
   it('non-meta providers unaffected by the exclusion', () => {
@@ -181,5 +202,42 @@ describe('classifyMetaErrorForAlert (2026-06-23)', () => {
       'Meta fetch failed (code=403): {"error":{"type":"OAuthException","code":190,"message":"Invalid OAuth access token"}}',
     );
     expect(out.kind).toBe('token_failure');
+  });
+
+  // 2026-06-24 prod alert — the latest misclassification: code 100 / subcode
+  // 1504018 "Invalid parameter" (error_user_msg "יש לנסות טווח תאריכים קצר יותר"
+  // = try a shorter date range; is_transient:false; HTTP 400) was classified
+  // meta_hot_metrics_auth WITH "Refresh the Meta access token" advice. code 100
+  // is a query/parameter/timeout error, NOT auth — Meta just wraps it in the
+  // type:OAuthException envelope like every other Graph error. It must NOT be a
+  // token failure and must NOT carry refresh advice.
+  it('PROD: code 100 / subcode 1504018 "Invalid parameter" (shorter date range) → unknown, NO refresh advice, not titled token failure', () => {
+    const out = classifyMetaErrorForAlert(
+      'Meta hot-metrics batch part failed (code=400): {"error":{"message":"Invalid parameter","type":"OAuthException","is_transient":false,"code":100,"error_subcode":1504018,"error_user_title":"x","error_user_msg":"יש לנסות טווח תאריכים קצר יותר"}}',
+    );
+    expect(out.kind).toBe('unknown');
+    expect(out.advice).not.toMatch(TOKEN_REFRESH_RE);
+    expect(out.advice).not.toMatch(/[Rr]efresh|רענן/);
+    expect(out.operation).not.toMatch(/auth/i);
+    expect(out.titleIsTokenFailure).toBe(false);
+  });
+
+  it('a bare OAuthException with no auth code/message → NOT token_failure (root over-trust removed)', () => {
+    const out = classifyMetaErrorForAlert('{"error":{"type":"OAuthException"}}');
+    expect(out.kind).not.toBe('token_failure');
+    expect(out.advice).not.toMatch(TOKEN_REFRESH_RE);
+    expect(out.titleIsTokenFailure).toBe(false);
+  });
+
+  it('an explicit "Invalid OAuth access token" message → token_failure (regression)', () => {
+    const out = classifyMetaErrorForAlert(
+      '{"error":{"type":"OAuthException","message":"Invalid OAuth access token"}}',
+    );
+    expect(out.kind).toBe('token_failure');
+    expect(out.advice).toMatch(TOKEN_REFRESH_RE);
+  });
+
+  it('code 2 → transient (regression)', () => {
+    expect(classifyMetaErrorForAlert('{"error":{"type":"OAuthException","code":2}}').kind).toBe('transient');
   });
 });
