@@ -440,6 +440,300 @@ describe('fetchMetaHotMetricsForStore()', () => {
     ).rejects.toThrow(/ad.*chunk|chunk.*ad|level.*ad|ad.*level/i);
   });
 
+  // ── Gap-closure tests (adversarial review 2026-06-24) ─────────────────────
+
+  /**
+   * CHUNK-7: Anti-level-swap — ASYMMETRIC counts + IDENTITY assertions.
+   *
+   * CHUNK-2 used symmetric 60/60 counts and only asserted array lengths,
+   * so a hypothetical bug that routes adset response parts into `ads`
+   * (and vice-versa) would still produce two 60-element arrays and both
+   * length assertions would pass.
+   *
+   * This test uses ASYMMETRIC counts (60 adset IDs + 110 ad IDs) and
+   * asserts ROW IDENTITY:
+   *   • every row in result.adsets has `ad_set_id` and NO `ad_id`
+   *   • every row in result.ads has `ad_id`
+   *   • counts are 60 and 110 respectively
+   *
+   * Mutation that would cause failure:
+   *   If adset parts were routed to the `adRaw` accumulator and ad parts
+   *   to `adsetRaw`, `result.adsets` would contain 110 ad-shaped rows
+   *   (which have `ad_id`), and the `not.toHaveProperty('ad_id')` and
+   *   `toHaveLength(60)` assertions would both fail.
+   */
+  it('CHUNK-7: 60 adset + 110 ad IDs — identity assertions detect level-swap mis-routing', async () => {
+    const hotAdsetIds = Array.from({ length: 60 }, (_, i) => `AS${i + 1}`);
+    const hotAdIds    = Array.from({ length: 110 }, (_, i) => `AD${i + 1}`);
+
+    // 60 adset IDs → ceil(60/50) = 2 adset chunks.
+    // 110 ad IDs   → ceil(110/50) = 3 ad chunks.
+    // Total = 5 sub-requests → 1 batch POST.
+    // Sub-request order: adset-chunk-0, adset-chunk-1, ad-chunk-0, ad-chunk-1, ad-chunk-2.
+
+    function makeAdsetPartBody(ids: string[]) {
+      return JSON.stringify({
+        data: ids.map((id) => ({
+          campaign_id: 'C1', campaign_name: 'Campaign 1',
+          adset_id: id, adset_name: `AdSet ${id}`,
+          // Deliberately NO ad_id field — adset-shaped rows.
+          impressions: '10', clicks: '1', spend: '1.0',
+          actions: [], action_values: [], account_currency: 'ILS',
+          date_start: '2026-05-30', date_stop: '2026-05-30',
+        })),
+      });
+    }
+    function makeAdPartBody(ids: string[]) {
+      return JSON.stringify({
+        data: ids.map((id) => ({
+          campaign_id: 'C1', campaign_name: 'Campaign 1',
+          adset_id: 'AS1', adset_name: 'AdSet 1',
+          ad_id: id, ad_name: `Ad ${id}`,
+          impressions: '10', clicks: '1', spend: '1.0',
+          actions: [], action_values: [], account_currency: 'ILS',
+          date_start: '2026-05-30', date_stop: '2026-05-30',
+        })),
+      });
+    }
+
+    // Parts in sub-request order: 2 adset chunks, 3 ad chunks.
+    const batchResponse = JSON.stringify([
+      { code: 200, body: makeAdsetPartBody(hotAdsetIds.slice(0, 50)) },   // adset chunk 0: AS1..AS50
+      { code: 200, body: makeAdsetPartBody(hotAdsetIds.slice(50, 60)) },  // adset chunk 1: AS51..AS60
+      { code: 200, body: makeAdPartBody(hotAdIds.slice(0, 50)) },         // ad chunk 0: AD1..AD50
+      { code: 200, body: makeAdPartBody(hotAdIds.slice(50, 100)) },       // ad chunk 1: AD51..AD100
+      { code: 200, body: makeAdPartBody(hotAdIds.slice(100, 110)) },      // ad chunk 2: AD101..AD110
+    ]);
+    const fetchMock = mockFetch(batchResponse);
+
+    const out = await fetchMetaHotMetricsForStore({
+      storeId: 'uzoshop', adAccountId: 'act_111', accessToken: 'tok',
+      hotCampaignIds: [], hotAdsetIds, hotAdIds,
+      dateStr: '2026-05-30', fetcher: fetchMock,
+      getFxCadFor: async (amount, currency) => currency === 'ILS' ? amount * 0.37 : amount,
+    });
+
+    // Exact counts — asymmetric so a swap is detectable.
+    expect(out.adsets).toHaveLength(60);
+    expect(out.ads).toHaveLength(110);
+
+    // Identity: every adset row is adset-shaped (has ad_set_id, no ad_id).
+    for (const row of out.adsets) {
+      expect(row).toHaveProperty('ad_set_id');
+      expect(row).not.toHaveProperty('ad_id');
+    }
+    // Identity: every ad row is ad-shaped (has ad_id).
+    for (const row of out.ads) {
+      expect(row).toHaveProperty('ad_id');
+    }
+
+    // Spot-check a known adset row and a known ad row for correct content.
+    expect(out.adsets.find((r) => r.ad_set_id === 'AS1')).toBeDefined();
+    expect(out.adsets.find((r) => r.ad_set_id === 'AS60')).toBeDefined();
+    expect(out.ads.find((r) => r.ad_id === 'AD1')).toBeDefined();
+    expect(out.ads.find((r) => r.ad_id === 'AD110')).toBeDefined();
+  });
+
+  /**
+   * CHUNK-8: Chunk boundary — exactly 50 vs 51 hot ad IDs.
+   *
+   * 50 ad IDs → ceil(50/50) = 1 ad-level sub-request (exactly one chunk).
+   * 51 ad IDs → ceil(51/50) = 2 ad-level sub-requests (two chunks).
+   *
+   * Assertions:
+   *   • batch array length (= number of ad sub-requests per POST)
+   *   • no single sub-request's `filtering` value array exceeds 50 IDs
+   *
+   * Mutation that would cause failure:
+   *   An off-by-one in the chunk() function that produces chunks of 51
+   *   would cause the 50-ID case to still produce 1 sub-request (passing)
+   *   but the 51-ID case to also produce 1 sub-request (failing the length=2
+   *   assertion). An off-by-one that chunks at 49 would cause the 50-ID
+   *   case to produce 2 sub-requests (failing length=1 assertion).
+   *   The max-IDs-per-chunk assertion catches any chunk that carries >50 IDs.
+   */
+  it('CHUNK-8: exactly 50 ad IDs → 1 ad sub-request; 51 ad IDs → 2 ad sub-requests', async () => {
+    // Helper: count ad-level sub-requests in the batch body sent by fetchMock.
+    function countAdSubRequests(fetchMock: ReturnType<typeof vi.fn>): number {
+      const sentBody = fetchMock.mock.calls[0]?.[1]?.body as string;
+      const parsed = new URLSearchParams(sentBody);
+      const batchArr = JSON.parse(parsed.get('batch') ?? '[]') as Array<{ relative_url: string }>;
+      return batchArr.filter((s) => s.relative_url.includes('level=ad')).length;
+    }
+
+    // Helper: assert max IDs per ad sub-request.
+    function assertMaxIdsPerChunk(fetchMock: ReturnType<typeof vi.fn>): void {
+      const sentBody = fetchMock.mock.calls[0]?.[1]?.body as string;
+      const parsed = new URLSearchParams(sentBody);
+      const batchArr = JSON.parse(parsed.get('batch') ?? '[]') as Array<{ relative_url: string }>;
+      for (const sub of batchArr.filter((s) => s.relative_url.includes('level=ad'))) {
+        const decoded = decodeURIComponent(decodeURIComponent(sub.relative_url));
+        const filterMatch = decoded.match(/"value"\s*:\s*(\[[^\]]*\])/);
+        expect(filterMatch).not.toBeNull();
+        const ids = JSON.parse(filterMatch![1]) as string[];
+        expect(ids.length).toBeLessThanOrEqual(50);
+      }
+    }
+
+    // ── Case A: exactly 50 ad IDs → 1 ad sub-request ────────────────────────
+    {
+      const hotAdIds50 = Array.from({ length: 50 }, (_, i) => `AD${i + 1}`);
+      const adPartBody50 = JSON.stringify({
+        data: hotAdIds50.map((id) => ({
+          campaign_id: 'C1', campaign_name: 'Campaign 1',
+          adset_id: 'AS1', adset_name: 'AdSet 1',
+          ad_id: id, ad_name: `Ad ${id}`,
+          impressions: '5', clicks: '1', spend: '0.5',
+          actions: [], action_values: [], account_currency: 'ILS',
+          date_start: '2026-05-30', date_stop: '2026-05-30',
+        })),
+      });
+      const batchResponse50 = JSON.stringify([{ code: 200, body: adPartBody50 }]);
+      const fetchMock50 = mockFetch(batchResponse50);
+
+      const out50 = await fetchMetaHotMetricsForStore({
+        storeId: 'uzoshop', adAccountId: 'act_111', accessToken: 'tok',
+        hotCampaignIds: [], hotAdsetIds: [], hotAdIds: hotAdIds50,
+        dateStr: '2026-05-30', fetcher: fetchMock50,
+        getFxCadFor: async (amount, currency) => currency === 'ILS' ? amount * 0.37 : amount,
+      });
+
+      expect(out50.ads).toHaveLength(50);
+      expect(countAdSubRequests(fetchMock50)).toBe(1); // exactly 1 chunk
+      assertMaxIdsPerChunk(fetchMock50);
+    }
+
+    // ── Case B: exactly 51 ad IDs → 2 ad sub-requests ───────────────────────
+    {
+      const hotAdIds51 = Array.from({ length: 51 }, (_, i) => `AD${i + 1}`);
+      function makeAdBody(ids: string[]) {
+        return JSON.stringify({
+          data: ids.map((id) => ({
+            campaign_id: 'C1', campaign_name: 'Campaign 1',
+            adset_id: 'AS1', adset_name: 'AdSet 1',
+            ad_id: id, ad_name: `Ad ${id}`,
+            impressions: '5', clicks: '1', spend: '0.5',
+            actions: [], action_values: [], account_currency: 'ILS',
+            date_start: '2026-05-30', date_stop: '2026-05-30',
+          })),
+        });
+      }
+      // 2 sub-requests in 1 batch POST: chunk-0 (IDs 1-50) + chunk-1 (ID 51).
+      const batchResponse51 = JSON.stringify([
+        { code: 200, body: makeAdBody(hotAdIds51.slice(0, 50)) },
+        { code: 200, body: makeAdBody(hotAdIds51.slice(50)) },
+      ]);
+      const fetchMock51 = mockFetch(batchResponse51);
+
+      const out51 = await fetchMetaHotMetricsForStore({
+        storeId: 'uzoshop', adAccountId: 'act_111', accessToken: 'tok',
+        hotCampaignIds: [], hotAdsetIds: [], hotAdIds: hotAdIds51,
+        dateStr: '2026-05-30', fetcher: fetchMock51,
+        getFxCadFor: async (amount, currency) => currency === 'ILS' ? amount * 0.37 : amount,
+      });
+
+      expect(out51.ads).toHaveLength(51);
+      expect(countAdSubRequests(fetchMock51)).toBe(2); // two chunks
+      assertMaxIdsPerChunk(fetchMock51);
+    }
+  });
+
+  /**
+   * CHUNK-9: Batch-POST boundary — exactly 50 vs 51 total sub-requests.
+   *
+   * Each batch POST holds at most MAX_BATCH_SIZE=50 sub-requests.
+   *   • 50 total sub-requests → exactly ONE fetch/POST call.
+   *   • 51 total sub-requests → exactly TWO fetch/POST calls.
+   *
+   * Configuration chosen to hit the boundary cleanly (no adset IDs, only
+   * ad IDs, because adset=0 means 0 adset chunks):
+   *   50 total: 0 adset chunks + 50 ad chunks = 50 × 50 = 2500 ad IDs
+   *     → ceil(2500/50)=50 ad chunks = 50 sub-requests → 1 POST.
+   *   51 total: 0 adset chunks + 51 ad chunks = 51 × 50 = 2550 ad IDs
+   *     → ceil(2550/50)=51 ad chunks = 51 sub-requests → 2 POSTs (50+1).
+   *
+   * Assertions:
+   *   • fetch call count: 1 vs 2
+   *   • all rows (one per chunk, 50 vs 51) are merged into result.ads
+   *
+   * Mutation that would cause failure:
+   *   If the batch-split used > MAX_BATCH_SIZE (e.g. 51), the 50-request
+   *   case would still be 1 POST but the 51-request case would also be 1
+   *   POST (failing fetchMock.toHaveBeenCalledTimes(2)). If it used
+   *   < MAX_BATCH_SIZE (e.g. 49), the 50-request case would split into
+   *   2 POSTs (failing toHaveBeenCalledTimes(1)).
+   */
+  it('CHUNK-9: exactly 50 total sub-requests → 1 batch POST; 51 total → 2 batch POSTs', async () => {
+    // Build a fixture where every ad chunk (of size 50) returns exactly
+    // one sentinel row identified by its chunk index. This lets us verify
+    // that all rows across multiple POSTs are merged correctly.
+    function makeOneAdRow(chunkIdx: number) {
+      const id = `AD_CHUNK${chunkIdx}`;
+      return JSON.stringify({
+        data: [{
+          campaign_id: 'C1', campaign_name: 'Campaign 1',
+          adset_id: 'AS1', adset_name: 'AdSet 1',
+          ad_id: id, ad_name: `Sentinel Ad chunk${chunkIdx}`,
+          impressions: '1', clicks: '0', spend: '0.1',
+          actions: [], action_values: [], account_currency: 'ILS',
+          date_start: '2026-05-30', date_stop: '2026-05-30',
+        }],
+      });
+    }
+
+    // ── Case A: 2500 ad IDs → 50 chunks → 1 POST ─────────────────────────
+    {
+      const hotAdIds2500 = Array.from({ length: 2500 }, (_, i) => `AD${i + 1}`);
+      // 50 chunks → 1 POST response with 50 parts, one row each.
+      const parts50 = Array.from({ length: 50 }, (_, k) => ({
+        code: 200,
+        body: makeOneAdRow(k),
+      }));
+      const fetchMock50 = mockFetch(JSON.stringify(parts50));
+
+      const out50 = await fetchMetaHotMetricsForStore({
+        storeId: 'uzoshop', adAccountId: 'act_111', accessToken: 'tok',
+        hotCampaignIds: [], hotAdsetIds: [], hotAdIds: hotAdIds2500,
+        dateStr: '2026-05-30', fetcher: fetchMock50,
+        getFxCadFor: async (amount, currency) => currency === 'ILS' ? amount * 0.37 : amount,
+      });
+
+      expect(fetchMock50).toHaveBeenCalledTimes(1); // exactly one batch POST
+      expect(out50.ads).toHaveLength(50);           // 50 sentinel rows merged
+      expect(out50.adsets).toHaveLength(0);
+    }
+
+    // ── Case B: 2550 ad IDs → 51 chunks → 2 POSTs (50 + 1) ──────────────
+    {
+      const hotAdIds2550 = Array.from({ length: 2550 }, (_, i) => `AD${i + 1}`);
+      // 51 chunks → split across 2 batch POSTs: first 50 parts, then 1 part.
+      const parts51 = Array.from({ length: 51 }, (_, k) => ({
+        code: 200,
+        body: makeOneAdRow(k),
+      }));
+      const post1Body = JSON.stringify(parts51.slice(0, 50));
+      const post2Body = JSON.stringify(parts51.slice(50));
+
+      let callCount = 0;
+      const fetchMock51 = vi.fn(async () => {
+        const body = callCount === 0 ? post1Body : post2Body;
+        callCount++;
+        return new Response(body, { status: 200 });
+      });
+
+      const out51 = await fetchMetaHotMetricsForStore({
+        storeId: 'uzoshop', adAccountId: 'act_111', accessToken: 'tok',
+        hotCampaignIds: [], hotAdsetIds: [], hotAdIds: hotAdIds2550,
+        dateStr: '2026-05-30', fetcher: fetchMock51 as unknown as typeof fetch,
+        getFxCadFor: async (amount, currency) => currency === 'ILS' ? amount * 0.37 : amount,
+      });
+
+      expect(fetchMock51).toHaveBeenCalledTimes(2); // two batch POSTs
+      expect(out51.ads).toHaveLength(51);            // 51 sentinel rows merged
+      expect(out51.adsets).toHaveLength(0);
+    }
+  });
+
   /**
    * CHUNK-6: >50 total sub-requests → multiple batch POSTs.
    * 130 adset IDs → ceil(130/50)=3 adset chunks.
