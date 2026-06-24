@@ -109,6 +109,19 @@ export function findingMagnitude(v: Violation): number {
   return Number.isFinite(g) ? g : 0;
 }
 
+/**
+ * Is this a RATIO-valued check (magnitude is a dimensionless ratio, not dollars)?
+ * Only INV-3 (`agree([roas, revenue/totalSpend])`) is ratio-valued: its gap is a
+ * single-digit ROAS difference. Every other live check (INV-7 spend, INV-9/10
+ * revenue, INV-6 platform-sum, INV-14 non-finite) is dollar-valued, where the
+ * fixed $25 floor is the right scale. We key on the check phrase rather than the
+ * magnitude so a genuinely-small DOLLAR gap (a $2 INV-7 wobble) keeps the dollar
+ * floor and does not get treated as a ratio.
+ */
+export function isRatioFinding(v: Violation): boolean {
+  return /\bINV-3\b/.test(parseFinding(v).check);
+}
+
 /** One stored acknowledgement: the gap magnitude at ack time + when it was acked. */
 export interface ReconcileAck {
   /** The finding's gap magnitude when the operator marked it reviewed. */
@@ -123,18 +136,48 @@ export type ReconcileAcks = Record<string, ReconcileAck>;
 /**
  * An ack RE-POPS when the finding's gap has worsened MATERIALLY vs the acked
  * value. "Material" = grew by more than ACK_WORSEN_REL (relative) AND by more
- * than ACK_WORSEN_ABS (absolute floor, so tiny gaps don't churn the ack on a
- * few-dollar wobble). A finding hidden today must NOT silently re-show on a
- * trivial bump, but a genuine deterioration SHOULD surface again.
+ * than the absolute floor (so tiny gaps don't churn the ack on a few-dollar
+ * wobble). A finding hidden today must NOT silently re-show on a trivial bump,
+ * but a genuine deterioration SHOULD surface again.
  */
 export const ACK_WORSEN_REL = 0.2; // +20% over the acked gap
-export const ACK_WORSEN_ABS = 25; // …AND at least +$25 absolute, so micro-gaps don't churn
+
+/**
+ * Absolute worsening floor, in the metric's own units. The DOLLAR-denominated
+ * findings (INV-7 spend, INV-9/10 revenue, INV-6 platform-sum) carry gap
+ * magnitudes in the hundreds-to-thousands, so a $25 floor cheaply filters out a
+ * few-dollar wobble. But INV-3 (`agree([roas, revenue/totalSpend])`) is a RATIO
+ * check: its magnitude is a single-digit ROAS gap, so a fixed $25 dollar floor
+ * could NEVER be crossed — an acked INV-3 finding whose gap balloons (e.g.
+ * 0.05 → 7.5, a 150× deterioration) would stay hidden forever, silently breaking
+ * the "re-pops if it worsens" guarantee for the whole ratio-check class.
+ *
+ * Fix: make the floor UNIT-AWARE per check class (see ackWorsenAbsFloor).
+ */
+export const ACK_WORSEN_ABS = 25; // dollar-scale floor (dominates for $-valued checks)
+/** Ratio-valued checks (INV-3 ROAS): a much smaller floor in ratio units, so a
+ *  large RELATIVE jump drives the re-pop instead of an unreachable dollar floor. */
+export const ACK_WORSEN_ABS_RATIO = 0.25;
+
+/**
+ * The effective, UNIT-AWARE absolute worsening floor for a finding. Dollar-valued
+ * checks use the $25 floor; the lone ratio-valued check (INV-3 ROAS) uses a small
+ * ratio-units floor so the relative threshold governs its re-pop. Keyed on the
+ * check CLASS (isRatioFinding), not the raw magnitude, so a genuinely-small
+ * DOLLAR gap (a $2 INV-7 wobble) still gets the dollar floor and stays put.
+ */
+export function ackWorsenAbsFloor(v: Violation): number {
+  return isRatioFinding(v) ? ACK_WORSEN_ABS_RATIO : ACK_WORSEN_ABS;
+}
 
 /**
  * Is this finding currently covered by an ack (→ hide it)?
  *
  *   false → no ack for this fingerprint (un-acked / new / new-date) — SHOW.
  *   false → acked, but the gap WORSENED past BOTH thresholds — RE-POP (SHOW).
+ *   false → acked with a real (>0) gap but the CURRENT magnitude no longer
+ *           parses (returns 0) — a detail-string format drift could otherwise
+ *           silently suppress a worsened finding forever, so prefer to SHOW.
  *   true  → acked AND the gap is ~unchanged / improved / grew sub-threshold — HIDE.
  */
 export function isFindingAcked(v: Violation, acks: ReconcileAcks): boolean {
@@ -142,10 +185,18 @@ export function isFindingAcked(v: Violation, acks: ReconcileAcks): boolean {
   if (!ack) return false;
   const current = findingMagnitude(v);
   const ackedVal = Number.isFinite(ack.value) ? ack.value : 0;
+  // Conservative guard: the finding was acked WITH a comparable gap (>0) but the
+  // current magnitude is unparseable (0). Today every live detail/values format
+  // yields two parseable numbers (locked by detailContract.test.ts), so this is
+  // not reachable — but if a future format change ever breaks the parse, SHOW
+  // rather than hide a possibly-worsened finding under a stale ack.
+  if (ackedVal > 0 && current === 0) return false;
   const growth = current - ackedVal;
   if (growth <= 0) return true; // unchanged or improved → stays acked
   const worsenedRel = current > ackedVal * (1 + ACK_WORSEN_REL);
-  const worsenedAbs = growth > ACK_WORSEN_ABS;
+  // Unit-aware absolute floor: $25 for dollar gaps, a small ratio floor for INV-3
+  // ROAS so a 150× ratio deterioration is no longer immune to re-popping.
+  const worsenedAbs = growth > ackWorsenAbsFloor(v);
   // Re-pop only when it crossed BOTH the relative AND the absolute floor.
   return !(worsenedRel && worsenedAbs);
 }

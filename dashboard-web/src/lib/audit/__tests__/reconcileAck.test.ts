@@ -4,9 +4,12 @@ import {
   reconcileAckKey,
   findingMagnitude,
   isFindingAcked,
+  isRatioFinding,
+  ackWorsenAbsFloor,
   filterAckedFindings,
   ACK_WORSEN_REL,
   ACK_WORSEN_ABS,
+  ACK_WORSEN_ABS_RATIO,
   type ReconcileAcks,
 } from '@/lib/audit/reconcileAck';
 import type { Violation } from '@/lib/audit/reconcile';
@@ -140,6 +143,75 @@ describe('isFindingAcked — ack holds while ~unchanged, re-pops on material wor
   it('exposes sensible default thresholds', () => {
     expect(ACK_WORSEN_REL).toBeCloseTo(0.2);
     expect(ACK_WORSEN_ABS).toBeGreaterThan(0);
+    expect(ACK_WORSEN_ABS_RATIO).toBeGreaterThan(0);
+    expect(ACK_WORSEN_ABS_RATIO).toBeLessThan(ACK_WORSEN_ABS);
+  });
+});
+
+describe('unit-aware worsening floor — ratio-valued INV-3 ROAS re-pops on a large jump', () => {
+  // INV-3 (`agree([roas, revenue/totalSpend])`) carries a `values` map whose
+  // magnitude is a ROAS RATIO (single digits), not dollars. The fixed $25
+  // dollar floor could never be crossed by a ratio gap, so an acked-then-
+  // ballooned INV-3 finding used to stay hidden forever.
+  const inv3 = (roas: number, expected: number): Violation => ({
+    label: 'INV-3 ROAS 2026-06-22/uzoshop',
+    detail: `spread ${Math.abs(roas - expected).toFixed(4)} > tol 0.0100`,
+    values: { src0: roas, src1: expected },
+  });
+
+  it('classifies INV-3 as a ratio finding and INV-7/9/10 as dollar findings', () => {
+    expect(isRatioFinding(inv3(3.0, 3.05))).toBe(true);
+    expect(isRatioFinding({ label: 'INV-7 Meta spend 2026-06-22/uzoshop', detail: 'data_daily 1 vs campaigns_daily 2' })).toBe(false);
+    expect(isRatioFinding({ label: 'INV-10 orders vs data revenue 2026-06-22/uzoshop', detail: 'x' })).toBe(false);
+    expect(isRatioFinding({ label: 'INV-6 platform-sum 2026-06-22/uzoshop', detail: 'spread 12 > tol 0.01', values: { src0: 100, src1: 112 } })).toBe(false);
+  });
+
+  it('uses a small ratio-units floor for INV-3 and the $25 dollar floor otherwise', () => {
+    expect(ackWorsenAbsFloor(inv3(3.0, 3.05))).toBe(ACK_WORSEN_ABS_RATIO);
+    expect(ackWorsenAbsFloor({ label: 'INV-7 Meta spend 2026-06-22/uzoshop', detail: 'data_daily 1 vs campaigns_daily 2' })).toBe(ACK_WORSEN_ABS);
+  });
+
+  it('an acked INV-3 ROAS finding whose ratio gap BALLOONS (0.05 → 7.5, ~150×) RE-POPS', () => {
+    const acked = inv3(3.0, 3.05); // gap 0.05
+    const ack: ReconcileAcks = { [reconcileAckKey(acked)]: { value: findingMagnitude(acked), ackedAt: '2026-06-22T10:00:00Z' } };
+    expect(findingMagnitude(acked)).toBeCloseTo(0.05, 4);
+    expect(isFindingAcked(acked, ack)).toBe(true); // unchanged → hidden
+
+    const ballooned = inv3(3.0, 10.5); // gap 7.5 — a 150× deterioration
+    expect(findingMagnitude(ballooned)).toBeCloseTo(7.5, 4);
+    expect(isFindingAcked(ballooned, ack)).toBe(false); // RE-POPS (regression guard)
+  });
+
+  it('an acked INV-3 finding with a trivial ratio wobble stays acked (no churn)', () => {
+    const acked = inv3(3.0, 3.2); // gap 0.2
+    const ack: ReconcileAcks = { [reconcileAckKey(acked)]: { value: findingMagnitude(acked), ackedAt: '2026-06-22T10:00:00Z' } };
+    const wobble = inv3(3.0, 3.25); // gap 0.25 (+25% rel but only +0.05 abs < 0.25 floor)
+    expect(isFindingAcked(wobble, ack)).toBe(true);
+  });
+});
+
+describe('conservative SHOW when the current magnitude no longer parses', () => {
+  it('an ack with a real (>0) gap re-pops if the current finding magnitude is 0 (format drift)', () => {
+    const acked: Violation = {
+      label: 'INV-10 orders vs data revenue 2026-06-22/uzoshop',
+      detail: 'data_daily 3219 vs orders_attribution 3869', // gap 650
+    };
+    const ack: ReconcileAcks = { [reconcileAckKey(acked)]: { value: findingMagnitude(acked), ackedAt: '2026-06-22T10:00:00Z' } };
+    // Same fingerprint, but a detail string the NUM_RE can no longer pull two
+    // numbers from → findingMagnitude === 0. Prefer SHOW over silent suppression.
+    const drifted: Violation = { label: acked.label, detail: 'orders and data diverged (no numerics)' };
+    expect(findingMagnitude(drifted)).toBe(0);
+    expect(isFindingAcked(drifted, ack)).toBe(false);
+  });
+
+  it('an ack whose own baseline gap was 0 still holds when the current gap is 0 (fingerprint-only ack)', () => {
+    // A finding acked with magnitude 0 (no comparable gap — fewer than two
+    // parseable numbers) relies purely on the fingerprint; a still-0 current
+    // magnitude must NOT churn it (only a >0 baseline guards toward SHOW).
+    const v: Violation = { label: 'INV-X custom check 2026-06-22/uzoshop', detail: 'no numerics here at all' };
+    expect(findingMagnitude(v)).toBe(0);
+    const ack: ReconcileAcks = { [reconcileAckKey(v)]: { value: 0, ackedAt: '2026-06-22T10:00:00Z' } };
+    expect(isFindingAcked(v, ack)).toBe(true);
   });
 });
 

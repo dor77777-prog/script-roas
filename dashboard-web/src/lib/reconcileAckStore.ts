@@ -9,6 +9,19 @@
  *     and let hydrateFromCloud overwrite the just-saved ack — same bug class
  *     campaignProductMap's immediate push was added to prevent).
  *
+ * KNOWN LIMITATION — multi-device concurrent-ack race (accepted, documented):
+ * cloudSync is whole-map LAST-WRITE-WINS (cloudSync.ts header "Last-write-wins":
+ * no server-side merge). setReconcileAck reads the full map, adds one entry, and
+ * pushes the FULL map. If TWO devices ack DIFFERENT findings inside the same
+ * ~poll/grace window, the later POST's full map can overwrite the earlier
+ * device's just-added ack, silently dropping it. This is a genuine lost-write
+ * window for acks (which are append-style), but it is ACCEPTABLE here: this is an
+ * internal single-operator tool (see MEMORY: single-user max), acking is rare,
+ * and the dropped ack only means a reviewed finding re-shows (fail-safe toward
+ * SHOW, never toward hiding a real discrepancy). If multi-device acking ever
+ * matters, switch THIS key to a merge-on-hydrate strategy (union of fingerprints,
+ * newest ackedAt wins per key) instead of whole-map last-write-wins.
+ *
  * Registered in cloudSync.ts:STATE_KEYS + dashboardStateKeys.ts:ALLOWED_STATE_KEYS
  * (parity enforced by lib/__tests__/stateKeysParity.test.ts).
  *
