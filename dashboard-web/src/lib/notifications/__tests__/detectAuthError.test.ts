@@ -156,4 +156,30 @@ describe('classifyMetaErrorForAlert (2026-06-23)', () => {
     );
     expect(out.advice).toMatch(/אין צורך בפעולה/);
   });
+
+  // 2026-06-24 prod incident: a code-4 rate-limit came back with HTTP 403, and
+  // the old `/\b403\b/` hard-auth pattern misclassified it as meta_hot_metrics_auth
+  // with the false "refresh the token" advice. These pin the fix.
+  it('PROD: HTTP 403 + code 4 + subcode 1504022 + is_transient:true → transient, NOT token_failure', () => {
+    const out = classifyMetaErrorForAlert(
+      'Meta hot-metrics batch part failed (code=403): {"error":{"message":"Application request limit reached","type":"OAuthException","is_transient":true,"code":4,"error_subcode":1504022}}',
+    );
+    expect(out.kind).toBe('transient');
+    expect(out.titleIsTokenFailure).toBe(false);
+    expect(out.operation).not.toMatch(/auth/);
+    expect(out.advice).not.toMatch(/[Rr]efresh|רענן/);
+  });
+
+  it('a bare HTTP 403 with NO transient/rate-limit signature still → token_failure (genuine-auth fallback preserved)', () => {
+    const out = classifyMetaErrorForAlert('HTTP 403 Forbidden');
+    expect(out.kind).toBe('token_failure');
+    expect(out.titleIsTokenFailure).toBe(true);
+  });
+
+  it('code 190 wins even when the HTTP status is 403 (hard-auth runs first)', () => {
+    const out = classifyMetaErrorForAlert(
+      'Meta fetch failed (code=403): {"error":{"type":"OAuthException","code":190,"message":"Invalid OAuth access token"}}',
+    );
+    expect(out.kind).toBe('token_failure');
+  });
 });

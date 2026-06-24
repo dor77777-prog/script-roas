@@ -96,17 +96,23 @@ const PROVIDER_PATTERNS: Record<TokenFailureProvider, RegExp[]> = {
  * token_failures alert fired 32s BEFORE data_freshness recorded success on
  * the same tick). These codes are retry-class, not auth-class.
  *
- * Real auth signatures (code 190/102/460, session expired, HTTP 401/403)
- * still win: the hard-auth check runs FIRST, so a hypothetical
- * "code 190 + service unavailable" combo still alerts.
+ * Real Meta auth signatures are the error CODES (190/102/460) + explicit
+ * token/session messages — NOT bare HTTP 401/403. Meta returns 403 for RATE
+ * LIMITS too (code 4 / subcode 1504022 "Application request limit reached",
+ * is_transient:true), so a bare 403 must NOT hard-classify as auth.
+ * 2026-06-24 prod incident: a 403 rate-limit (code 4, is_transient:true) was
+ * mis-classified as `meta_hot_metrics_auth` and got the false "refresh the
+ * token" advice — because `/\b403\b/` was a hard-auth signal and ran before
+ * the transient check. Fix: 401/403 are no longer hard-auth; they remain in
+ * the generic AUTH_PATTERNS fallback (reached ONLY when there is no
+ * transient/rate-limit signature). A real code-190 combo still wins
+ * (hard-auth runs first, before the transient exclusion).
  */
 const META_HARD_AUTH = [
   /"code":\s*190\b/,
   /"code":\s*102\b/,
   /"code":\s*460\b/,
   /session\s+(?:expired|invalid)/i,
-  /\b401\b/,
-  /\b403\b/,
   /\bunauthor[iz]ed\b/i,
   /\binvalid[\s_-]+token\b/i,
   /\btoken[\s_-]+(?:expired|invalid)\b/i,
