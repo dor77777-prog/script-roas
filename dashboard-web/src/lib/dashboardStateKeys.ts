@@ -51,6 +51,9 @@ export const ALLOWED_STATE_KEYS = [
   // Editable net-profit-margin target (2026-06-13) — per-month, business-wide.
   // Must match cloudSync.ts:STATE_KEYS ('roas-dashboard:net-margin-target') for cross-device sync.
   'net-margin-target',
+  // Reconcile acks (2026-06-24) — DQ-1 "mark reviewed" fingerprint→ack map.
+  // Must match cloudSync.ts:STATE_KEYS ('roas-dashboard:reconcile-acks') for cross-device sync.
+  'reconcile-acks',
 ] as const;
 
 export type AllowedStateKey = (typeof ALLOWED_STATE_KEYS)[number];

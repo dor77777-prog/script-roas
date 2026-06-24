@@ -108,3 +108,52 @@ export function findingMagnitude(v: Violation): number {
   const g = Math.abs(actual - expected);
   return Number.isFinite(g) ? g : 0;
 }
+
+/** One stored acknowledgement: the gap magnitude at ack time + when it was acked. */
+export interface ReconcileAck {
+  /** The finding's gap magnitude when the operator marked it reviewed. */
+  value: number;
+  /** ISO timestamp of the ack — for the "show acked (N)" review/undo affordance. */
+  ackedAt: string;
+}
+
+/** fingerprint → ack. The 'reconcile-acks' dashboard_state shape. */
+export type ReconcileAcks = Record<string, ReconcileAck>;
+
+/**
+ * An ack RE-POPS when the finding's gap has worsened MATERIALLY vs the acked
+ * value. "Material" = grew by more than ACK_WORSEN_REL (relative) AND by more
+ * than ACK_WORSEN_ABS (absolute floor, so tiny gaps don't churn the ack on a
+ * few-dollar wobble). A finding hidden today must NOT silently re-show on a
+ * trivial bump, but a genuine deterioration SHOULD surface again.
+ */
+export const ACK_WORSEN_REL = 0.2; // +20% over the acked gap
+export const ACK_WORSEN_ABS = 25; // …AND at least +$25 absolute, so micro-gaps don't churn
+
+/**
+ * Is this finding currently covered by an ack (→ hide it)?
+ *
+ *   false → no ack for this fingerprint (un-acked / new / new-date) — SHOW.
+ *   false → acked, but the gap WORSENED past BOTH thresholds — RE-POP (SHOW).
+ *   true  → acked AND the gap is ~unchanged / improved / grew sub-threshold — HIDE.
+ */
+export function isFindingAcked(v: Violation, acks: ReconcileAcks): boolean {
+  const ack = acks[reconcileAckKey(v)];
+  if (!ack) return false;
+  const current = findingMagnitude(v);
+  const ackedVal = Number.isFinite(ack.value) ? ack.value : 0;
+  const growth = current - ackedVal;
+  if (growth <= 0) return true; // unchanged or improved → stays acked
+  const worsenedRel = current > ackedVal * (1 + ACK_WORSEN_REL);
+  const worsenedAbs = growth > ACK_WORSEN_ABS;
+  // Re-pop only when it crossed BOTH the relative AND the absolute floor.
+  return !(worsenedRel && worsenedAbs);
+}
+
+/** Keep only findings that are NOT currently acked (the operator-visible list). */
+export function filterAckedFindings(
+  findings: Violation[],
+  acks: ReconcileAcks,
+): Violation[] {
+  return findings.filter((v) => !isFindingAcked(v, acks));
+}

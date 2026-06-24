@@ -78,6 +78,10 @@ export const STATE_KEYS = [
   // Editable net-profit-margin target (2026-06-13) — per-month, business-wide,
   // carry-forward + global default 0.35. Drives the P&L synthesis "מתחת/מעל ליעד".
   'roas-dashboard:net-margin-target',
+  // Reconcile acks (2026-06-24) — DQ-1 "mark reviewed": fingerprint → { value,
+  // ackedAt }. Lets the operator acknowledge an explained reconcile finding so
+  // it stops nagging; re-pops on a NEW date or material worsening.
+  'roas-dashboard:reconcile-acks',
 ] as const;
 export type StateKey = (typeof STATE_KEYS)[number];
 
@@ -97,6 +101,7 @@ const CHANGE_EVENTS: Record<StateKey, string> = {
   'roas-dashboard:goal-settings': 'roas-goal-changed',
   'roas-dashboard:saved-views': 'roas-saved-views-changed',
   'roas-dashboard:net-margin-target': 'roas-net-margin-target-changed',
+  'roas-dashboard:reconcile-acks': 'roas-reconcile-acks-changed',
 };
 
 /** ms epoch of the last push we sent for each key. Used to skip stomping

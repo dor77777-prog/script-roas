@@ -59,4 +59,9 @@ describe('client/server state-key parity', () => {
   it('the two lists are exactly equal as sets', () => {
     expect([...clientSet].sort()).toEqual([...serverSet].sort());
   });
+
+  it('the reconcile-acks key is registered in BOTH lists (DQ-1 mark-reviewed)', () => {
+    expect(clientSet.has('reconcile-acks')).toBe(true);
+    expect(serverSet.has('reconcile-acks')).toBe(true);
+  });
 });
