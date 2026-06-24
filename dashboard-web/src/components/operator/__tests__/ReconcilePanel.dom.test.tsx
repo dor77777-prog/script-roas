@@ -12,16 +12,19 @@
 //
 // SWR cache is isolated per-render via SWRConfig + new Map(); fetch is stubbed.
 
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, cleanup, waitFor, screen } from '@testing-library/react';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { render, cleanup, waitFor, screen, fireEvent, act } from '@testing-library/react';
 import { SWRConfig } from 'swr';
 
 vi.mock('@/lib/hooks/useIsMobile', () => ({ useIsMobile: () => false }));
+vi.mock('@/lib/cloudSync', () => ({ pushCloudKey: vi.fn() }));
 
 import { ReconcilePanel } from '@/components/operator/ReconcilePanel';
 import type { ReconcileResponse } from '@/app/api/reconcile/route';
+import { readReconcileAcks } from '@/lib/reconcileAckStore';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+beforeEach(() => { window.localStorage.clear(); });
 
 function stubFetch(body: ReconcileResponse) {
   vi.stubGlobal(
@@ -100,5 +103,61 @@ describe('ReconcilePanel (DQ-1)', () => {
     renderPanel();
     // Soft path: null data is treated as "no known violations" → calm line.
     await waitFor(() => expect(screen.getByText(/הכל תואם/)).toBeInTheDocument());
+  });
+
+  it('marking a finding reviewed hides exactly that row and persists the ack', async () => {
+    stubFetch({
+      violations: [
+        { label: 'INV-7 Meta spend 2026-06-22/uzoshop', detail: 'data_daily 1204 vs campaigns_daily 1180' },
+        { label: 'INV-10 orders vs data revenue 2026-06-22/zolplus', detail: 'data_daily 3010 vs orders_attribution 3142' },
+      ],
+    });
+    renderPanel();
+
+    await screen.findByText(/INV-7/);
+    expect(screen.getByText(/INV-10/)).toBeInTheDocument();
+
+    // One ack button per material row. Click the first (the INV-7/uzoshop row).
+    const ackButtons = screen.getAllByRole('button', { name: /סמן כנבדק/ });
+    expect(ackButtons.length).toBe(2);
+    act(() => { fireEvent.click(ackButtons[0]); });
+
+    // INV-7 row gone; INV-10 sibling still shown.
+    await waitFor(() => expect(screen.queryByText(/INV-7/)).not.toBeInTheDocument());
+    expect(screen.getByText(/INV-10/)).toBeInTheDocument();
+
+    // Ack persisted to the cloud-synced store under the INV-7 fingerprint.
+    const acks = readReconcileAcks();
+    expect(acks['INV-7 Meta spend::uzoshop::Meta::2026-06-22']).toBeDefined();
+  });
+
+  it('the "show reviewed" toggle reveals acked rows with an un-ack control that restores them', async () => {
+    stubFetch({
+      violations: [
+        { label: 'INV-10 orders vs data revenue 2026-06-22/uzoshop', detail: 'data_daily 3010 vs orders_attribution 3142' },
+      ],
+    });
+    renderPanel();
+
+    await screen.findByText(/INV-10/);
+    act(() => { fireEvent.click(screen.getByRole('button', { name: /סמן כנבדק/ })); });
+
+    // Row hidden; a "show reviewed (1)" toggle appears.
+    await waitFor(() => expect(screen.queryByText(/INV-10/)).not.toBeInTheDocument());
+    const toggle = screen.getByRole('button', { name: /הצג שנבדקו/ });
+    expect(toggle.textContent ?? '').toMatch(/1/);
+
+    // Expand → the acked row + its un-ack control are shown.
+    act(() => { fireEvent.click(toggle); });
+    expect(screen.getByText(/INV-10/)).toBeInTheDocument();
+    const undo = screen.getByRole('button', { name: /בטל סימון/ });
+    expect(undo).toBeInTheDocument();
+
+    // Un-ack restores it to the active list.
+    act(() => { fireEvent.click(undo); });
+    await waitFor(() => {
+      expect(readReconcileAcks()['INV-10 orders vs data revenue::uzoshop::::2026-06-22']).toBeUndefined();
+    });
+    expect(screen.getByRole('button', { name: /סמן כנבדק/ })).toBeInTheDocument();
   });
 });

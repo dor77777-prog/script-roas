@@ -17,6 +17,8 @@ import { fetchJsonOrNull } from '@/lib/fetchJson';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { bannerViolations } from '@/lib/audit/reconcileRows';
+import { filterAckedFindings } from '@/lib/audit/reconcileAck';
+import { useReconcileAcks } from '@/lib/hooks/useReconcileAcks';
 import type { Violation } from '@/lib/audit/reconcile';
 
 const KEY = '/api/reconcile';
@@ -31,17 +33,23 @@ export function ReconcileBanner() {
     refreshInterval: 15_000,
     revalidateOnFocus: false,
   });
+  // DQ-1 "mark reviewed": the banner COUNT reflects only UN-ACKED findings, so
+  // acking explained discrepancies in /operator makes the banner shrink and
+  // ultimately disappear at 0 un-acked (it stops nagging). Acks are the same
+  // cloud-synced dashboard_state key the operator panel writes.
+  const { acks } = useReconcileAcks();
 
   // Quiet by default: nothing while loading or errored. And crucially, alarm
   // ONLY on MATERIAL/hard discrepancies — soft known gaps (INV-9 custom-item
   // refunds) + sub-threshold gaps stay in the operator panel, not the Home
   // banner. So a clean-but-soft window shows no banner at all.
   const material = data && Array.isArray(data.violations) ? bannerViolations(data.violations) : [];
-  if (material.length === 0) {
+  const unacked = filterAckedFindings(material, acks);
+  if (unacked.length === 0) {
     return null;
   }
 
-  const n = material.length;
+  const n = unacked.length;
 
   return (
     <Card

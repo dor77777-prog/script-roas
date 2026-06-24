@@ -76,10 +76,12 @@ describe('findingMagnitude — the gap captured at ack time', () => {
     expect(findingMagnitude(v)).toBe(650);
   });
 
-  it('falls back to 0 when no two numbers are present (same-source INV-3/6 without a parseable detail)', () => {
-    const v: Violation = { label: 'INV-3 ROAS 2026-06-22/uzoshop', detail: 'spread 0.5 only-one-number-here' };
-    // single number → not a comparable gap → 0 (always-show, never accidentally suppressed)
-    expect(findingMagnitude(v)).toBe(0.5 - 0 === 0.5 ? 0 : 0); // documents intent: <2 numbers ⇒ 0
+  it('falls back to 0 when fewer than two numbers are present (same-source INV-3/6 without a parseable two-number detail)', () => {
+    // A single number in the detail is not a comparable gap → magnitude 0
+    // (such a finding is always shown, never accidentally suppressed by the
+    // worsening test — its ack relies purely on the fingerprint match).
+    const v: Violation = { label: 'INV-3 ROAS 2026-06-22/uzoshop', detail: 'spread only-one-number 5' };
+    expect(findingMagnitude(v)).toBe(0);
   });
 
   it('uses agree()-style `values` (src0/src1) when present instead of detail', () => {

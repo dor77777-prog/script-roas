@@ -6,18 +6,23 @@
 // test's response never leaks into the next. We then `await waitFor(...)` for
 // the post-fetch render to settle.
 
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import { SWRConfig } from 'swr';
 import {
   ReconcileBanner,
   type ReconcileResponse,
 } from '@/components/home/ReconcileBanner';
+import { setReconcileAck } from '@/lib/reconcileAckStore';
+import type { Violation } from '@/lib/audit/reconcile';
+
+vi.mock('@/lib/cloudSync', () => ({ pushCloudKey: vi.fn() }));
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
+beforeEach(() => { window.localStorage.clear(); });
 
 function stubFetch(body: ReconcileResponse) {
   vi.stubGlobal(
@@ -84,6 +89,31 @@ describe('ReconcileBanner (DQ-1)', () => {
         { label: 'INV-10 orders vs data revenue 2026-05-31/uzoshop', detail: '6.7% gap', relGap: 0.067 },
       ],
     });
+    const { container } = renderBanner();
+    await waitFor(() => { expect(global.fetch).toHaveBeenCalled(); });
+    expect(container.querySelector('[data-testid="reconcile-banner"]')).toBeNull();
+  });
+
+  it('the count reflects only UN-ACKED findings — acking one decrements it', async () => {
+    const a: Violation = { label: 'INV-7 Meta spend 2026-06-22/uzoshop', detail: 'data_daily 1204 vs campaigns_daily 1180' };
+    const b: Violation = { label: 'INV-10 orders vs data revenue 2026-06-22/Zol Plus', detail: 'data_daily 3010 vs orders_attribution 4515', relGap: 0.5 };
+    stubFetch({ violations: [a, b] });
+
+    // Ack ONE of the two material findings BEFORE mount.
+    setReconcileAck(a);
+
+    renderBanner();
+    const banner = await screen.findByTestId('reconcile-banner');
+    // 2 material findings, 1 acked → banner shows 1.
+    expect(banner.textContent ?? '').toMatch(/\b1\b/);
+    expect(banner.textContent ?? '').not.toMatch(/\b2\b/);
+  });
+
+  it('disappears entirely once every material finding is acked', async () => {
+    const a: Violation = { label: 'INV-7 Meta spend 2026-06-22/uzoshop', detail: 'data_daily 1204 vs campaigns_daily 1180' };
+    stubFetch({ violations: [a] });
+    setReconcileAck(a);
+
     const { container } = renderBanner();
     await waitFor(() => { expect(global.fetch).toHaveBeenCalled(); });
     expect(container.querySelector('[data-testid="reconcile-banner"]')).toBeNull();

@@ -22,12 +22,19 @@
 // 100 % token-driven (bg-status-*/text-status-*Fg + ink-*), full light+dark via
 // the tokens, RTL/logical classes only (ms-/ps-/start-/end-).
 
+import { useState } from 'react';
 import useSWR from 'swr';
-import { CheckCircle2, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Check, Undo2 } from 'lucide-react';
 import { fetchJsonOrNull } from '@/lib/fetchJson';
 import type { ReconcileResponse } from '@/app/api/reconcile/route';
 import type { Violation } from '@/lib/audit/reconcile';
 import { bannerViolations } from '@/lib/audit/reconcileRows';
+import {
+  isFindingAcked,
+  reconcileAckKey,
+  type ReconcileAcks,
+} from '@/lib/audit/reconcileAck';
+import { useReconcileAcks } from '@/lib/hooks/useReconcileAcks';
 import {
   TableBase,
   TableHead,
@@ -37,6 +44,7 @@ import {
 } from '@/components/ui/TableBase';
 import { Money } from '@/components/ui/Money';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 
 const ENDPOINT = '/api/reconcile';
 
@@ -145,6 +153,13 @@ export function ReconcilePanel() {
     refreshInterval: 15_000,
     revalidateOnFocus: false,
   });
+  // DQ-1 "mark reviewed": acks are a cloud-synced dashboard_state key, applied
+  // CLIENT-SIDE to the fetched findings (consistent with how campaignProductMap
+  // is a synced key the client applies to fetched data; the /api/reconcile
+  // route stays stateless + shared by the Home banner). An ack HIDES the finding
+  // while ~unchanged and re-pops on a new date or material worsening.
+  const { acks, ack, unack } = useReconcileAcks();
+  const [showReviewed, setShowReviewed] = useState(false);
 
   // null (pending / soft-failed fetch) is treated as "no known violations" so
   // the operator never sees a scary table flash before the first tick lands.
@@ -171,9 +186,15 @@ export function ReconcilePanel() {
   const materialSet = new Set(material);
   const explained = violations.filter((v) => !materialSet.has(v));
 
+  // Within the material list, peel off the acked findings (hidden by default;
+  // revealable via the "show reviewed" toggle). Only material findings carry
+  // an ack control — explained/soft gaps are already collapsed + never alarm.
+  const activeMaterial = material.filter((v) => !isFindingAcked(v, acks));
+  const ackedMaterial = material.filter((v) => isFindingAcked(v, acks));
+
   return (
     <div className="space-y-3">
-      {material.length === 0 ? (
+      {activeMaterial.length === 0 ? (
         <div className="flex items-center gap-2.5 py-1.5 ps-0.5 text-sm font-semibold text-status-greenFg">
           <span className="relative inline-flex h-2.5 w-2.5 shrink-0">
             <span className="absolute inset-0 rounded-pill bg-status-green opacity-75 motion-safe:animate-ping" />
@@ -186,10 +207,32 @@ export function ReconcilePanel() {
         <>
           <div className="flex items-center gap-1.5 text-sm font-semibold text-status-warningFg">
             <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
-            <span>{material.length} אי-התאמות מהותיות דורשות בדיקה</span>
+            <span>{activeMaterial.length} אי-התאמות מהותיות דורשות בדיקה</span>
           </div>
-          <ReconcileTable list={material} />
+          <ReconcileTable list={activeMaterial} acks={acks} onAck={ack} onUnack={unack} />
         </>
+      )}
+
+      {/* DQ-1 — reviewed/acked material findings: hidden by default, with a
+          toggle to review them + an un-ack control so an ack is never a trap. */}
+      {ackedMaterial.length > 0 && (
+        <div className="text-xs">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowReviewed((s) => !s)}
+            aria-expanded={showReviewed}
+          >
+            {showReviewed ? 'הסתר שנבדקו' : 'הצג שנבדקו'} (
+            <bdi dir="ltr" className="tabular-nums">{ackedMaterial.length}</bdi>)
+          </Button>
+          {showReviewed && (
+            <div className="mt-2">
+              <ReconcileTable list={ackedMaterial} acks={acks} onAck={ack} onUnack={unack} reviewed />
+            </div>
+          )}
+        </div>
       )}
 
       {explained.length > 0 && (
@@ -198,7 +241,7 @@ export function ReconcilePanel() {
             הצג {explained.length} פערים מוסברים (הפרשי custom-item / החזרים — תקינים, ARCHITECTURE §14.7)
           </summary>
           <div className="mt-2">
-            <ReconcileTable list={explained} />
+            <ReconcileTable list={explained} acks={acks} onAck={ack} onUnack={unack} />
           </div>
         </details>
       )}
@@ -206,9 +249,22 @@ export function ReconcilePanel() {
   );
 }
 
-/** The reconcile table for a list of violations (material or explained). */
-function ReconcileTable({ list }: { list: Violation[] }) {
-  const rows = list.map(parseViolation);
+/** The reconcile table for a list of violations. When `reviewed` the action
+ *  column offers "בטל סימון" (un-ack); otherwise "✓ סמן כנבדק" (ack). */
+function ReconcileTable({
+  list,
+  acks,
+  onAck,
+  onUnack,
+  reviewed = false,
+}: {
+  list: Violation[];
+  acks: ReconcileAcks;
+  onAck: (v: Violation) => void;
+  onUnack: (fingerprint: string) => void;
+  reviewed?: boolean;
+}) {
+  const rows = list.map((v, i) => ({ v, parsed: parseViolation(v, i) }));
   return (
     <div className="overflow-x-auto">
       <TableBase className="text-xs sm:text-sm">
@@ -220,10 +276,11 @@ function ReconcileTable({ list }: { list: Violation[] }) {
             <TableHeaderCell numeric>צפוי</TableHeaderCell>
             <TableHeaderCell numeric>בפועל</TableHeaderCell>
             <TableHeaderCell numeric>פער</TableHeaderCell>
+            <TableHeaderCell>פעולה</TableHeaderCell>
           </TableRow>
         </TableHead>
         <tbody>
-          {rows.map((r) => (
+          {rows.map(({ v, parsed: r }) => (
             <TableRow key={r.key}>
               <TableCell className="font-mono text-xs text-ink">
                 <span className="inline-flex items-center gap-1.5">
@@ -252,6 +309,29 @@ function ReconcileTable({ list }: { list: Violation[] }) {
                   </span>
                 ) : (
                   '—'
+                )}
+              </TableCell>
+              <TableCell>
+                {reviewed || isFindingAcked(v, acks) ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onUnack(reconcileAckKey(v))}
+                  >
+                    <Undo2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    בטל סימון
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onAck(v)}
+                  >
+                    <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    סמן כנבדק
+                  </Button>
                 )}
               </TableCell>
             </TableRow>
