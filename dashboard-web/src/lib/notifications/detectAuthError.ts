@@ -42,14 +42,14 @@ const GENERIC_AUTH = [
 ];
 
 const PROVIDER_PATTERNS: Record<TokenFailureProvider, RegExp[]> = {
-  meta: [
-    ...GENERIC_AUTH,
-    /OAuth\s*(?:Exception|access)/i,
-    /"code":\s*190\b/, // Meta: invalid OAuth access token
-    /"code":\s*102\b/, // Meta: session expired
-    /"code":\s*460\b/, // Meta: logged out
-    /session\s+(?:expired|invalid)/i,
-  ],
+  // 2026-06-24 — Meta auth is determined SOLELY by META_AUTH (explicit auth
+  // CODE or MESSAGE), NOT by these patterns: the Meta branch of isAuthError
+  // short-circuits before this loop. `/OAuthException/i` was REMOVED entirely
+  // (it was the root over-trust — Meta wraps EVERY Graph error, incl. non-auth
+  // code 100 "Invalid parameter", in type:OAuthException). This entry is kept
+  // only so the Record stays exhaustive over TokenFailureProvider; it is never
+  // reached for `provider === 'meta'`.
+  meta: [...GENERIC_AUTH],
   google: [
     ...GENERIC_AUTH,
     /INVALID[_\s]GRANT/i,
@@ -107,15 +107,41 @@ const PROVIDER_PATTERNS: Record<TokenFailureProvider, RegExp[]> = {
  * the generic AUTH_PATTERNS fallback (reached ONLY when there is no
  * transient/rate-limit signature). A real code-190 combo still wins
  * (hard-auth runs first, before the transient exclusion).
+ *
+ * 2026-06-24 ROOT FIX — Meta auth is now CODE/MESSAGE-driven, NOT
+ * wrapper-driven. Meta wraps EVERY Graph error in `"type":"OAuthException"`,
+ * so `/OAuthException/i` (and the bare HTTP 401/403, already de-fanged) over-
+ * trusted non-auth codes into a false token_failure. Latest prod alert:
+ * `code 100 / error_subcode 1504018 "Invalid parameter"` (error_user_msg
+ * "try a shorter date range", is_transient:false, HTTP 400) → mislabeled
+ * `meta_hot_metrics_auth` with "Refresh the Meta access token" advice. code 100
+ * is a query/parameter/timeout error, NOT auth.
+ *
+ * The Meta branch of `isAuthError` now classifies auth IFF the message carries
+ * an explicit Meta auth CODE (190 invalid token / 102 session / 460 logged-out
+ * / 467 invalid / 458 459 463 464 session/login) OR an explicit auth MESSAGE
+ * (invalid/expired access token, session expired, unauthorized/forbidden-as-
+ * permission). `/OAuthException/i` was REMOVED — a bare OAuthException with no
+ * auth code/message is NOT auth. The Meta branch short-circuits before the
+ * generic PROVIDER_PATTERNS loop (which still applies to the other providers).
  */
-const META_HARD_AUTH = [
-  /"code":\s*190\b/,
-  /"code":\s*102\b/,
-  /"code":\s*460\b/,
+const META_AUTH = [
+  /"code":\s*190\b/, // invalid OAuth access token
+  /"code":\s*102\b/, // session key invalid / expired
+  /"code":\s*460\b/, // password changed / logged out
+  /"code":\s*467\b/, // invalid access token (re-login)
+  /"code":\s*458\b/, // app not installed (re-auth)
+  /"code":\s*459\b/, // user checkpointed (re-login)
+  /"code":\s*463\b/, // session expired
+  /"code":\s*464\b/, // unconfirmed user (re-login)
   /session\s+(?:expired|invalid)/i,
-  /\bunauthor[iz]ed\b/i,
+  /session\s+key\s+invalid/i,
+  /\bunauthorized\b/i,
+  /\bforbidden\b/i, // permission-style forbidden message
   /\binvalid[\s_-]+token\b/i,
   /\btoken[\s_-]+(?:expired|invalid)\b/i,
+  /access[\s_-]+token\b.*(?:invalid|expired|missing)/i, // "access token … invalid/expired"
+  /(?:invalid|expired|missing)\b.*access[\s_-]+token\b/i, // "Invalid OAuth access token"
 ];
 const META_TRANSIENT_SERVICE = [
   /service\s+temporarily\s+unavailable/i,
@@ -126,10 +152,10 @@ const META_TRANSIENT_SERVICE = [
 
 export function isAuthError(provider: TokenFailureProvider, errMsg: unknown): boolean {
   if (typeof errMsg !== 'string' || errMsg.length === 0) return false;
-  if (provider === 'meta' && !META_HARD_AUTH.some((p) => p.test(errMsg))) {
-    // No hard auth signature — if it carries a transient-service signature,
-    // it's a retry-class blip, not a token problem (see note above).
-    if (META_TRANSIENT_SERVICE.some((p) => p.test(errMsg))) return false;
+  if (provider === 'meta') {
+    // CODE/MESSAGE-driven, NOT wrapper-driven. A bare OAuthException (no auth
+    // code/message) is NOT auth — Meta wraps every Graph error in it.
+    return META_AUTH.some((p) => p.test(errMsg));
   }
   const patterns = PROVIDER_PATTERNS[provider];
   for (const p of patterns) {
@@ -228,13 +254,24 @@ export function classifyMetaErrorForAlert(errorMsg: unknown): MetaAlertClassific
     };
   }
 
-  // 3. Unknown — neutral, no token advice.
+  // 3. Unknown — neutral, NO token advice. Covers non-auth non-transient codes,
+  //    e.g. code 100 "Invalid parameter" / subcode 1504018 (error_user_msg "try
+  //    a shorter date range" — a query/parameter/timeout error, NOT a token
+  //    problem; Meta just wraps it in the type:OAuthException envelope). The
+  //    advice explicitly says it is NOT a token issue so the operator does not
+  //    waste time refreshing a token.
+  const isParamError =
+    /"code":\s*100\b/.test(msg) ||
+    /invalid\s+parameter/i.test(msg) ||
+    /טווח\s+תאריכים/.test(msg);
   return {
     kind: 'unknown',
     operation: 'meta_fetch_error',
-    advice:
-      'שגיאת fetch לא מזוהה מ-Meta — בדוק את ה-stack ב-Sentry. ' +
-      '(Unidentified Meta fetch error — check Sentry for the full stack trace.)',
+    advice: isParamError
+      ? 'שגיאת בקשה מול Meta (פרמטר/טווח-תאריכים) — לא בעיית-טוקן. בדוק ב-Sentry / צמצם טווח. ' +
+        '(Meta request/parameter error — not a token issue. Check Sentry / shorten the date range.)'
+      : 'שגיאת fetch לא מזוהה מ-Meta — בדוק את ה-stack ב-Sentry. ' +
+        '(Unidentified Meta fetch error — check Sentry for the full stack trace.)',
     titleIsTokenFailure: false,
   };
 }
