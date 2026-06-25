@@ -28,13 +28,6 @@
 // every hot-metrics upsert. Supabase upsert SETs every column; omitting
 // names would null them until nightly cron repopulates.
 //
-// ID-VOLUME note: Meta rejects single Insights queries with large IN
-// lists (code=100, error_subcode=1504018). We chunk hotAdsetIds and
-// hotAdIds into groups of HOT_ID_CHUNK (50) and emit one sub-request
-// per chunk. Meta's batch POST allows at most 50 sub-requests per call;
-// if the total exceeds 50, we split across multiple batch POSTs and
-// merge all results.
-//
 // Returns rows compatible with the existing campaigns_daily +
 // ads_daily shapes used by persistCampaignsLive.
 
@@ -45,11 +38,6 @@ const GRAPH_VERSION = 'v22.0';
 // + account_currency for per-row FX resolution.
 const ADSET_INSIGHTS_FIELDS = 'campaign_id,campaign_name,adset_id,adset_name,impressions,clicks,spend,actions,action_values,account_currency';
 const AD_INSIGHTS_FIELDS = 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,impressions,clicks,spend,actions,action_values,account_currency';
-
-/** Maximum IDs per IN-filter sub-request; keeps Meta Insights query complexity low. */
-const HOT_ID_CHUNK = 50;
-/** Meta batch API limit: at most 50 sub-requests per batch POST. */
-const MAX_BATCH_SIZE = 50;
 
 export type MetaHotMetricsInput = {
   storeId: StoreId;
@@ -98,28 +86,6 @@ export type MetaHotMetricsResult = {
   ads: AdDailyRow[];
 };
 
-/**
- * Split an array into chunks of at most `size` elements.
- */
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    out.push(arr.slice(i, i + size));
-  }
-  return out;
-}
-
-/**
- * Descriptor for a single sub-request within a Meta batch POST.
- * Carries enough metadata so the response parts can be routed back to
- * the correct level (adset vs ad) and chunk index for error reporting.
- */
-type SubRequest = {
-  level: 'adset' | 'ad';
-  chunkIndex: number;
-  relative_url: string;
-};
-
 export async function fetchMetaHotMetricsForStore(input: MetaHotMetricsInput): Promise<MetaHotMetricsResult> {
   const { storeId, accessToken, dateStr, fetcher = fetch, getFxCadFor } = input;
   // hotCampaignIds is intentionally ignored — see file-header CRIT-B note.
@@ -132,63 +98,36 @@ export async function fetchMetaHotMetricsForStore(input: MetaHotMetricsInput): P
     encodeURIComponent(JSON.stringify([{ field, operator: 'IN', value: ids }]));
   const timeRange = encodeURIComponent(JSON.stringify({ since: dateStr, until: dateStr }));
 
-  // Build one sub-request descriptor per chunk, adsets first then ads.
-  const subRequests: SubRequest[] = [];
-
-  const adsetChunks = chunk(input.hotAdsetIds, HOT_ID_CHUNK);
-  for (let i = 0; i < adsetChunks.length; i++) {
-    subRequests.push({
-      level: 'adset',
-      chunkIndex: i,
-      relative_url: `${adAccountId}/insights?level=adset&fields=${ADSET_INSIGHTS_FIELDS}&time_range=${timeRange}&filtering=${filtering('adset.id', adsetChunks[i])}&limit=1000`,
+  const batch: Array<{ method: string; relative_url: string }> = [];
+  if (input.hotAdsetIds.length > 0) {
+    batch.push({
+      method: 'GET',
+      relative_url: `${adAccountId}/insights?level=adset&fields=${ADSET_INSIGHTS_FIELDS}&time_range=${timeRange}&filtering=${filtering('adset.id', input.hotAdsetIds)}&limit=1000`,
+    });
+  }
+  if (input.hotAdIds.length > 0) {
+    batch.push({
+      method: 'GET',
+      relative_url: `${adAccountId}/insights?level=ad&fields=${AD_INSIGHTS_FIELDS}&time_range=${timeRange}&filtering=${filtering('ad.id', input.hotAdIds)}&limit=2000`,
     });
   }
 
-  const adChunks = chunk(input.hotAdIds, HOT_ID_CHUNK);
-  for (let i = 0; i < adChunks.length; i++) {
-    subRequests.push({
-      level: 'ad',
-      chunkIndex: i,
-      relative_url: `${adAccountId}/insights?level=ad&fields=${AD_INSIGHTS_FIELDS}&time_range=${timeRange}&filtering=${filtering('ad.id', adChunks[i])}&limit=2000`,
-    });
-  }
+  const body = new URLSearchParams();
+  body.set('access_token', accessToken);
+  body.set('batch', JSON.stringify(batch));
 
-  // Split sub-requests into batches of at most MAX_BATCH_SIZE and issue each
-  // as a separate batch POST. Collect all parts with their sub-request metadata.
-  const allParts: Array<{ sub: SubRequest; part: { code: number; body: string } }> = [];
+  const res = await fetcher(`https://graph.facebook.com/${GRAPH_VERSION}/`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  if (!res.ok) throw new Error(`Meta hot-metrics batch ${res.status}: ${await res.text()}`);
 
-  const batchGroups = chunk(subRequests, MAX_BATCH_SIZE);
-  for (const group of batchGroups) {
-    const body = new URLSearchParams();
-    body.set('access_token', accessToken);
-    body.set('batch', JSON.stringify(group.map((s) => ({ method: 'GET', relative_url: s.relative_url }))));
+  const parts = (await res.json()) as Array<{ code: number; body: string }>;
 
-    const res = await fetcher(`https://graph.facebook.com/${GRAPH_VERSION}/`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    });
-    if (!res.ok) throw new Error(`Meta hot-metrics batch ${res.status}: ${await res.text()}`);
-
-    const parts = (await res.json()) as Array<{ code: number; body: string }>;
-
-    for (let i = 0; i < group.length; i++) {
-      allParts.push({ sub: group[i], part: parts[i] });
-    }
-  }
-
-  // Parse all parts, routing by level.
-  const adsetRaw: Array<Record<string, unknown>> = [];
-  const adRaw: Array<Record<string, unknown>> = [];
-
-  for (const { sub, part } of allParts) {
-    const rows = asArray(part, sub.level, sub.chunkIndex);
-    if (sub.level === 'adset') {
-      adsetRaw.push(...rows);
-    } else {
-      adRaw.push(...rows);
-    }
-  }
+  let cursor = 0;
+  const adsetRaw = input.hotAdsetIds.length > 0 ? asArray(parts[cursor++]) : [];
+  const adRaw = input.hotAdIds.length > 0 ? asArray(parts[cursor++]) : [];
 
   const adsets = await Promise.all(adsetRaw.map((r) => toAdsetRow(storeId, dateStr, r, getFxCadFor)));
   const ads = await Promise.all(adRaw.map((r) => toAdRow(storeId, dateStr, r, getFxCadFor)));
@@ -202,18 +141,12 @@ export async function fetchMetaHotMetricsForStore(input: MetaHotMetricsInput): P
 // nothing and record freshness='success' — a false-green panel while today's
 // spend silently stopped refreshing. Throwing routes through the worker's
 // try/catch → transient_error row → Inngest retry.
-//
-// level + chunkIndex are included in the error message for diagnosability.
-function asArray(
-  part: { code: number; body: string } | null | undefined,
-  level: 'adset' | 'ad',
-  chunkIndex: number,
-): Array<Record<string, unknown>> {
+function asArray(part: { code: number; body: string } | null | undefined): Array<Record<string, unknown>> {
   if (!part) {
-    throw new Error(`Meta hot-metrics batch part missing/null in envelope response (level=${level}, chunk=${chunkIndex})`);
+    throw new Error('Meta hot-metrics batch part missing/null in envelope response');
   }
   if (part.code !== 200) {
-    throw new Error(`Meta hot-metrics batch part failed (level=${level}, chunk=${chunkIndex}, code=${part.code}): ${part.body}`);
+    throw new Error(`Meta hot-metrics batch part failed (code=${part.code}): ${part.body}`);
   }
   try {
     const parsed = JSON.parse(part.body) as { data?: unknown };
@@ -224,7 +157,7 @@ function asArray(
     // record freshness='success', so today's spend silently stopped refreshing
     // with no retry. Throwing routes through the worker try/catch →
     // transient_error → Inngest retry.
-    throw new Error(`Meta hot-metrics batch part body unparseable (level=${level}, chunk=${chunkIndex}, code=200): ` + part.body.slice(0, 200));
+    throw new Error('Meta hot-metrics batch part body unparseable (code=200): ' + part.body.slice(0, 200));
   }
 }
 
