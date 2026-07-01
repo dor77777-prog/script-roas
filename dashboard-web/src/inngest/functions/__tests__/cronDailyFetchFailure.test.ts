@@ -46,6 +46,18 @@ type MockState = {
   /** error message the Meta fetchers throw when throwIn === 'meta' — lets a
    *  test drive the alert-classification path with a real Meta error body. */
   metaThrowMsg: string;
+  /**
+   * 2026-07-01 — INDEPENDENT-FETCH bug fix. The account-level spend fetch
+   * (fetchMetaSpendForDay) is the KPI; the heavy ad-level / adset / budgets
+   * fetches are supplementary (the 10-min hot-path worker fills them via ON
+   * CONFLICT). These flags make a SINGLE sub-fetch throw while account-spend
+   * succeeds, so a heavy ad-level blip no longer discards the account KPI.
+   * `throwIn:'meta'` (above) still throws in ALL four — that's the
+   * account-spend-itself-failed path (kpi_daily red).
+   */
+  metaAdInsightsThrowMsg: string | null;
+  metaAdSetInsightsThrowMsg: string | null;
+  metaBudgetsThrowMsg: string | null;
 };
 
 const mockState = vi.hoisted<MockState>(() => ({
@@ -53,6 +65,9 @@ const mockState = vi.hoisted<MockState>(() => ({
   throwIn: null,
   metaZeroActivity: false,
   metaThrowMsg: 'meta-token-expired',
+  metaAdInsightsThrowMsg: null,
+  metaAdSetInsightsThrowMsg: null,
+  metaBudgetsThrowMsg: null,
 }));
 
 // recordFreshness spy (hoisted so the vi.mock factory can close over it).
@@ -95,13 +110,18 @@ vi.mock('@/lib/fetchers/meta', () => ({
   }),
   fetchMetaAdSetInsights: vi.fn(async () => {
     if (mockState.throwIn === 'meta') throw new Error(mockState.metaThrowMsg);
+    if (mockState.metaAdSetInsightsThrowMsg) throw new Error(mockState.metaAdSetInsightsThrowMsg);
     return [];
   }),
   fetchMetaAdInsights: vi.fn(async () => {
     if (mockState.throwIn === 'meta') throw new Error(mockState.metaThrowMsg);
+    if (mockState.metaAdInsightsThrowMsg) throw new Error(mockState.metaAdInsightsThrowMsg);
     return [];
   }),
-  fetchMetaBudgets: vi.fn(async () => ({ currency: 'ILS', campaigns: {}, adSets: {} })),
+  fetchMetaBudgets: vi.fn(async () => {
+    if (mockState.metaBudgetsThrowMsg) throw new Error(mockState.metaBudgetsThrowMsg);
+    return { currency: 'ILS', campaigns: {}, adSets: {} };
+  }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -222,6 +242,9 @@ beforeEach(() => {
   mockState.throwIn = null;
   mockState.metaZeroActivity = false;
   mockState.metaThrowMsg = 'meta-token-expired';
+  mockState.metaAdInsightsThrowMsg = null;
+  mockState.metaAdSetInsightsThrowMsg = null;
+  mockState.metaBudgetsThrowMsg = null;
   recordFreshnessSpy.mockClear();
   captureCronFetchErrorMock.mockClear();
 });
@@ -249,6 +272,19 @@ function dataDailyRow(): Record<string, unknown> {
   const call = mockState.upserts.find((u) => u.table === 'data_daily');
   expect(call).toBeDefined();
   return call!.rows as Record<string, unknown>;
+}
+
+/** Was a kpi_daily/data_daily transient_error freshness row recorded for Meta? */
+function metaKpiTransientRecorded(): boolean {
+  return recordFreshnessSpy.mock.calls
+    .map((c) => c[0] as Record<string, unknown>)
+    .some(
+      (a) =>
+        a.platform === 'meta' &&
+        a.scope === 'kpi_daily' &&
+        a.tableName === 'data_daily' &&
+        a.status === 'transient_error',
+    );
 }
 
 describe('cronDaily — FETCH failure preserves prior spend/impressions (#2/#16/#31)', () => {
@@ -487,5 +523,98 @@ describe('cronDaily — Meta transient blips fire NO WhatsApp (quietWhatsapp), t
     await runDailyForStore('uzoshop', PAST_DATE, { step });
 
     expect(metaQuietWhatsapp()).toBe(false);
+  });
+});
+
+// 2026-07-01 — INDEPENDENT META FETCHES. The four Meta fetches used to run under
+// Promise.all; a heavy ad-level blip (uzoshop = 600-800 ads/day → intermittent
+// Meta code 2 "Service temporarily unavailable" / code 4 rate-limit on the sync
+// Insights endpoint) REJECTED the whole step, so the existing catch DISCARDED the
+// account-spend KPI that fetchMetaSpendForDay had returned fine — leaving
+// uzoshop's kpi_daily freshness stuck transient_error even though the KPI + data
+// were correct (the 10-min hot-path worker fills campaigns_daily/ads_daily).
+//
+// THE FIX makes the four fetches INDEPENDENT (Promise.allSettled). kpi_daily red
+// ⇔ the ACCOUNT-SPEND KPI failed. A supplementary ad-level/adset/budgets blip is
+// captured to Sentry (quietWhatsapp:true) but does NOT mark kpi_daily red and
+// does NOT throw — the real account spend still lands in data_daily.fb_spend_cad.
+describe('cronDaily — heavy Meta sub-fetch blip does NOT discard the account-spend KPI (2026-07-01)', () => {
+  const PAST_DATE = '2026-05-20';
+  const SERVICE_UNAVAILABLE =
+    'Meta ad insights failed (code=400): {"error":{"message":"Service temporarily unavailable","type":"OAuthException","is_transient":false,"code":2,"error_subcode":1504044}}';
+
+  it('account-spend SUCCEEDS but fetchMetaAdInsights REJECTS (code 2) → real spend lands, adRows empty, kpi_daily NOT red, no throw', async () => {
+    mockState.metaAdInsightsThrowMsg = SERVICE_UNAVAILABLE;
+
+    const { step } = makeMockStep();
+    await expect(
+      runDailyForStore('uzoshop', PAST_DATE, { step }),
+    ).resolves.toBeDefined();
+
+    const row = dataDailyRow();
+    // The account-level KPI is intact: real fb spend + impressions written.
+    expect(row.fb_spend_cad).toBe(36); // 100 ILS @ 0.36
+    expect(row.fb_impressions).toBe(1000);
+    // Derived totals recomputed (all spend components known — Google + TikTok ok).
+    expect('total_spend_cad' in row).toBe(true);
+    // kpi_daily is NOT marked transient_error for an ad-level blip.
+    expect(metaKpiTransientRecorded()).toBe(false);
+    // The ad-level fetch failure was still captured to Sentry, WhatsApp-silent.
+    expect(captureCronFetchErrorMock).toHaveBeenCalled();
+    expect(metaQuietWhatsapp()).toBe(true);
+  });
+
+  it('account-spend SUCCEEDS but fetchMetaAdSetInsights REJECTS → real spend lands, adsetRows empty (no campaigns_daily meta rows), kpi_daily NOT red', async () => {
+    mockState.metaAdSetInsightsThrowMsg = SERVICE_UNAVAILABLE;
+
+    const { step } = makeMockStep();
+    await expect(
+      runDailyForStore('uzoshop', PAST_DATE, { step }),
+    ).resolves.toBeDefined();
+
+    const row = dataDailyRow();
+    expect(row.fb_spend_cad).toBe(36);
+    expect(row.fb_impressions).toBe(1000);
+    expect(metaKpiTransientRecorded()).toBe(false);
+    expect(captureCronFetchErrorMock).toHaveBeenCalled();
+    expect(metaQuietWhatsapp()).toBe(true);
+    // adsetRows fell back to [] → no meta campaigns_daily rows were upserted.
+    const metaCampaignUpsert = mockState.upserts.find(
+      (u) =>
+        u.table === 'campaigns_daily' &&
+        Array.isArray(u.rows) &&
+        (u.rows as Array<{ platform?: string }>).some((r) => r.platform === 'meta'),
+    );
+    expect(metaCampaignUpsert).toBeUndefined();
+  });
+
+  it('account-spend SUCCEEDS but fetchMetaBudgets REJECTS → real spend lands, kpi_daily NOT red, budgets fell back to empty', async () => {
+    mockState.metaBudgetsThrowMsg = SERVICE_UNAVAILABLE;
+
+    const { step } = makeMockStep();
+    await expect(
+      runDailyForStore('uzoshop', PAST_DATE, { step }),
+    ).resolves.toBeDefined();
+
+    const row = dataDailyRow();
+    expect(row.fb_spend_cad).toBe(36);
+    expect(row.fb_impressions).toBe(1000);
+    expect(metaKpiTransientRecorded()).toBe(false);
+    expect(captureCronFetchErrorMock).toHaveBeenCalled();
+    expect(metaQuietWhatsapp()).toBe(true);
+  });
+
+  it('account-spend ITSELF rejects (throwIn:meta) → kpi_daily red + null-spend sentinel (unchanged red-path semantics)', async () => {
+    mockState.throwIn = 'meta';
+    mockState.metaThrowMsg = SERVICE_UNAVAILABLE;
+
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', PAST_DATE, { step });
+
+    const row = dataDailyRow();
+    // Account-spend failed → the KPI is unknown → columns omitted, kpi_daily red.
+    expect('fb_spend_cad' in row).toBe(false);
+    expect('fb_impressions' in row).toBe(false);
+    expect(metaKpiTransientRecorded()).toBe(true);
   });
 });
