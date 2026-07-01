@@ -691,12 +691,84 @@ async function runDailyForStoreInner(
       };
     }
     try {
-      const [spend, adsetRows, adRows, budgets] = await Promise.all([
-        fetchMetaSpendForDay(storeId, dateStr),
-        fetchMetaAdSetInsights(storeId, dateStr),
-        fetchMetaAdInsights(storeId, dateStr),
-        fetchMetaBudgets(storeId),
-      ]);
+      // 2026-07-01 — INDEPENDENT FETCHES. Previously these four ran under
+      // Promise.all, so ANY one rejection killed the whole step → the catch
+      // below discarded the account-spend KPI. For uzoshop (600-800 ads/day)
+      // the HEAVY ad-level fetch intermittently 5xx's on Meta's sync Insights
+      // endpoint (code 2 "Service temporarily unavailable" subcode 1504044, or
+      // code 4 rate-limit), leaving kpi_daily stuck transient_error even though
+      // the account KPI + data_daily.fb_spend_cad were fine (the 10-min hot-path
+      // worker fills campaigns_daily/ads_daily via ON CONFLICT).
+      //
+      // Now: allSettled + the account-level spend (fetchMetaSpendForDay) is the
+      // KPI. kpi_daily red ⇔ THAT fetch failed. If it rejected → re-throw so the
+      // existing catch runs UNCHANGED (classify + capture + recordFreshness
+      // transient_error + null-spend sentinel). If it fulfilled → the step
+      // SUCCEEDS (real spend lands); any REJECTED adset/ad/budgets sub-fetch is
+      // supplementary — captured to Sentry (quietWhatsapp:true, hot-path worker
+      // already covers those tables) and falls back to an empty value. It does
+      // NOT mark kpi_daily red and does NOT throw.
+      const [spendResult, adsetResult, adResult, budgetsResult] =
+        await Promise.allSettled([
+          fetchMetaSpendForDay(storeId, dateStr),
+          fetchMetaAdSetInsights(storeId, dateStr),
+          fetchMetaAdInsights(storeId, dateStr),
+          fetchMetaBudgets(storeId),
+        ]);
+
+      // Account-spend IS the KPI — if it failed, run the existing red path.
+      if (spendResult.status === 'rejected') {
+        throw spendResult.reason;
+      }
+      const spend = spendResult.value;
+
+      // Supplementary sub-fetches: capture-and-continue on failure. These write
+      // campaigns_daily / ads_daily / budgets, which the 10-min hot-path worker
+      // also refreshes (ON CONFLICT) — so a blip here is non-fatal to the KPI.
+      // quietWhatsapp:true always (Sentry record, WhatsApp-silent); no kpi_daily
+      // freshness write. Reuses the same fetchErrorDedup + classify convention
+      // as the account-spend catch below.
+      const supplementaryRejections = (
+        [
+          ['adset', adsetResult] as const,
+          ['ad', adResult] as const,
+          ['budgets', budgetsResult] as const,
+        ] as const
+      ).filter(([, r]) => r.status === 'rejected');
+      for (const [, r] of supplementaryRejections) {
+        const reason = (r as PromiseRejectedResult).reason;
+        const subClass = classifyMetaErrorForAlert(
+          reason instanceof Error ? reason.message : String(reason),
+        );
+        const subAdvice = subClass.titleIsTokenFailure
+          ? `Refresh the Meta access token in Vercel (${storeId.toUpperCase()}_META_ACCESS_TOKEN) and redeploy. ` +
+            'רענן את טוקן הגישה של Meta ב-Vercel ועשה redeploy.'
+          : subClass.advice;
+        await captureCronFetchError(
+          {
+            storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
+            platform: 'meta',
+            dedup: fetchErrorDedup,
+            // Always WhatsApp-silent: the hot-path worker covers these tables,
+            // so an ad-level/adset/budgets blip is supplementary telemetry only.
+            quietWhatsapp: true,
+          },
+          reason,
+          subAdvice,
+        );
+      }
+
+      // Preserve the EXACT return shape. Rejected sub-fetches fall back to the
+      // same empty sentinels the account-spend catch uses, so all downstream
+      // reads (meta.adsetRows.length/.map, meta.budgets.campaigns/.adSets) are
+      // unaffected. The budgets fallback currency prefers the real account-spend
+      // currency so cadFor has a truthful source (no-op since maps are empty).
+      const adsetRows = adsetResult.status === 'fulfilled' ? adsetResult.value : [];
+      const adRows = adResult.status === 'fulfilled' ? adResult.value : [];
+      const budgets =
+        budgetsResult.status === 'fulfilled'
+          ? budgetsResult.value
+          : { currency: spend.currency ?? 'ILS', campaigns: {}, adSets: {} };
       return { spend, adsetRows, adRows, budgets };
     } catch (e) {
       // Phase 13.2 P0-D — capture to Sentry + dedup-throttled WhatsApp.
