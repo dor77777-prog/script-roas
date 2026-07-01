@@ -47,7 +47,7 @@ import {
 import {
   fetchMetaAdSetInsights,
   fetchMetaAdInsights,
-  fetchMetaSpendForDay,
+  fetchMetaSpendForDayLight,
   fetchMetaBudgets,
 } from '@/lib/fetchers/meta';
 import {
@@ -691,26 +691,39 @@ async function runDailyForStoreInner(
       };
     }
     try {
-      // 2026-07-01 — INDEPENDENT FETCHES. Previously these four ran under
-      // Promise.all, so ANY one rejection killed the whole step → the catch
-      // below discarded the account-spend KPI. For uzoshop (600-800 ads/day)
-      // the HEAVY ad-level fetch intermittently 5xx's on Meta's sync Insights
-      // endpoint (code 2 "Service temporarily unavailable" subcode 1504044, or
-      // code 4 rate-limit), leaving kpi_daily stuck transient_error even though
-      // the account KPI + data_daily.fb_spend_cad were fine (the 10-min hot-path
-      // worker fills campaigns_daily/ads_daily via ON CONFLICT).
+      // 2026-07-01 — INDEPENDENT FETCHES (revised). Previously these four ran
+      // under Promise.all, so ANY one rejection killed the whole step → the catch
+      // below discarded the account-spend KPI. For uzoshop (600-800 ads/day) the
+      // HEAVY paginated fetches intermittently 5xx on Meta's sync Insights endpoint
+      // (code 2 "Service temporarily unavailable" subcode 1504044, or code 4
+      // rate-limit), leaving kpi_daily stuck transient_error even though the account
+      // KPI was fine (the 10-min hot-path worker fills campaigns_daily/ads_daily via
+      // ON CONFLICT).
       //
-      // Now: allSettled + the account-level spend (fetchMetaSpendForDay) is the
-      // KPI. kpi_daily red ⇔ THAT fetch failed. If it rejected → re-throw so the
+      // Now: allSettled with the GENUINELY LIGHT account-level fetch as the KPI —
+      // `fetchMetaSpendForDayLight` (level=account, ONE row, NO pagination, ~500ms).
+      // It is independent of BOTH the heavy paginated adset fetch
+      // (`fetchMetaAdSetInsights` → campaigns_daily) AND the heavy ad-level fetch
+      // (`fetchMetaAdInsights` → ads_daily). Meta guarantees the account total ==
+      // sum of adsets, so the KPI value is identical to the old summed-adset total.
+      //
+      // (This ALSO removes a prior double adset roundtrip: the old KPI leg
+      // `fetchMetaSpendForDay` was NOT light — it internally called
+      // `fetchMetaAdSetInsights` and summed the rows, so the step ran that heavy
+      // paginated fetch TWICE per run AND an adset blip failed the KPI too. The
+      // Light swap makes `fetchMetaAdSetInsights` the SOLE adset fetch.)
+      //
+      // Invariant: kpi_daily transient_error ⇔ the account-level spend fetch itself
+      // (`fetchMetaSpendForDayLight`) failed. If it rejected → re-throw so the
       // existing catch runs UNCHANGED (classify + capture + recordFreshness
-      // transient_error + null-spend sentinel). If it fulfilled → the step
-      // SUCCEEDS (real spend lands); any REJECTED adset/ad/budgets sub-fetch is
-      // supplementary — captured to Sentry (quietWhatsapp:true, hot-path worker
-      // already covers those tables) and falls back to an empty value. It does
-      // NOT mark kpi_daily red and does NOT throw.
+      // transient_error + null-spend sentinel). If it fulfilled → the step SUCCEEDS
+      // (real spend lands); any REJECTED adset/ad/budgets sub-fetch is supplementary
+      // — captured to Sentry (quietWhatsapp:true, hot-path worker already covers
+      // those tables) and falls back to an empty value. It does NOT mark kpi_daily
+      // red and does NOT throw.
       const [spendResult, adsetResult, adResult, budgetsResult] =
         await Promise.allSettled([
-          fetchMetaSpendForDay(storeId, dateStr),
+          fetchMetaSpendForDayLight(storeId, dateStr),
           fetchMetaAdSetInsights(storeId, dateStr),
           fetchMetaAdInsights(storeId, dateStr),
           fetchMetaBudgets(storeId),
@@ -726,24 +739,13 @@ async function runDailyForStoreInner(
       // campaigns_daily / ads_daily / budgets, which the 10-min hot-path worker
       // also refreshes (ON CONFLICT) — so a blip here is non-fatal to the KPI.
       // quietWhatsapp:true always (Sentry record, WhatsApp-silent); no kpi_daily
-      // freshness write. Reuses the same fetchErrorDedup + classify convention
-      // as the account-spend catch below.
-      const supplementaryRejections = (
-        [
-          ['adset', adsetResult] as const,
-          ['ad', adResult] as const,
-          ['budgets', budgetsResult] as const,
-        ] as const
-      ).filter(([, r]) => r.status === 'rejected');
-      for (const [, r] of supplementaryRejections) {
-        const reason = (r as PromiseRejectedResult).reason;
-        const subClass = classifyMetaErrorForAlert(
-          reason instanceof Error ? reason.message : String(reason),
-        );
-        const subAdvice = subClass.titleIsTokenFailure
-          ? `Refresh the Meta access token in Vercel (${storeId.toUpperCase()}_META_ACCESS_TOKEN) and redeploy. ` +
-            'רענן את טוקן הגישה של Meta ב-Vercel ועשה redeploy.'
-          : subClass.advice;
+      // freshness write. captureCronFetchError early-returns on quietWhatsapp
+      // BEFORE it consumes `advice`, so no per-error classify/advice is computed
+      // here — the Sentry capture is all this loop needs.
+      const supplementaryRejections = [adsetResult, adResult, budgetsResult].filter(
+        (r): r is PromiseRejectedResult => r.status === 'rejected',
+      );
+      for (const r of supplementaryRejections) {
         await captureCronFetchError(
           {
             storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
@@ -753,8 +755,7 @@ async function runDailyForStoreInner(
             // so an ad-level/adset/budgets blip is supplementary telemetry only.
             quietWhatsapp: true,
           },
-          reason,
-          subAdvice,
+          r.reason,
         );
       }
 
@@ -846,7 +847,7 @@ async function runDailyForStoreInner(
     // — the fetch-failure catch returns null (the "unknown" signal). Success +
     // ads-off + budget-skip paths return numbers. The persist gate reads these
     // only when merged.fbSpendCad !== null (i.e. spend was a real number).
-    spend: Omit<Awaited<ReturnType<typeof fetchMetaSpendForDay>>, 'spend' | 'impressions'> & {
+    spend: Omit<Awaited<ReturnType<typeof fetchMetaSpendForDayLight>>, 'spend' | 'impressions'> & {
       spend: number | null;
       impressions: number | null;
     };

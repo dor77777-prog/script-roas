@@ -63,7 +63,8 @@ vi.mock('@/lib/fetchers/shopify', () => ({
 // --- Meta fetchers (zero spend, no insights).
 vi.mock('@/lib/fetchers/meta', () => ({
   fetchMetaAdSetInsights: vi.fn().mockResolvedValue([]),
-  fetchMetaSpendForDay: vi.fn().mockResolvedValue({
+  // 2026-07-01 — KPI leg is the LIGHT account-level fetch.
+  fetchMetaSpendForDayLight: vi.fn().mockResolvedValue({
     storeId: 'uzoshop',
     date: '2026-05-20',
     spend: 0,

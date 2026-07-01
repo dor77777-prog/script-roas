@@ -378,7 +378,10 @@ vi.mock('@/lib/fetchers/meta', () => ({
     if (mockState.throwIn === 'meta') throw new Error('meta-adset-failed');
     return mockState.metaAdSetResult;
   }),
-  fetchMetaSpendForDay: vi.fn(async () => {
+  // 2026-07-01 — the KPI leg is now the LIGHT account-level fetch. throwIn:'meta'
+  // makes it (and the supplementary legs) throw; the account-spend KPI failing is
+  // what drives the red path.
+  fetchMetaSpendForDayLight: vi.fn(async () => {
     if (mockState.throwIn === 'meta') throw new Error('meta-spend-failed');
     return mockState.metaSpendResult;
   }),
@@ -499,7 +502,7 @@ vi.mock('@/lib/postgresReaders', async (orig) => ({
 
 import { runDailyForStore } from '../cronDaily';
 import {
-  fetchMetaSpendForDay,
+  fetchMetaSpendForDayLight,
   fetchMetaAdSetInsights,
   fetchMetaAdInsights,
   fetchMetaBudgets,
@@ -1010,7 +1013,7 @@ describe('cronDaily — handler', () => {
           runDailyForStore('uzoshop', '2026-05-20', { step }),
         ).resolves.toBeDefined();
 
-        expect(vi.mocked(fetchMetaSpendForDay)).not.toHaveBeenCalled();
+        expect(vi.mocked(fetchMetaSpendForDayLight)).not.toHaveBeenCalled();
         expect(vi.mocked(fetchMetaAdSetInsights)).not.toHaveBeenCalled();
         expect(vi.mocked(fetchMetaAdInsights)).not.toHaveBeenCalled();
         expect(vi.mocked(fetchMetaBudgets)).not.toHaveBeenCalled();
@@ -1070,7 +1073,7 @@ describe('cronDaily — handler', () => {
         const { step } = makeMockStep();
         await runDailyForStore('uzoshop', '2026-05-20', { step });
 
-        expect(vi.mocked(fetchMetaSpendForDay)).toHaveBeenCalled();
+        expect(vi.mocked(fetchMetaSpendForDayLight)).toHaveBeenCalled();
         expect(vi.mocked(fetchGoogleAdsSpendForDay)).toHaveBeenCalled();
         expect(vi.mocked(fetchTikTokSpendForDay)).toHaveBeenCalled();
       });

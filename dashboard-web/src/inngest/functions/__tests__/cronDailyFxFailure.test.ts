@@ -125,7 +125,8 @@ vi.mock('@/lib/fetchers/shopify', () => ({
 }));
 
 vi.mock('@/lib/fetchers/meta', () => ({
-  fetchMetaSpendForDay: vi.fn(async () => ({
+  // 2026-07-01 — KPI leg is the LIGHT account-level fetch.
+  fetchMetaSpendForDayLight: vi.fn(async () => ({
     storeId: 'uzoshop',
     date: '2026-05-20',
     spend: 100,

@@ -78,7 +78,8 @@ vi.mock('@/lib/fetchers/tiktok', () => ({
 
 // Other fetchers return minimal non-empty data to satisfy cron-daily branches.
 vi.mock('@/lib/fetchers/meta', () => ({
-  fetchMetaSpendForDay: vi.fn().mockResolvedValue({
+  // 2026-07-01 — KPI leg is the LIGHT account-level fetch.
+  fetchMetaSpendForDayLight: vi.fn().mockResolvedValue({
     storeId: STORE, date: DATE, spend: 0, currency: 'ILS', impressions: 0,
   }),
   fetchMetaAdSetInsights: vi.fn().mockResolvedValue([]),

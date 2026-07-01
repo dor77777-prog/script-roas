@@ -83,7 +83,8 @@ vi.mock('@/lib/fetchers/shopify', () => ({
 
 vi.mock('@/lib/fetchers/meta', () => ({
   fetchMetaAdSetInsights: vi.fn(async () => []),
-  fetchMetaSpendForDay: vi.fn(async (storeId: string, date: string) => ({
+  // 2026-07-01 — KPI leg is the LIGHT account-level fetch.
+  fetchMetaSpendForDayLight: vi.fn(async (storeId: string, date: string) => ({
     storeId,
     date,
     spend: 50,

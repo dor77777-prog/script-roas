@@ -44,7 +44,8 @@ vi.mock('@/lib/sentry/capture', () => ({
 }));
 
 vi.mock('@/lib/fetchers/meta', () => ({
-  fetchMetaSpendForDay: vi.fn().mockResolvedValue({
+  // 2026-07-01 — KPI leg is the LIGHT account-level fetch.
+  fetchMetaSpendForDayLight: vi.fn().mockResolvedValue({
     storeId: STORE,
     date: DATE,
     spend: 100,
@@ -320,7 +321,7 @@ beforeEach(async () => {
 
   // Re-establish default return values that clearAllMocks wiped.
   const metaMod = await import('@/lib/fetchers/meta');
-  (metaMod.fetchMetaSpendForDay as ReturnType<typeof vi.fn>).mockResolvedValue({
+  (metaMod.fetchMetaSpendForDayLight as ReturnType<typeof vi.fn>).mockResolvedValue({
     storeId: STORE, date: DATE, spend: 100, currency: 'ILS', impressions: 1000,
   });
   (metaMod.fetchMetaAdSetInsights as ReturnType<typeof vi.fn>).mockResolvedValue([{
