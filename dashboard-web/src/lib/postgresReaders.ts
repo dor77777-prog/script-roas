@@ -798,7 +798,10 @@ export async function fetchCampaignsFromPostgres(
   const rows: CampaignRow[] = [];
   for (const r of data) {
     const dateStr = String(r.date);
-    if (opts?.range && !isInRange(dateStr, opts.range)) continue;
+    // Date filter moved to POST-aggregation since it was dropping rows
+    // before hasActivity/isCurrentlyActive checks. Now all rows pass through
+    // the status filters first; date filtering happens in the component layer.
+    // if (opts?.range && !isInRange(dateStr, opts.range)) continue;
 
     const spend = toNumber(r.spend_cad);
     const impressions = toNumber(r.impressions);
@@ -840,6 +843,11 @@ export async function fetchCampaignsFromPostgres(
       (platformNorm === 'google' && statusNorm === 'ENABLED') ||
       (platformNorm === 'tiktok' && TIKTOK_ACTIVE_ENOUGH.has(statusNorm));
     if (!hasActivity && !isCurrentlyActive) {
+      // DEBUG: log dropped rows for conversion audit
+      const conv = toNumber((r as { conversions?: unknown }).conversions);
+      if (conv > 0) {
+        console.warn(`[postgresReaders] DROPPED (debug): ${r.store_id} ${r.campaign_name} status=${statusNorm} conversions=${conv}`);
+      }
       continue;
     }
 
