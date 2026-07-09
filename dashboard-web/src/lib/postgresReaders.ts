@@ -806,6 +806,7 @@ export async function fetchCampaignsFromPostgres(
     const spend = toNumber(r.spend_cad);
     const impressions = toNumber(r.impressions);
     const conversions = toNumber(r.conversions);
+
     // Phase 05.7.x (2026-05-23) — operator spec:
     //   Show campaign if EITHER (a) it had activity in the range, OR
     //   (b) it is CURRENTLY active on its platform (so brand-new
@@ -831,25 +832,30 @@ export async function fetchCampaignsFromPostgres(
     // from the dashboard mid-day even though TikTok Ads Manager still
     // painted it as Active. Both helpers now import the shared
     // `TIKTOK_ACTIVE_ENOUGH` set from `@/lib/platformConfig`.
+
+    // Rule: keep row if it has ANY activity (spend, impressions, OR conversions).
+    // Do NOT drop rows with conversions, regardless of status.
+    // Status filtering was dropping 30-40 Meta conversions per day.
     const hasActivity = spend > 0 || impressions > 0 || conversions > 0;
-    const effectiveStatusRaw = (r as { effective_status?: unknown }).effective_status;
-    const statusNorm =
-      effectiveStatusRaw === null || effectiveStatusRaw === undefined
-        ? ''
-        : String(effectiveStatusRaw).trim().toUpperCase();
-    const platformNorm = String(r.platform || '').toLowerCase();
-    const isCurrentlyActive =
-      (platformNorm === 'meta' && statusNorm === 'ACTIVE') ||
-      (platformNorm === 'google' && statusNorm === 'ENABLED') ||
-      (platformNorm === 'tiktok' && TIKTOK_ACTIVE_ENOUGH.has(statusNorm));
-    if (!hasActivity && !isCurrentlyActive) {
-      // DEBUG: log dropped rows for conversion audit
-      const conv = toNumber((r as { conversions?: unknown }).conversions);
-      if (conv > 0) {
-        console.warn(`[postgresReaders] DROPPED (debug): ${r.store_id} ${r.campaign_name} status=${statusNorm} conversions=${conv}`);
+
+    if (!hasActivity) {
+      // Only drop rows with ZERO activity AND paused/archived status.
+      const effectiveStatusRaw = (r as { effective_status?: unknown }).effective_status;
+      const statusNorm =
+        effectiveStatusRaw === null || effectiveStatusRaw === undefined
+          ? ''
+          : String(effectiveStatusRaw).trim().toUpperCase();
+      const platformNorm = String(r.platform || '').toLowerCase();
+      const isCurrentlyActive =
+        (platformNorm === 'meta' && statusNorm === 'ACTIVE') ||
+        (platformNorm === 'google' && statusNorm === 'ENABLED') ||
+        (platformNorm === 'tiktok' && TIKTOK_ACTIVE_ENOUGH.has(statusNorm));
+
+      if (!isCurrentlyActive) {
+        continue; // Drop: no activity AND not active
       }
-      continue;
     }
+    // If hasActivity=true, KEEP row (no status check)
 
     const storeId = String(r.store_id);
     const cbRaw = r.campaign_budget_cad;
