@@ -343,6 +343,8 @@ The "Sync now" button preserves the old eventSyncNow work: `scope:'all'` → tod
 
 Drops everything else. This is the operator spec: show campaigns with activity in the range, OR campaigns currently active (so brand-new ones appear within 10 min), but NOT paused-no-activity ad-sets that would be visual noise.
 
+**Date filtering (2026-07-09 fix):** Originally `postgresReaders.fetchCampaigns` applied date range filtering (isInRange) BEFORE the hasActivity/isCurrentlyActive checks. This could drop rows with conversions if date parsing had any edge case (e.g., UTC/IL timezone boundary). **Fix:** moved date filtering to component layer (CampaignsTable, CampaignsAggregator). The reader now returns all rows; the component filters by date for display. This ensures rows with activity pass status checks first. **Symptom:** dashboard showed 123 Meta conversions vs 153 actual (30 missing, 19.7% gap). **Result:** all 153 now visible. Debug log added to catch any future dropped rows with conversions.
+
 ### 6.2c Active-only placeholder enrollment
 cron-live's `refresh-effective-status` step UPSERTs a placeholder row for TODAY for each enumerated ad-set whose status is "active" for its platform. Paused/archived ad-sets are skipped at INSERT but their existing past-day rows still get effective_status UPDATEs (so an ad-set paused this morning lights up the off-chip on yesterday's row).
 
