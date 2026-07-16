@@ -4420,6 +4420,7 @@ Backfill על אותו טווח שוב ושוב הוא בטוח — לא יוצ�
 - Google Ads refresh token נדחה (HTTP 401, INVALID_GRANT, UNAUTHENTICATED)
 - TikTok access token פג / נדחה (HTTP 401, code 40104/40105)
 - Shopify Admin token נדחה (HTTP 401, "Invalid API key", "storefront access token")
+- שערי מטבע (FX · fx_rate_failure) — **רק כשכל 3 ספקי ה-FX נכשלו יחד** (Frankfurter + currency-api ב-jsDelivr + mirror ב-pages.dev). מאז 2026-07-16 יש שרשרת ספקים, אז ההתראה הזו אמורה להיות נדירה מאוד; אם היא מגיעה — כנראה בעיית רשת/DNS כללית. הדשבורד ממשיך להציג את ערכי ה-CAD הטובים האחרונים (לא מתאפס).
 
 cron-live בודק את הטוקנים כל 10 דקות. אם זוהתה כשלת auth — הודעה ראשונה תוך 10 דקות. **Throttle**: אותה כשלה (provider + storeId + operation) משדרת רק פעם ב-6 שעות, כדי שטוקן מת לא יציף את הטלפון 144 פעם ביום.
 

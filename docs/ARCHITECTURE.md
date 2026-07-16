@@ -315,7 +315,14 @@ The "Sync now" button preserves the old eventSyncNow work: `scope:'all'` → tod
 - **רוטציית טוקן**: דרך TikTok Developers Portal → Apps → ROAS Tracker → Authorization URL → `auth_code` → POST `/v1.3/oauth2/access_token/` (ראה §11.2).
 
 ### 5.5 FX (Foreign Exchange)
-- **Provider**: Frankfurter API (`https://api.frankfurter.app/{date}?from=ILS&to=CAD`).
+- **Provider chain (2026-07-16, fx_rate_failure #55 / seen 230×)**: `getFxRate` (`dashboard-web/src/lib/fetchers/fx.ts`) הולך על שרשרת של 3 ספקים חינמיים-ללא-מפתח עד שאחד עונה:
+  1. **Frankfurter** (`https://api.frankfurter.dev/v1/{date}?base=X&symbols=Y`) — primary, ECB-backed.
+  2. **currency-api דרך jsDelivr CDN** (`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@{date}/v1/currencies/{base}.json`, fawazahmed0/exchange-api).
+  3. **currency-api דרך Cloudflare Pages mirror** (`https://{date}.currency-api.pages.dev/...`) — אותו dataset, תשתית נפרדת.
+- **למה שרשרת**: ל-Frankfurter יש חלון-נפילה לילי חוזר (~03:00 UTC ≈ 06:00 IL, Cloudflare 522) שהתנגש כל יום עם ה-crons של `*/10` — 230 כשלים / 55 התראות בין 2026-06-04 ל-2026-07-16. שערי ה-fallback תואמים ל-Frankfurter עד ~0.1%.
+- **Timeout פר-ניסיון**: 8s (`AbortSignal.timeout`) — Cloudflare 522 לוקח 15-30s להתממש; בלי timeout שלושה ספקים היו אוכלים את תקציב ה-step.
+- **תאריך שטרם פורסם**: currency-api מפרסם snapshot יומי; תאריך "היום" בישראל יכול להקדים את הפרסום (IL רץ לפני UTC) → 404 על תאריך בטווח **±3 ימים** מ-now (שני הכיוונים — `Math.abs`) נצמד ל-`latest` (מקביל להתנהגות סופ"ש/חג של Frankfurter). 404 מחוץ לחלון — תאריך ישן (backfill) או שנה עתידית שגויה — נשאר כשל רועש; לא לוקחים בשקט שער נוכחי לתאריך לא-נכון.
+- **`fx_rate_failure` נזרק רק כשכל השלושה נכשלו** — ההתראה עכשיו אומרת "כל השרשרת למטה", לא "Frankfurter מהבהב".
 - **תזמון**: cron-daily ב-00:05 IL.
 - **שורה ב-`data_daily`** — שערים שמשמשים גם להמרת spend וגם להמרת revenue ל-CAD canonical.
 
@@ -566,7 +573,8 @@ providers. Now fully end-to-end:
 
 ### 9.5.2 Notifier
 - `dashboard-web/src/lib/notifications/tokenFailures.ts` → `notifyTokenFailure({provider, storeId, operation, errorMsg, advice?})`.
-- **DQ-2 (2026-06-04) — FX-failure alert:** `dashboard-web/src/lib/notifications/fxFailure.ts` → `notifyFxFailure({currency, dateStr, errorMsg})` wraps `notifyTokenFailure` as `provider='fx'`, `storeId='global'`, `operation='fx_rate_failure'`. The Meta + TikTok CAD adapters (`getFxCadAdapterForStore` / `getTikTokFxCadAdapterForStore`) previously swallowed a Frankfurter outage with a silent `return 0` (→ understated CAD spend/ROAS/net, no signal); they now fire this alert on BOTH the throw path and the invalid-rate (`rate<=0`) path before returning 0. Inherits the (provider,store,operation) 6h throttle → one page per outage window, not per-conversion. Never throws.
+- **DQ-2 (2026-06-04) — FX-failure alert:** `dashboard-web/src/lib/notifications/fxFailure.ts` → `notifyFxFailure({currency, dateStr, errorMsg})` wraps `notifyTokenFailure` as `provider='fx'`, `storeId='global'`, `operation='fx_rate_failure'`. The Meta + TikTok CAD adapters (`getFxCadAdapterForStore` / `getTikTokFxCadAdapterForStore`) previously swallowed a Frankfurter outage with a silent `return 0` (→ understated CAD spend/ROAS/net, no signal); they now fire this alert on BOTH the throw path and the invalid-rate (`rate<=0`) path before returning 0. Inherits the (provider,store,operation) 6h throttle → one page per outage window, not per-conversion. Never throws. **2026-07-16:** `getFxRate` הפך לשרשרת 3 ספקים (§5.5) → ההתראה יורה רק כשכל השרשרת נכשלה, וה-advice עודכן בהתאם.
+- **Token-failure resolved_at fix (2026-07-16):** ה-upsert של `notifyTokenFailure` עכשיו מאפס `resolved_at=null` בכל כשל. לפני-כן: שורה שסומנה "✓ תוקן" לפני >7 ימים המשיכה להתריא כל 6h אבל **נעלמה מ-/operator** (הפילטר `resolved_at IS NULL OR >= now()-7d` הסתיר אותה) — ההתראה הפנתה ל-/operator "לפרטים" והקונסולה הראתה 0 שורות (אומת מול prod: "Seen 230 / Alert #55" בזמן ש-API החזיר רשימה ריקה).
 - Soft-fail (never throws — caller's original exception keeps propagating).
 - 6h throttle per (provider, storeId, operation) — bumps `seen_count` every call, sends WhatsApp only when `last_alert_sent_at` is null or > 6h old.
 - Sends to single hard-coded recipient: `+972524809540` (operator's explicit instruction). Distinct from the daily-summary phone1/phone2 in `notification_config`.
