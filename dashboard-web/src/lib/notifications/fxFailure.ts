@@ -33,11 +33,16 @@ export async function notifyFxFailure(input: {
       // last good CAD numbers (stale > wrong) while non-CAD metrics keep
       // refreshing. The old "fell back to 0 / understated" copy predated that
       // contract and misdescribed the impact (2026-06-11 incident).
+      // 2026-07-16: getFxRate walks a 3-provider chain (Frankfurter →
+      // currency-api via jsDelivr → pages.dev mirror), so this alert now
+      // means the WHOLE chain failed — rare and worth looking at, unlike the
+      // old daily Frankfurter-nightly-522 noise (alert #55, seen 230×).
       advice:
-        'The FX rate provider (Frankfurter) failed — CAD conversion is paused ' +
-        'for this run and the dashboard keeps showing the LAST GOOD CAD values ' +
-        '(slightly stale, never zeroed); non-CAD metrics keep refreshing. ' +
-        'Usually transient; if it persists, check the FX provider status.',
+        'ALL FX rate providers (Frankfurter + currency-api on jsDelivr + ' +
+        'pages.dev mirror) failed — CAD conversion is paused for this run and ' +
+        'the dashboard keeps showing the LAST GOOD CAD values (slightly ' +
+        'stale, never zeroed); non-CAD metrics keep refreshing. A whole-chain ' +
+        'failure is unusual — check network/DNS and the providers\' status.',
     });
   } catch {
     // Alerting must never break the FX/conversion path.

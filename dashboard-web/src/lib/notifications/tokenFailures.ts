@@ -321,6 +321,7 @@ export async function notifyTokenFailure(
       alerts_sent_count: number;
       last_error_msg: string;
       last_advice: string | null;
+      resolved_at: null;
       first_seen_at?: string;
       last_alert_sent_at?: string;
     } = {
@@ -333,6 +334,11 @@ export async function notifyTokenFailure(
         (existing?.alerts_sent_count ?? 0) + (result.alerted ? 1 : 0),
       last_error_msg: sanitizeForWhatsApp(errorMsg),
       last_advice: advice ?? null,
+      // 2026-07-16 (fx_rate_failure #55): a failure happening NOW means the
+      // issue is NOT resolved — clear any stale resolved_at so the row
+      // resurfaces in /operator. Pre-fix, a row resolved >7 days ago kept
+      // alerting every 6h while staying invisible in the console.
+      resolved_at: null,
     };
     if (!existing) {
       payload.first_seen_at = new Date(now).toISOString();

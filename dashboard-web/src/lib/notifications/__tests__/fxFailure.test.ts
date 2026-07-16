@@ -24,6 +24,12 @@ describe('notifyFxFailure (DQ-2 — FX outage alert)', () => {
     // dashboard was correctly preserving values.
     expect(calls[0].advice).toMatch(/LAST GOOD/);
     expect(calls[0].advice).not.toMatch(/fell back to 0|understated/);
+    // 2026-07-16: getFxRate is now a 3-provider chain (Frankfurter →
+    // currency-api jsDelivr → pages.dev mirror). This alert only fires when
+    // ALL of them failed — the advice must say so, not "Frankfurter failed"
+    // (which made a whole-chain outage read as the routine daily blip).
+    expect(calls[0].advice).toMatch(/ALL .*providers/i);
+    expect(calls[0].advice).not.toMatch(/provider \(Frankfurter\) failed/);
   });
 
   it('never throws even if the underlying notifier rejects', async () => {

@@ -186,6 +186,38 @@ describe('notifyTokenFailure (d/CR-09 — throttle clock advances on send failur
 });
 
 // ---------------------------------------------------------------------------
+// 2026-07-16 (fx_rate_failure #55) — a failure upsert must CLEAR resolved_at.
+//
+// Pre-fix: the operator pressed "✓ סומן כתוקן" on the fx/global row weeks ago
+// (resolved_at set), then Frankfurter kept failing nightly. Each failure
+// upserted seen_count/last_seen_at but left resolved_at at the OLD date, so
+// the row kept sending WhatsApp alerts every 6h while /operator's
+// `resolved_at IS NULL OR resolved_at >= now()-7d` filter HID it — the alert
+// linked to /operator "for details" and /operator showed nothing (verified
+// against prod 2026-07-16: alert said "Seen 230 / Alert #55", API returned
+// 0 rows). A failure happening NOW means the issue is NOT resolved.
+// ---------------------------------------------------------------------------
+describe('notifyTokenFailure (resolved_at clears on re-failure — 2026-07-16)', () => {
+  it('sets resolved_at to null in every failure upsert', async () => {
+    sendMock.mockResolvedValue(undefined);
+
+    const { notifyTokenFailure } = await import('../tokenFailures');
+    await notifyTokenFailure({
+      provider: 'fx',
+      storeId: 'global',
+      operation: 'fx_rate_failure',
+      errorMsg: 'FX fetch failed (ILS->CAD on 2026-07-16): frankfurter: status 522',
+    });
+
+    expect(upsertCapture.payload).not.toBeNull();
+    // The key must be PRESENT with an explicit null (an absent key would
+    // leave a stale resolved_at untouched in Postgres).
+    expect('resolved_at' in (upsertCapture.payload ?? {})).toBe(true);
+    expect(upsertCapture.payload?.resolved_at).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // #34 — non-WhatsApp fallback when WhatsApp itself is the dead dependency.
 //
 // When the WhatsApp TOKEN is what died (exactly when a token-failure alert is
